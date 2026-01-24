@@ -220,11 +220,7 @@ function createWindow() {
   } else {
     // In production, use the custom app:// protocol to properly serve static files
     // This fixes issues with absolute paths like /logo.png not resolving correctly
-    console.log('Loading production app via app:// protocol');
     mainWindow.loadURL('app://-/index.html');
-
-    // Debug in production (can be removed for final release)
-    mainWindow.webContents.openDevTools();
   }
 
   mainWindow.on('closed', () => {

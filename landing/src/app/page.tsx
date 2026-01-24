@@ -753,6 +753,16 @@ function DownloadSection() {
                 <span>No Account Required</span>
               </div>
             </div>
+
+            {/* macOS installation note */}
+            <div className="mt-8 p-4 rounded-xl bg-[#1a1a24] border border-[#27272a] text-left max-w-lg mx-auto">
+              <p className="text-xs text-[#71717a] mb-2">
+                <span className="text-[#f59e0b]">⚠️ macOS users:</span> If you see &quot;app is damaged&quot;, run this in Terminal:
+              </p>
+              <code className="text-xs text-[#22d3ee] bg-[#0a0a0f] px-2 py-1 rounded block">
+                xattr -cr /Applications/claude.mgr.app
+              </code>
+            </div>
           </div>
 
           {/* Border gradient */}

@@ -522,8 +522,8 @@ function ScrollScreenshot({
               <span
                 key={tag}
                 className={`px-3 py-1 rounded-full text-xs font-medium border ${tag === 'skills.sh'
-                    ? 'bg-[#f59e0b]/20 border-[#f59e0b]/50 text-[#f59e0b]'
-                    : 'bg-[#1a1a24] border-[#27272a] text-[#a1a1aa]'
+                  ? 'bg-[#f59e0b]/20 border-[#f59e0b]/50 text-[#f59e0b]'
+                  : 'bg-[#1a1a24] border-[#27272a] text-[#a1a1aa]'
                   }`}
               >
                 {tag}
@@ -740,15 +740,15 @@ function DownloadSection() {
             <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-[#a1a1aa]">
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-[#4ade80]" />
-                <span>Free Forever</span>
+                <span>Free Forever.</span>
               </div>
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-[#4ade80]" />
-                <span>Open Source</span>
+                <span>Open Source.</span>
               </div>
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-[#4ade80]" />
-                <span>No Account Required</span>
+                <span>No Account Required.</span>
               </div>
             </div>
 

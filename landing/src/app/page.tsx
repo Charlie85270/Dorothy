@@ -494,9 +494,8 @@ function ScrollScreenshot({
 
   return (
     <div ref={ref} className="min-h-[80vh] flex items-center py-10">
-      <div className={`w-full max-w-[1400px] mx-auto px-6 grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-center ${
-        isEven ? '' : 'lg:flex-row-reverse'
-      }`}>
+      <div className={`w-full max-w-[1400px] mx-auto px-6 grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-center ${isEven ? '' : 'lg:flex-row-reverse'
+        }`}>
         {/* Text content - smaller column */}
         <motion.div
           style={{ y: textY, opacity: textOpacity }}
@@ -522,11 +521,10 @@ function ScrollScreenshot({
             {screenshot.tags.map((tag) => (
               <span
                 key={tag}
-                className={`px-3 py-1 rounded-full text-xs font-medium border ${
-                  tag === 'skills.sh'
+                className={`px-3 py-1 rounded-full text-xs font-medium border ${tag === 'skills.sh'
                     ? 'bg-[#f59e0b]/20 border-[#f59e0b]/50 text-[#f59e0b]'
                     : 'bg-[#1a1a24] border-[#27272a] text-[#a1a1aa]'
-                }`}
+                  }`}
               >
                 {tag}
               </span>
@@ -757,7 +755,7 @@ function DownloadSection() {
             {/* macOS installation note */}
             <div className="mt-8 p-4 rounded-xl bg-[#1a1a24] border border-[#27272a] text-left max-w-lg mx-auto">
               <p className="text-xs text-[#71717a] mb-2">
-                <span className="text-[#f59e0b]">⚠️ macOS users:</span> If you see &quot;app is damaged&quot;, run this in Terminal:
+                <span className="text-[#f59e0b]">⚠️ macOS users:</span> If you see &quot;app is damaged&quot;, it's because of Gatekeeper (unsigned app). Run this in Terminal:
               </p>
               <code className="text-xs text-[#22d3ee] bg-[#0a0a0f] px-2 py-1 rounded block">
                 xattr -cr /Applications/claude.mgr.app

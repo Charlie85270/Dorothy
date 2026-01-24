@@ -13,6 +13,10 @@ export const metadata: Metadata = {
   description: "Manage, monitor, and orchestrate your Claude Code agents from a beautiful 3D interface. Track usage, manage skills, and boost your productivity.",
   keywords: ["Claude", "AI", "Agent", "Manager", "Claude Code", "Productivity", "Developer Tools"],
   authors: [{ name: "Claude Manager Team" }],
+  icons: {
+    icon: "/bot-icon.svg",
+    apple: "/bot-icon.svg",
+  },
   openGraph: {
     title: "Claude Manager - Your AI Agent Command Center",
     description: "Manage, monitor, and orchestrate your Claude Code agents from a beautiful 3D interface.",

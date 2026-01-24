@@ -5,7 +5,9 @@ import { SKILLS_DATABASE } from '@/lib/skills-database';
 
 const execAsync = promisify(exec);
 
-export const dynamic = 'force-dynamic';
+// API routes are not used in Electron (uses IPC instead)
+// Use 'auto' for static export compatibility
+export const dynamic = 'auto';
 
 // GET all available skills from database
 export async function GET() {

@@ -452,7 +452,7 @@ function AgentListItem({
                 ${agent.status === 'running' ? 'bg-emerald-500/20 text-emerald-400' : ''}
                 ${agent.status === 'waiting' ? 'bg-amber-500/20 text-amber-400' : ''}
                 ${agent.status === 'idle' ? 'bg-gray-500/20 text-gray-400' : ''}
-                ${agent.status === 'stopped' ? 'bg-red-500/20 text-red-400' : ''}
+                ${agent.status === 'error' ? 'bg-red-500/20 text-red-400' : ''}
               `}
             >
               {agent.status}

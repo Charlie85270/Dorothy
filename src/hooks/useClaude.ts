@@ -10,6 +10,7 @@ import type {
   HistoryEntry,
   ClaudeMessage,
 } from '@/lib/claude-code';
+import { isElectron } from './useElectron';
 
 interface ClaudeData {
   settings: ClaudeSettings | null;
@@ -29,11 +30,24 @@ export function useClaude() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/claude');
-      if (!response.ok) throw new Error('Failed to fetch');
-      const result = await response.json();
-      setData(result);
-      setError(null);
+
+      // Use IPC in Electron, API in browser
+      if (isElectron() && window.electronAPI?.claude?.getData) {
+        const result = await window.electronAPI.claude.getData();
+        if (result) {
+          // Cast the result to ClaudeData type
+          setData(result as unknown as ClaudeData);
+          setError(null);
+        } else {
+          throw new Error('Failed to get Claude data from Electron');
+        }
+      } else {
+        const response = await fetch('/api/claude');
+        if (!response.ok) throw new Error('Failed to fetch');
+        const result = await response.json();
+        setData(result);
+        setError(null);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {

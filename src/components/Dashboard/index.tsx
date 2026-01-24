@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, Component, ReactNode } from 'react';
 import {
   Loader2,
   Globe,
@@ -15,11 +15,47 @@ import {
   TrendingUp,
   Clock,
   History,
+  AlertTriangle,
 } from 'lucide-react';
 import { useClaude } from '@/hooks/useClaude';
 import { useElectronAgents } from '@/hooks/useElectron';
 import StatsCard from './StatsCard';
 import dynamic from 'next/dynamic';
+
+// Error boundary for 3D world
+class WorldErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error?: Error }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex items-center justify-center h-full min-h-[600px] bg-bg-secondary rounded-xl border border-border-primary">
+          <div className="text-center p-8">
+            <AlertTriangle className="w-12 h-12 text-accent-amber mx-auto mb-4" />
+            <h3 className="text-lg font-medium mb-2">3D World Failed to Load</h3>
+            <p className="text-text-muted text-sm mb-4">
+              {this.state.error?.message || 'An error occurred loading the 3D view'}
+            </p>
+            <button
+              onClick={() => this.setState({ hasError: false })}
+              className="px-4 py-2 bg-accent-cyan/20 text-accent-cyan rounded-lg hover:bg-accent-cyan/30"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // Dynamically import AgentWorld to avoid SSR issues with Three.js
 const AgentWorld = dynamic(() => import('@/components/AgentWorld'), {
@@ -42,7 +78,7 @@ export default function Dashboard() {
   // Calculate stats
   const stats = data?.stats;
   const projects = data?.projects || [];
-  const plugins = data?.plugins || [];
+  const skills = data?.skills || [];
   const history = data?.history || [];
   const activeSessions = data?.activeSessions || [];
 
@@ -61,13 +97,19 @@ export default function Dashboard() {
     const sorted = [...stats.dailyModelTokens].sort((a, b) =>
       new Date(b.date).getTime() - new Date(a.date).getTime()
     );
-    return Object.values(sorted[0].tokensByModel).reduce((a, b) => a + b, 0);
+    const tokensByModel = sorted[0]?.tokensByModel;
+    if (!tokensByModel) return 0;
+    return Object.values(tokensByModel).reduce((a, b) => a + b, 0);
   }, [stats?.dailyModelTokens]);
 
   // Calculate total cost
   const totalCost = useMemo(() => {
     if (!stats?.modelUsage) return 0;
-    return Object.values(stats.modelUsage).reduce((sum, usage) => sum + (usage.costUSD || 0), 0);
+    try {
+      return Object.values(stats.modelUsage).reduce((sum, usage) => sum + ((usage as { costUSD?: number })?.costUSD || 0), 0);
+    } catch {
+      return 0;
+    }
   }, [stats?.modelUsage]);
 
   // Process hourCounts for display
@@ -204,7 +246,9 @@ export default function Dashboard() {
           className="rounded-xl border border-border-primary bg-bg-secondary overflow-hidden"
           style={{ height: 'calc(100vh - 180px)', minHeight: '600px' }}
         >
-          <AgentWorld />
+          <WorldErrorBoundary>
+            <AgentWorld />
+          </WorldErrorBoundary>
         </div>
       )}
 
@@ -230,14 +274,14 @@ export default function Dashboard() {
             <StatsCard
               title="Projects"
               value={projects.length}
-              subtitle={`${plugins.length} skills installed`}
+              subtitle={`${skills.length} skills installed`}
               icon={FolderKanban}
               color="amber"
             />
             <StatsCard
               title="Skills"
-              value={plugins.length}
-              subtitle="Installed plugins"
+              value={skills.length}
+              subtitle={`${skills.filter(s => s.source === 'user').length} user, ${skills.filter(s => s.source === 'project').length} project, ${skills.filter(s => s.source === 'plugin').length} plugin`}
               icon={Sparkles}
               color="purple"
             />

@@ -81,6 +81,16 @@ electron_1.contextBridge.exposeInMainWorld('electronAPI', {
     fs: {
         listProjects: () => electron_1.ipcRenderer.invoke('fs:list-projects'),
     },
+    // Claude data
+    claude: {
+        getData: () => electron_1.ipcRenderer.invoke('claude:getData'),
+    },
+    // Settings
+    settings: {
+        get: () => electron_1.ipcRenderer.invoke('settings:get'),
+        save: (settings) => electron_1.ipcRenderer.invoke('settings:save', settings),
+        getInfo: () => electron_1.ipcRenderer.invoke('settings:getInfo'),
+    },
     // Dialogs
     dialog: {
         openFolder: () => electron_1.ipcRenderer.invoke('dialog:open-folder'),

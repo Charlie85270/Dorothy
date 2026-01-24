@@ -39,6 +39,38 @@ const fs = __importStar(require("fs"));
 const os = __importStar(require("os"));
 const uuid_1 = require("uuid");
 const pty = __importStar(require("node-pty"));
+// Get the base path for static assets
+function getAppBasePath() {
+    let appPath = electron_1.app.getAppPath();
+    // If running from asar, the unpacked files are in app.asar.unpacked
+    if (appPath.includes('app.asar')) {
+        appPath = appPath.replace('app.asar', 'app.asar.unpacked');
+    }
+    return path.join(appPath, 'out');
+}
+// MIME type lookup
+const mimeTypes = {
+    '.html': 'text/html',
+    '.js': 'application/javascript',
+    '.css': 'text/css',
+    '.json': 'application/json',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.svg': 'image/svg+xml',
+    '.ico': 'image/x-icon',
+    '.woff': 'font/woff',
+    '.woff2': 'font/woff2',
+    '.ttf': 'font/ttf',
+    '.eot': 'application/vnd.ms-fontobject',
+    '.otf': 'font/otf',
+    '.webp': 'image/webp',
+    '.mp4': 'video/mp4',
+    '.webm': 'video/webm',
+    '.mp3': 'audio/mpeg',
+    '.wav': 'audio/wav',
+};
 // PTY instances for terminals
 const ptyProcesses = new Map();
 const agents = new Map();
@@ -177,16 +209,86 @@ function createWindow() {
         mainWindow.webContents.openDevTools();
     }
     else {
-        // In production, load the exported Next.js static files
-        mainWindow.loadFile(path.join(__dirname, '../out/index.html'));
+        // In production, use the custom app:// protocol to properly serve static files
+        // This fixes issues with absolute paths like /logo.png not resolving correctly
+        console.log('Loading production app via app:// protocol');
+        mainWindow.loadURL('app://-/index.html');
+        // Debug in production (can be removed for final release)
+        mainWindow.webContents.openDevTools();
     }
     mainWindow.on('closed', () => {
         mainWindow = null;
     });
+    // Handle loading errors
+    mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+        console.error('Failed to load:', validatedURL, errorCode, errorDescription);
+    });
+    mainWindow.webContents.on('did-finish-load', () => {
+        console.log('Page loaded successfully');
+    });
 }
+// Register custom protocol for serving static files
+// This must be called before app.whenReady()
+electron_1.protocol.registerSchemesAsPrivileged([
+    {
+        scheme: 'app',
+        privileges: {
+            standard: true,
+            secure: true,
+            supportFetchAPI: true,
+            corsEnabled: true,
+        },
+    },
+]);
 electron_1.app.whenReady().then(() => {
     // Load persisted agents before creating window
     loadAgents();
+    // Register the app:// protocol handler
+    const isDev = process.env.NODE_ENV === 'development';
+    if (!isDev) {
+        const basePath = getAppBasePath();
+        console.log('Registering app:// protocol with basePath:', basePath);
+        electron_1.protocol.handle('app', (request) => {
+            let urlPath = request.url.replace('app://', '');
+            // Remove the host part (e.g., "localhost" or "-")
+            const slashIndex = urlPath.indexOf('/');
+            if (slashIndex !== -1) {
+                urlPath = urlPath.substring(slashIndex);
+            }
+            else {
+                urlPath = '/';
+            }
+            // Default to index.html for directory requests
+            if (urlPath === '/' || urlPath === '') {
+                urlPath = '/index.html';
+            }
+            // Handle page routes (e.g., /agents/, /settings/) - serve their index.html
+            if (urlPath.endsWith('/')) {
+                urlPath = urlPath + 'index.html';
+            }
+            // Remove leading slash for path.join
+            const relativePath = urlPath.startsWith('/') ? urlPath.substring(1) : urlPath;
+            const filePath = path.join(basePath, relativePath);
+            console.log(`app:// request: ${request.url} -> ${filePath}`);
+            // Check if file exists
+            if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+                const ext = path.extname(filePath).toLowerCase();
+                const mimeType = mimeTypes[ext] || 'application/octet-stream';
+                return new Response(fs.readFileSync(filePath), {
+                    headers: { 'Content-Type': mimeType },
+                });
+            }
+            // If it's a page route without .html, try adding index.html
+            const htmlPath = path.join(basePath, relativePath, 'index.html');
+            if (fs.existsSync(htmlPath)) {
+                return new Response(fs.readFileSync(htmlPath), {
+                    headers: { 'Content-Type': 'text/html' },
+                });
+            }
+            console.error(`File not found: ${filePath}`);
+            return new Response('Not Found', { status: 404 });
+        });
+    }
     createWindow();
 });
 electron_1.app.on('window-all-closed', () => {
@@ -615,6 +717,269 @@ electron_1.ipcMain.handle('skill:list-installed', async () => {
     }
     catch {
         return [];
+    }
+});
+// ============== Claude Data IPC Handlers ==============
+// Read Claude Code settings
+async function getClaudeSettings() {
+    try {
+        const settingsPath = path.join(os.homedir(), '.claude', 'settings.json');
+        if (!fs.existsSync(settingsPath))
+            return null;
+        return JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    }
+    catch {
+        return null;
+    }
+}
+// Read Claude Code stats
+async function getClaudeStats() {
+    try {
+        // Primary stats are in stats-cache.json
+        const statsCachePath = path.join(os.homedir(), '.claude', 'stats-cache.json');
+        if (fs.existsSync(statsCachePath)) {
+            const statsCache = JSON.parse(fs.readFileSync(statsCachePath, 'utf-8'));
+            return statsCache;
+        }
+        // Fallback to statsig_user_metadata.json if it exists
+        const statsPath = path.join(os.homedir(), '.claude', 'statsig_user_metadata.json');
+        if (fs.existsSync(statsPath)) {
+            return JSON.parse(fs.readFileSync(statsPath, 'utf-8'));
+        }
+        return null;
+    }
+    catch {
+        return null;
+    }
+}
+// Read Claude Code projects
+async function getClaudeProjects() {
+    try {
+        const projectsDir = path.join(os.homedir(), '.claude', 'projects');
+        if (!fs.existsSync(projectsDir))
+            return [];
+        const projects = [];
+        const dirs = fs.readdirSync(projectsDir);
+        for (const dir of dirs) {
+            const fullPath = path.join(projectsDir, dir);
+            const stat = fs.statSync(fullPath);
+            if (!stat.isDirectory())
+                continue;
+            // Decode project path
+            let decodedPath = dir.replace(/-/g, '/');
+            if (!decodedPath.startsWith('/'))
+                decodedPath = '/' + decodedPath;
+            // Get sessions
+            const sessions = [];
+            const files = fs.readdirSync(fullPath);
+            for (const file of files) {
+                if (file.endsWith('.jsonl')) {
+                    const sessionId = file.replace('.jsonl', '');
+                    const fileStat = fs.statSync(path.join(fullPath, file));
+                    sessions.push({ id: sessionId, timestamp: fileStat.mtimeMs });
+                }
+            }
+            projects.push({
+                id: dir,
+                path: decodedPath,
+                name: path.basename(decodedPath),
+                sessions: sessions.sort((a, b) => b.timestamp - a.timestamp),
+                lastAccessed: stat.mtimeMs,
+            });
+        }
+        return projects.sort((a, b) => b.lastAccessed - a.lastAccessed);
+    }
+    catch {
+        return [];
+    }
+}
+// Read Claude Code plugins
+async function getClaudePlugins() {
+    try {
+        const pluginsPath = path.join(os.homedir(), '.claude', 'plugins', 'installed_plugins.json');
+        if (!fs.existsSync(pluginsPath))
+            return [];
+        const data = JSON.parse(fs.readFileSync(pluginsPath, 'utf-8'));
+        return Array.isArray(data) ? data : [];
+    }
+    catch {
+        return [];
+    }
+}
+// Read skill metadata from a path
+function readSkillMetadata(skillPath) {
+    try {
+        const metadataPath = path.join(skillPath, '.claude-plugin', 'plugin.json');
+        if (fs.existsSync(metadataPath)) {
+            const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
+            return { name: metadata.name || path.basename(skillPath), description: metadata.description };
+        }
+        return { name: path.basename(skillPath) };
+    }
+    catch {
+        return { name: path.basename(skillPath) };
+    }
+}
+// Read Claude Code skills
+async function getClaudeSkills() {
+    const skills = [];
+    // User skills from ~/.claude/skills
+    const userSkillsDir = path.join(os.homedir(), '.claude', 'skills');
+    if (fs.existsSync(userSkillsDir)) {
+        const entries = fs.readdirSync(userSkillsDir);
+        for (const entry of entries) {
+            const entryPath = path.join(userSkillsDir, entry);
+            try {
+                const realPath = fs.realpathSync(entryPath);
+                const metadata = readSkillMetadata(realPath);
+                if (metadata) {
+                    skills.push({
+                        name: metadata.name,
+                        source: 'user',
+                        path: realPath,
+                        description: metadata.description,
+                    });
+                }
+            }
+            catch {
+                // Skip broken symlinks
+            }
+        }
+    }
+    // Plugin skills from installed_plugins.json
+    const pluginsPath = path.join(os.homedir(), '.claude', 'plugins', 'installed_plugins.json');
+    if (fs.existsSync(pluginsPath)) {
+        try {
+            const plugins = JSON.parse(fs.readFileSync(pluginsPath, 'utf-8'));
+            if (Array.isArray(plugins)) {
+                for (const plugin of plugins) {
+                    skills.push({
+                        name: plugin.name || 'Unknown Plugin',
+                        source: 'plugin',
+                        path: plugin.path || '',
+                        description: plugin.description,
+                    });
+                }
+            }
+        }
+        catch {
+            // Ignore parse errors
+        }
+    }
+    return skills;
+}
+// Read Claude Code history
+async function getClaudeHistory(limit = 50) {
+    try {
+        const historyPath = path.join(os.homedir(), '.claude', '.history');
+        if (!fs.existsSync(historyPath))
+            return [];
+        const content = fs.readFileSync(historyPath, 'utf-8');
+        const entries = content.trim().split('\n').filter(Boolean);
+        return entries.slice(-limit).reverse().map((line) => {
+            const [display, timestampStr, project] = line.split('\t');
+            return {
+                display: display || '',
+                timestamp: parseInt(timestampStr || '0', 10),
+                project: project || undefined,
+            };
+        });
+    }
+    catch {
+        return [];
+    }
+}
+// Get all Claude data
+electron_1.ipcMain.handle('claude:getData', async () => {
+    try {
+        const [settings, stats, projects, plugins, skills, history] = await Promise.all([
+            getClaudeSettings(),
+            getClaudeStats(),
+            getClaudeProjects(),
+            getClaudePlugins(),
+            getClaudeSkills(),
+            getClaudeHistory(50),
+        ]);
+        return {
+            settings,
+            stats,
+            projects,
+            plugins,
+            skills,
+            history,
+            activeSessions: [],
+        };
+    }
+    catch (err) {
+        console.error('Failed to get Claude data:', err);
+        return null;
+    }
+});
+// ============== Settings IPC Handlers ==============
+const SETTINGS_PATH = path.join(os.homedir(), '.claude', 'settings.json');
+// Get Claude settings
+electron_1.ipcMain.handle('settings:get', async () => {
+    try {
+        if (!fs.existsSync(SETTINGS_PATH)) {
+            return {
+                enabledPlugins: {},
+                env: {},
+                hooks: {},
+                includeCoAuthoredBy: false,
+                permissions: { allow: [], deny: [] },
+            };
+        }
+        return JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf-8'));
+    }
+    catch (err) {
+        console.error('Failed to read settings:', err);
+        return null;
+    }
+});
+// Save Claude settings
+electron_1.ipcMain.handle('settings:save', async (_event, settings) => {
+    try {
+        // Read existing settings first
+        let existingSettings = {};
+        if (fs.existsSync(SETTINGS_PATH)) {
+            existingSettings = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf-8'));
+        }
+        // Merge with new settings
+        const newSettings = { ...existingSettings, ...settings };
+        // Write back
+        fs.writeFileSync(SETTINGS_PATH, JSON.stringify(newSettings, null, 2));
+        return { success: true };
+    }
+    catch (err) {
+        console.error('Failed to save settings:', err);
+        return { success: false, error: String(err) };
+    }
+});
+// Get Claude info (version, paths, etc.)
+electron_1.ipcMain.handle('settings:getInfo', async () => {
+    try {
+        const { execSync } = await Promise.resolve().then(() => __importStar(require('child_process')));
+        // Try to get Claude version
+        let claudeVersion = 'Unknown';
+        try {
+            claudeVersion = execSync('claude --version 2>/dev/null', { encoding: 'utf-8' }).trim();
+        }
+        catch {
+            // Claude not installed or not in PATH
+        }
+        return {
+            claudeVersion,
+            configPath: path.join(os.homedir(), '.claude'),
+            settingsPath: SETTINGS_PATH,
+            platform: process.platform,
+            arch: process.arch,
+            nodeVersion: process.version,
+            electronVersion: process.versions.electron,
+        };
+    }
+    catch (err) {
+        console.error('Failed to get info:', err);
+        return null;
     }
 });
 // ============== File System IPC Handlers ==============

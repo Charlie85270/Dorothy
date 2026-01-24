@@ -1,7 +1,7 @@
 import { agentManager } from '@/lib/agent-manager';
 import type { AgentEvent } from '@/types/agent';
 
-export const dynamic = 'force-dynamic';
+export const dynamic = 'auto';
 
 export async function GET(
   request: Request,

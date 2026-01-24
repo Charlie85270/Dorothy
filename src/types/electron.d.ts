@@ -97,6 +97,46 @@ export interface ElectronAPI {
     listProjects: () => Promise<{ path: string; name: string; lastModified: string }[]>;
   };
 
+  // Claude data
+  claude: {
+    getData: () => Promise<{
+      settings: unknown;
+      stats: unknown;
+      projects: unknown[];
+      plugins: unknown[];
+      skills: Array<{ name: string; source: 'project' | 'user' | 'plugin'; path: string; description?: string; projectName?: string }>;
+      history: Array<{ display: string; timestamp: number; project?: string }>;
+      activeSessions: string[];
+    } | null>;
+  };
+
+  // Settings
+  settings: {
+    get: () => Promise<{
+      enabledPlugins: Record<string, boolean>;
+      env: Record<string, string>;
+      hooks: Record<string, unknown>;
+      includeCoAuthoredBy: boolean;
+      permissions: { allow: string[]; deny: string[] };
+    } | null>;
+    save: (settings: {
+      enabledPlugins?: Record<string, boolean>;
+      env?: Record<string, string>;
+      hooks?: Record<string, unknown>;
+      includeCoAuthoredBy?: boolean;
+      permissions?: { allow: string[]; deny: string[] };
+    }) => Promise<{ success: boolean; error?: string }>;
+    getInfo: () => Promise<{
+      claudeVersion: string;
+      configPath: string;
+      settingsPath: string;
+      platform: string;
+      arch: string;
+      nodeVersion: string;
+      electronVersion: string;
+    } | null>;
+  };
+
   // Dialogs
   dialog: {
     openFolder: () => Promise<string | null>;

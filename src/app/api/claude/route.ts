@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAllClaudeData } from '@/lib/claude-code';
 
-export const dynamic = 'force-dynamic';
+export const dynamic = 'auto';
 
 export async function GET() {
   try {

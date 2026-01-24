@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { agentManager } from '@/lib/agent-manager';
 
-export const dynamic = 'force-dynamic';
+export const dynamic = 'auto';
 
 // GET all agents
 export async function GET() {

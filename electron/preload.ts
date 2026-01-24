@@ -124,6 +124,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('fs:list-projects'),
   },
 
+  // Claude data
+  claude: {
+    getData: () =>
+      ipcRenderer.invoke('claude:getData'),
+  },
+
+  // Settings
+  settings: {
+    get: () =>
+      ipcRenderer.invoke('settings:get'),
+    save: (settings: {
+      enabledPlugins?: Record<string, boolean>;
+      env?: Record<string, string>;
+      hooks?: Record<string, unknown>;
+      includeCoAuthoredBy?: boolean;
+      permissions?: { allow: string[]; deny: string[] };
+    }) =>
+      ipcRenderer.invoke('settings:save', settings),
+    getInfo: () =>
+      ipcRenderer.invoke('settings:getInfo'),
+  },
+
   // Dialogs
   dialog: {
     openFolder: () =>

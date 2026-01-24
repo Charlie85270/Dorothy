@@ -1,8 +1,10 @@
 import type { NextConfig } from "next";
 
+const isElectronBuild = process.env.ELECTRON_BUILD === '1';
+
 const nextConfig: NextConfig = {
   // Enable static export for Electron builds
-  output: process.env.ELECTRON_BUILD ? 'export' : undefined,
+  output: isElectronBuild ? 'export' : undefined,
 
   // For static export, we need to disable image optimization
   images: {
@@ -11,6 +13,8 @@ const nextConfig: NextConfig = {
 
   // Ensure trailing slashes for file:// protocol compatibility
   trailingSlash: true,
+
+  // No assetPrefix needed - we use custom app:// protocol that handles absolute paths
 };
 
 export default nextConfig;

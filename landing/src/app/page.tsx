@@ -63,7 +63,7 @@ function FeatureCard({
   gradient,
   delay = 0,
 }: {
-  icon: React.ElementType;
+  icon: typeof Bot;
   title: string;
   description: string;
   gradient: string;
@@ -200,7 +200,7 @@ function HeroSection() {
           className="flex flex-col sm:flex-row items-center justify-center gap-4"
         >
           <a
-            href="#download"
+            href="/api/download?platform=mac"
             className="group flex items-center gap-3 px-8 py-4 rounded-xl bg-gradient-to-r from-[#22d3ee] to-[#60a5fa] text-[#0a0a0f] font-semibold text-lg hover:opacity-90 transition-all shine-effect"
           >
             <Download className="w-5 h-5" />
@@ -458,7 +458,7 @@ interface Screenshot {
   title: string;
   description: string;
   gradient: string;
-  icon: React.ElementType;
+  icon: typeof Bot;
   tags: string[];
   link?: { url: string; label: string };
 }
@@ -671,6 +671,16 @@ function DemoSection() {
 
 // Download Section
 function DownloadSection() {
+  const [downloadCount, setDownloadCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    // Fetch download stats
+    fetch('/api/stats')
+      .then(res => res.json())
+      .then(data => setDownloadCount(data.total))
+      .catch(() => setDownloadCount(null));
+  }, []);
+
   return (
     <section id="download" className="relative py-32 px-6">
       <div className="max-w-4xl mx-auto">
@@ -704,11 +714,9 @@ function DownloadSection() {
             </p>
 
             {/* Download buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-10">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
               <a
-                href="https://github.com/Charlie85270/claude-mgr/releases"
-                target="_blank"
-                rel="noopener noreferrer"
+                href="/api/download?platform=mac"
                 className="group flex items-center gap-3 px-8 py-4 rounded-xl bg-gradient-to-r from-[#22d3ee] to-[#60a5fa] text-[#0a0a0f] font-semibold text-lg hover:opacity-90 transition-all"
               >
                 <Download className="w-5 h-5" />
@@ -716,6 +724,19 @@ function DownloadSection() {
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </a>
             </div>
+
+            {/* Download count */}
+            {downloadCount !== null && downloadCount > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-8"
+              >
+                <span className="text-[#71717a] text-sm">
+                  <span className="text-[#22d3ee] font-semibold">{downloadCount.toLocaleString()}</span> downloads
+                </span>
+              </motion.div>
+            )}
 
             {/* Features list */}
             <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-[#a1a1aa]">

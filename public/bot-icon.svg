@@ -1,0 +1,48 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background gradient -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <!-- Background circle -->
+  <rect width="512" height="512" rx="128" fill="url(#bgGradient)"/>
+
+  <!-- Bot body with shadow -->
+  <g filter="url(#shadow)">
+    <!-- Antenna line -->
+    <rect x="246" y="96" width="20" height="48" rx="10" fill="white"/>
+    <!-- Antenna ball -->
+    <circle cx="256" cy="80" r="24" fill="white"/>
+
+    <!-- Main head -->
+    <rect x="128" y="160" width="256" height="256" rx="48" fill="white"/>
+
+    <!-- Eyes -->
+    <circle cx="208" cy="256" r="32" fill="#667eea"/>
+    <circle cx="304" cy="256" r="32" fill="#667eea"/>
+
+    <!-- Eye highlights -->
+    <circle cx="218" cy="246" r="12" fill="white" opacity="0.5"/>
+    <circle cx="314" cy="246" r="12" fill="white" opacity="0.5"/>
+
+    <!-- Smile -->
+    <path
+      d="M 192 320 Q 256 368 320 320"
+      stroke="#667eea"
+      stroke-width="20"
+      stroke-linecap="round"
+      fill="none"
+    />
+
+    <!-- Control panel indicators -->
+    <rect x="180" y="360" width="40" height="8" rx="4" fill="#667eea" opacity="0.3"/>
+    <rect x="236" y="360" width="40" height="8" rx="4" fill="#764ba2" opacity="0.3"/>
+    <rect x="292" y="360" width="40" height="8" rx="4" fill="#667eea" opacity="0.3"/>
+  </g>
+</svg>

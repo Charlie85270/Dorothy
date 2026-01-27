@@ -413,13 +413,13 @@ function HowItWorksSection() {
 // Screenshot data
 const screenshots = [
   {
-    id: '3d',
-    src: '/3d.png',
-    title: '3D Agent View',
-    description: 'Watch your agents work in a beautiful 3D office environment with animated characters',
+    id: 'dashboard',
+    src: '/0.png',
+    title: 'Beautiful Dashboard',
+    description: 'Manage your agents like never before with a simple and UX friendly UI. Get notified when your agent task is done or needs your input.',
     gradient: 'from-[#22d3ee] to-[#60a5fa]',
-    icon: Layers,
-    tags: ['Real-time', 'Interactive', 'Immersive'],
+    icon: FolderKanban,
+    tags: ['Notifications', 'User-friendly', 'Real-time'],
   },
   {
     id: 'agents',
@@ -448,6 +448,15 @@ const screenshots = [
     icon: Sparkles,
     tags: ['skills.sh', 'One-click install', 'Community'],
     link: { url: 'https://skills.sh', label: 'Visit skills.sh →' },
+  },
+  {
+    id: '3d',
+    src: '/3d.png',
+    title: '3D Agent View',
+    description: 'Watch your agents work in a beautiful 3D office environment with animated characters',
+    gradient: 'from-[#60a5fa] to-[#a78bfa]',
+    icon: Layers,
+    tags: ['Real-time', 'Interactive', 'Immersive'],
   },
 ];
 

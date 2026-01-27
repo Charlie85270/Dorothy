@@ -2,9 +2,12 @@
 
 A beautiful desktop manager for [Claude Code](https://claude.ai/code) - the AI coding assistant by Anthropic. Monitor your agents, manage skills, track usage, and visualize your Claude Code activity all in one place.
 
-![claude.mgr Dashboard](screenshots/3d.png)
+![claude.mgr Dashboard](screenshots/0.png)
 
 ## Features
+
+### 🎨 Beautiful Dashboard
+Manage your agents like never before with a simple and UX friendly UI. Get notified when your agent task is done or needs your input.
 
 ### 🤖 Agent Management
 Create, monitor, and control multiple Claude Code agents simultaneously. Each agent runs in its own terminal with full PTY support, allowing you to interact with them in real-time.
@@ -23,6 +26,11 @@ Browse and manage your Claude Code skills. Directly integrated with [skills.sh](
 
 ### ⚙️ Settings Management
 Configure your Claude Code settings directly from the app. Manage permissions, environment variables, hooks, and more.
+
+### 🌐 3D Agent View
+Watch your agents work in a beautiful 3D office environment with animated characters.
+
+![3D View](screenshots/3d.png)
 
 ## Installation
 

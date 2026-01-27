@@ -16,11 +16,25 @@ import {
   Clock,
   History,
   AlertTriangle,
+  LayoutGrid,
 } from 'lucide-react';
 import { useClaude } from '@/hooks/useClaude';
 import { useElectronAgents } from '@/hooks/useElectron';
 import StatsCard from './StatsCard';
 import dynamic from 'next/dynamic';
+
+// Dynamically import CanvasView to avoid SSR issues
+const CanvasView = dynamic(() => import('@/components/CanvasView'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-full min-h-[600px] bg-bg-secondary rounded-xl border border-border-primary">
+      <div className="text-center">
+        <Loader2 className="w-8 h-8 animate-spin text-accent-cyan mx-auto mb-4" />
+        <p className="text-text-secondary">Loading Board...</p>
+      </div>
+    </div>
+  ),
+});
 
 // Error boundary for 3D world
 class WorldErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error?: Error }> {
@@ -73,7 +87,7 @@ const AgentWorld = dynamic(() => import('@/components/AgentWorld'), {
 export default function Dashboard() {
   const { data, loading, error } = useClaude();
   const { agents } = useElectronAgents();
-  const [viewMode, setViewMode] = useState<'world' | 'stats'>('world');
+  const [viewMode, setViewMode] = useState<'world' | 'canvas' | 'stats'>('canvas');
 
   // Calculate stats
   const stats = data?.stats;
@@ -203,7 +217,20 @@ export default function Dashboard() {
               `}
             >
               <Globe className="w-4 h-4" />
-              Open Space
+              3D View
+            </button>
+            <button
+              onClick={() => setViewMode('canvas')}
+              className={`
+                flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all
+                ${viewMode === 'canvas'
+                  ? 'bg-accent-green/20 text-accent-green'
+                  : 'text-text-muted hover:text-text-primary'
+                }
+              `}
+            >
+              <LayoutGrid className="w-4 h-4" />
+              Board
             </button>
             <button
               onClick={() => setViewMode('stats')}
@@ -249,6 +276,16 @@ export default function Dashboard() {
           <WorldErrorBoundary>
             <AgentWorld />
           </WorldErrorBoundary>
+        </div>
+      )}
+
+      {/* Canvas View */}
+      {viewMode === 'canvas' && (
+        <div
+          className="rounded-xl border border-border-primary bg-bg-secondary overflow-hidden"
+          style={{ height: 'calc(100vh - 180px)', minHeight: '600px' }}
+        >
+          <CanvasView />
         </div>
       )}
 

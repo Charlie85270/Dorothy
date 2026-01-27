@@ -14,8 +14,8 @@ export const metadata: Metadata = {
   keywords: ["Claude", "AI", "Agent", "Manager", "Claude Code", "Productivity", "Developer Tools"],
   authors: [{ name: "Claude Manager Team" }],
   icons: {
-    icon: "/bot-icon.svg",
-    apple: "/bot-icon.svg",
+    icon: "/bot-icon.png",
+    apple: "/bot-icon.png",
   },
   openGraph: {
     title: "Claude Manager - Your AI Agent Command Center",

@@ -77,6 +77,7 @@ export interface ElectronAPI {
     onError: (callback: (event: AgentEvent) => void) => () => void;
     onComplete: (callback: (event: AgentEvent) => void) => () => void;
     onToolUse: (callback: (event: AgentEvent) => void) => () => void;
+    onStatus?: (callback: (event: { type: string; agentId: string; status: string; timestamp: string }) => void) => () => void;
   };
 
   // Skills management
@@ -137,6 +138,22 @@ export interface ElectronAPI {
     } | null>;
   };
 
+  // App settings (notifications, etc.)
+  appSettings?: {
+    get: () => Promise<{
+      notificationsEnabled: boolean;
+      notifyOnWaiting: boolean;
+      notifyOnComplete: boolean;
+      notifyOnError: boolean;
+    }>;
+    save: (settings: {
+      notificationsEnabled?: boolean;
+      notifyOnWaiting?: boolean;
+      notifyOnComplete?: boolean;
+      notifyOnError?: boolean;
+    }) => Promise<{ success: boolean; error?: string }>;
+  };
+
   // Dialogs
   dialog: {
     openFolder: () => Promise<string | null>;
@@ -146,6 +163,13 @@ export interface ElectronAPI {
   shell: {
     openTerminal: (params: { cwd: string; command?: string }) => Promise<{ success: boolean }>;
     exec: (params: { command: string; cwd?: string }) => Promise<{ success: boolean; output?: string; error?: string; code?: number }>;
+    // Quick terminal PTY
+    startPty?: (params: { cwd?: string; cols?: number; rows?: number }) => Promise<string>;
+    writePty?: (params: { ptyId: string; data: string }) => Promise<{ success: boolean }>;
+    resizePty?: (params: { ptyId: string; cols: number; rows: number }) => Promise<{ success: boolean }>;
+    killPty?: (params: { ptyId: string }) => Promise<{ success: boolean }>;
+    onPtyOutput?: (callback: (event: { ptyId: string; data: string }) => void) => () => void;
+    onPtyExit?: (callback: (event: { ptyId: string; exitCode: number }) => void) => () => void;
   };
 
   // Platform info

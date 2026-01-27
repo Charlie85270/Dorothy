@@ -7,6 +7,7 @@ import type {
   ClaudeProject,
   ClaudePlugin,
   ClaudeSkill,
+  ClaudeSession,
   HistoryEntry,
   ClaudeMessage,
 } from '@/lib/claude-code';
@@ -35,8 +36,40 @@ export function useClaude() {
       if (isElectron() && window.electronAPI?.claude?.getData) {
         const result = await window.electronAPI.claude.getData();
         if (result) {
-          // Cast the result to ClaudeData type
-          setData(result as unknown as ClaudeData);
+          // Transform the result to match expected types
+          // Electron returns lastAccessed as number (ms timestamp), frontend expects lastActivity as Date
+          interface ElectronProject {
+            id: string;
+            path: string;
+            name: string;
+            sessions: Array<{ id: string; timestamp: number }>;
+            lastAccessed: number;
+          }
+
+          const rawProjects = (result.projects || []) as ElectronProject[];
+          const transformedProjects = rawProjects.map((p) => ({
+            id: p.id,
+            name: p.name,
+            path: p.path,
+            sessions: (p.sessions || []).map(s => ({
+              id: s.id,
+              projectPath: p.path,
+              messages: [] as ClaudeMessage[],
+              startTime: new Date(s.timestamp),
+              lastActivity: new Date(s.timestamp),
+            })),
+            lastActivity: new Date(p.lastAccessed),
+          }));
+
+          setData({
+            settings: result.settings as ClaudeSettings | null,
+            stats: result.stats as ClaudeStats | null,
+            projects: transformedProjects,
+            plugins: (result.plugins || []) as ClaudePlugin[],
+            skills: (result.skills || []) as ClaudeSkill[],
+            history: (result.history || []) as HistoryEntry[],
+            activeSessions: (result.activeSessions || []) as string[],
+          });
           setError(null);
         } else {
           throw new Error('Failed to get Claude data from Electron');

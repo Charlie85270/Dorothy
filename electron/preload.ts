@@ -85,6 +85,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('agent:tool_use', listener);
       return () => ipcRenderer.removeListener('agent:tool_use', listener);
     },
+    onStatus: (callback: (event: { type: string; agentId: string; status: string; timestamp: string }) => void) => {
+      const listener = (_: unknown, event: { type: string; agentId: string; status: string; timestamp: string }) => callback(event);
+      ipcRenderer.on('agent:status', listener);
+      return () => ipcRenderer.removeListener('agent:status', listener);
+    },
   },
 
   // Skills management
@@ -146,6 +151,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('settings:getInfo'),
   },
 
+  // App settings (notifications, etc.)
+  appSettings: {
+    get: () =>
+      ipcRenderer.invoke('app:getSettings'),
+    save: (settings: {
+      notificationsEnabled?: boolean;
+      notifyOnWaiting?: boolean;
+      notifyOnComplete?: boolean;
+      notifyOnError?: boolean;
+    }) =>
+      ipcRenderer.invoke('app:saveSettings', settings),
+  },
+
   // Dialogs
   dialog: {
     openFolder: () =>
@@ -158,6 +176,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('shell:open-terminal', params),
     exec: (params: { command: string; cwd?: string }) =>
       ipcRenderer.invoke('shell:exec', params),
+    // Quick terminal PTY
+    startPty: (params: { cwd?: string; cols?: number; rows?: number }) =>
+      ipcRenderer.invoke('shell:startPty', params),
+    writePty: (params: { ptyId: string; data: string }) =>
+      ipcRenderer.invoke('shell:writePty', params),
+    resizePty: (params: { ptyId: string; cols: number; rows: number }) =>
+      ipcRenderer.invoke('shell:resizePty', params),
+    killPty: (params: { ptyId: string }) =>
+      ipcRenderer.invoke('shell:killPty', params),
+    // Event listeners for quick terminal
+    onPtyOutput: (callback: (event: { ptyId: string; data: string }) => void) => {
+      const listener = (_: unknown, event: { ptyId: string; data: string }) => callback(event);
+      ipcRenderer.on('shell:ptyOutput', listener);
+      return () => ipcRenderer.removeListener('shell:ptyOutput', listener);
+    },
+    onPtyExit: (callback: (event: { ptyId: string; exitCode: number }) => void) => {
+      const listener = (_: unknown, event: { ptyId: string; exitCode: number }) => callback(event);
+      ipcRenderer.on('shell:ptyExit', listener);
+      return () => ipcRenderer.removeListener('shell:ptyExit', listener);
+    },
   },
 
   // Platform info

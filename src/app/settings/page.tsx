@@ -15,6 +15,8 @@ import {
   Sparkles,
   RefreshCw,
   ExternalLink,
+  Bell,
+  BellOff,
 } from 'lucide-react';
 import { isElectron } from '@/hooks/useElectron';
 
@@ -44,8 +46,21 @@ interface Skill {
   projectName?: string;
 }
 
+interface AppSettings {
+  notificationsEnabled: boolean;
+  notifyOnWaiting: boolean;
+  notifyOnComplete: boolean;
+  notifyOnError: boolean;
+}
+
 export default function SettingsPage() {
   const [settings, setSettings] = useState<ClaudeSettings | null>(null);
+  const [appSettings, setAppSettings] = useState<AppSettings>({
+    notificationsEnabled: true,
+    notifyOnWaiting: true,
+    notifyOnComplete: true,
+    notifyOnError: true,
+  });
   const [info, setInfo] = useState<ClaudeInfo | null>(null);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,10 +78,11 @@ export default function SettingsPage() {
 
     try {
       setLoading(true);
-      const [settingsData, infoData, claudeData] = await Promise.all([
+      const [settingsData, infoData, claudeData, appSettingsData] = await Promise.all([
         window.electronAPI.settings.get(),
         window.electronAPI.settings.getInfo(),
         window.electronAPI.claude?.getData(),
+        window.electronAPI.appSettings?.get(),
       ]);
 
       if (settingsData) {
@@ -77,6 +93,9 @@ export default function SettingsPage() {
       }
       if (claudeData?.skills) {
         setSkills(claudeData.skills);
+      }
+      if (appSettingsData) {
+        setAppSettings(appSettingsData);
       }
       setError(null);
     } catch (err) {
@@ -108,6 +127,22 @@ export default function SettingsPage() {
       setError(err instanceof Error ? err.message : 'Failed to save settings');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveAppSettings = async (newSettings: Partial<AppSettings>) => {
+    const updated = { ...appSettings, ...newSettings };
+    setAppSettings(updated);
+
+    if (!window.electronAPI?.appSettings) return;
+
+    try {
+      const result = await window.electronAPI.appSettings.save(updated);
+      if (!result.success) {
+        setError(result.error || 'Failed to save notification settings');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save notification settings');
     }
   };
 
@@ -229,11 +264,113 @@ export default function SettingsPage() {
           </div>
         </motion.div>
 
-        {/* Permissions */}
+        {/* Notification Settings */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
+          className="rounded-xl border border-border-primary bg-bg-secondary p-6"
+        >
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 rounded-lg bg-accent-amber/20 flex items-center justify-center">
+              {appSettings.notificationsEnabled ? (
+                <Bell className="w-5 h-5 text-accent-amber" />
+              ) : (
+                <BellOff className="w-5 h-5 text-accent-amber" />
+              )}
+            </div>
+            <div>
+              <h2 className="font-semibold">Notifications</h2>
+              <p className="text-xs text-text-muted">Configure desktop notifications for agents</p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between py-3 border-b border-border-primary">
+              <div>
+                <p className="text-sm font-medium">Enable Notifications</p>
+                <p className="text-xs text-text-muted">Receive desktop notifications for agent events</p>
+              </div>
+              <button
+                onClick={() => handleSaveAppSettings({ notificationsEnabled: !appSettings.notificationsEnabled })}
+                className={`w-12 h-6 rounded-full transition-colors ${
+                  appSettings.notificationsEnabled ? 'bg-accent-cyan' : 'bg-bg-tertiary'
+                }`}
+              >
+                <div
+                  className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                    appSettings.notificationsEnabled ? 'translate-x-6' : 'translate-x-0.5'
+                  }`}
+                />
+              </button>
+            </div>
+
+            <div className={`space-y-4 ${!appSettings.notificationsEnabled ? 'opacity-50 pointer-events-none' : ''}`}>
+              <div className="flex items-center justify-between py-3 border-b border-border-primary">
+                <div>
+                  <p className="text-sm font-medium">Waiting for Input</p>
+                  <p className="text-xs text-text-muted">Notify when an agent needs user input</p>
+                </div>
+                <button
+                  onClick={() => handleSaveAppSettings({ notifyOnWaiting: !appSettings.notifyOnWaiting })}
+                  className={`w-12 h-6 rounded-full transition-colors ${
+                    appSettings.notifyOnWaiting ? 'bg-accent-cyan' : 'bg-bg-tertiary'
+                  }`}
+                >
+                  <div
+                    className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                      appSettings.notifyOnWaiting ? 'translate-x-6' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between py-3 border-b border-border-primary">
+                <div>
+                  <p className="text-sm font-medium">Task Complete</p>
+                  <p className="text-xs text-text-muted">Notify when an agent completes a task</p>
+                </div>
+                <button
+                  onClick={() => handleSaveAppSettings({ notifyOnComplete: !appSettings.notifyOnComplete })}
+                  className={`w-12 h-6 rounded-full transition-colors ${
+                    appSettings.notifyOnComplete ? 'bg-accent-cyan' : 'bg-bg-tertiary'
+                  }`}
+                >
+                  <div
+                    className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                      appSettings.notifyOnComplete ? 'translate-x-6' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between py-3">
+                <div>
+                  <p className="text-sm font-medium">Error Alerts</p>
+                  <p className="text-xs text-text-muted">Notify when an agent encounters an error</p>
+                </div>
+                <button
+                  onClick={() => handleSaveAppSettings({ notifyOnError: !appSettings.notifyOnError })}
+                  className={`w-12 h-6 rounded-full transition-colors ${
+                    appSettings.notifyOnError ? 'bg-accent-cyan' : 'bg-bg-tertiary'
+                  }`}
+                >
+                  <div
+                    className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                      appSettings.notifyOnError ? 'translate-x-6' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Permissions */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
           className="rounded-xl border border-border-primary bg-bg-secondary p-6"
         >
           <div className="flex items-center gap-3 mb-6">

@@ -52,6 +52,11 @@ electron_1.contextBridge.exposeInMainWorld('electronAPI', {
             electron_1.ipcRenderer.on('agent:tool_use', listener);
             return () => electron_1.ipcRenderer.removeListener('agent:tool_use', listener);
         },
+        onStatus: (callback) => {
+            const listener = (_, event) => callback(event);
+            electron_1.ipcRenderer.on('agent:status', listener);
+            return () => electron_1.ipcRenderer.removeListener('agent:status', listener);
+        },
     },
     // Skills management
     skill: {
@@ -91,6 +96,11 @@ electron_1.contextBridge.exposeInMainWorld('electronAPI', {
         save: (settings) => electron_1.ipcRenderer.invoke('settings:save', settings),
         getInfo: () => electron_1.ipcRenderer.invoke('settings:getInfo'),
     },
+    // App settings (notifications, etc.)
+    appSettings: {
+        get: () => electron_1.ipcRenderer.invoke('app:getSettings'),
+        save: (settings) => electron_1.ipcRenderer.invoke('app:saveSettings', settings),
+    },
     // Dialogs
     dialog: {
         openFolder: () => electron_1.ipcRenderer.invoke('dialog:open-folder'),
@@ -99,6 +109,22 @@ electron_1.contextBridge.exposeInMainWorld('electronAPI', {
     shell: {
         openTerminal: (params) => electron_1.ipcRenderer.invoke('shell:open-terminal', params),
         exec: (params) => electron_1.ipcRenderer.invoke('shell:exec', params),
+        // Quick terminal PTY
+        startPty: (params) => electron_1.ipcRenderer.invoke('shell:startPty', params),
+        writePty: (params) => electron_1.ipcRenderer.invoke('shell:writePty', params),
+        resizePty: (params) => electron_1.ipcRenderer.invoke('shell:resizePty', params),
+        killPty: (params) => electron_1.ipcRenderer.invoke('shell:killPty', params),
+        // Event listeners for quick terminal
+        onPtyOutput: (callback) => {
+            const listener = (_, event) => callback(event);
+            electron_1.ipcRenderer.on('shell:ptyOutput', listener);
+            return () => electron_1.ipcRenderer.removeListener('shell:ptyOutput', listener);
+        },
+        onPtyExit: (callback) => {
+            const listener = (_, event) => callback(event);
+            electron_1.ipcRenderer.on('shell:ptyExit', listener);
+            return () => electron_1.ipcRenderer.removeListener('shell:ptyExit', listener);
+        },
     },
     // Platform info
     platform: process.platform,

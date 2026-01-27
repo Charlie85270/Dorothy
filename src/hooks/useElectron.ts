@@ -109,10 +109,19 @@ export function useElectronAgents() {
       fetchAgents();
     });
 
+    const unsubStatus = window.electronAPI!.agent.onStatus?.((event: { agentId: string; status: string; timestamp: string }) => {
+      setAgents(prev => prev.map(a =>
+        a.id === event.agentId
+          ? { ...a, status: event.status as AgentStatus['status'], lastActivity: event.timestamp }
+          : a
+      ));
+    });
+
     return () => {
       unsubOutput();
       unsubError();
       unsubComplete();
+      unsubStatus?.();
     };
   }, [fetchAgents]);
 

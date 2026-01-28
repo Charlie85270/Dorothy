@@ -231,60 +231,61 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 lg:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Mission Control</h1>
-          <p className="text-text-secondary text-sm mt-1">
+          <h1 className="text-xl lg:text-2xl font-bold tracking-tight">Mission Control</h1>
+          <p className="text-text-secondary text-xs lg:text-sm mt-1 hidden sm:block">
             Monitor your Claude Code agents in real-time
           </p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
           {/* View Mode Toggle */}
           <div className="flex items-center gap-1 p-1 bg-bg-tertiary rounded-lg border border-border-primary">
             <button
               onClick={() => setViewMode('world')}
               className={`
-                flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all
+                flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1.5 rounded-md text-xs lg:text-sm font-medium transition-all
                 ${viewMode === 'world'
                   ? 'bg-accent-cyan/20 text-accent-cyan'
                   : 'text-text-muted hover:text-text-primary'
                 }
               `}
             >
-              <Globe className="w-4 h-4" />
-              3D View
+              <Globe className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
+              <span className="hidden sm:inline">3D View</span>
+              <span className="sm:hidden">3D</span>
             </button>
             <button
               onClick={() => setViewMode('canvas')}
               className={`
-                flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all
+                flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1.5 rounded-md text-xs lg:text-sm font-medium transition-all
                 ${viewMode === 'canvas'
                   ? 'bg-accent-green/20 text-accent-green'
                   : 'text-text-muted hover:text-text-primary'
                 }
               `}
             >
-              <LayoutGrid className="w-4 h-4" />
+              <LayoutGrid className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
               Board
             </button>
             <button
               onClick={() => setViewMode('stats')}
               className={`
-                flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all
+                flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1.5 rounded-md text-xs lg:text-sm font-medium transition-all
                 ${viewMode === 'stats'
                   ? 'bg-accent-purple/20 text-accent-purple'
                   : 'text-text-muted hover:text-text-primary'
                 }
               `}
             >
-              <BarChart3 className="w-4 h-4" />
-              Statistics
+              <BarChart3 className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
+              Stats
             </button>
           </div>
 
-          <div className="text-right text-xs text-text-muted">
+          <div className="text-right text-xs text-text-muted hidden sm:block">
             <div className="flex items-center gap-2 justify-end">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-green opacity-75"></span>
@@ -308,7 +309,7 @@ export default function Dashboard() {
       {viewMode === 'world' && (
         <div
           className="rounded-xl border border-border-primary bg-bg-secondary overflow-hidden"
-          style={{ height: 'calc(100vh - 180px)', minHeight: '600px' }}
+          style={{ height: 'calc(100vh - 200px)', minHeight: '400px' }}
         >
           <WorldErrorBoundary>
             <AgentWorld />
@@ -320,7 +321,7 @@ export default function Dashboard() {
       {viewMode === 'canvas' && (
         <div
           className="rounded-xl border border-border-primary bg-bg-secondary overflow-hidden"
-          style={{ height: 'calc(100vh - 180px)', minHeight: '600px' }}
+          style={{ height: 'calc(100vh - 200px)', minHeight: '400px' }}
         >
           <CanvasView />
         </div>

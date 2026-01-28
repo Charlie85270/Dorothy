@@ -22,7 +22,22 @@ export function useElectronAgents() {
 
     try {
       const list = await window.electronAPI!.agent.list();
-      setAgents(list);
+      // Only update state if data has actually changed to prevent unnecessary re-renders
+      setAgents(prev => {
+        // Quick length check first
+        if (prev.length !== list.length) return list;
+        // Compare each agent's key fields
+        const hasChanged = list.some((agent, i) => {
+          const prevAgent = prev[i];
+          return (
+            prevAgent.id !== agent.id ||
+            prevAgent.status !== agent.status ||
+            prevAgent.currentTask !== agent.currentTask ||
+            prevAgent.lastActivity !== agent.lastActivity
+          );
+        });
+        return hasChanged ? list : prev;
+      });
     } catch (error) {
       console.error('Failed to fetch agents:', error);
     } finally {

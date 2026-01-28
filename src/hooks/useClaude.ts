@@ -61,14 +61,29 @@ export function useClaude() {
             lastActivity: new Date(p.lastAccessed),
           }));
 
-          setData({
-            settings: result.settings as ClaudeSettings | null,
-            stats: result.stats as ClaudeStats | null,
-            projects: transformedProjects,
-            plugins: (result.plugins || []) as ClaudePlugin[],
-            skills: (result.skills || []) as ClaudeSkill[],
-            history: (result.history || []) as HistoryEntry[],
-            activeSessions: (result.activeSessions || []) as string[],
+          // Only update if data actually changed to prevent unnecessary re-renders
+          setData(prev => {
+            const newData = {
+              settings: result.settings as ClaudeSettings | null,
+              stats: result.stats as ClaudeStats | null,
+              projects: transformedProjects,
+              plugins: (result.plugins || []) as ClaudePlugin[],
+              skills: (result.skills || []) as ClaudeSkill[],
+              history: (result.history || []) as HistoryEntry[],
+              activeSessions: (result.activeSessions || []) as string[],
+            };
+            // Quick comparison - check if project count or active sessions changed
+            if (!prev) return newData;
+            if (prev.projects.length !== newData.projects.length) return newData;
+            if (prev.activeSessions.length !== newData.activeSessions.length) return newData;
+            // Check if any project changed
+            const projectsChanged = newData.projects.some((p, i) => {
+              const prevP = prev.projects[i];
+              return prevP?.id !== p.id || prevP?.sessions.length !== p.sessions.length;
+            });
+            if (projectsChanged) return newData;
+            // No significant changes
+            return prev;
           });
           setError(null);
         } else {
@@ -78,7 +93,13 @@ export function useClaude() {
         const response = await fetch('/api/claude');
         if (!response.ok) throw new Error('Failed to fetch');
         const result = await response.json();
-        setData(result);
+        // Only update if data actually changed
+        setData(prev => {
+          if (!prev) return result;
+          if (prev.projects?.length !== result.projects?.length) return result;
+          if (prev.activeSessions?.length !== result.activeSessions?.length) return result;
+          return prev;
+        });
         setError(null);
       }
     } catch (err) {

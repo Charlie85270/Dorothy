@@ -392,28 +392,29 @@ export default function AgentsPage() {
   }
 
   return (
-    <div className="h-[calc(100vh-3rem)] flex flex-col">
+    <div className="h-[calc(100vh-7rem)] lg:h-[calc(100vh-3rem)] flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 lg:mb-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Agent Control Center</h1>
-          <p className="text-text-secondary text-sm mt-1">
+          <h1 className="text-xl lg:text-2xl font-bold tracking-tight">Agent Control Center</h1>
+          <p className="text-text-secondary text-xs lg:text-sm mt-1 hidden sm:block">
             Manage and monitor your Claude Code agents in real-time
           </p>
         </div>
         <button
           onClick={() => setShowNewChatModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-accent-cyan text-bg-primary font-medium rounded-lg hover:bg-accent-cyan/90 transition-colors"
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-accent-cyan text-bg-primary font-medium rounded-lg hover:bg-accent-cyan/90 transition-colors text-sm lg:text-base"
         >
           <Plus className="w-4 h-4" />
-          New Agent
+          <span className="hidden sm:inline">New Agent</span>
+          <span className="sm:hidden">New</span>
         </button>
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex gap-6 min-h-0">
+      <div className="flex-1 flex flex-col lg:flex-row gap-4 lg:gap-6 min-h-0">
         {/* Agent List */}
-        <div className="w-96 flex flex-col rounded-xl border border-border-primary bg-bg-secondary overflow-hidden shrink-0">
+        <div className="w-full lg:w-96 flex flex-col rounded-xl border border-border-primary bg-bg-secondary overflow-hidden lg:shrink-0 h-48 lg:h-auto">
           <div className="px-4 py-3 border-b border-border-primary bg-bg-tertiary flex items-center justify-between">
             <span className="text-sm font-medium flex items-center gap-2">
               <Bot className="w-4 h-4 text-accent-purple" />
@@ -482,8 +483,8 @@ export default function AgentsPage() {
           )}
 
           <div className="flex-1 overflow-y-auto">
-            <AnimatePresence mode="popLayout">
-              {filteredAgents.map((agent, index) => {
+            <div>
+              {filteredAgents.map((agent) => {
                 const statusConfig = STATUS_COLORS[agent.status];
                 const StatusIcon = statusConfig.icon;
                 const isSelected = selectedAgent === agent.id;
@@ -491,12 +492,8 @@ export default function AgentsPage() {
                 const projectColor = getProjectColor(projectName);
 
                 return (
-                  <motion.div
+                  <div
                     key={agent.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
-                    transition={{ delay: index * 0.02 }}
                     onClick={() => setSelectedAgent(agent.id)}
                     className={`
                       p-4 cursor-pointer transition-all border-b border-border-primary/50
@@ -572,10 +569,10 @@ export default function AgentsPage() {
                         )}
                       </div>
                     </div>
-                  </motion.div>
+                  </div>
                 );
               })}
-            </AnimatePresence>
+            </div>
 
             {filteredAgents.length === 0 && (
               <div className="p-8 text-center">
@@ -608,7 +605,7 @@ export default function AgentsPage() {
           {selectedAgentData ? (
             <>
               {/* Agent Header */}
-              <div className="px-5 py-4 border-b border-border-primary flex items-center justify-between bg-bg-tertiary/30">
+              <div className="px-3 lg:px-5 py-3 lg:py-4 border-b border-border-primary flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-bg-tertiary/30">
                 <div className="flex items-center gap-3">
                   <div className={`w-12 h-12 rounded-xl ${selectedAgentData.name?.toLowerCase() === 'bitwonka' ? 'bg-accent-green/20' : STATUS_COLORS[selectedAgentData.status].bg} flex items-center justify-center relative`}>
                     {selectedAgentData.name?.toLowerCase() === 'bitwonka' ? (
@@ -655,19 +652,19 @@ export default function AgentsPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   {selectedAgentData.pathMissing && (
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-accent-amber/20 text-accent-amber rounded-lg text-sm">
-                      <AlertTriangle className="w-4 h-4" />
-                      Path not found
+                    <div className="flex items-center gap-2 px-2 lg:px-3 py-1 lg:py-1.5 bg-accent-amber/20 text-accent-amber rounded-lg text-xs lg:text-sm">
+                      <AlertTriangle className="w-3 h-3 lg:w-4 lg:h-4" />
+                      <span className="hidden sm:inline">Path not found</span>
                     </div>
                   )}
                   {selectedAgentData.status === 'running' ? (
                     <button
                       onClick={() => stopAgent(selectedAgentData.id)}
-                      className="flex items-center gap-2 px-3 py-1.5 bg-accent-red/20 text-accent-red rounded-lg hover:bg-accent-red/30 transition-colors"
+                      className="flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1 lg:py-1.5 bg-accent-red/20 text-accent-red rounded-lg hover:bg-accent-red/30 transition-colors text-xs lg:text-sm"
                     >
-                      <Square className="w-4 h-4" />
+                      <Square className="w-3 h-3 lg:w-4 lg:h-4" />
                       Stop
                     </button>
                   ) : (
@@ -678,13 +675,13 @@ export default function AgentsPage() {
                         setTimeout(() => startPromptInputRef.current?.focus(), 100);
                       }}
                       disabled={selectedAgentData.pathMissing}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors ${
+                      className={`flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1 lg:py-1.5 rounded-lg transition-colors text-xs lg:text-sm ${
                         selectedAgentData.pathMissing
                           ? 'bg-bg-tertiary text-text-muted cursor-not-allowed'
                           : 'bg-accent-green/20 text-accent-green hover:bg-accent-green/30'
                       }`}
                     >
-                      <Play className="w-4 h-4" />
+                      <Play className="w-3 h-3 lg:w-4 lg:h-4" />
                       Start
                     </button>
                   )}
@@ -693,9 +690,9 @@ export default function AgentsPage() {
                       removeAgent(selectedAgentData.id);
                       setSelectedAgent(null);
                     }}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-bg-tertiary text-text-muted rounded-lg hover:text-accent-red transition-colors"
+                    className="flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1 lg:py-1.5 bg-bg-tertiary text-text-muted rounded-lg hover:text-accent-red transition-colors"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-3 h-3 lg:w-4 lg:h-4" />
                   </button>
                 </div>
               </div>

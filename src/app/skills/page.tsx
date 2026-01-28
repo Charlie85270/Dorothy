@@ -330,35 +330,41 @@ export default function SkillsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 lg:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Skills Marketplace</h1>
-          <p className="text-text-secondary text-sm mt-1">
-            {hasElectron
-              ? 'Install skills directly to enhance your Claude agents'
-              : 'Browse and copy install commands for skills'
-            }
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {!hasElectron && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-accent-amber/10 text-accent-amber text-xs">
-              <MonitorDown className="w-3.5 h-3.5" />
-              <span>Desktop app for direct install</span>
-            </div>
-          )}
-          <div className="text-sm text-text-muted">
-            <span className="text-accent-purple font-medium">{SKILLS_DATABASE.length}</span> skills available
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h1 className="text-xl lg:text-2xl font-bold tracking-tight">Skills Marketplace</h1>
+            <p className="text-text-secondary text-xs lg:text-sm mt-1 hidden sm:block">
+              {hasElectron
+                ? 'Install skills directly to enhance your Claude agents'
+                : 'Browse and copy install commands for skills'
+              }
+            </p>
           </div>
           <button
             onClick={() => setShowCustomInstall(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-accent-purple text-white font-medium rounded-lg hover:bg-accent-purple/90 transition-colors"
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-accent-purple text-white font-medium rounded-lg hover:bg-accent-purple/90 transition-colors text-sm shrink-0"
           >
             <Plus className="w-4 h-4" />
-            Custom Install
+            <span className="hidden sm:inline">Custom Install</span>
+            <span className="sm:hidden">Custom</span>
           </button>
+        </div>
+
+        {/* Badges row - below on mobile */}
+        <div className="flex flex-wrap items-center gap-2">
+          {!hasElectron && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-accent-amber/10 text-accent-amber text-xs">
+              <MonitorDown className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Desktop app for direct install</span>
+              <span className="sm:hidden">Desktop only</span>
+            </div>
+          )}
+          <div className="text-xs lg:text-sm text-text-muted">
+            <span className="text-accent-purple font-medium">{SKILLS_DATABASE.length}</span> skills
+          </div>
         </div>
       </div>
 
@@ -484,22 +490,22 @@ export default function SkillsPage() {
       </AnimatePresence>
 
       {/* Search & Filter */}
-      <div className="flex gap-3">
+      <div className="flex flex-col sm:flex-row gap-3">
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search skills by name, repo, or category..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-lg"
+            placeholder="Search skills..."
+            className="w-full pl-10 pr-4 py-2.5 rounded-lg text-sm"
           />
         </div>
 
         <div className="relative">
           <button
             onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-bg-tertiary text-text-secondary hover:text-text-primary transition-colors min-w-[140px]"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-bg-tertiary text-text-secondary hover:text-text-primary transition-colors w-full sm:w-auto sm:min-w-[140px] text-sm"
           >
             <Filter className="w-4 h-4" />
             {selectedCategory || 'All Categories'}

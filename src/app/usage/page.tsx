@@ -364,14 +364,15 @@ export default function UsagePage() {
   const maxCost = Math.max(...costChartData.map(d => d.cost), 0.01);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 lg:space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-3">
-          <BarChart2 className="w-7 h-7 text-accent-purple" />
-          Usage & Cost Analytics
+        <h1 className="text-xl lg:text-2xl font-bold tracking-tight flex items-center gap-2 lg:gap-3">
+          <BarChart2 className="w-6 h-6 lg:w-7 lg:h-7 text-accent-purple" />
+          <span className="hidden sm:inline">Usage & Cost Analytics</span>
+          <span className="sm:hidden">Usage & Costs</span>
         </h1>
-        <p className="text-text-secondary text-sm mt-1">
+        <p className="text-text-secondary text-xs lg:text-sm mt-1 hidden sm:block">
           Monitor your Claude API usage and estimated costs
         </p>
       </div>
@@ -389,7 +390,7 @@ export default function UsagePage() {
             </div>
             <div>
               <p className="text-xs text-text-muted">Total Cost (All Time)</p>
-              <p className="text-2xl font-bold text-accent-green">${totalUsage.totalCost.toFixed(2)}</p>
+              <p className="text-xl lg:text-2xl font-bold text-accent-green">${totalUsage.totalCost.toFixed(2)}</p>
             </div>
           </div>
           <p className="text-xs text-text-muted">
@@ -409,7 +410,7 @@ export default function UsagePage() {
             </div>
             <div>
               <p className="text-xs text-text-muted">Today's Cost</p>
-              <p className="text-2xl font-bold text-accent-amber">${todayCost.toFixed(2)}</p>
+              <p className="text-xl lg:text-2xl font-bold text-accent-amber">${todayCost.toFixed(2)}</p>
             </div>
           </div>
           <p className="text-xs text-text-muted">
@@ -429,7 +430,7 @@ export default function UsagePage() {
             </div>
             <div>
               <p className="text-xs text-text-muted">Total Tokens</p>
-              <p className="text-2xl font-bold">{(totalUsage.totalTokens / 1000000).toFixed(2)}M</p>
+              <p className="text-xl lg:text-2xl font-bold">{(totalUsage.totalTokens / 1000000).toFixed(2)}M</p>
             </div>
           </div>
           <p className="text-xs text-text-muted">
@@ -449,7 +450,7 @@ export default function UsagePage() {
             </div>
             <div>
               <p className="text-xs text-text-muted">Cache Savings</p>
-              <p className="text-2xl font-bold text-accent-cyan">{(totalUsage.totalCacheRead / 1000000).toFixed(2)}M</p>
+              <p className="text-xl lg:text-2xl font-bold text-accent-cyan">{(totalUsage.totalCacheRead / 1000000).toFixed(2)}M</p>
             </div>
           </div>
           <p className="text-xs text-text-muted">

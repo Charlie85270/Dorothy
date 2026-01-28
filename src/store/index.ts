@@ -218,6 +218,7 @@ interface AppState {
   selectedAgent: string | null;
   selectedChat: string | null;
   sidebarCollapsed: boolean;
+  mobileMenuOpen: boolean;
 
   // Actions - Agents
   addAgent: (agent: Omit<Agent, 'id' | 'createdAt' | 'lastActive' | 'logs' | 'tokensUsed' | 'tasksCompleted'>) => void;
@@ -246,6 +247,8 @@ interface AppState {
   setSelectedAgent: (id: string | null) => void;
   setSelectedChat: (id: string | null) => void;
   toggleSidebar: () => void;
+  setMobileMenuOpen: (open: boolean) => void;
+  toggleMobileMenu: () => void;
 
   // Computed
   getStats: () => DashboardStats;
@@ -268,6 +271,7 @@ export const useStore = create<AppState>((set, get) => ({
   selectedAgent: null,
   selectedChat: null,
   sidebarCollapsed: false,
+  mobileMenuOpen: false,
 
   // Agent Actions
   addAgent: (agent) => set((state) => ({
@@ -393,6 +397,8 @@ export const useStore = create<AppState>((set, get) => ({
   setSelectedAgent: (id) => set({ selectedAgent: id }),
   setSelectedChat: (id) => set({ selectedChat: id }),
   toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+  setMobileMenuOpen: (open) => set({ mobileMenuOpen: open }),
+  toggleMobileMenu: () => set((state) => ({ mobileMenuOpen: !state.mobileMenuOpen })),
 
   // Computed
   getStats: () => {

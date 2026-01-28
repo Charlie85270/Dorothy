@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#22d3ee"/>
+      <stop offset="100%" style="stop-color:#3b82f6"/>
+    </linearGradient>
+  </defs>
+  <!-- Background with rounded corners -->
+  <rect width="512" height="512" rx="96" fill="url(#bgGradient)"/>
+  <!-- Bot icon (simplified) -->
+  <g transform="translate(128, 128)" fill="none" stroke="#0a0a0f" stroke-width="20" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Bot head -->
+    <rect x="32" y="64" width="192" height="144" rx="24" fill="#0a0a0f"/>
+    <!-- Eyes -->
+    <circle cx="96" cy="136" r="20" fill="#22d3ee"/>
+    <circle cx="160" cy="136" r="20" fill="#22d3ee"/>
+    <!-- Antenna -->
+    <line x1="128" y1="64" x2="128" y2="24"/>
+    <circle cx="128" cy="16" r="12" fill="#0a0a0f"/>
+    <!-- Body hint -->
+    <rect x="64" y="208" width="128" height="48" rx="12" fill="#0a0a0f"/>
+  </g>
+</svg>

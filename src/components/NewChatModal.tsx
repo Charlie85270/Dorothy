@@ -383,17 +383,17 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
           onClick={(e) => e.stopPropagation()}
-          className="w-full max-w-4xl bg-bg-secondary border border-border-primary rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+          className="w-full max-w-4xl mx-4 bg-bg-secondary border border-border-primary rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] lg:max-h-[90vh] flex flex-col"
         >
           {/* Header */}
-          <div className="px-6 py-4 border-b border-border-primary flex items-center justify-between bg-bg-tertiary/30">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent-cyan to-accent-blue flex items-center justify-center">
-                <Bot className="w-5 h-5 text-bg-primary" />
+          <div className="px-4 lg:px-6 py-3 lg:py-4 border-b border-border-primary flex items-center justify-between bg-bg-tertiary/30">
+            <div className="flex items-center gap-2 lg:gap-3">
+              <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-xl bg-gradient-to-br from-accent-cyan to-accent-blue flex items-center justify-center">
+                <Bot className="w-4 h-4 lg:w-5 lg:h-5 text-bg-primary" />
               </div>
               <div>
-                <h2 className="font-semibold text-lg">Create New Agent</h2>
-                <p className="text-sm text-text-muted">Step {step} of 3</p>
+                <h2 className="font-semibold text-base lg:text-lg">Create New Agent</h2>
+                <p className="text-xs lg:text-sm text-text-muted">Step {step} of 3</p>
               </div>
             </div>
             <button

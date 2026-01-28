@@ -277,6 +277,43 @@ function AgentNodeCard({
     document.addEventListener('mouseup', handleMouseUp);
   };
 
+  // Touch support for mobile dragging
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if ((e.target as HTMLElement).closest('button')) return;
+
+    e.stopPropagation();
+    const touch = e.touches[0];
+    dragRef.current = { startX: touch.clientX, startY: touch.clientY, hasMoved: false };
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if ((e.target as HTMLElement).closest('button')) return;
+
+    const touch = e.touches[0];
+    const deltaX = touch.clientX - dragRef.current.startX;
+    const deltaY = touch.clientY - dragRef.current.startY;
+
+    if (!dragRef.current.hasMoved && (Math.abs(deltaX) > DRAG_THRESHOLD || Math.abs(deltaY) > DRAG_THRESHOLD)) {
+      dragRef.current.hasMoved = true;
+      setIsDragging(true);
+    }
+
+    if (dragRef.current.hasMoved) {
+      e.preventDefault();
+      e.stopPropagation();
+      dragRef.current.startX = touch.clientX;
+      dragRef.current.startY = touch.clientY;
+      onDrag({ x: deltaX, y: deltaY });
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (!dragRef.current.hasMoved) {
+      onSelect();
+    }
+    setIsDragging(false);
+  };
+
   const statusColors: Record<string, string> = {
     running: 'bg-green-500',
     waiting: 'bg-amber-500',
@@ -304,7 +341,7 @@ function AgentNodeCard({
 
   return (
     <motion.div
-      className={`node-card absolute select-none ${isDragging ? 'z-50 cursor-grabbing' : 'z-10 cursor-pointer'}`}
+      className={`node-card absolute select-none touch-none ${isDragging ? 'z-50 cursor-grabbing' : 'z-10 cursor-pointer'}`}
       style={{ left: node.position.x, top: node.position.y }}
       initial={{ scale: 0, opacity: 0 }}
       animate={{
@@ -313,6 +350,9 @@ function AgentNodeCard({
       }}
       whileHover={{ scale: isDragging ? 1 : 1.02 }}
       onMouseDown={handleMouseDown}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
     >
       {/* Status Indicator Badge */}
       <StatusIndicator status={node.status} />
@@ -479,16 +519,56 @@ function ProjectNodeCard({
     document.addEventListener('mouseup', handleMouseUp);
   };
 
+  // Touch support for mobile dragging
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if ((e.target as HTMLElement).closest('button')) return;
+
+    e.stopPropagation();
+    const touch = e.touches[0];
+    dragRef.current = { startX: touch.clientX, startY: touch.clientY, hasMoved: false };
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if ((e.target as HTMLElement).closest('button')) return;
+
+    const touch = e.touches[0];
+    const deltaX = touch.clientX - dragRef.current.startX;
+    const deltaY = touch.clientY - dragRef.current.startY;
+
+    if (!dragRef.current.hasMoved && (Math.abs(deltaX) > DRAG_THRESHOLD || Math.abs(deltaY) > DRAG_THRESHOLD)) {
+      dragRef.current.hasMoved = true;
+      setIsDragging(true);
+    }
+
+    if (dragRef.current.hasMoved) {
+      e.preventDefault();
+      e.stopPropagation();
+      dragRef.current.startX = touch.clientX;
+      dragRef.current.startY = touch.clientY;
+      onDrag({ x: deltaX, y: deltaY });
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (!dragRef.current.hasMoved) {
+      onSelect();
+    }
+    setIsDragging(false);
+  };
+
   const agentCount = node.agentIds.length;
 
   return (
     <motion.div
-      className={`node-card absolute select-none ${isDragging ? 'z-50 cursor-grabbing' : 'z-10 cursor-pointer'}`}
+      className={`node-card absolute select-none touch-none ${isDragging ? 'z-50 cursor-grabbing' : 'z-10 cursor-pointer'}`}
       style={{ left: node.position.x, top: node.position.y }}
       initial={{ scale: 0, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
       whileHover={{ scale: isDragging ? 1 : 1.02 }}
       onMouseDown={handleMouseDown}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
     >
       <div
         className={`w-56 rounded-xl border backdrop-blur-sm transition-all duration-200 ${
@@ -588,10 +668,11 @@ function CanvasToolbar({
   setZoom: (zoom: number) => void;
 }) {
   return (
-    <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-40">
+    <div className="absolute top-3 left-3 right-3 lg:top-4 lg:left-4 lg:right-4 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-2 z-40">
       {/* Left side - Search & Filter */}
-      <div className="flex items-center gap-3">
-        <div className="relative">
+      <div className="flex items-center gap-2 lg:gap-3 overflow-x-auto">
+        {/* Search - hidden on mobile */}
+        <div className="relative hidden sm:block">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
           <input
             type="text"
@@ -602,12 +683,12 @@ function CanvasToolbar({
           />
         </div>
 
-        {/* Project filter dropdown */}
+        {/* Project filter dropdown - compact on mobile */}
         <div className="relative">
           <select
             value={projectFilter}
             onChange={(e) => setProjectFilter(e.target.value)}
-            className="pl-3 pr-8 py-2 rounded-lg bg-zinc-900/90 border border-zinc-700 text-sm text-zinc-200 focus:outline-none focus:border-cyan-500/50 appearance-none cursor-pointer min-w-[140px]"
+            className="pl-3 pr-8 py-2 rounded-lg bg-zinc-900/90 border border-zinc-700 text-xs lg:text-sm text-zinc-200 focus:outline-none focus:border-cyan-500/50 appearance-none cursor-pointer min-w-[100px] lg:min-w-[140px]"
           >
             <option value="all">All Projects</option>
             {projects.map((p) => (
@@ -619,38 +700,39 @@ function CanvasToolbar({
           <FolderGit2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
         </div>
 
-        <div className="flex items-center gap-1 p-1 rounded-lg bg-zinc-900/90 border border-zinc-700">
-          <Filter className="w-4 h-4 text-zinc-500 ml-2" />
+        {/* Status filter - compact on mobile */}
+        <div className="flex items-center gap-0.5 lg:gap-1 p-1 rounded-lg bg-zinc-900/90 border border-zinc-700">
+          <Filter className="w-4 h-4 text-zinc-500 ml-1 lg:ml-2 hidden sm:block" />
           {(['all', 'running', 'idle', 'stopped'] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+              className={`px-2 lg:px-3 py-1.5 rounded-md text-[10px] lg:text-xs font-medium transition-all ${
                 filter === f
                   ? 'bg-cyan-500/20 text-cyan-400'
                   : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
-              {f.charAt(0).toUpperCase() + f.slice(1)}
+              {f === 'all' ? 'All' : f === 'running' ? 'Run' : f === 'idle' ? 'Idle' : 'Stop'}
             </button>
           ))}
         </div>
       </div>
 
       {/* Right side - View controls */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 justify-end">
         <div className="flex items-center gap-1 p-1 rounded-lg bg-zinc-900/90 border border-zinc-700">
           <button
-            onClick={() => setZoom(Math.max(0.5, zoom - 0.1))}
+            onClick={() => setZoom(Math.max(0.3, zoom - 0.1))}
             className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
           >
             <ZoomOut className="w-4 h-4" />
           </button>
-          <span className="px-2 text-xs text-zinc-400 min-w-[3rem] text-center">
+          <span className="px-1.5 lg:px-2 text-[10px] lg:text-xs text-zinc-400 min-w-[2.5rem] lg:min-w-[3rem] text-center">
             {Math.round(zoom * 100)}%
           </span>
           <button
-            onClick={() => setZoom(Math.min(1.5, zoom + 0.1))}
+            onClick={() => setZoom(Math.min(2, zoom + 0.1))}
             className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
           >
             <ZoomIn className="w-4 h-4" />
@@ -671,16 +753,16 @@ function CanvasToolbar({
 // Status bar
 function CanvasStatusBar({ agentCount, runningCount, projectCount, waitingCount }: { agentCount: number; runningCount: number; projectCount: number; waitingCount: number }) {
   return (
-    <div className="absolute bottom-4 left-4 flex items-center gap-6 px-4 py-2 rounded-lg bg-zinc-900/90 border border-zinc-700 text-xs text-zinc-400 z-40">
-      <div className="flex items-center gap-2">
-        <Bot className="w-4 h-4 text-cyan-400" />
-        <span>{agentCount} Agent{agentCount !== 1 ? 's' : ''}</span>
-        {runningCount > 0 && <span className="text-green-400">({runningCount} running)</span>}
-        {waitingCount > 0 && <span className="text-amber-400">({waitingCount} waiting)</span>}
+    <div className="absolute bottom-3 left-3 lg:bottom-4 lg:left-4 flex items-center gap-3 lg:gap-6 px-3 lg:px-4 py-2 rounded-lg bg-zinc-900/90 border border-zinc-700 text-[10px] lg:text-xs text-zinc-400 z-40">
+      <div className="flex items-center gap-1.5 lg:gap-2">
+        <Bot className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-cyan-400" />
+        <span>{agentCount}</span>
+        {runningCount > 0 && <span className="text-green-400 hidden sm:inline">({runningCount} run)</span>}
+        {waitingCount > 0 && <span className="text-amber-400">({waitingCount} wait)</span>}
       </div>
-      <div className="flex items-center gap-2">
-        <FolderGit2 className="w-4 h-4 text-purple-400" />
-        <span>{projectCount} Project{projectCount !== 1 ? 's' : ''}</span>
+      <div className="flex items-center gap-1.5 lg:gap-2 hidden sm:flex">
+        <FolderGit2 className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-purple-400" />
+        <span>{projectCount}</span>
       </div>
     </div>
   );
@@ -973,6 +1055,14 @@ export default function CanvasView() {
   const [isPanning, setIsPanning] = useState(false);
   const panRef = useRef({ startX: 0, startY: 0 });
 
+  // Touch gesture state
+  const touchRef = useRef<{
+    lastTouchDistance: number | null;
+    lastTouchCenter: { x: number; y: number } | null;
+    isPinching: boolean;
+  }>({ lastTouchDistance: null, lastTouchCenter: null, isPinching: false });
+  const canvasRef = useRef<HTMLDivElement>(null);
+
   // Terminal dialog state
   const [terminalAgentId, setTerminalAgentId] = useState<string | null>(null);
 
@@ -1231,6 +1321,91 @@ export default function CanvasView() {
     setIsPanning(false);
   };
 
+  // Touch event handlers for mobile
+  const getTouchDistance = (touches: React.TouchList) => {
+    if (touches.length < 2) return null;
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  const getTouchCenter = (touches: React.TouchList) => {
+    if (touches.length < 2) {
+      return { x: touches[0].clientX, y: touches[0].clientY };
+    }
+    return {
+      x: (touches[0].clientX + touches[1].clientX) / 2,
+      y: (touches[0].clientY + touches[1].clientY) / 2,
+    };
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    // Don't interfere with node interactions
+    if ((e.target as HTMLElement).closest('.node-card')) return;
+
+    if (e.touches.length === 2) {
+      // Pinch gesture start
+      e.preventDefault();
+      touchRef.current.isPinching = true;
+      touchRef.current.lastTouchDistance = getTouchDistance(e.touches);
+      touchRef.current.lastTouchCenter = getTouchCenter(e.touches);
+    } else if (e.touches.length === 1) {
+      // Single finger pan
+      setIsPanning(true);
+      panRef.current = {
+        startX: e.touches[0].clientX - panOffset.x,
+        startY: e.touches[0].clientY - panOffset.y,
+      };
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if ((e.target as HTMLElement).closest('.node-card')) return;
+
+    if (e.touches.length === 2 && touchRef.current.isPinching) {
+      // Pinch to zoom
+      e.preventDefault();
+      const newDistance = getTouchDistance(e.touches);
+      const newCenter = getTouchCenter(e.touches);
+
+      if (newDistance && touchRef.current.lastTouchDistance) {
+        const scale = newDistance / touchRef.current.lastTouchDistance;
+        const newZoom = Math.min(2, Math.max(0.3, zoom * scale));
+        setZoom(newZoom);
+      }
+
+      // Also pan while pinching
+      if (touchRef.current.lastTouchCenter && newCenter) {
+        const dx = newCenter.x - touchRef.current.lastTouchCenter.x;
+        const dy = newCenter.y - touchRef.current.lastTouchCenter.y;
+        setPanOffset(prev => ({
+          x: prev.x + dx,
+          y: prev.y + dy,
+        }));
+      }
+
+      touchRef.current.lastTouchDistance = newDistance;
+      touchRef.current.lastTouchCenter = newCenter;
+    } else if (e.touches.length === 1 && isPanning && !touchRef.current.isPinching) {
+      // Single finger pan
+      setPanOffset({
+        x: e.touches[0].clientX - panRef.current.startX,
+        y: e.touches[0].clientY - panRef.current.startY,
+      });
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (e.touches.length < 2) {
+      touchRef.current.isPinching = false;
+      touchRef.current.lastTouchDistance = null;
+      touchRef.current.lastTouchCenter = null;
+    }
+    if (e.touches.length === 0) {
+      setIsPanning(false);
+    }
+  };
+
   // Handle keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1276,11 +1451,15 @@ export default function CanvasView() {
 
   return (
     <div
-      className={`relative w-full h-full bg-[#0a0a0f] overflow-hidden ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
+      ref={canvasRef}
+      className={`relative w-full h-full bg-[#0a0a0f] overflow-hidden touch-none ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
       onMouseDown={handleCanvasMouseDown}
       onMouseMove={handleCanvasMouseMove}
       onMouseUp={handleCanvasMouseUp}
       onMouseLeave={handleCanvasMouseLeave}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
       onClick={(e) => {
         if (!(e.target as HTMLElement).closest('.node-card')) {
           setSelectedNodeId(null);
@@ -1355,26 +1534,28 @@ export default function CanvasView() {
         projectCount={filteredProjects.length}
       />
 
-      {/* Notification Panel */}
-      <NotificationPanel
-        agents={agentNodes}
-        isCollapsed={notificationPanelCollapsed}
-        onToggle={() => setNotificationPanelCollapsed(!notificationPanelCollapsed)}
-        onOpenTerminal={handleOpenTerminal}
-      />
+      {/* Notification Panel - hidden on mobile */}
+      <div className="hidden lg:block">
+        <NotificationPanel
+          agents={agentNodes}
+          isCollapsed={notificationPanelCollapsed}
+          onToggle={() => setNotificationPanelCollapsed(!notificationPanelCollapsed)}
+          onOpenTerminal={handleOpenTerminal}
+        />
+      </div>
 
       {/* Empty state */}
       {agentNodes.length === 0 && projectNodes.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center z-30">
-          <div className="text-center p-8 rounded-xl bg-zinc-900/80 border border-zinc-700 max-w-md">
-            <Bot className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-zinc-300 mb-2">No agents yet</h3>
-            <p className="text-sm text-zinc-500 mb-4">
-              Create an agent from the Agents page to see them here on the board.
+        <div className="absolute inset-0 flex items-center justify-center z-30 p-4">
+          <div className="text-center p-4 lg:p-8 rounded-xl bg-zinc-900/80 border border-zinc-700 max-w-[280px] lg:max-w-md">
+            <Bot className="w-8 h-8 lg:w-12 lg:h-12 text-zinc-600 mx-auto mb-3 lg:mb-4" />
+            <h3 className="text-base lg:text-lg font-medium text-zinc-300 mb-1.5 lg:mb-2">No agents yet</h3>
+            <p className="text-xs lg:text-sm text-zinc-500 mb-3 lg:mb-4">
+              Create an agent from the Agents page to see them here.
             </p>
             <button
               onClick={() => router.push('/agents')}
-              className="px-4 py-2 rounded-lg bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/30 transition-colors text-sm"
+              className="px-3 lg:px-4 py-1.5 lg:py-2 rounded-lg bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/30 transition-colors text-xs lg:text-sm"
             >
               Go to Agents
             </button>

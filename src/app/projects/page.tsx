@@ -7,6 +7,7 @@ import {
   MessageSquare,
   Clock,
   ChevronRight,
+  ChevronLeft,
   Loader2,
   ExternalLink,
   Terminal,
@@ -77,6 +78,7 @@ export default function ProjectsPage() {
   const [activeTab, setActiveTab] = useState<'all' | 'favorites'>('all');
   const [favorites, setFavorites] = useState<string[]>([]);
   const [customProjects, setCustomProjects] = useState<CustomProject[]>([]);
+  const [mobileShowDetail, setMobileShowDetail] = useState(false);
 
   // Agent dialog state
   const [showAgentDialog, setShowAgentDialog] = useState(false);
@@ -103,13 +105,12 @@ export default function ProjectsPage() {
     }
   };
 
-  // Add a new project (defined after allProjects - see below)
+  // Add a new project
   const handleAddProject = async () => {
     if (!openFolderDialog) return;
     try {
       const selectedPath = await openFolderDialog();
       if (selectedPath) {
-        // Check if already exists in custom projects
         const normalizedPath = selectedPath.replace(/\/+$/, '');
         const existsInCustom = customProjects.some(p => p.path.replace(/\/+$/, '').toLowerCase() === normalizedPath.toLowerCase());
         if (!existsInCustom) {
@@ -128,15 +129,16 @@ export default function ProjectsPage() {
     saveCustomProjects(customProjects.filter(p => p.path !== projectPath));
     if (selectedProject?.path === projectPath) {
       setSelectedProject(null);
+      setMobileShowDetail(false);
     }
   };
 
-  // Check if a project is custom (can be removed)
+  // Check if a project is custom
   const isCustomProject = (projectPath: string) => {
     return customProjects.some(p => p.path === projectPath);
   };
 
-  // Load favorites from localStorage on mount
+  // Load favorites from localStorage
   useEffect(() => {
     try {
       const stored = localStorage.getItem(FAVORITES_KEY);
@@ -148,7 +150,7 @@ export default function ProjectsPage() {
     }
   }, []);
 
-  // Save favorites to localStorage when changed
+  // Save favorites
   const saveFavorites = (newFavorites: string[]) => {
     setFavorites(newFavorites);
     try {
@@ -158,9 +160,9 @@ export default function ProjectsPage() {
     }
   };
 
-  // Toggle favorite status
+  // Toggle favorite
   const toggleFavorite = (projectId: string, e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent project selection
+    e.stopPropagation();
     if (favorites.includes(projectId)) {
       saveFavorites(favorites.filter(id => id !== projectId));
     } else {
@@ -170,28 +172,22 @@ export default function ProjectsPage() {
 
   const isFavorite = (projectId: string) => favorites.includes(projectId);
 
-  // Normalize path for comparison (remove trailing slashes, resolve symlinks conceptually)
+  // Normalize path for comparison
   const normalizePath = (path: string) => {
-    // Remove trailing slashes and lowercase for comparison
     return path.replace(/\/+$/, '').toLowerCase();
   };
 
-  // More flexible path matching - check if paths refer to the same directory
+  // Flexible path matching
   const pathsMatch = (path1: string, path2: string) => {
     const norm1 = normalizePath(path1);
     const norm2 = normalizePath(path2);
-    // Exact match
     if (norm1 === norm2) return true;
-    // One ends with the other (handle relative vs absolute)
     if (norm1.endsWith(norm2) || norm2.endsWith(norm1)) return true;
-    // Match by directory name (last component)
     const name1 = norm1.split('/').pop();
     const name2 = norm2.split('/').pop();
     if (name1 && name2 && name1 === name2) {
-      // Additional check: if names match, verify they have similar structure
       const parts1 = norm1.split('/').filter(Boolean);
       const parts2 = norm2.split('/').filter(Boolean);
-      // If the last 2 components match, consider it a match
       if (parts1.length >= 2 && parts2.length >= 2) {
         if (parts1.slice(-2).join('/') === parts2.slice(-2).join('/')) return true;
       }
@@ -199,27 +195,12 @@ export default function ProjectsPage() {
     return false;
   };
 
-  // Get agents for the selected project (use flexible path matching)
+  // Get agents for the selected project
   const projectAgents = selectedProject
     ? agents.filter(a => pathsMatch(a.projectPath, selectedProject.path))
     : [];
 
-  // Debug: Log agent paths when project changes (remove in production)
-  useEffect(() => {
-    if (selectedProject && agents.length > 0) {
-      console.log('=== Agent Path Matching Debug ===');
-      console.log('Selected project:', selectedProject.name, selectedProject.path);
-      const matched = agents.filter(a => pathsMatch(a.projectPath, selectedProject.path));
-      agents.forEach(a => {
-        const matches = pathsMatch(a.projectPath, selectedProject.path);
-        console.log(`Agent "${a.name}": ${a.projectPath} -> ${matches ? '✓ MATCH' : '✗ no match'}`);
-      });
-      console.log('Matched agents:', matched.length);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProject?.path, agents.length]);
-
-  // Handle creating a new agent via NewChatModal
+  // Handle creating a new agent
   const handleCreateAgent = async (
     projectPath: string,
     skills: string[],
@@ -240,7 +221,6 @@ export default function ProjectsPage() {
         secondaryProjectPath,
       });
 
-      // Start the agent with the prompt
       if (prompt) {
         setTimeout(async () => {
           await startAgent(agent.id, prompt, { model });
@@ -253,12 +233,9 @@ export default function ProjectsPage() {
     }
   };
 
-  // Handle restarting/resuming an agent
+  // Handle restarting an agent
   const handleRestartAgent = async (agent: AgentStatus, resume: boolean = false) => {
-    const prompt = resume
-      ? '/resume' // Special command to resume conversation
-      : 'Continue working on the previous task';
-
+    const prompt = resume ? '/resume' : 'Continue working on the previous task';
     try {
       await startAgent(agent.id, prompt, { resume });
     } catch (err) {
@@ -271,12 +248,10 @@ export default function ProjectsPage() {
     selectedSession
   );
 
-  // Merge Claude Code projects with custom projects - MUST be before early returns
+  // Merge Claude Code projects with custom projects
   const claudeProjects = data?.projects || [];
   const allProjects = useMemo(() => {
     const merged: ClaudeProject[] = [...claudeProjects];
-
-    // Add custom projects that aren't already in Claude projects
     customProjects.forEach(cp => {
       const exists = claudeProjects.some(p => pathsMatch(p.path, cp.path));
       if (!exists) {
@@ -289,7 +264,6 @@ export default function ProjectsPage() {
         });
       }
     });
-
     return merged;
   }, [claudeProjects, customProjects]);
 
@@ -300,7 +274,18 @@ export default function ProjectsPage() {
 
   const favoritesCount = allProjects.filter(p => favorites.includes(p.id)).length;
 
-  // Early returns for loading/error states - AFTER all hooks
+  // Handle project selection
+  const handleSelectProject = (project: ClaudeProject) => {
+    setSelectedProject(project);
+    setSelectedSession(null);
+    setMobileShowDetail(true);
+  };
+
+  // Handle back button on mobile
+  const handleBackToList = () => {
+    setMobileShowDetail(false);
+  };
+
   if (loading && !data) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
@@ -331,7 +316,7 @@ export default function ProjectsPage() {
 
     if (diffDays === 0) return 'Today';
     if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
@@ -353,47 +338,24 @@ export default function ProjectsPage() {
     return 'Message content';
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
-          <p className="text-text-secondary text-sm mt-1">
-            Browse your Claude Code projects and conversations
-          </p>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-text-muted">
-            {allProjects.length} project{allProjects.length !== 1 ? 's' : ''}
-          </span>
-          {hasElectron && (
-            <button
-              onClick={handleAddProject}
-              className="flex items-center gap-2 px-4 py-2 bg-accent-cyan/20 text-accent-cyan rounded-lg hover:bg-accent-cyan/30 transition-colors"
-            >
-              <FolderPlus className="w-4 h-4" />
-              Add Project
-            </button>
-          )}
-        </div>
-      </div>
-
+  // Project List Component
+  const ProjectList = () => (
+    <div className="flex flex-col h-full">
       {/* Tabs */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 p-3 border-b border-border-primary overflow-x-auto">
         <button
           onClick={() => setActiveTab('all')}
           className={`
-            flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all
+            flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-xs transition-all shrink-0
             ${activeTab === 'all'
-              ? 'bg-accent-cyan/20 text-accent-cyan border border-accent-cyan/30'
-              : 'bg-bg-tertiary text-text-secondary hover:text-text-primary border border-transparent'
+              ? 'bg-accent-cyan/20 text-accent-cyan'
+              : 'bg-bg-tertiary text-text-secondary'
             }
           `}
         >
-          <Layers className="w-4 h-4" />
-          All Projects
-          <span className={`px-1.5 py-0.5 rounded text-xs ${
+          <Layers className="w-3.5 h-3.5" />
+          All
+          <span className={`px-1.5 py-0.5 rounded text-[10px] ${
             activeTab === 'all' ? 'bg-accent-cyan/20' : 'bg-bg-secondary'
           }`}>
             {allProjects.length}
@@ -402,16 +364,16 @@ export default function ProjectsPage() {
         <button
           onClick={() => setActiveTab('favorites')}
           className={`
-            flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all
+            flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-xs transition-all shrink-0
             ${activeTab === 'favorites'
-              ? 'bg-accent-amber/20 text-accent-amber border border-accent-amber/30'
-              : 'bg-bg-tertiary text-text-secondary hover:text-text-primary border border-transparent'
+              ? 'bg-accent-amber/20 text-accent-amber'
+              : 'bg-bg-tertiary text-text-secondary'
             }
           `}
         >
-          <Star className="w-4 h-4" />
+          <Star className="w-3.5 h-3.5" />
           Favorites
-          <span className={`px-1.5 py-0.5 rounded text-xs ${
+          <span className={`px-1.5 py-0.5 rounded text-[10px] ${
             activeTab === 'favorites' ? 'bg-accent-amber/20' : 'bg-bg-secondary'
           }`}>
             {favoritesCount}
@@ -419,313 +381,210 @@ export default function ProjectsPage() {
         </button>
       </div>
 
-      {/* Main Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Project List */}
-        <div className="lg:col-span-2 space-y-3">
-          <AnimatePresence mode="popLayout">
-            {projects.map((project, index) => {
-              const color = getProjectColor(project.name);
-              const isSelected = selectedProject?.id === project.id;
+      {/* Project Items */}
+      <div className="flex-1 overflow-y-auto">
+        <div>
+          {projects.map((project) => {
+            const color = getProjectColor(project.name);
+            const isSelected = selectedProject?.id === project.id;
+            const linkedAgents = agents.filter(a => pathsMatch(a.projectPath, project.path));
 
-              return (
-                <motion.div
-                  key={project.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ delay: index * 0.03 }}
-                  onClick={() => {
-                    setSelectedProject(project);
-                    setSelectedSession(null);
-                  }}
-                  className={`
-                    relative rounded-xl border bg-bg-secondary p-5 cursor-pointer transition-all overflow-hidden
-                    ${isSelected ? 'border-accent-cyan shadow-[0_0_20px_rgba(34,211,238,0.15)]' : 'border-border-primary hover:border-border-accent'}
-                  `}
-                >
-                  {/* Color bar */}
+            return (
+              <div
+                key={project.id}
+                onClick={() => handleSelectProject(project)}
+                className={`
+                  p-4 cursor-pointer transition-all border-b border-border-primary/30 active:bg-bg-tertiary
+                  ${isSelected ? 'bg-accent-cyan/10' : 'hover:bg-bg-tertiary/50'}
+                `}
+              >
+                <div className="flex items-center gap-3">
+                  {/* Avatar */}
                   <div
-                    className="absolute left-0 top-0 bottom-0 w-1"
-                    style={{ backgroundColor: color }}
-                  />
+                    className="w-12 h-12 rounded-full flex items-center justify-center shrink-0"
+                    style={{ backgroundColor: `${color}20` }}
+                  >
+                    <FolderOpen className="w-5 h-5" style={{ color }} />
+                  </div>
 
-                  <div className="pl-4 flex items-start justify-between">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-3">
-                        <FolderOpen className="w-5 h-5" style={{ color }} />
-                        <h3 className="font-semibold text-lg">{project.name}</h3>
-                        {isFavorite(project.id) && (
-                          <Star className="w-4 h-4 text-accent-amber fill-accent-amber" />
-                        )}
-                        {isCustomProject(project.path) && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent-purple/20 text-accent-purple">
-                            Custom
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-text-muted mt-2 font-mono truncate">
-                        {project.path}
-                      </p>
-
-                      {/* Stats - include agent count */}
-                      {(() => {
-                        const linkedAgents = agents.filter(a => pathsMatch(a.projectPath, project.path));
-                        return linkedAgents.length > 0 ? (
-                          <div className="flex items-center gap-1 mt-1">
-                            <Bot className="w-3.5 h-3.5 text-accent-cyan" />
-                            <span className="text-xs text-accent-cyan">
-                              {linkedAgents.length} agent{linkedAgents.length !== 1 ? 's' : ''} linked
-                            </span>
-                          </div>
-                        ) : null;
-                      })()}
-
-                      {/* Stats */}
-                      <div className="flex items-center gap-6 mt-3 text-xs text-text-muted">
-                        <div className="flex items-center gap-1">
-                          <MessageSquare className="w-3.5 h-3.5" />
-                          <span>{project.sessions.length} sessions</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5" />
-                          <span>Last active: {formatDate(project.lastActivity)}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        onClick={(e) => toggleFavorite(project.id, e)}
-                        className={`p-2 rounded-lg transition-all ${
-                          isFavorite(project.id)
-                            ? 'text-accent-amber hover:bg-accent-amber/20'
-                            : 'text-text-muted hover:text-accent-amber hover:bg-bg-tertiary'
-                        }`}
-                        title={isFavorite(project.id) ? 'Remove from favorites' : 'Add to favorites'}
-                      >
-                        <Star className={`w-5 h-5 ${isFavorite(project.id) ? 'fill-current' : ''}`} />
-                      </button>
-                      {isCustomProject(project.path) && (
-                        <button
-                          onClick={(e) => handleRemoveProject(project.path, e)}
-                          className="p-2 rounded-lg text-text-muted hover:text-accent-red hover:bg-accent-red/10 transition-all"
-                          title="Remove from list"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-semibold text-sm truncate">{project.name}</h4>
+                      {isFavorite(project.id) && (
+                        <Star className="w-3.5 h-3.5 text-accent-amber fill-accent-amber shrink-0" />
                       )}
-                      <ChevronRight className={`w-5 h-5 text-text-muted transition-transform ${isSelected ? 'rotate-90' : ''}`} />
                     </div>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
-
-          {projects.length === 0 && (
-            <div className="rounded-xl border border-border-primary bg-bg-secondary p-12 text-center">
-              {activeTab === 'favorites' ? (
-                <>
-                  <Star className="w-12 h-12 mx-auto text-text-muted mb-4" />
-                  <h3 className="font-medium text-lg mb-2">No favorite projects</h3>
-                  <p className="text-text-secondary text-sm">
-                    Click the star icon on a project to add it to your favorites
-                  </p>
-                  <button
-                    onClick={() => setActiveTab('all')}
-                    className="mt-4 text-accent-cyan hover:underline text-sm"
-                  >
-                    View all projects
-                  </button>
-                </>
-              ) : (
-                <>
-                  <FolderKanban className="w-12 h-12 mx-auto text-text-muted mb-4" />
-                  <h3 className="font-medium text-lg mb-2">No projects found</h3>
-                  <p className="text-text-secondary text-sm mb-4">
-                    Start using Claude Code in a project directory to see it here
-                  </p>
-                  {hasElectron && (
-                    <button
-                      onClick={handleAddProject}
-                      className="flex items-center gap-2 px-4 py-2 mx-auto bg-accent-cyan/20 text-accent-cyan rounded-lg hover:bg-accent-cyan/30 transition-colors"
-                    >
-                      <FolderPlus className="w-4 h-4" />
-                      Add a Project
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Project Details Panel */}
-        <div className="space-y-4">
-          {selectedProject ? (
-            <>
-              {/* Project Info */}
-              <div className="rounded-xl border border-border-primary bg-bg-secondary p-5">
-                <h3 className="text-sm font-medium flex items-center gap-2 mb-4">
-                  <FolderOpen className="w-4 h-4" style={{ color: getProjectColor(selectedProject.name) }} />
-                  {selectedProject.name}
-                </h3>
-
-                <div className="space-y-3 text-sm">
-                  <div>
-                    <span className="text-text-muted">Path:</span>
-                    <p className="font-mono text-xs mt-1 text-text-secondary break-all">
-                      {selectedProject.path}
+                    <p className="text-[11px] text-text-muted mt-0.5">
+                      {project.sessions.length} sessions · {formatDate(project.lastActivity)}
                     </p>
+                    {linkedAgents.length > 0 && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <Bot className="w-3 h-3 text-accent-cyan" />
+                        <span className="text-[10px] text-accent-cyan">
+                          {linkedAgents.length} agent{linkedAgents.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-text-muted">Sessions:</span>
-                    <span>{selectedProject.sessions.length}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-text-muted">Last Active:</span>
-                    <span>{formatDate(selectedProject.lastActivity)}</span>
-                  </div>
-                </div>
 
-                <div className="flex gap-2 mt-4">
-                  <button
-                    onClick={() => {
-                      // Open in Cursor
-                      window.open(`cursor://file${selectedProject.path}`, '_blank');
-                    }}
-                    className="flex-1 px-4 py-2 rounded-lg border border-border-primary text-text-secondary hover:text-text-primary hover:border-border-accent transition-colors flex items-center justify-center gap-2"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                    Open in Cursor
-                  </button>
-                  {hasElectron && (
-                    <button
-                      onClick={() => setShowAgentDialog(true)}
-                      className="flex-1 px-4 py-2 rounded-lg bg-accent-cyan/20 text-accent-cyan hover:bg-accent-cyan/30 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Launch Agent
-                    </button>
-                  )}
+                  <ChevronRight className="w-5 h-5 text-text-muted shrink-0" />
                 </div>
               </div>
+            );
+          })}
+        </div>
 
-              {/* Project Agents */}
+        {projects.length === 0 && (
+          <div className="p-8 text-center">
+            <FolderKanban className="w-12 h-12 mx-auto text-text-muted/30 mb-3" />
+            <p className="text-text-muted text-sm">
+              {activeTab === 'favorites' ? 'No favorite projects' : 'No projects found'}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // Project Detail Component
+  const ProjectDetail = () => (
+    <div className="flex flex-col h-full overflow-y-auto">
+      {selectedProject ? (
+        <>
+          {/* Header */}
+          <div className="px-4 py-3 border-b border-border-primary flex items-center gap-3 bg-bg-secondary sticky top-0 z-10">
+            <button
+              onClick={handleBackToList}
+              className="lg:hidden p-1.5 -ml-1.5 rounded-lg hover:bg-bg-tertiary transition-colors"
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+
+            <div
+              className="w-10 h-10 rounded-full flex items-center justify-center"
+              style={{ backgroundColor: `${getProjectColor(selectedProject.name)}20` }}
+            >
+              <FolderOpen className="w-5 h-5" style={{ color: getProjectColor(selectedProject.name) }} />
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-sm truncate">{selectedProject.name}</h3>
+              <p className="text-xs text-text-muted truncate">
+                {selectedProject.path.split('/').slice(-2).join('/')}
+              </p>
+            </div>
+
+            <button
+              onClick={(e) => toggleFavorite(selectedProject.id, e)}
+              className={`p-2 rounded-lg transition-all ${
+                isFavorite(selectedProject.id)
+                  ? 'text-accent-amber'
+                  : 'text-text-muted'
+              }`}
+            >
+              <Star className={`w-5 h-5 ${isFavorite(selectedProject.id) ? 'fill-current' : ''}`} />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 p-4 space-y-4 bg-bg-primary">
+            {/* Quick Actions */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => window.open(`cursor://file${selectedProject.path}`, '_blank')}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-border-primary bg-bg-secondary text-sm flex items-center justify-center gap-2"
+              >
+                <ExternalLink className="w-4 h-4" />
+                Open in Cursor
+              </button>
               {hasElectron && (
-                <div className="rounded-xl border border-border-primary bg-bg-secondary p-5">
-                  <h3 className="text-sm font-medium flex items-center gap-2 mb-4">
-                    <Bot className="w-4 h-4 text-accent-cyan" />
-                    Agents ({projectAgents.length})
-                  </h3>
-
-                  {projectAgents.length === 0 ? (
-                    <div className="text-center py-6">
-                      <Bot className="w-8 h-8 mx-auto text-text-muted mb-2 opacity-50" />
-                      <p className="text-xs text-text-muted">No agents for this project</p>
-                      <button
-                        onClick={() => setShowAgentDialog(true)}
-                        className="mt-3 text-xs text-accent-cyan hover:underline"
-                      >
-                        Launch your first agent
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="space-y-2 max-h-60 overflow-y-auto">
-                      {projectAgents.map((agent) => {
-                        const statusColor = STATUS_COLORS[agent.status] || STATUS_COLORS.idle;
-                        const charEmoji = CHARACTER_EMOJIS[agent.character || 'robot'] || '🤖';
-                        const isIdle = agent.status === 'idle' || agent.status === 'completed';
-
-                        return (
-                          <div
-                            key={agent.id}
-                            className="p-3 rounded-lg bg-bg-tertiary/50 border border-border-primary"
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="text-lg">{charEmoji}</span>
-                                <div className="min-w-0">
-                                  <p className="font-medium text-sm truncate">
-                                    {agent.name || `Agent ${agent.id.slice(0, 6)}`}
-                                  </p>
-                                  <div className="flex items-center gap-2 mt-0.5">
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${statusColor.bg} ${statusColor.text}`}>
-                                      {agent.status}
-                                    </span>
-                                    {agent.branchName && (
-                                      <span className="text-[10px] text-accent-purple">
-                                        {agent.branchName}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {isIdle && (
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    onClick={() => handleRestartAgent(agent, true)}
-                                    className="p-1.5 rounded-lg text-accent-cyan hover:bg-accent-cyan/20 transition-colors"
-                                    title="Resume (restore context)"
-                                  >
-                                    <RotateCcw className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleRestartAgent(agent, false)}
-                                    className="p-1.5 rounded-lg text-emerald-400 hover:bg-emerald-500/20 transition-colors"
-                                    title="Restart"
-                                  >
-                                    <Play className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              )}
-
-                              {agent.status === 'running' && (
-                                <span className="flex items-center gap-1 text-xs text-emerald-400">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                  Working
-                                </span>
-                              )}
-
-                              {agent.status === 'waiting' && (
-                                <span className="flex items-center gap-1 text-xs text-amber-400">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                                  Waiting
-                                </span>
-                              )}
-                            </div>
-
-                            {agent.currentTask && (
-                              <p className="text-xs text-text-muted mt-2 truncate">
-                                {agent.currentTask}
-                              </p>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                <button
+                  onClick={() => setShowAgentDialog(true)}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-accent-cyan text-bg-primary text-sm font-medium flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Launch Agent
+                </button>
               )}
+            </div>
 
-              {/* Sessions */}
-              <div className="rounded-xl border border-border-primary bg-bg-secondary p-5">
-                <h3 className="text-sm font-medium flex items-center gap-2 mb-4">
-                  <Terminal className="w-4 h-4 text-text-muted" />
-                  Sessions
+            {/* Project Agents */}
+            {hasElectron && projectAgents.length > 0 && (
+              <div className="rounded-xl border border-border-primary bg-bg-secondary p-4">
+                <h3 className="text-sm font-medium flex items-center gap-2 mb-3">
+                  <Bot className="w-4 h-4 text-accent-cyan" />
+                  Agents ({projectAgents.length})
                 </h3>
 
-                <div className="space-y-2 max-h-60 overflow-y-auto">
+                <div className="space-y-2">
+                  {projectAgents.map((agent) => {
+                    const statusColor = STATUS_COLORS[agent.status] || STATUS_COLORS.idle;
+                    const charEmoji = CHARACTER_EMOJIS[agent.character || 'robot'] || '🤖';
+                    const isIdle = agent.status === 'idle' || agent.status === 'completed';
+
+                    return (
+                      <div
+                        key={agent.id}
+                        className="p-3 rounded-lg bg-bg-tertiary/50 border border-border-primary"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-lg">{charEmoji}</span>
+                            <div className="min-w-0">
+                              <p className="font-medium text-sm truncate">
+                                {agent.name || `Agent ${agent.id.slice(0, 6)}`}
+                              </p>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${statusColor.bg} ${statusColor.text}`}>
+                                {agent.status}
+                              </span>
+                            </div>
+                          </div>
+
+                          {isIdle && (
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleRestartAgent(agent, true)}
+                                className="p-1.5 rounded-lg text-accent-cyan hover:bg-accent-cyan/20"
+                              >
+                                <RotateCcw className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleRestartAgent(agent, false)}
+                                className="p-1.5 rounded-lg text-emerald-400 hover:bg-emerald-500/20"
+                              >
+                                <Play className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Sessions */}
+            <div className="rounded-xl border border-border-primary bg-bg-secondary p-4">
+              <h3 className="text-sm font-medium flex items-center gap-2 mb-3">
+                <Terminal className="w-4 h-4 text-text-muted" />
+                Sessions ({selectedProject.sessions.length})
+              </h3>
+
+              {selectedProject.sessions.length === 0 ? (
+                <p className="text-sm text-text-muted text-center py-4">No sessions yet</p>
+              ) : (
+                <div className="space-y-2">
                   {selectedProject.sessions.map((session) => (
                     <button
                       key={session.id}
-                      onClick={() => setSelectedSession(session.id)}
+                      onClick={() => setSelectedSession(selectedSession === session.id ? null : session.id)}
                       className={`
                         w-full text-left p-3 rounded-lg transition-all
                         ${selectedSession === session.id
                           ? 'bg-accent-cyan/10 border border-accent-cyan/30'
-                          : 'bg-bg-tertiary/50 border border-transparent hover:border-border-accent'
+                          : 'bg-bg-tertiary/50 border border-transparent'
                         }
                       `}
                     >
@@ -738,59 +597,302 @@ export default function ProjectsPage() {
                     </button>
                   ))}
                 </div>
-              </div>
+              )}
+            </div>
 
-              {/* Session Messages */}
-              {selectedSession && (
-                <div className="rounded-xl border border-border-primary bg-bg-secondary p-5">
-                  <h3 className="text-sm font-medium flex items-center gap-2 mb-4">
-                    <MessageSquare className="w-4 h-4 text-text-muted" />
-                    Messages
-                  </h3>
+            {/* Session Messages */}
+            {selectedSession && (
+              <div className="rounded-xl border border-border-primary bg-bg-secondary p-4">
+                <h3 className="text-sm font-medium flex items-center gap-2 mb-3">
+                  <MessageSquare className="w-4 h-4 text-text-muted" />
+                  Messages
+                </h3>
 
-                  {messagesLoading ? (
-                    <div className="flex items-center justify-center py-8">
-                      <Loader2 className="w-6 h-6 animate-spin text-accent-cyan" />
-                    </div>
-                  ) : (
-                    <div className="space-y-3 max-h-80 overflow-y-auto">
-                      {messages.slice(0, 20).map((message) => (
-                        <div
-                          key={message.uuid}
-                          className={`p-3 rounded-lg ${
-                            message.type === 'user'
-                              ? 'bg-accent-cyan/10 border border-accent-cyan/20'
-                              : 'bg-bg-tertiary border border-border-primary'
-                          }`}
-                        >
-                          <p className="text-xs text-text-muted mb-1">
-                            {message.type === 'user' ? 'You' : 'Claude'}
-                          </p>
-                          <p className="text-sm text-text-secondary">
-                            {getMessagePreview(message.content)}
-                          </p>
-                        </div>
-                      ))}
-                      {messages.length === 0 && (
-                        <p className="text-sm text-text-muted text-center py-4">
-                          No messages found
+                {messagesLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-accent-cyan" />
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {messages.slice(0, 10).map((message) => (
+                      <div
+                        key={message.uuid}
+                        className={`p-3 rounded-lg ${
+                          message.type === 'user'
+                            ? 'bg-accent-cyan/10'
+                            : 'bg-bg-tertiary'
+                        }`}
+                      >
+                        <p className="text-[10px] text-text-muted mb-1">
+                          {message.type === 'user' ? 'You' : 'Claude'}
                         </p>
-                      )}
+                        <p className="text-xs text-text-secondary">
+                          {getMessagePreview(message.content)}
+                        </p>
+                      </div>
+                    ))}
+                    {messages.length === 0 && (
+                      <p className="text-sm text-text-muted text-center py-4">
+                        No messages found
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Path Info */}
+            <div className="rounded-xl border border-border-primary bg-bg-secondary p-4">
+              <h3 className="text-sm font-medium mb-2">Project Path</h3>
+              <p className="font-mono text-xs text-text-muted break-all">
+                {selectedProject.path}
+              </p>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="flex-1 flex items-center justify-center bg-bg-primary">
+          <div className="text-center p-8">
+            <div className="w-20 h-20 rounded-full bg-bg-secondary flex items-center justify-center mx-auto mb-4">
+              <FolderKanban className="w-10 h-10 text-text-muted/30" />
+            </div>
+            <h3 className="font-semibold text-lg mb-2">Select a project</h3>
+            <p className="text-text-muted text-sm">
+              Choose a project to view details
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="h-[calc(100vh-7rem)] lg:h-[calc(100vh-3rem)] flex flex-col -m-4 lg:m-0">
+      {/* Mobile: Show either list or detail */}
+      <div className="lg:hidden flex-1 flex flex-col">
+        <AnimatePresence mode="wait">
+          {!mobileShowDetail ? (
+            <motion.div
+              key="list"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="flex-1 flex flex-col bg-bg-secondary"
+            >
+              {/* Mobile Header */}
+              <div className="px-4 py-3 border-b border-border-primary flex items-center justify-between">
+                <div>
+                  <h1 className="text-xl font-bold">Projects</h1>
+                  <p className="text-xs text-text-muted mt-0.5">
+                    {allProjects.length} project{allProjects.length !== 1 ? 's' : ''}
+                  </p>
+                </div>
+                {hasElectron && (
+                  <button
+                    onClick={handleAddProject}
+                    className="p-2 rounded-lg bg-accent-cyan/20 text-accent-cyan"
+                  >
+                    <FolderPlus className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
+              <ProjectList />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="detail"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              className="flex-1 flex flex-col"
+            >
+              <ProjectDetail />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Desktop: Side by side */}
+      <div className="hidden lg:block">
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
+              <p className="text-text-secondary text-sm mt-1">
+                Browse your Claude Code projects and conversations
+              </p>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-text-muted">
+                {allProjects.length} project{allProjects.length !== 1 ? 's' : ''}
+              </span>
+              {hasElectron && (
+                <button
+                  onClick={handleAddProject}
+                  className="flex items-center gap-2 px-4 py-2 bg-accent-cyan/20 text-accent-cyan rounded-lg hover:bg-accent-cyan/30 transition-colors"
+                >
+                  <FolderPlus className="w-4 h-4" />
+                  Add Project
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setActiveTab('all')}
+              className={`
+                flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all
+                ${activeTab === 'all'
+                  ? 'bg-accent-cyan/20 text-accent-cyan border border-accent-cyan/30'
+                  : 'bg-bg-tertiary text-text-secondary hover:text-text-primary border border-transparent'
+                }
+              `}
+            >
+              <Layers className="w-4 h-4" />
+              All Projects
+              <span className={`px-1.5 py-0.5 rounded text-xs ${
+                activeTab === 'all' ? 'bg-accent-cyan/20' : 'bg-bg-secondary'
+              }`}>
+                {allProjects.length}
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab('favorites')}
+              className={`
+                flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all
+                ${activeTab === 'favorites'
+                  ? 'bg-accent-amber/20 text-accent-amber border border-accent-amber/30'
+                  : 'bg-bg-tertiary text-text-secondary hover:text-text-primary border border-transparent'
+                }
+              `}
+            >
+              <Star className="w-4 h-4" />
+              Favorites
+              <span className={`px-1.5 py-0.5 rounded text-xs ${
+                activeTab === 'favorites' ? 'bg-accent-amber/20' : 'bg-bg-secondary'
+              }`}>
+                {favoritesCount}
+              </span>
+            </button>
+          </div>
+
+          {/* Main Content */}
+          <div className="grid grid-cols-3 gap-6">
+            {/* Project List */}
+            <div className="col-span-2 space-y-3">
+              {projects.map((project) => {
+                const color = getProjectColor(project.name);
+                const isSelected = selectedProject?.id === project.id;
+                const linkedAgents = agents.filter(a => pathsMatch(a.projectPath, project.path));
+
+                return (
+                  <div
+                    key={project.id}
+                    onClick={() => {
+                      setSelectedProject(project);
+                      setSelectedSession(null);
+                    }}
+                    className={`
+                      relative rounded-xl border bg-bg-secondary p-5 cursor-pointer transition-all overflow-hidden
+                      ${isSelected ? 'border-accent-cyan shadow-[0_0_20px_rgba(34,211,238,0.15)]' : 'border-border-primary hover:border-border-accent'}
+                    `}
+                  >
+                      <div
+                        className="absolute left-0 top-0 bottom-0 w-1"
+                        style={{ backgroundColor: color }}
+                      />
+
+                      <div className="pl-4 flex items-start justify-between">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-3">
+                            <FolderOpen className="w-5 h-5" style={{ color }} />
+                            <h3 className="font-semibold text-lg">{project.name}</h3>
+                            {isFavorite(project.id) && (
+                              <Star className="w-4 h-4 text-accent-amber fill-accent-amber" />
+                            )}
+                            {isCustomProject(project.path) && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent-purple/20 text-accent-purple">
+                                Custom
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-text-muted mt-2 font-mono truncate">
+                            {project.path}
+                          </p>
+
+                          {linkedAgents.length > 0 && (
+                            <div className="flex items-center gap-1 mt-1">
+                              <Bot className="w-3.5 h-3.5 text-accent-cyan" />
+                              <span className="text-xs text-accent-cyan">
+                                {linkedAgents.length} agent{linkedAgents.length !== 1 ? 's' : ''} linked
+                              </span>
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-6 mt-3 text-xs text-text-muted">
+                            <div className="flex items-center gap-1">
+                              <MessageSquare className="w-3.5 h-3.5" />
+                              <span>{project.sessions.length} sessions</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5" />
+                              <span>Last active: {formatDate(project.lastActivity)}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={(e) => toggleFavorite(project.id, e)}
+                            className={`p-2 rounded-lg transition-all ${
+                              isFavorite(project.id)
+                                ? 'text-accent-amber hover:bg-accent-amber/20'
+                                : 'text-text-muted hover:text-accent-amber hover:bg-bg-tertiary'
+                            }`}
+                          >
+                            <Star className={`w-5 h-5 ${isFavorite(project.id) ? 'fill-current' : ''}`} />
+                          </button>
+                          {isCustomProject(project.path) && (
+                            <button
+                              onClick={(e) => handleRemoveProject(project.path, e)}
+                              className="p-2 rounded-lg text-text-muted hover:text-accent-red hover:bg-accent-red/10 transition-all"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        <ChevronRight className={`w-5 h-5 text-text-muted transition-transform ${isSelected ? 'rotate-90' : ''}`} />
+                      </div>
                     </div>
-                  )}
+                  </div>
+                );
+              })}
+
+              {projects.length === 0 && (
+                <div className="rounded-xl border border-border-primary bg-bg-secondary p-12 text-center">
+                  <FolderKanban className="w-12 h-12 mx-auto text-text-muted mb-4" />
+                  <h3 className="font-medium text-lg mb-2">
+                    {activeTab === 'favorites' ? 'No favorite projects' : 'No projects found'}
+                  </h3>
+                  <p className="text-text-secondary text-sm">
+                    {activeTab === 'favorites'
+                      ? 'Click the star icon to add favorites'
+                      : 'Start using Claude Code to see projects here'}
+                  </p>
                 </div>
               )}
-            </>
-          ) : (
-            <div className="rounded-xl border border-border-primary bg-bg-secondary p-8 text-center">
-              <FolderKanban className="w-10 h-10 mx-auto text-text-muted mb-3" />
-              <p className="text-text-secondary text-sm">Select a project to view details</p>
             </div>
-          )}
+
+            {/* Project Details Panel */}
+            <div className="space-y-4">
+              <ProjectDetail />
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Launch Agent Modal - uses same dialog as Create Agent */}
+      {/* Launch Agent Modal */}
       <NewChatModal
         open={showAgentDialog}
         onClose={() => setShowAgentDialog(false)}
@@ -800,7 +902,7 @@ export default function ProjectsPage() {
         installedSkills={installedSkills}
         onRefreshSkills={refreshSkills}
         initialProjectPath={selectedProject?.path}
-        initialStep={2} // Skip project selection, go to skills
+        initialStep={2}
       />
     </div>
   );

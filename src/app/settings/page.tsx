@@ -176,44 +176,47 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 lg:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-3">
-            <Settings className="w-7 h-7 text-accent-cyan" />
-            Settings
-          </h1>
-          <p className="text-text-secondary text-sm mt-1">
-            Configure Claude Code preferences
-          </p>
-        </div>
-        <div className="flex gap-3">
-          <button
-            onClick={fetchSettings}
-            className="px-4 py-2 rounded-lg border border-border-primary text-text-secondary hover:text-text-primary hover:border-border-accent transition-colors flex items-center gap-2"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Refresh
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving || !hasChanges}
-            className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
-              hasChanges
-                ? 'bg-accent-cyan text-bg-primary hover:bg-accent-cyan/90'
-                : 'bg-bg-tertiary text-text-muted cursor-not-allowed'
-            }`}
-          >
-            {saving ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : saved ? (
-              <Check className="w-4 h-4" />
-            ) : (
-              <Save className="w-4 h-4" />
-            )}
-            {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Changes'}
-          </button>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h1 className="text-xl lg:text-2xl font-bold tracking-tight flex items-center gap-2 lg:gap-3">
+              <Settings className="w-6 h-6 lg:w-7 lg:h-7 text-accent-cyan" />
+              Settings
+            </h1>
+            <p className="text-text-secondary text-xs lg:text-sm mt-1 hidden sm:block">
+              Configure Claude Code preferences
+            </p>
+          </div>
+          <div className="flex gap-2 sm:gap-3">
+            <button
+              onClick={fetchSettings}
+              className="px-3 lg:px-4 py-2 rounded-lg border border-border-primary text-text-secondary hover:text-text-primary hover:border-border-accent transition-colors flex items-center gap-2 text-sm"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving || !hasChanges}
+              className={`px-3 lg:px-4 py-2 rounded-lg flex items-center gap-2 transition-all text-sm ${
+                hasChanges
+                  ? 'bg-accent-cyan text-bg-primary hover:bg-accent-cyan/90'
+                  : 'bg-bg-tertiary text-text-muted cursor-not-allowed'
+              }`}
+            >
+              {saving ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : saved ? (
+                <Check className="w-4 h-4" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
+              <span className="hidden sm:inline">{saving ? 'Saving...' : saved ? 'Saved!' : 'Save Changes'}</span>
+              <span className="sm:hidden">{saving ? '...' : saved ? 'Saved' : 'Save'}</span>
+            </button>
+          </div>
         </div>
       </div>
 

@@ -933,7 +933,7 @@ function NotificationPanel({
 // Main Canvas View Component
 export default function CanvasView() {
   const router = useRouter();
-  const { agents: electronAgents, stopAgent, sendInput, startAgent, createAgent } = useElectronAgents();
+  const { agents: electronAgents, stopAgent, sendInput, startAgent, createAgent, refresh: refreshAgents } = useElectronAgents();
   const { projects, openFolderDialog } = useElectronFS();
   const { installedSkills, refresh: refreshSkills } = useElectronSkills();
   const { data: claudeData } = useClaude();
@@ -1165,10 +1165,11 @@ export default function CanvasView() {
     model?: string,
     worktree?: { enabled: boolean; branchName: string },
     character?: AgentCharacter,
-    name?: string
+    name?: string,
+    secondaryProjectPath?: string
   ) => {
     try {
-      const agent = await createAgent({ projectPath, skills, worktree, character, name });
+      const agent = await createAgent({ projectPath, skills, worktree, character, name, secondaryProjectPath });
       setShowCreateAgentModal(false);
       setCreateAgentProjectPath(null);
 
@@ -1393,6 +1394,9 @@ export default function CanvasView() {
         onClose={() => setTerminalAgentId(null)}
         onStart={handleStartAgent}
         onStop={handleStopAgent}
+        projects={projects.map(p => ({ path: p.path, name: p.name }))}
+        onBrowseFolder={isElectron() ? openFolderDialog : undefined}
+        onAgentUpdated={refreshAgents}
       />
 
       {/* New Agent Modal */}

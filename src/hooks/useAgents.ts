@@ -24,7 +24,8 @@ export function useAgents() {
 
   useEffect(() => {
     fetchAgents();
-    const interval = setInterval(fetchAgents, 2000);
+    // Poll every 10 seconds to reduce CPU usage
+    const interval = setInterval(fetchAgents, 10000);
     return () => clearInterval(interval);
   }, [fetchAgents]);
 

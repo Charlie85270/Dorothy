@@ -227,7 +227,8 @@ export default function ProjectsPage() {
     model?: string,
     worktree?: { enabled: boolean; branchName: string },
     character?: AgentCharacter,
-    name?: string
+    name?: string,
+    secondaryProjectPath?: string
   ) => {
     try {
       const agent = await createAgent({
@@ -236,6 +237,7 @@ export default function ProjectsPage() {
         worktree,
         character,
         name,
+        secondaryProjectPath,
       });
 
       // Start the agent with the prompt

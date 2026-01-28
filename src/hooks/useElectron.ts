@@ -37,6 +37,7 @@ export function useElectronAgents() {
     worktree?: { enabled: boolean; branchName: string };
     character?: AgentCharacter;
     name?: string;
+    secondaryProjectPath?: string;
   }) => {
     if (!isElectron()) {
       throw new Error('Electron API not available');

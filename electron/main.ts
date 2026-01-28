@@ -54,6 +54,7 @@ interface AgentStatus {
   id: string;
   status: 'idle' | 'running' | 'completed' | 'error' | 'waiting';
   projectPath: string;
+  secondaryProjectPath?: string; // Secondary project added via --add-dir
   worktreePath?: string;
   branchName?: string;
   skills: string[];
@@ -948,6 +949,7 @@ ipcMain.handle('agent:create', async (_event, config: {
   worktree?: WorktreeConfig;
   character?: AgentCharacter;
   name?: string;
+  secondaryProjectPath?: string;
 }) => {
   const id = uuidv4();
   const shell = process.env.SHELL || '/bin/zsh';
@@ -1030,10 +1032,22 @@ ipcMain.handle('agent:create', async (_event, config: {
   const ptyId = uuidv4();
   ptyProcesses.set(ptyId, ptyProcess);
 
+  // Validate secondary project path if provided
+  let secondaryProjectPath: string | undefined;
+  if (config.secondaryProjectPath) {
+    if (fs.existsSync(config.secondaryProjectPath)) {
+      secondaryProjectPath = config.secondaryProjectPath;
+      console.log(`Secondary project path validated: ${secondaryProjectPath}`);
+    } else {
+      console.warn(`Secondary project path does not exist: ${config.secondaryProjectPath}`);
+    }
+  }
+
   const status: AgentStatus = {
     id,
     status: 'idle',
     projectPath: config.projectPath,
+    secondaryProjectPath,
     worktreePath,
     branchName,
     skills: config.skills,
@@ -1140,6 +1154,12 @@ ipcMain.handle('agent:start', async (_event, { id, prompt, options }: {
     command += ' --resume';
   }
 
+  // Add secondary project path with --add-dir flag if set
+  if (agent.secondaryProjectPath) {
+    const escapedSecondaryPath = agent.secondaryProjectPath.replace(/'/g, "'\\''");
+    command += ` --add-dir '${escapedSecondaryPath}'`;
+  }
+
   // Add the prompt (escape single quotes)
   const escapedPrompt = prompt.replace(/'/g, "'\\''");
   command += ` '${escapedPrompt}'`;
@@ -1236,6 +1256,32 @@ ipcMain.handle('agent:remove', async (_event, id: string) => {
   saveAgents();
 
   return { success: true };
+});
+
+// Update agent's secondary project path
+ipcMain.handle('agent:setSecondaryProject', async (_event, { id, secondaryProjectPath }: { id: string; secondaryProjectPath: string | null }) => {
+  const agent = agents.get(id);
+  if (!agent) {
+    return { success: false, error: 'Agent not found' };
+  }
+
+  // Validate the path if provided
+  if (secondaryProjectPath) {
+    if (!fs.existsSync(secondaryProjectPath)) {
+      return { success: false, error: 'Path does not exist' };
+    }
+    agent.secondaryProjectPath = secondaryProjectPath;
+    console.log(`Set secondary project path for agent ${id}: ${secondaryProjectPath}`);
+  } else {
+    // Clear the secondary project path
+    agent.secondaryProjectPath = undefined;
+    console.log(`Cleared secondary project path for agent ${id}`);
+  }
+
+  // Save updated agents to disk
+  saveAgents();
+
+  return { success: true, agent };
 });
 
 // Send input to an agent

@@ -892,10 +892,22 @@ electron_1.ipcMain.handle('agent:create', async (_event, config) => {
     }
     const ptyId = (0, uuid_1.v4)();
     ptyProcesses.set(ptyId, ptyProcess);
+    // Validate secondary project path if provided
+    let secondaryProjectPath;
+    if (config.secondaryProjectPath) {
+        if (fs.existsSync(config.secondaryProjectPath)) {
+            secondaryProjectPath = config.secondaryProjectPath;
+            console.log(`Secondary project path validated: ${secondaryProjectPath}`);
+        }
+        else {
+            console.warn(`Secondary project path does not exist: ${config.secondaryProjectPath}`);
+        }
+    }
     const status = {
         id,
         status: 'idle',
         projectPath: config.projectPath,
+        secondaryProjectPath,
         worktreePath,
         branchName,
         skills: config.skills,
@@ -987,6 +999,11 @@ electron_1.ipcMain.handle('agent:start', async (_event, { id, prompt, options })
     if (options?.resume) {
         command += ' --resume';
     }
+    // Add secondary project path with --add-dir flag if set
+    if (agent.secondaryProjectPath) {
+        const escapedSecondaryPath = agent.secondaryProjectPath.replace(/'/g, "'\\''");
+        command += ` --add-dir '${escapedSecondaryPath}'`;
+    }
     // Add the prompt (escape single quotes)
     const escapedPrompt = prompt.replace(/'/g, "'\\''");
     command += ` '${escapedPrompt}'`;
@@ -1070,6 +1087,29 @@ electron_1.ipcMain.handle('agent:remove', async (_event, id) => {
     // Save agents to disk
     saveAgents();
     return { success: true };
+});
+// Update agent's secondary project path
+electron_1.ipcMain.handle('agent:setSecondaryProject', async (_event, { id, secondaryProjectPath }) => {
+    const agent = agents.get(id);
+    if (!agent) {
+        return { success: false, error: 'Agent not found' };
+    }
+    // Validate the path if provided
+    if (secondaryProjectPath) {
+        if (!fs.existsSync(secondaryProjectPath)) {
+            return { success: false, error: 'Path does not exist' };
+        }
+        agent.secondaryProjectPath = secondaryProjectPath;
+        console.log(`Set secondary project path for agent ${id}: ${secondaryProjectPath}`);
+    }
+    else {
+        // Clear the secondary project path
+        agent.secondaryProjectPath = undefined;
+        console.log(`Cleared secondary project path for agent ${id}`);
+    }
+    // Save updated agents to disk
+    saveAgents();
+    return { success: true, agent };
 });
 // Send input to an agent
 electron_1.ipcMain.handle('agent:input', async (_event, { id, input }) => {

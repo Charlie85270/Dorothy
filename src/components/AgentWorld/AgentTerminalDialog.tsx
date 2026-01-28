@@ -13,12 +13,18 @@ import {
   Minimize2,
   AlertTriangle,
   FolderOpen,
+  FolderPlus,
   ChevronUp,
   ChevronDown,
+  ChevronRight,
   GitBranch,
   PanelRightClose,
   PanelRight,
   TerminalSquare,
+  Layers,
+  Check,
+  Code2,
+  Settings2,
 } from 'lucide-react';
 import type { AgentStatus } from '@/types/electron';
 import { isElectron } from '@/hooks/useElectron';
@@ -51,40 +57,34 @@ interface AgentTerminalDialogProps {
   onClose: () => void;
   onStart: (agentId: string, prompt: string) => void;
   onStop: (agentId: string) => void;
+  projects?: { path: string; name: string }[];
+  onBrowseFolder?: () => Promise<string | null>;
+  onAgentUpdated?: (agent: AgentStatus) => void;
 }
 
-// Memoized header component (rerender-memo)
+// Panel types for the sidebar
+type PanelType = 'code' | 'git' | 'terminal' | 'context';
+
+// Memoized simplified header component
 const DialogHeader = memo(function DialogHeader({
   agent,
   character,
-  showCodePanel,
-  showGitPanel,
-  showQuickTerminal,
   isFullscreen,
-  hasActiveTerminal,
-  onToggleCodePanel,
-  onToggleGitPanel,
-  onToggleTerminal,
+  hasSecondaryProject,
   onOpenInFinder,
   onToggleFullscreen,
   onClose,
 }: {
   agent: AgentStatus;
   character: string;
-  showCodePanel: boolean;
-  showGitPanel: boolean;
-  showQuickTerminal: boolean;
   isFullscreen: boolean;
-  hasActiveTerminal: boolean;
-  onToggleCodePanel: () => void;
-  onToggleGitPanel: () => void;
-  onToggleTerminal: () => void;
+  hasSecondaryProject: boolean;
   onOpenInFinder: () => void;
   onToggleFullscreen: () => void;
   onClose: () => void;
 }) {
   return (
-    <div className="px-5 py-4 border-b border-border-primary flex items-center justify-between bg-bg-tertiary/30">
+    <div className="px-5 py-3 border-b border-border-primary flex items-center justify-between bg-bg-tertiary/30">
       <div className="flex items-center gap-3">
         <span className="text-2xl">{CHARACTER_FACES[character as keyof typeof CHARACTER_FACES] || '🤖'}</span>
         <div>
@@ -102,55 +102,27 @@ const DialogHeader = memo(function DialogHeader({
               {agent.status}
             </span>
           </h3>
-          <p className="text-xs text-text-muted font-mono truncate max-w-md">
-            {agent.projectPath.split('/').pop()}
+          <div className="flex items-center gap-2 text-xs text-text-muted">
+            <span className="font-mono truncate max-w-[200px]">
+              {agent.projectPath.split('/').pop()}
+            </span>
             {agent.branchName && (
-              <span className="text-accent-purple ml-2">({agent.branchName})</span>
+              <span className="text-accent-purple flex items-center gap-1">
+                <GitBranch className="w-3 h-3" />
+                {agent.branchName}
+              </span>
             )}
-          </p>
+            {hasSecondaryProject && (
+              <span className="text-amber-400 flex items-center gap-1">
+                <Layers className="w-3 h-3" />
+                +1 context
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
       <div className="flex items-center gap-1">
-        <button
-          onClick={onToggleCodePanel}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-            showCodePanel
-              ? 'bg-purple-500/20 text-purple-400'
-              : 'bg-purple-500/10 text-purple-400 hover:bg-purple-500/20'
-          }`}
-          title={showCodePanel ? 'Hide code panel' : 'Show code panel'}
-        >
-          {showCodePanel ? <PanelRightClose className="w-3.5 h-3.5" /> : <PanelRight className="w-3.5 h-3.5" />}
-          Code
-        </button>
-        <button
-          onClick={onToggleTerminal}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors relative ${
-            showQuickTerminal
-              ? 'bg-cyan-500/20 text-cyan-400'
-              : 'bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20'
-          }`}
-          title={showQuickTerminal ? 'Hide terminal (process keeps running)' : 'Open terminal'}
-        >
-          <TerminalSquare className="w-3.5 h-3.5" />
-          Terminal
-          {hasActiveTerminal && !showQuickTerminal && (
-            <span className="absolute -top-1 -right-1 w-2 h-2 bg-cyan-400 rounded-full animate-pulse" />
-          )}
-        </button>
-        <button
-          onClick={onToggleGitPanel}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-            showGitPanel
-              ? 'bg-orange-500/20 text-orange-400'
-              : 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20'
-          }`}
-          title={showGitPanel ? 'Hide git panel' : 'Show git panel'}
-        >
-          <GitBranch className="w-3.5 h-3.5" />
-          Git
-        </button>
         <button
           onClick={onOpenInFinder}
           className="p-2 hover:bg-bg-tertiary rounded-lg transition-colors"
@@ -178,7 +150,151 @@ const DialogHeader = memo(function DialogHeader({
   );
 });
 
-// Memoized footer component (rerender-memo)
+// Accordion panel header component
+const PanelHeader = memo(function PanelHeader({
+  icon: Icon,
+  title,
+  color,
+  isExpanded,
+  badge,
+  onToggle,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  color: string;
+  isExpanded: boolean;
+  badge?: React.ReactNode;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      onClick={onToggle}
+      className={`w-full flex items-center justify-between px-3 py-2.5 transition-colors hover:bg-bg-tertiary/50 ${
+        isExpanded ? 'bg-bg-tertiary/30' : ''
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <Icon className={`w-4 h-4 ${color}`} />
+        <span className="text-sm font-medium">{title}</span>
+        {badge}
+      </div>
+      {isExpanded ? (
+        <ChevronDown className="w-4 h-4 text-text-muted" />
+      ) : (
+        <ChevronRight className="w-4 h-4 text-text-muted" />
+      )}
+    </button>
+  );
+});
+
+// Memoized secondary project content
+const SecondaryProjectContent = memo(function SecondaryProjectContent({
+  agent,
+  availableProjects,
+  customSecondaryPath,
+  onCustomPathChange,
+  onSetSecondaryProject,
+  onBrowseFolder,
+}: {
+  agent: AgentStatus;
+  availableProjects: { path: string; name: string }[];
+  customSecondaryPath: string;
+  onCustomPathChange: (value: string) => void;
+  onSetSecondaryProject: (path: string | null) => void;
+  onBrowseFolder?: () => Promise<string | null>;
+}) {
+  // Get the selected project name
+  const selectedProjectName = agent.secondaryProjectPath?.split('/').pop() || '';
+
+  // Filter out already selected project from available list
+  const unselectedProjects = availableProjects.filter(p => p.path !== agent.secondaryProjectPath);
+
+  return (
+    <div className="p-3 space-y-3">
+      {/* Active context - shown at top, clickable to remove */}
+      {agent.secondaryProjectPath && (
+        <div>
+          <p className="text-[10px] text-text-muted mb-1.5 uppercase tracking-wide">Active Context</p>
+          <button
+            onClick={() => onSetSecondaryProject(null)}
+            className="w-full text-left px-2 py-1.5 rounded-lg text-xs transition-colors flex items-center justify-between bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <FolderPlus className="w-3 h-3 shrink-0" />
+              <span className="truncate">{selectedProjectName}</span>
+            </div>
+            <X className="w-3 h-3 shrink-0 opacity-60 hover:opacity-100" />
+          </button>
+        </div>
+      )}
+
+      {/* Available projects to add */}
+      {unselectedProjects.length > 0 && (
+        <div>
+          <p className="text-[10px] text-text-muted mb-1.5 uppercase tracking-wide">Available Projects</p>
+          <div className="space-y-1">
+            {unselectedProjects.slice(0, 6).map((project) => (
+              <div
+                key={project.path}
+                className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-xs hover:bg-bg-tertiary/50"
+              >
+                <div className="flex items-center gap-2 min-w-0 text-text-secondary">
+                  <FolderPlus className="w-3 h-3 shrink-0" />
+                  <span className="truncate">{project.name}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSetSecondaryProject(project.path);
+                  }}
+                  className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[10px] font-medium hover:bg-amber-500/30 shrink-0"
+                >
+                  Add
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Custom path */}
+      <div>
+        <p className="text-[10px] text-text-muted mb-1.5 uppercase tracking-wide">Custom Path</p>
+        <div className="flex gap-1.5">
+          <input
+            type="text"
+            value={customSecondaryPath}
+            onChange={(e) => onCustomPathChange(e.target.value)}
+            placeholder="/path/to/project..."
+            className="flex-1 px-2 py-1 rounded text-xs bg-bg-primary border border-border-primary focus:border-amber-500 focus:outline-none font-mono"
+          />
+          {onBrowseFolder && (
+            <button
+              onClick={async () => {
+                const path = await onBrowseFolder();
+                if (path) onCustomPathChange(path);
+              }}
+              className="p-1 rounded bg-bg-tertiary border border-border-primary hover:border-amber-500/50"
+              title="Browse"
+            >
+              <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
+            </button>
+          )}
+          <button
+            onClick={() => customSecondaryPath.trim() && onSetSecondaryProject(customSecondaryPath.trim())}
+            disabled={!customSecondaryPath.trim()}
+            className="px-2 py-1 rounded bg-amber-500/20 text-amber-400 text-xs font-medium hover:bg-amber-500/30 disabled:opacity-50"
+          >
+            Add
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+// Memoized footer component
 const DialogFooter = memo(function DialogFooter({
   agent,
   prompt,
@@ -254,15 +370,17 @@ export default function AgentTerminalDialog({
   onClose,
   onStart,
   onStop,
+  projects = [],
+  onBrowseFolder,
+  onAgentUpdated,
 }: AgentTerminalDialogProps) {
   const [terminalReady, setTerminalReady] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [prompt, setPrompt] = useState('');
-  const [showCodePanel, setShowCodePanel] = useState(false);
-  const [showGitPanel, setShowGitPanel] = useState(false);
-  const [showQuickTerminal, setShowQuickTerminal] = useState(false);
+  const [expandedPanels, setExpandedPanels] = useState<Set<PanelType>>(new Set(['code', 'git']));
   const [quickTerminalReady, setQuickTerminalReady] = useState(false);
-  const [terminalMinimized, setTerminalMinimized] = useState(false);
+  const [customSecondaryPath, setCustomSecondaryPath] = useState('');
+  const [gitBranch, setGitBranch] = useState<string>('');
 
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<import('xterm').Terminal | null>(null);
@@ -273,19 +391,20 @@ export default function AgentTerminalDialog({
   const quickFitAddonRef = useRef<import('xterm-addon-fit').FitAddon | null>(null);
   const quickPtyIdRef = useRef<string | null>(null);
 
-  // Memoize project path to avoid recalculation (rerender-memo)
+  // Memoize project path
   const projectPath = useMemo(() => {
     return agent?.worktreePath || agent?.projectPath || '';
   }, [agent?.worktreePath, agent?.projectPath]);
 
-  // Memoize character to avoid recalculation
+  // Memoize character
   const character = useMemo(() => {
     return agent?.name?.toLowerCase() === 'bitwonka' ? 'frog' : agent?.character || 'robot';
   }, [agent?.name, agent?.character]);
 
-  // Keep track of agent ID
+  // Keep track of agent ID and reset state when agent changes
   useEffect(() => {
     agentIdRef.current = agent?.id || null;
+    setGitBranch('');
   }, [agent?.id]);
 
   // Initialize xterm when dialog opens
@@ -438,7 +557,7 @@ export default function AgentTerminalDialog({
     return () => resizeObserver.disconnect();
   }, [terminalReady]);
 
-  // Fit terminal when fullscreen or panels change
+  // Fit terminal when fullscreen changes
   useEffect(() => {
     if (!terminalReady || !fitAddonRef.current || !xtermRef.current) return;
 
@@ -460,12 +579,13 @@ export default function AgentTerminalDialog({
     ];
 
     return () => timeouts.forEach(clearTimeout);
-  }, [isFullscreen, showCodePanel, showGitPanel, terminalReady]);
+  }, [isFullscreen, terminalReady]);
 
   // Quick terminal initialization
   useEffect(() => {
     const agentId = agent?.id;
-    if (!showQuickTerminal || !agentId || !projectPath) return;
+    const isTerminalExpanded = expandedPanels.has('terminal');
+    if (!isTerminalExpanded || !agentId || !projectPath) return;
 
     if (quickXtermRef.current && quickPtyIdRef.current) return;
 
@@ -559,7 +679,7 @@ export default function AgentTerminalDialog({
       }
       setQuickTerminalReady(false);
     };
-  }, [showQuickTerminal, agent?.id, projectPath]);
+  }, [expandedPanels, agent?.id, projectPath]);
 
   // Cleanup xterm UI when dialog closes
   useEffect(() => {
@@ -597,7 +717,7 @@ export default function AgentTerminalDialog({
     return unsubscribe;
   }, [agent?.id]);
 
-  // Memoized callbacks (rerender-functional-setstate)
+  // Memoized callbacks
   const handleStart = useCallback(() => {
     if (agent && prompt.trim()) {
       onStart(agent.id, prompt.trim());
@@ -623,22 +743,55 @@ export default function AgentTerminalDialog({
     }
   }, [projectPath]);
 
-  const handleToggleCodePanel = useCallback(() => {
-    setShowCodePanel((prev) => !prev);
-  }, []);
-
-  const handleToggleGitPanel = useCallback(() => {
-    setShowGitPanel((prev) => !prev);
-  }, []);
-
-  const handleToggleTerminal = useCallback(() => {
-    if (!showCodePanel) setShowCodePanel(true);
-    setShowQuickTerminal((prev) => !prev);
-  }, [showCodePanel]);
-
   const handleToggleFullscreen = useCallback(() => {
     setIsFullscreen((prev) => !prev);
   }, []);
+
+  const togglePanel = useCallback((panel: PanelType) => {
+    setExpandedPanels((prev) => {
+      const next = new Set(prev);
+      if (next.has(panel)) {
+        next.delete(panel);
+      } else {
+        next.add(panel);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSetSecondaryProject = useCallback(async (path: string | null) => {
+    if (!agent) return;
+
+    // Send /add-dir command to the running Claude terminal
+    if (path && window.electronAPI?.agent?.sendInput) {
+      try {
+        await window.electronAPI.agent.sendInput({
+          id: agent.id,
+          input: `/add-dir ${path}\r`,
+        });
+      } catch (err) {
+        console.error('Failed to send /add-dir command:', err);
+      }
+    }
+
+    // Also update the agent's secondaryProjectPath for persistence
+    if (window.electronAPI?.agent?.setSecondaryProject) {
+      try {
+        const result = await window.electronAPI.agent.setSecondaryProject({
+          id: agent.id,
+          secondaryProjectPath: path,
+        });
+        if (result.success && result.agent && onAgentUpdated) {
+          onAgentUpdated(result.agent);
+        }
+        if (result.success) {
+          setCustomSecondaryPath('');
+        }
+      } catch (err) {
+        console.error('Failed to set secondary project:', err);
+      }
+    }
+  }, [agent, onAgentUpdated]);
 
   const closeQuickTerminal = useCallback(() => {
     const agentId = agent?.id;
@@ -656,20 +809,38 @@ export default function AgentTerminalDialog({
     }
     quickPtyIdRef.current = null;
     setQuickTerminalReady(false);
-    setShowQuickTerminal(false);
+    setExpandedPanels((prev) => {
+      const next = new Set(prev);
+      next.delete('terminal');
+      return next;
+    });
   }, [agent?.id]);
+
+  const handleGitBranchChange = useCallback((branch: string) => {
+    setGitBranch(branch);
+  }, []);
 
   // Check if there's an active terminal session
   const hasActiveTerminal = useMemo(() => {
     return agent ? persistentTerminals.has(agent.id) : false;
   }, [agent]);
 
+  // Check if agent has a secondary project
+  const hasSecondaryProject = useMemo(() => {
+    return !!agent?.secondaryProjectPath;
+  }, [agent?.secondaryProjectPath]);
+
+  // Get available projects (excluding primary)
+  const availableProjects = useMemo(() => {
+    if (!agent) return projects;
+    return projects.filter(p => p.path !== agent.projectPath && p.path !== agent.worktreePath);
+  }, [projects, agent?.projectPath, agent?.worktreePath]);
+
   // Compute dialog class
   const dialogClass = useMemo(() => {
     if (isFullscreen) return 'fixed inset-4';
-    if (showCodePanel || showGitPanel) return 'w-full max-w-7xl h-[80vh]';
-    return 'w-full max-w-4xl h-[80vh]';
-  }, [isFullscreen, showCodePanel, showGitPanel]);
+    return 'w-full max-w-[80vw] h-[85vh]';
+  }, [isFullscreen]);
 
   if (!open || !agent) return null;
 
@@ -692,31 +863,17 @@ export default function AgentTerminalDialog({
           <DialogHeader
             agent={agent}
             character={character}
-            showCodePanel={showCodePanel}
-            showGitPanel={showGitPanel}
-            showQuickTerminal={showQuickTerminal}
             isFullscreen={isFullscreen}
-            hasActiveTerminal={hasActiveTerminal}
-            onToggleCodePanel={handleToggleCodePanel}
-            onToggleGitPanel={handleToggleGitPanel}
-            onToggleTerminal={handleToggleTerminal}
+            hasSecondaryProject={hasSecondaryProject}
             onOpenInFinder={handleOpenInFinder}
             onToggleFullscreen={handleToggleFullscreen}
             onClose={onClose}
           />
 
           {/* Main Content */}
-          <div className="flex-1 min-h-[300px] flex">
-            {/* Terminal */}
-            <div
-              className={`relative ${
-                showCodePanel && showGitPanel
-                  ? 'w-1/3 border-r border-border-primary'
-                  : showCodePanel || showGitPanel
-                    ? 'w-1/2 border-r border-border-primary'
-                    : 'flex-1'
-              }`}
-            >
+          <div className="flex-1 min-h-[300px] flex overflow-hidden">
+            {/* Terminal - Main Area */}
+            <div className="flex-1 relative">
               <div
                 ref={terminalRef}
                 className="absolute inset-0 bg-[#1a1a2e] p-2"
@@ -730,75 +887,145 @@ export default function AgentTerminalDialog({
               )}
             </div>
 
-            {/* Git Panel */}
-            {showGitPanel && (
-              <GitPanel
-                projectPath={projectPath}
-                className={showCodePanel ? 'w-1/3 border-r border-border-primary' : 'w-1/2'}
-              />
-            )}
-
-            {/* Code Panel */}
-            {showCodePanel && (
-              <div className={`${showGitPanel ? 'w-1/3' : 'w-1/2'} flex flex-col`}>
-                <CodePanel
-                  projectPath={projectPath}
-                  className={showQuickTerminal && !terminalMinimized ? 'h-1/2' : 'flex-1'}
-                />
-
-                {/* Quick Terminal */}
-                {showQuickTerminal && (
-                  <div
-                    className={`${terminalMinimized ? 'h-8' : 'h-1/2'} border-t border-border-primary flex flex-col transition-all`}
-                  >
-                    <div className="px-3 py-1.5 border-b border-border-primary bg-bg-tertiary/30 flex items-center justify-between shrink-0">
-                      <div className="flex items-center gap-2">
-                        <TerminalSquare className="w-3 h-3 text-cyan-400" />
-                        <span className="text-xs font-medium text-text-secondary">Terminal</span>
-                        <span className="text-[10px] text-text-muted font-mono">
-                          {projectPath.split('/').pop()}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-0.5">
-                        <button
-                          onClick={() => setTerminalMinimized((prev) => !prev)}
-                          className="p-0.5 hover:bg-bg-tertiary rounded transition-colors"
-                          title={terminalMinimized ? 'Expand terminal' : 'Minimize terminal'}
-                        >
-                          {terminalMinimized ? (
-                            <ChevronUp className="w-3 h-3 text-text-muted" />
-                          ) : (
-                            <ChevronDown className="w-3 h-3 text-text-muted" />
-                          )}
-                        </button>
-                        <button
-                          onClick={closeQuickTerminal}
-                          className="p-0.5 hover:bg-bg-tertiary rounded transition-colors"
-                          title="Close terminal (kills process)"
-                        >
-                          <X className="w-3 h-3 text-text-muted" />
-                        </button>
+            {/* Right Sidebar with Panels */}
+            <div
+              className="border-l border-border-primary bg-bg-tertiary/20 flex flex-col overflow-hidden"
+              style={{ width: '480px' }}
+            >
+              <div className="flex-1 overflow-y-auto">
+                  {/* Code Panel */}
+                  <div className="border-b border-border-primary">
+                    <PanelHeader
+                      icon={Code2}
+                      title="Code"
+                      color="text-purple-400"
+                      isExpanded={expandedPanels.has('code')}
+                      onToggle={() => togglePanel('code')}
+                    />
+                    <div
+                      className="grid transition-[grid-template-rows] duration-200 ease-out"
+                      style={{ gridTemplateRows: expandedPanels.has('code') ? '1fr' : '0fr' }}
+                    >
+                      <div className="overflow-hidden">
+                        <div className="h-[250px]">
+                          <CodePanel projectPath={projectPath} className="h-full" />
+                        </div>
                       </div>
                     </div>
-                    {!terminalMinimized && (
-                      <div className="flex-1 relative">
-                        <div
-                          ref={quickTerminalRef}
-                          className="absolute inset-0 bg-[#0f0f1a] p-1"
-                          style={{ cursor: 'text' }}
-                          onClick={() => quickXtermRef.current?.focus()}
-                        />
-                        {!quickTerminalReady && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-[#0f0f1a]">
-                            <Loader2 className="w-5 h-5 animate-spin text-cyan-400" />
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
-                )}
-              </div>
-            )}
+
+                  {/* Git Panel */}
+                  <div className="border-b border-border-primary">
+                    <PanelHeader
+                      icon={GitBranch}
+                      title="Git"
+                      color="text-orange-400"
+                      isExpanded={expandedPanels.has('git')}
+                      badge={
+                        gitBranch ? (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 font-mono">
+                            {gitBranch}
+                          </span>
+                        ) : null
+                      }
+                      onToggle={() => togglePanel('git')}
+                    />
+                    <div
+                      className="grid transition-[grid-template-rows] duration-200 ease-out"
+                      style={{ gridTemplateRows: expandedPanels.has('git') ? '1fr' : '0fr' }}
+                    >
+                      <div className="overflow-hidden">
+                        <div className="h-[200px]">
+                          <GitPanel
+                            projectPath={projectPath}
+                            className="h-full"
+                            hideHeader
+                            onBranchChange={handleGitBranchChange}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Terminal Panel */}
+                  <div className="border-b border-border-primary">
+                    <PanelHeader
+                      icon={TerminalSquare}
+                      title="Shell"
+                      color="text-cyan-400"
+                      isExpanded={expandedPanels.has('terminal')}
+                      badge={
+                        hasActiveTerminal && !expandedPanels.has('terminal') ? (
+                          <span className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse" />
+                        ) : null
+                      }
+                      onToggle={() => togglePanel('terminal')}
+                    />
+                    <div
+                      className="grid transition-[grid-template-rows] duration-200 ease-out"
+                      style={{ gridTemplateRows: expandedPanels.has('terminal') ? '1fr' : '0fr' }}
+                    >
+                      <div className="overflow-hidden">
+                        <div className="h-[180px] relative">
+                          <div className="absolute top-1 right-1 z-10">
+                            <button
+                              onClick={closeQuickTerminal}
+                              className="p-1 hover:bg-bg-tertiary rounded text-text-muted hover:text-accent-red transition-colors"
+                              title="Close terminal (kills process)"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                          <div
+                            ref={quickTerminalRef}
+                            className="absolute inset-0 bg-[#0f0f1a] p-1"
+                            style={{ cursor: 'text' }}
+                            onClick={() => quickXtermRef.current?.focus()}
+                          />
+                          {!quickTerminalReady && expandedPanels.has('terminal') && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-[#0f0f1a]">
+                              <Loader2 className="w-5 h-5 animate-spin text-cyan-400" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Context Panel (+Project) */}
+                  <div className="border-b border-border-primary">
+                    <PanelHeader
+                      icon={Layers}
+                      title="Context"
+                      color="text-amber-400"
+                      isExpanded={expandedPanels.has('context')}
+                      badge={
+                        hasSecondaryProject ? (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">
+                            +1
+                          </span>
+                        ) : null
+                      }
+                      onToggle={() => togglePanel('context')}
+                    />
+                    <div
+                      className="grid transition-[grid-template-rows] duration-200 ease-out"
+                      style={{ gridTemplateRows: expandedPanels.has('context') ? '1fr' : '0fr' }}
+                    >
+                      <div className="overflow-hidden">
+                        <SecondaryProjectContent
+                          agent={agent}
+                          availableProjects={availableProjects}
+                          customSecondaryPath={customSecondaryPath}
+                          onCustomPathChange={setCustomSecondaryPath}
+                          onSetSecondaryProject={handleSetSecondaryProject}
+                          onBrowseFolder={onBrowseFolder}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+            </div>
           </div>
 
           <DialogFooter

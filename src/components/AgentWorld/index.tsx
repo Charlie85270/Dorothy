@@ -9,7 +9,7 @@ import Workstation from './Workstation';
 import OfficeEnvironment from './OfficeEnvironment';
 import AgentTerminalDialog from './AgentTerminalDialog';
 import type { AgentStatus } from '@/types/electron';
-import { useElectronAgents } from '@/hooks/useElectron';
+import { useElectronAgents, useElectronFS, isElectron } from '@/hooks/useElectron';
 import { Loader2, AlertCircle, Bot, Users, FolderOpen, Layers, AlertTriangle } from 'lucide-react';
 
 // Calculate workstation positions in a semi-circle around the center
@@ -110,15 +110,26 @@ function AnimatedAgent({
 }) {
   const positionRef = useRef<THREE.Vector3>(new THREE.Vector3(...targetPosition));
   const [currentPosition, setCurrentPosition] = useState<[number, number, number]>(targetPosition);
+  const lastUpdateRef = useRef<[number, number, number]>(targetPosition);
 
   useFrame((_, delta) => {
     const target = new THREE.Vector3(...targetPosition);
     positionRef.current.lerp(target, Math.min(delta * 2, 1));
-    setCurrentPosition([
-      positionRef.current.x,
-      positionRef.current.y,
-      positionRef.current.z,
-    ]);
+
+    // Only update state if position changed significantly (threshold: 0.01)
+    const dx = Math.abs(positionRef.current.x - lastUpdateRef.current[0]);
+    const dy = Math.abs(positionRef.current.y - lastUpdateRef.current[1]);
+    const dz = Math.abs(positionRef.current.z - lastUpdateRef.current[2]);
+
+    if (dx > 0.01 || dy > 0.01 || dz > 0.01) {
+      const newPos: [number, number, number] = [
+        positionRef.current.x,
+        positionRef.current.y,
+        positionRef.current.z,
+      ];
+      lastUpdateRef.current = newPos;
+      setCurrentPosition(newPos);
+    }
   });
 
   // Use "frog" character for agent named "bitwonka"
@@ -476,7 +487,8 @@ function AgentListItem({
 
 // Main component
 export default function AgentWorld() {
-  const { agents, startAgent, stopAgent } = useElectronAgents();
+  const { agents, startAgent, stopAgent, refresh } = useElectronAgents();
+  const { projects, openFolderDialog } = useElectronFS();
   const [selectedAgent, setSelectedAgent] = useState<AgentStatus | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [focusTarget, setFocusTarget] = useState<[number, number, number] | null>(null);
@@ -724,6 +736,9 @@ export default function AgentWorld() {
         onClose={handleCloseDialog}
         onStart={handleStart}
         onStop={handleStop}
+        projects={projects}
+        onBrowseFolder={isElectron() ? openFolderDialog : undefined}
+        onAgentUpdated={refresh}
       />
     </div>
   );

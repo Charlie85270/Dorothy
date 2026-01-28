@@ -116,11 +116,48 @@ export default function Dashboard() {
     return Object.values(tokensByModel).reduce((a, b) => a + b, 0);
   }, [stats?.dailyModelTokens]);
 
-  // Calculate total cost
+  // Token pricing per million tokens (MTok)
+  const MODEL_PRICING: Record<string, { inputPerMTok: number; outputPerMTok: number; cacheHitsPerMTok: number; cache5mWritePerMTok: number }> = {
+    'claude-opus-4-5-20251101': { inputPerMTok: 5, outputPerMTok: 25, cacheHitsPerMTok: 0.50, cache5mWritePerMTok: 6.25 },
+    'claude-opus-4-5': { inputPerMTok: 5, outputPerMTok: 25, cacheHitsPerMTok: 0.50, cache5mWritePerMTok: 6.25 },
+    'claude-opus-4-1': { inputPerMTok: 15, outputPerMTok: 75, cacheHitsPerMTok: 1.50, cache5mWritePerMTok: 18.75 },
+    'claude-opus-4': { inputPerMTok: 15, outputPerMTok: 75, cacheHitsPerMTok: 1.50, cache5mWritePerMTok: 18.75 },
+    'claude-sonnet-4-5': { inputPerMTok: 3, outputPerMTok: 15, cacheHitsPerMTok: 0.30, cache5mWritePerMTok: 3.75 },
+    'claude-sonnet-4': { inputPerMTok: 3, outputPerMTok: 15, cacheHitsPerMTok: 0.30, cache5mWritePerMTok: 3.75 },
+    'claude-sonnet-3-7': { inputPerMTok: 3, outputPerMTok: 15, cacheHitsPerMTok: 0.30, cache5mWritePerMTok: 3.75 },
+    'claude-haiku-4-5': { inputPerMTok: 1, outputPerMTok: 5, cacheHitsPerMTok: 0.10, cache5mWritePerMTok: 1.25 },
+    'claude-haiku-3-5': { inputPerMTok: 0.80, outputPerMTok: 4, cacheHitsPerMTok: 0.08, cache5mWritePerMTok: 1 },
+    'claude-haiku-3': { inputPerMTok: 0.25, outputPerMTok: 1.25, cacheHitsPerMTok: 0.03, cache5mWritePerMTok: 0.30 },
+  };
+
+  // Get pricing for a model (with fallback)
+  const getModelPricing = (modelId: string) => {
+    if (MODEL_PRICING[modelId]) return MODEL_PRICING[modelId];
+    const lowerModel = modelId.toLowerCase();
+    if (lowerModel.includes('opus-4-5') || lowerModel.includes('opus-4.5')) return MODEL_PRICING['claude-opus-4-5'];
+    if (lowerModel.includes('opus-4')) return MODEL_PRICING['claude-opus-4'];
+    if (lowerModel.includes('sonnet-4-5') || lowerModel.includes('sonnet-4.5')) return MODEL_PRICING['claude-sonnet-4-5'];
+    if (lowerModel.includes('sonnet-4') || lowerModel.includes('sonnet')) return MODEL_PRICING['claude-sonnet-4'];
+    if (lowerModel.includes('haiku-4-5') || lowerModel.includes('haiku-4.5')) return MODEL_PRICING['claude-haiku-4-5'];
+    if (lowerModel.includes('haiku-3-5') || lowerModel.includes('haiku-3.5')) return MODEL_PRICING['claude-haiku-3-5'];
+    if (lowerModel.includes('haiku')) return MODEL_PRICING['claude-haiku-3'];
+    return MODEL_PRICING['claude-sonnet-4']; // Default
+  };
+
+  // Calculate total cost using accurate pricing
   const totalCost = useMemo(() => {
     if (!stats?.modelUsage) return 0;
     try {
-      return Object.values(stats.modelUsage).reduce((sum, usage) => sum + ((usage as { costUSD?: number })?.costUSD || 0), 0);
+      let cost = 0;
+      Object.entries(stats.modelUsage).forEach(([modelId, usage]) => {
+        const pricing = getModelPricing(modelId);
+        const u = usage as { inputTokens?: number; outputTokens?: number; cacheReadInputTokens?: number; cacheCreationInputTokens?: number };
+        cost += ((u.inputTokens || 0) / 1_000_000) * pricing.inputPerMTok;
+        cost += ((u.outputTokens || 0) / 1_000_000) * pricing.outputPerMTok;
+        cost += ((u.cacheReadInputTokens || 0) / 1_000_000) * pricing.cacheHitsPerMTok;
+        cost += ((u.cacheCreationInputTokens || 0) / 1_000_000) * pricing.cache5mWritePerMTok;
+      });
+      return cost;
     } catch {
       return 0;
     }

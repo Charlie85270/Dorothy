@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       worktree?: { enabled: boolean; branchName: string };
       character?: string;
       name?: string;
+      secondaryProjectPath?: string;
     }) => ipcRenderer.invoke('agent:create', config),
     start: (params: { id: string; prompt: string; options?: { model?: string; resume?: boolean } }) =>
       ipcRenderer.invoke('agent:start', params),
@@ -63,6 +64,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('agent:input', params),
     resize: (params: { id: string; cols: number; rows: number }) =>
       ipcRenderer.invoke('agent:resize', params),
+    setSecondaryProject: (params: { id: string; secondaryProjectPath: string | null }) =>
+      ipcRenderer.invoke('agent:setSecondaryProject', params),
 
     // Event listeners
     onOutput: (callback: AgentEventCallback) => {

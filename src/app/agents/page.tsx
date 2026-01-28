@@ -323,10 +323,11 @@ export default function AgentsPage() {
     model?: string,
     worktree?: { enabled: boolean; branchName: string },
     character?: AgentCharacter,
-    name?: string
+    name?: string,
+    secondaryProjectPath?: string
   ) => {
     try {
-      const agent = await createAgent({ projectPath, skills, worktree, character, name });
+      const agent = await createAgent({ projectPath, skills, worktree, character, name, secondaryProjectPath });
       setSelectedAgent(agent.id);
       setShowNewChatModal(false);
 

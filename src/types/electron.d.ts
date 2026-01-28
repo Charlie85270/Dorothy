@@ -18,6 +18,7 @@ export interface AgentStatus {
   id: string;
   status: 'idle' | 'running' | 'completed' | 'error' | 'waiting';
   projectPath: string;
+  secondaryProjectPath?: string; // Secondary project added via --add-dir
   worktreePath?: string;
   branchName?: string;
   skills: string[];
@@ -65,6 +66,7 @@ export interface ElectronAPI {
       worktree?: WorktreeConfig;
       character?: AgentCharacter;
       name?: string;
+      secondaryProjectPath?: string;
     }) => Promise<AgentStatus & { ptyId: string }>;
     start: (params: { id: string; prompt: string; options?: { model?: string; resume?: boolean } }) => Promise<{ success: boolean }>;
     get: (id: string) => Promise<AgentStatus | null>;
@@ -73,6 +75,7 @@ export interface ElectronAPI {
     remove: (id: string) => Promise<{ success: boolean }>;
     sendInput: (params: { id: string; input: string }) => Promise<{ success: boolean }>;
     resize: (params: { id: string; cols: number; rows: number }) => Promise<{ success: boolean }>;
+    setSecondaryProject: (params: { id: string; secondaryProjectPath: string | null }) => Promise<{ success: boolean; error?: string; agent?: AgentStatus }>;
     onOutput: (callback: (event: AgentEvent) => void) => () => void;
     onError: (callback: (event: AgentEvent) => void) => () => void;
     onComplete: (callback: (event: AgentEvent) => void) => () => void;

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
   FolderOpen,
+  FolderPlus,
   Sparkles,
   Search,
   Check,
@@ -21,6 +22,7 @@ import {
   GitBranch,
   GitFork,
   User,
+  Layers,
 } from 'lucide-react';
 import type { AgentCharacter } from '@/types/electron';
 
@@ -61,7 +63,8 @@ interface NewChatModalProps {
     model?: string,
     worktree?: WorktreeConfig,
     character?: AgentCharacter,
-    name?: string
+    name?: string,
+    secondaryProjectPath?: string
   ) => void;
   projects: Project[];
   onBrowseFolder?: () => Promise<string | null>;
@@ -91,6 +94,11 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
   const [agentCharacter, setAgentCharacter] = useState<AgentCharacter>('robot');
   const [agentName, setAgentName] = useState('');
 
+  // Secondary project state
+  const [showSecondaryProject, setShowSecondaryProject] = useState(false);
+  const [selectedSecondaryProject, setSelectedSecondaryProject] = useState<string>('');
+  const [customSecondaryPath, setCustomSecondaryPath] = useState('');
+
   // Installation state
   const [showInstallTerminal, setShowInstallTerminal] = useState(false);
   const [installingSkill, setInstallingSkill] = useState<{ name: string; repo: string } | null>(null);
@@ -115,6 +123,9 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
       setBranchName('');
       setAgentCharacter('robot');
       setAgentName('');
+      setShowSecondaryProject(false);
+      setSelectedSecondaryProject('');
+      setCustomSecondaryPath('');
     }
   }, [open, initialProjectPath, initialStep]);
 
@@ -337,7 +348,10 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
     const projectName = projectPath.split('/').pop() || 'project';
     const finalName = agentName.trim() || `${CHARACTER_OPTIONS.find(c => c.id === agentCharacter)?.name || 'Agent'} on ${projectName}`;
 
-    onSubmit(projectPath, selectedSkills, finalPrompt, model, worktreeConfig, agentCharacter, finalName);
+    // Get secondary project path if set
+    const secondaryPath = showSecondaryProject ? (selectedSecondaryProject || customSecondaryPath) : undefined;
+
+    onSubmit(projectPath, selectedSkills, finalPrompt, model, worktreeConfig, agentCharacter, finalName, secondaryPath);
     // Reset form
     setStep(1);
     setSelectedProject('');
@@ -348,6 +362,9 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
     setBranchName('');
     setAgentCharacter('robot');
     setAgentName('');
+    setShowSecondaryProject(false);
+    setSelectedSecondaryProject('');
+    setCustomSecondaryPath('');
   };
 
   if (!open) return null;
@@ -475,6 +492,127 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                       </button>
                     )}
                   </div>
+                </div>
+
+                {/* Secondary Project (Collapsible) */}
+                <div className="border border-border-primary rounded-xl overflow-hidden">
+                  <button
+                    onClick={() => setShowSecondaryProject(!showSecondaryProject)}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-bg-tertiary/30 hover:bg-bg-tertiary/50 transition-colors"
+                  >
+                    <span className="font-medium text-sm flex items-center gap-2">
+                      {showSecondaryProject ? (
+                        <ChevronDown className="w-4 h-4" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4" />
+                      )}
+                      <Layers className="w-4 h-4 text-accent-purple" />
+                      Add second project for context (optional)
+                    </span>
+                    {(selectedSecondaryProject || customSecondaryPath) && (
+                      <span className="text-xs text-accent-purple px-2 py-0.5 rounded bg-accent-purple/10">
+                        Selected
+                      </span>
+                    )}
+                  </button>
+
+                  <AnimatePresence>
+                    {showSecondaryProject && (
+                      <motion.div
+                        initial={{ height: 0 }}
+                        animate={{ height: 'auto' }}
+                        exit={{ height: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="p-4 space-y-4 border-t border-border-primary">
+                          <p className="text-xs text-text-muted">
+                            The agent will have access to this project via <code className="bg-bg-tertiary px-1 rounded">--add-dir</code>
+                          </p>
+
+                          {/* Available projects grid (excluding primary) */}
+                          {projects.filter(p => p.path !== projectPath).length > 0 ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                              {projects.filter(p => p.path !== projectPath).map((project) => (
+                                <button
+                                  key={project.path}
+                                  onClick={() => {
+                                    setSelectedSecondaryProject(project.path);
+                                    setCustomSecondaryPath('');
+                                  }}
+                                  className={`
+                                    text-left p-3 rounded-lg border transition-all text-sm
+                                    ${selectedSecondaryProject === project.path
+                                      ? 'border-accent-purple bg-accent-purple/10'
+                                      : 'border-border-primary hover:border-border-accent bg-bg-tertiary/30'
+                                    }
+                                  `}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <FolderPlus className="w-3.5 h-3.5 text-accent-amber" />
+                                      <span className="font-medium">{project.name}</span>
+                                    </div>
+                                    {selectedSecondaryProject === project.path && (
+                                      <Check className="w-3.5 h-3.5 text-accent-purple" />
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-text-muted mt-1 truncate font-mono">
+                                    {project.path}
+                                  </p>
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-text-muted italic">No other projects available</p>
+                          )}
+
+                          {/* Custom secondary path */}
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={customSecondaryPath}
+                              onChange={(e) => {
+                                setCustomSecondaryPath(e.target.value);
+                                setSelectedSecondaryProject('');
+                              }}
+                              placeholder="/path/to/secondary/project"
+                              className="flex-1 px-3 py-2 rounded-lg font-mono text-sm"
+                            />
+                            {onBrowseFolder && (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const path = await onBrowseFolder();
+                                  if (path) {
+                                    setCustomSecondaryPath(path);
+                                    setSelectedSecondaryProject('');
+                                  }
+                                }}
+                                className="px-3 py-2 rounded-lg bg-bg-tertiary border border-border-primary hover:border-accent-purple transition-colors flex items-center gap-2"
+                              >
+                                <FolderOpen className="w-4 h-4 text-accent-purple" />
+                                <span className="text-sm">Browse</span>
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Clear button */}
+                          {(selectedSecondaryProject || customSecondaryPath) && (
+                            <button
+                              onClick={() => {
+                                setSelectedSecondaryProject('');
+                                setCustomSecondaryPath('');
+                              }}
+                              className="text-xs text-text-muted hover:text-accent-red transition-colors flex items-center gap-1"
+                            >
+                              <X className="w-3 h-3" />
+                              Clear selection
+                            </button>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               </div>
             )}
@@ -722,6 +860,17 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                     <span className="text-sm text-text-muted">Project:</span>
                     <span className="font-mono text-sm truncate max-w-xs">{projectPath}</span>
                   </div>
+                  {(selectedSecondaryProject || customSecondaryPath) && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-text-muted flex items-center gap-1">
+                        <Layers className="w-3.5 h-3.5" />
+                        Secondary:
+                      </span>
+                      <span className="font-mono text-sm truncate max-w-xs text-accent-purple">
+                        {(selectedSecondaryProject || customSecondaryPath).split('/').pop()}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-text-muted">Skills:</span>
                     <span className="text-sm">

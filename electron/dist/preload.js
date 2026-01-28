@@ -31,6 +31,7 @@ electron_1.contextBridge.exposeInMainWorld('electronAPI', {
         remove: (id) => electron_1.ipcRenderer.invoke('agent:remove', id),
         sendInput: (params) => electron_1.ipcRenderer.invoke('agent:input', params),
         resize: (params) => electron_1.ipcRenderer.invoke('agent:resize', params),
+        setSecondaryProject: (params) => electron_1.ipcRenderer.invoke('agent:setSecondaryProject', params),
         // Event listeners
         onOutput: (callback) => {
             const listener = (_, event) => callback(event);

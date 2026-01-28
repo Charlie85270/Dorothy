@@ -90,8 +90,8 @@ export function useClaude() {
 
   useEffect(() => {
     fetchData();
-    // Refresh every 5 seconds for live updates
-    const interval = setInterval(fetchData, 5000);
+    // Poll every 10 seconds to reduce CPU usage
+    const interval = setInterval(fetchData, 10000);
     return () => clearInterval(interval);
   }, [fetchData]);
 

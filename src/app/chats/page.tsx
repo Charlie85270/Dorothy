@@ -181,7 +181,7 @@ export default function ChatsPage() {
       {/* Session Items */}
       <div className="flex-1 overflow-y-auto">
         <div>
-          {filteredSessions.map(({ session, project }) => {
+          {filteredSessions.map(({ session, project }, index) => {
             const isSelected = selectedSession?.session.id === session.id;
 
             return (

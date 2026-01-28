@@ -1378,7 +1378,7 @@ export default function CanvasView() {
       if (touchRef.current.lastTouchCenter && newCenter) {
         const dx = newCenter.x - touchRef.current.lastTouchCenter.x;
         const dy = newCenter.y - touchRef.current.lastTouchCenter.y;
-        setPanOffset(prev => ({
+        setPanOffset((prev: { x: number; y: number }) => ({
           x: prev.x + dx,
           y: prev.y + dy,
         }));

@@ -23,11 +23,13 @@ import {
   GitBranch,
   Layers,
   AlertTriangle,
+  Pencil,
 } from 'lucide-react';
 import { useElectronAgents, useElectronFS, useElectronSkills, isElectron } from '@/hooks/useElectron';
 import { useClaude } from '@/hooks/useClaude';
 import type { AgentCharacter } from '@/types/electron';
 import NewChatModal from '@/components/NewChatModal';
+import AgentTerminalDialog from '@/components/AgentWorld/AgentTerminalDialog';
 import type { AgentStatus } from '@/types/electron';
 // Import xterm CSS
 import 'xterm/css/xterm.css';
@@ -89,6 +91,7 @@ export default function AgentsPage() {
   const [startPromptValue, setStartPromptValue] = useState('');
   const [projectFilter, setProjectFilter] = useState<string | null>(null); // null = All
   const startPromptInputRef = useRef<HTMLInputElement>(null);
+  const [editAgentId, setEditAgentId] = useState<string | null>(null); // For edit dialog
 
   // Get unique projects from agents
   const uniqueProjects = useMemo(() => {
@@ -324,10 +327,11 @@ export default function AgentsPage() {
     worktree?: { enabled: boolean; branchName: string },
     character?: AgentCharacter,
     name?: string,
-    secondaryProjectPath?: string
+    secondaryProjectPath?: string,
+    skipPermissions?: boolean
   ) => {
     try {
-      const agent = await createAgent({ projectPath, skills, worktree, character, name, secondaryProjectPath });
+      const agent = await createAgent({ projectPath, skills, worktree, character, name, secondaryProjectPath, skipPermissions });
       setSelectedAgent(agent.id);
       setShowNewChatModal(false);
 
@@ -520,9 +524,21 @@ export default function AgentsPage() {
                           <h4 className="font-medium text-sm truncate">
                             {agent.name || 'Unnamed Agent'}
                           </h4>
-                          <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${statusConfig.bg} ${statusConfig.text}`}>
-                            {agent.status}
-                          </span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditAgentId(agent.id);
+                              }}
+                              className="p-1 hover:bg-bg-tertiary rounded transition-colors"
+                              title="Edit agent"
+                            >
+                              <Pencil className="w-3.5 h-3.5 text-text-muted hover:text-accent-cyan" />
+                            </button>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${statusConfig.bg} ${statusConfig.text}`}>
+                              {agent.status}
+                            </span>
+                          </div>
                         </div>
                         <p className="text-xs text-text-muted mt-1 truncate">
                           {agent.pathMissing ? (
@@ -855,6 +871,18 @@ export default function AgentsPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Edit Agent Dialog */}
+      <AgentTerminalDialog
+        agent={editAgentId ? agents.find(a => a.id === editAgentId) || null : null}
+        open={!!editAgentId}
+        onClose={() => setEditAgentId(null)}
+        onStart={handleStartAgent}
+        onStop={stopAgent}
+        projects={projects.map(p => ({ path: p.path, name: p.name }))}
+        onBrowseFolder={isElectron() ? openFolderDialog : undefined}
+        initialPanel="settings"
+      />
     </div>
   );
 }

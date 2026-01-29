@@ -29,6 +29,8 @@ import {
   MessageSquare,
   Plus,
   MoreVertical,
+  Pencil,
+  Settings2,
 } from 'lucide-react';
 import { useElectronAgents, useElectronFS, useElectronSkills, isElectron } from '@/hooks/useElectron';
 import { useClaude } from '@/hooks/useClaude';
@@ -229,6 +231,7 @@ function AgentNodeCard({
   onDrag,
   onOpenTerminal,
   onToggleAgent,
+  onEdit,
 }: {
   node: AgentNode;
   isSelected: boolean;
@@ -236,10 +239,26 @@ function AgentNodeCard({
   onDrag: (delta: { x: number; y: number }) => void;
   onOpenTerminal: () => void;
   onToggleAgent: () => void;
+  onEdit: () => void;
 }) {
   const [isDragging, setIsDragging] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef({ startX: 0, startY: 0, hasMoved: false });
   const DRAG_THRESHOLD = 5;
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    if (showMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showMenu]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('button')) return; // Don't drag when clicking buttons
@@ -358,24 +377,59 @@ function AgentNodeCard({
       <StatusIndicator status={node.status} />
 
       <div
-        className={`w-72 rounded-xl border backdrop-blur-sm transition-all duration-200 ${
-          isSelected
+        className={`w-72 rounded-xl border backdrop-blur-sm transition-all duration-200 ${isSelected
             ? 'bg-zinc-900/95 border-cyan-500/50 shadow-lg shadow-cyan-500/20'
             : node.status === 'waiting'
-            ? 'bg-zinc-900/95 border-amber-500/50 shadow-lg shadow-amber-500/20'
-            : 'bg-zinc-900/80 border-zinc-700/50 hover:border-zinc-600'
-        }`}
+              ? 'bg-zinc-900/95 border-amber-500/50 shadow-lg shadow-amber-500/20'
+              : 'bg-zinc-900/80 border-zinc-700/50 hover:border-zinc-600'
+          }`}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-3 border-b border-zinc-700/50">
           <div className="flex items-center gap-2">
             <GripVertical className="w-4 h-4 text-zinc-600 cursor-grab" />
             <span className="text-xl">{characterEmojis[node.character] || '🤖'}</span>
-            <span className="font-medium text-zinc-200 truncate max-w-[120px]">{node.name}</span>
+            <span className="font-medium text-zinc-200 truncate max-w-[100px]">{node.name}</span>
           </div>
           <div className="flex items-center gap-2">
             <span className={`w-2 h-2 rounded-full ${statusColors[node.status]} ${isRunning ? 'animate-pulse' : ''}`} />
             <span className="text-xs text-zinc-400 capitalize">{node.status}</span>
+            {/* Menu button */}
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowMenu(!showMenu);
+                }}
+                className="p-1 hover:bg-zinc-700/50 rounded transition-colors"
+              >
+                <MoreVertical className="w-4 h-4 text-zinc-400" />
+              </button>
+              {/* Dropdown menu */}
+              <AnimatePresence>
+                {showMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95, y: -5 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: -5 }}
+                    transition={{ duration: 0.1 }}
+                    className="absolute right-0 top-full mt-1 w-36 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl z-50 overflow-hidden"
+                  >
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowMenu(false);
+                        onEdit();
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700 transition-colors"
+                    >
+                      <Settings2 className="w-4 h-4 text-cyan-400" />
+                      Edit
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
 
@@ -571,11 +625,10 @@ function ProjectNodeCard({
       onTouchEnd={handleTouchEnd}
     >
       <div
-        className={`w-56 rounded-xl border backdrop-blur-sm transition-all duration-200 ${
-          isSelected
+        className={`w-56 rounded-xl border backdrop-blur-sm transition-all duration-200 ${isSelected
             ? 'bg-zinc-900/95 border-purple-500/50 shadow-lg shadow-purple-500/20'
             : 'bg-zinc-900/80 border-zinc-700/50 hover:border-zinc-600'
-        }`}
+          }`}
       >
         {/* Connection point */}
         <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-zinc-800 border-2 border-purple-500/50" />
@@ -707,11 +760,10 @@ function CanvasToolbar({
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`px-2 lg:px-3 py-1.5 rounded-md text-[10px] lg:text-xs font-medium transition-all ${
-                filter === f
+              className={`px-2 lg:px-3 py-1.5 rounded-md text-[10px] lg:text-xs font-medium transition-all ${filter === f
                   ? 'bg-cyan-500/20 text-cyan-400'
                   : 'text-zinc-400 hover:text-zinc-200'
-              }`}
+                }`}
             >
               {f === 'all' ? 'All' : f === 'running' ? 'Run' : f === 'idle' ? 'Idle' : 'Stop'}
             </button>
@@ -805,17 +857,16 @@ function NotificationPanel({
       initial={false}
       animate={{ opacity: 1, x: 0 }}
       transition={{ type: 'spring', stiffness: 500, damping: 40 }}
-      className={`p-3 rounded-lg border transition-colors cursor-pointer hover:bg-zinc-800/50 ${
-        agent.status === 'waiting'
+      className={`p-3 rounded-lg border transition-colors cursor-pointer hover:bg-zinc-800/50 ${agent.status === 'waiting'
           ? 'bg-amber-500/5 border-amber-500/30'
           : agent.status === 'running'
-          ? 'bg-cyan-500/5 border-cyan-500/20'
-          : agent.status === 'completed'
-          ? 'bg-green-500/5 border-green-500/20'
-          : agent.status === 'error'
-          ? 'bg-red-500/5 border-red-500/20'
-          : 'bg-zinc-800/30 border-zinc-700/50'
-      }`}
+            ? 'bg-cyan-500/5 border-cyan-500/20'
+            : agent.status === 'completed'
+              ? 'bg-green-500/5 border-green-500/20'
+              : agent.status === 'error'
+                ? 'bg-red-500/5 border-red-500/20'
+                : 'bg-zinc-800/30 border-zinc-700/50'
+        }`}
       onClick={() => onOpenTerminal(agent.id)}
     >
       <div className="flex items-start gap-2">
@@ -1065,6 +1116,7 @@ export default function CanvasView() {
 
   // Terminal dialog state
   const [terminalAgentId, setTerminalAgentId] = useState<string | null>(null);
+  const [terminalInitialPanel, setTerminalInitialPanel] = useState<'settings' | undefined>(undefined);
 
   // Create agent modal state
   const [showCreateAgentModal, setShowCreateAgentModal] = useState(false);
@@ -1210,6 +1262,13 @@ export default function CanvasView() {
   // Open terminal for agent (show inline modal)
   const handleOpenTerminal = useCallback((agentId: string) => {
     setTerminalAgentId(agentId);
+    setTerminalInitialPanel(undefined);
+  }, []);
+
+  // Open edit settings for agent
+  const handleEditAgent = useCallback((agentId: string) => {
+    setTerminalAgentId(agentId);
+    setTerminalInitialPanel('settings');
   }, []);
 
   // Toggle agent (start/stop)
@@ -1256,10 +1315,11 @@ export default function CanvasView() {
     worktree?: { enabled: boolean; branchName: string },
     character?: AgentCharacter,
     name?: string,
-    secondaryProjectPath?: string
+    secondaryProjectPath?: string,
+    skipPermissions?: boolean
   ) => {
     try {
-      const agent = await createAgent({ projectPath, skills, worktree, character, name, secondaryProjectPath });
+      const agent = await createAgent({ projectPath, skills, worktree, character, name, secondaryProjectPath, skipPermissions });
       setShowCreateAgentModal(false);
       setCreateAgentProjectPath(null);
 
@@ -1298,7 +1358,7 @@ export default function CanvasView() {
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
     // Only start panning if clicking on the background (not on a node)
     if ((e.target as HTMLElement).closest('.canvas-content') &&
-        !(e.target as HTMLElement).closest('.node-card')) {
+      !(e.target as HTMLElement).closest('.node-card')) {
       setIsPanning(true);
       panRef.current = { startX: e.clientX - panOffset.x, startY: e.clientY - panOffset.y };
     }
@@ -1507,6 +1567,7 @@ export default function CanvasView() {
               onDrag={(delta) => handleAgentDrag(agent.id, delta)}
               onOpenTerminal={() => handleOpenTerminal(agent.id)}
               onToggleAgent={() => handleToggleAgent(agent.id, agent.status === 'running' || agent.status === 'waiting')}
+              onEdit={() => handleEditAgent(agent.id)}
             />
           ))}
         </AnimatePresence>
@@ -1572,12 +1633,16 @@ export default function CanvasView() {
       <AgentTerminalDialog
         agent={terminalAgent}
         open={!!terminalAgentId}
-        onClose={() => setTerminalAgentId(null)}
+        onClose={() => {
+          setTerminalAgentId(null);
+          setTerminalInitialPanel(undefined);
+        }}
         onStart={handleStartAgent}
         onStop={handleStopAgent}
         projects={projects.map(p => ({ path: p.path, name: p.name }))}
         onBrowseFolder={isElectron() ? openFolderDialog : undefined}
         onAgentUpdated={refreshAgents}
+        initialPanel={terminalInitialPanel}
       />
 
       {/* New Agent Modal */}

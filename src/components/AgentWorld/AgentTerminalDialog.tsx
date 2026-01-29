@@ -60,10 +60,20 @@ interface AgentTerminalDialogProps {
   projects?: { path: string; name: string }[];
   onBrowseFolder?: () => Promise<string | null>;
   onAgentUpdated?: (agent: AgentStatus) => void;
+  onUpdateAgent?: (params: {
+    id: string;
+    skills?: string[];
+    secondaryProjectPath?: string | null;
+    skipPermissions?: boolean;
+  }) => Promise<{ success: boolean; error?: string; agent?: AgentStatus }>;
+  initialPanel?: PanelType; // Panel to expand when dialog opens
 }
 
 // Panel types for the sidebar
-type PanelType = 'code' | 'git' | 'terminal' | 'context';
+type PanelType = 'code' | 'git' | 'terminal' | 'context' | 'settings';
+
+// Import Zap icon for skip permissions
+import { Zap } from 'lucide-react';
 
 // Memoized simplified header component
 const DialogHeader = memo(function DialogHeader({
@@ -373,11 +383,20 @@ export default function AgentTerminalDialog({
   projects = [],
   onBrowseFolder,
   onAgentUpdated,
+  onUpdateAgent,
+  initialPanel,
 }: AgentTerminalDialogProps) {
   const [terminalReady, setTerminalReady] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [prompt, setPrompt] = useState('');
+
+  // Settings panel state
+  const [editSkipPermissions, setEditSkipPermissions] = useState(false);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [expandedPanels, setExpandedPanels] = useState<Set<PanelType>>(new Set(['code', 'git']));
+
+  // Track if we've applied the initial panel for this agent
+  const appliedInitialPanelRef = useRef<string | null>(null);
   const [quickTerminalReady, setQuickTerminalReady] = useState(false);
   const [customSecondaryPath, setCustomSecondaryPath] = useState('');
   const [gitBranch, setGitBranch] = useState<string>('');
@@ -405,7 +424,25 @@ export default function AgentTerminalDialog({
   useEffect(() => {
     agentIdRef.current = agent?.id || null;
     setGitBranch('');
-  }, [agent?.id]);
+    setEditSkipPermissions(agent?.skipPermissions || false);
+  }, [agent?.id, agent?.skipPermissions]);
+
+  // Handle initial panel expansion when dialog opens
+  useEffect(() => {
+    if (open && agent && initialPanel && appliedInitialPanelRef.current !== agent.id) {
+      // Expand the initial panel
+      setExpandedPanels(prev => {
+        const next = new Set(prev);
+        next.add(initialPanel);
+        return next;
+      });
+      appliedInitialPanelRef.current = agent.id;
+    }
+    // Reset when dialog closes
+    if (!open) {
+      appliedInitialPanelRef.current = null;
+    }
+  }, [open, agent, initialPanel]);
 
   // Initialize xterm when dialog opens
   useEffect(() => {
@@ -793,6 +830,37 @@ export default function AgentTerminalDialog({
     }
   }, [agent, onAgentUpdated]);
 
+  // Handle saving skip permissions setting
+  const handleSaveSkipPermissions = useCallback(async (value: boolean) => {
+    if (!agent) return;
+
+    setIsSavingSettings(true);
+    try {
+      if (onUpdateAgent) {
+        const result = await onUpdateAgent({
+          id: agent.id,
+          skipPermissions: value,
+        });
+        if (result.success && result.agent && onAgentUpdated) {
+          onAgentUpdated(result.agent);
+        }
+      } else if (window.electronAPI?.agent?.update) {
+        const result = await window.electronAPI.agent.update({
+          id: agent.id,
+          skipPermissions: value,
+        });
+        if (result.success && result.agent && onAgentUpdated) {
+          onAgentUpdated(result.agent);
+        }
+      }
+      setEditSkipPermissions(value);
+    } catch (err) {
+      console.error('Failed to save settings:', err);
+    } finally {
+      setIsSavingSettings(false);
+    }
+  }, [agent, onUpdateAgent, onAgentUpdated]);
+
   const closeQuickTerminal = useCallback(() => {
     const agentId = agent?.id;
     if (agentId) {
@@ -1021,6 +1089,83 @@ export default function AgentTerminalDialog({
                           onSetSecondaryProject={handleSetSecondaryProject}
                           onBrowseFolder={onBrowseFolder}
                         />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Settings Panel */}
+                  <div className="border-b border-border-primary">
+                    <PanelHeader
+                      icon={Settings2}
+                      title="Settings"
+                      color="text-zinc-400"
+                      isExpanded={expandedPanels.has('settings')}
+                      badge={
+                        agent.skipPermissions ? (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">
+                            Auto
+                          </span>
+                        ) : null
+                      }
+                      onToggle={() => togglePanel('settings')}
+                    />
+                    <div
+                      className="grid transition-[grid-template-rows] duration-200 ease-out"
+                      style={{ gridTemplateRows: expandedPanels.has('settings') ? '1fr' : '0fr' }}
+                    >
+                      <div className="overflow-hidden">
+                        <div className="p-3 space-y-4">
+                          {/* Skip Permissions Toggle */}
+                          <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/5">
+                            <div className="flex items-start gap-3">
+                              <button
+                                onClick={() => handleSaveSkipPermissions(!editSkipPermissions)}
+                                disabled={isSavingSettings}
+                                className={`
+                                  mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center transition-all shrink-0
+                                  ${editSkipPermissions
+                                    ? 'bg-amber-500 border-amber-500'
+                                    : 'border-amber-500/50 hover:border-amber-500'
+                                  }
+                                  ${isSavingSettings ? 'opacity-50' : ''}
+                                `}
+                              >
+                                {isSavingSettings ? (
+                                  <Loader2 className="w-3 h-3 text-white animate-spin" />
+                                ) : editSkipPermissions ? (
+                                  <Check className="w-3 h-3 text-white" />
+                                ) : null}
+                              </button>
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <Zap className="w-4 h-4 text-amber-500" />
+                                  <span className="font-medium text-sm">Skip Permissions</span>
+                                </div>
+                                <p className="text-xs text-text-muted mt-1">
+                                  Run without asking for permission on each action. Changes take effect on next task.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Agent Info */}
+                          <div className="space-y-2 text-xs">
+                            <div className="flex justify-between">
+                              <span className="text-text-muted">Skills:</span>
+                              <span>{agent.skills.length > 0 ? agent.skills.join(', ') : 'None'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-text-muted">Character:</span>
+                              <span>{agent.character || 'robot'}</span>
+                            </div>
+                            {agent.branchName && (
+                              <div className="flex justify-between">
+                                <span className="text-text-muted">Branch:</span>
+                                <span className="font-mono text-accent-purple">{agent.branchName}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>

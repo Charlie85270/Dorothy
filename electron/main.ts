@@ -66,6 +66,7 @@ interface AgentStatus {
   character?: AgentCharacter;
   name?: string;
   pathMissing?: boolean; // True if project path no longer exists
+  skipPermissions?: boolean; // If true, use --dangerously-skip-permissions flag
 }
 
 const agents: Map<string, AgentStatus> = new Map();
@@ -950,6 +951,7 @@ ipcMain.handle('agent:create', async (_event, config: {
   character?: AgentCharacter;
   name?: string;
   secondaryProjectPath?: string;
+  skipPermissions?: boolean;
 }) => {
   const id = uuidv4();
   const shell = process.env.SHELL || '/bin/zsh';
@@ -1056,6 +1058,7 @@ ipcMain.handle('agent:create', async (_event, config: {
     ptyId,
     character: config.character || 'robot',
     name: config.name || `Agent ${id.slice(0, 4)}`,
+    skipPermissions: config.skipPermissions || false,
   };
   agents.set(id, status);
 
@@ -1154,6 +1157,11 @@ ipcMain.handle('agent:start', async (_event, { id, prompt, options }: {
     command += ' --resume';
   }
 
+  // Add skip permissions flag if enabled
+  if (agent.skipPermissions) {
+    command += ' --dangerously-skip-permissions';
+  }
+
   // Add secondary project path with --add-dir flag if set
   if (agent.secondaryProjectPath) {
     const escapedSecondaryPath = agent.secondaryProjectPath.replace(/'/g, "'\\''");
@@ -1197,6 +1205,49 @@ ipcMain.handle('agent:get', async (_event, id: string) => {
 // Get all agents
 ipcMain.handle('agent:list', async () => {
   return Array.from(agents.values());
+});
+
+// Update an agent (can update skills, secondaryProjectPath, skipPermissions, name, character)
+ipcMain.handle('agent:update', async (_event, params: {
+  id: string;
+  skills?: string[];
+  secondaryProjectPath?: string | null;
+  skipPermissions?: boolean;
+  name?: string;
+  character?: AgentCharacter;
+}) => {
+  const agent = agents.get(params.id);
+  if (!agent) {
+    return { success: false, error: 'Agent not found' };
+  }
+
+  // Update fields if provided
+  if (params.skills !== undefined) {
+    agent.skills = params.skills;
+  }
+  if (params.secondaryProjectPath !== undefined) {
+    if (params.secondaryProjectPath === null) {
+      agent.secondaryProjectPath = undefined;
+    } else if (fs.existsSync(params.secondaryProjectPath)) {
+      agent.secondaryProjectPath = params.secondaryProjectPath;
+    } else {
+      return { success: false, error: 'Secondary project path does not exist' };
+    }
+  }
+  if (params.skipPermissions !== undefined) {
+    agent.skipPermissions = params.skipPermissions;
+  }
+  if (params.name !== undefined) {
+    agent.name = params.name;
+  }
+  if (params.character !== undefined) {
+    agent.character = params.character;
+  }
+
+  agent.lastActivity = new Date().toISOString();
+  saveAgents();
+
+  return { success: true, agent };
 });
 
 // Stop an agent

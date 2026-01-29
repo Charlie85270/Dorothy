@@ -30,6 +30,7 @@ export interface AgentStatus {
   character?: AgentCharacter;
   name?: string;
   pathMissing?: boolean; // True if project path no longer exists
+  skipPermissions?: boolean; // If true, use --dangerously-skip-permissions flag
 }
 
 export interface PtyDataEvent {
@@ -67,7 +68,16 @@ export interface ElectronAPI {
       character?: AgentCharacter;
       name?: string;
       secondaryProjectPath?: string;
+      skipPermissions?: boolean;
     }) => Promise<AgentStatus & { ptyId: string }>;
+    update: (params: {
+      id: string;
+      skills?: string[];
+      secondaryProjectPath?: string | null;
+      skipPermissions?: boolean;
+      name?: string;
+      character?: AgentCharacter;
+    }) => Promise<{ success: boolean; error?: string; agent?: AgentStatus }>;
     start: (params: { id: string; prompt: string; options?: { model?: string; resume?: boolean } }) => Promise<{ success: boolean }>;
     get: (id: string) => Promise<AgentStatus | null>;
     list: () => Promise<AgentStatus[]>;

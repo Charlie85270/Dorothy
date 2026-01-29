@@ -49,7 +49,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
       character?: string;
       name?: string;
       secondaryProjectPath?: string;
+      skipPermissions?: boolean;
     }) => ipcRenderer.invoke('agent:create', config),
+    update: (params: {
+      id: string;
+      skills?: string[];
+      secondaryProjectPath?: string | null;
+      skipPermissions?: boolean;
+      name?: string;
+      character?: string;
+    }) => ipcRenderer.invoke('agent:update', params),
     start: (params: { id: string; prompt: string; options?: { model?: string; resume?: boolean } }) =>
       ipcRenderer.invoke('agent:start', params),
     get: (id: string) =>

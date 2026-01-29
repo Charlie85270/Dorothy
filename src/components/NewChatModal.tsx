@@ -64,7 +64,8 @@ interface NewChatModalProps {
     worktree?: WorktreeConfig,
     character?: AgentCharacter,
     name?: string,
-    secondaryProjectPath?: string
+    secondaryProjectPath?: string,
+    skipPermissions?: boolean
   ) => void;
   projects: Project[];
   onBrowseFolder?: () => Promise<string | null>;
@@ -99,6 +100,9 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
   const [selectedSecondaryProject, setSelectedSecondaryProject] = useState<string>('');
   const [customSecondaryPath, setCustomSecondaryPath] = useState('');
 
+  // Skip permissions state (--dangerously-skip-permissions)
+  const [skipPermissions, setSkipPermissions] = useState(false);
+
   // Installation state
   const [showInstallTerminal, setShowInstallTerminal] = useState(false);
   const [installingSkill, setInstallingSkill] = useState<{ name: string; repo: string } | null>(null);
@@ -126,6 +130,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
       setShowSecondaryProject(false);
       setSelectedSecondaryProject('');
       setCustomSecondaryPath('');
+      setSkipPermissions(false);
     }
   }, [open, initialProjectPath, initialStep]);
 
@@ -351,7 +356,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
     // Get secondary project path if set
     const secondaryPath = showSecondaryProject ? (selectedSecondaryProject || customSecondaryPath) : undefined;
 
-    onSubmit(projectPath, selectedSkills, finalPrompt, model, worktreeConfig, agentCharacter, finalName, secondaryPath);
+    onSubmit(projectPath, selectedSkills, finalPrompt, model, worktreeConfig, agentCharacter, finalName, secondaryPath, skipPermissions);
     // Reset form
     setStep(1);
     setSelectedProject('');
@@ -364,6 +369,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
     setAgentName('');
     setShowSecondaryProject(false);
     setSelectedSecondaryProject('');
+    setSkipPermissions(false);
     setCustomSecondaryPath('');
   };
 
@@ -1005,6 +1011,33 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                           </motion.div>
                         )}
                       </AnimatePresence>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Skip Permissions Option */}
+                <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5">
+                  <div className="flex items-start gap-3">
+                    <button
+                      onClick={() => setSkipPermissions(!skipPermissions)}
+                      className={`
+                        mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center transition-all shrink-0
+                        ${skipPermissions
+                          ? 'bg-amber-500 border-amber-500'
+                          : 'border-amber-500/50 hover:border-amber-500'
+                        }
+                      `}
+                    >
+                      {skipPermissions && <Check className="w-3 h-3 text-white" />}
+                    </button>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <Zap className="w-4 h-4 text-amber-500" />
+                        <span className="font-medium text-sm">Skip Permission Prompts</span>
+                      </div>
+                      <p className="text-xs text-text-muted mt-1">
+                        Run without asking for permission on each action. Use with caution - the agent will have full autonomy.
+                      </p>
                     </div>
                   </div>
                 </div>

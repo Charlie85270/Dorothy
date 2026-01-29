@@ -53,6 +53,7 @@ export function useElectronAgents() {
     character?: AgentCharacter;
     name?: string;
     secondaryProjectPath?: string;
+    skipPermissions?: boolean;
   }) => {
     if (!isElectron()) {
       throw new Error('Electron API not available');
@@ -60,6 +61,25 @@ export function useElectronAgents() {
     const agent = await window.electronAPI!.agent.create(config);
     setAgents(prev => [...prev, agent]);
     return agent;
+  }, []);
+
+  // Update an agent
+  const updateAgent = useCallback(async (params: {
+    id: string;
+    skills?: string[];
+    secondaryProjectPath?: string | null;
+    skipPermissions?: boolean;
+    name?: string;
+    character?: AgentCharacter;
+  }) => {
+    if (!isElectron()) {
+      throw new Error('Electron API not available');
+    }
+    const result = await window.electronAPI!.agent.update(params);
+    if (result.success && result.agent) {
+      setAgents(prev => prev.map(a => a.id === params.id ? result.agent! : a));
+    }
+    return result;
   }, []);
 
   // Start an agent
@@ -151,6 +171,7 @@ export function useElectronAgents() {
     isLoading,
     isElectron: isElectron(),
     createAgent,
+    updateAgent,
     startAgent,
     stopAgent,
     removeAgent,

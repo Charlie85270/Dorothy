@@ -209,7 +209,8 @@ export default function ProjectsPage() {
     worktree?: { enabled: boolean; branchName: string },
     character?: AgentCharacter,
     name?: string,
-    secondaryProjectPath?: string
+    secondaryProjectPath?: string,
+    skipPermissions?: boolean
   ) => {
     try {
       const agent = await createAgent({
@@ -219,6 +220,7 @@ export default function ProjectsPage() {
         character,
         name,
         secondaryProjectPath,
+        skipPermissions,
       });
 
       if (prompt) {

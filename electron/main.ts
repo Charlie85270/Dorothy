@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, protocol, Notification } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
+import * as http from 'http';
 import { v4 as uuidv4 } from 'uuid';
 import * as pty from 'node-pty';
 
@@ -70,6 +71,317 @@ interface AgentStatus {
 }
 
 const agents: Map<string, AgentStatus> = new Map();
+
+// HTTP API Server for MCP orchestrator integration
+const API_PORT = 31415;
+let apiServer: http.Server | null = null;
+
+function startApiServer() {
+  if (apiServer) return;
+
+  apiServer = http.createServer(async (req, res) => {
+    // CORS headers for local access
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') {
+      res.writeHead(200);
+      res.end();
+      return;
+    }
+
+    const url = new URL(req.url || '/', `http://localhost:${API_PORT}`);
+    const pathname = url.pathname;
+
+    // Parse JSON body for POST requests
+    let body: Record<string, unknown> = {};
+    if (req.method === 'POST') {
+      try {
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) {
+          chunks.push(chunk);
+        }
+        const data = Buffer.concat(chunks).toString();
+        if (data) {
+          body = JSON.parse(data);
+        }
+      } catch {
+        // Ignore parse errors
+      }
+    }
+
+    const sendJson = (data: unknown, status = 200) => {
+      res.writeHead(status, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(data));
+    };
+
+    try {
+      // GET /api/agents - List all agents
+      if (pathname === '/api/agents' && req.method === 'GET') {
+        const agentList = Array.from(agents.values()).map(a => ({
+          id: a.id,
+          name: a.name,
+          status: a.status,
+          projectPath: a.projectPath,
+          secondaryProjectPath: a.secondaryProjectPath,
+          skills: a.skills,
+          currentTask: a.currentTask,
+          lastActivity: a.lastActivity,
+          character: a.character,
+          branchName: a.branchName,
+          error: a.error,
+        }));
+        sendJson({ agents: agentList });
+        return;
+      }
+
+      // GET /api/agents/:id - Get single agent
+      const agentMatch = pathname.match(/^\/api\/agents\/([^/]+)$/);
+      if (agentMatch && req.method === 'GET') {
+        const agent = agents.get(agentMatch[1]);
+        if (!agent) {
+          sendJson({ error: 'Agent not found' }, 404);
+          return;
+        }
+        sendJson({ agent });
+        return;
+      }
+
+      // GET /api/agents/:id/output - Get agent output
+      const outputMatch = pathname.match(/^\/api\/agents\/([^/]+)\/output$/);
+      if (outputMatch && req.method === 'GET') {
+        const agent = agents.get(outputMatch[1]);
+        if (!agent) {
+          sendJson({ error: 'Agent not found' }, 404);
+          return;
+        }
+        // Return last N lines of output
+        const lines = parseInt(url.searchParams.get('lines') || '100', 10);
+        const output = agent.output.slice(-lines).join('');
+        sendJson({ output, status: agent.status });
+        return;
+      }
+
+      // POST /api/agents - Create new agent
+      if (pathname === '/api/agents' && req.method === 'POST') {
+        const { projectPath, name, skills = [], character, skipPermissions, secondaryProjectPath } = body as {
+          projectPath: string;
+          name?: string;
+          skills?: string[];
+          character?: AgentCharacter;
+          skipPermissions?: boolean;
+          secondaryProjectPath?: string;
+        };
+
+        if (!projectPath) {
+          sendJson({ error: 'projectPath is required' }, 400);
+          return;
+        }
+
+        const id = uuidv4();
+        const agent: AgentStatus = {
+          id,
+          status: 'idle',
+          projectPath,
+          secondaryProjectPath,
+          skills,
+          output: [],
+          lastActivity: new Date().toISOString(),
+          character,
+          name: name || `Agent ${id.slice(0, 6)}`,
+          skipPermissions,
+        };
+        agents.set(id, agent);
+        saveAgents();
+        sendJson({ agent });
+        return;
+      }
+
+      // POST /api/agents/:id/start - Start agent with task
+      const startMatch = pathname.match(/^\/api\/agents\/([^/]+)\/start$/);
+      if (startMatch && req.method === 'POST') {
+        const agent = agents.get(startMatch[1]);
+        if (!agent) {
+          sendJson({ error: 'Agent not found' }, 404);
+          return;
+        }
+
+        const { prompt, model } = body as { prompt: string; model?: string };
+        if (!prompt) {
+          sendJson({ error: 'prompt is required' }, 400);
+          return;
+        }
+
+        // Start the agent (similar to agent:start IPC handler)
+        const workingDir = agent.worktreePath || agent.projectPath;
+        let command = `cd '${workingDir}' && claude`;
+
+        if (agent.secondaryProjectPath) {
+          command += ` --add-dir '${agent.secondaryProjectPath}'`;
+        }
+        if (agent.skipPermissions) {
+          command += ' --dangerously-skip-permissions';
+        }
+        if (model) {
+          command += ` --model ${model}`;
+        }
+        command += ` '${prompt.replace(/'/g, "'\\''")}'`;
+
+        const shell = process.env.SHELL || '/bin/zsh';
+        const ptyProcess = pty.spawn(shell, ['-l', '-c', command], {
+          name: 'xterm-256color',
+          cols: 120,
+          rows: 40,
+          cwd: workingDir,
+          env: { ...process.env, TERM: 'xterm-256color' },
+        });
+
+        const ptyId = uuidv4();
+        ptyProcesses.set(ptyId, ptyProcess);
+
+        agent.ptyId = ptyId;
+        agent.status = 'running';
+        agent.currentTask = prompt;
+        agent.output = [];
+        agent.lastActivity = new Date().toISOString();
+        saveAgents();
+
+        ptyProcess.onData((data: string) => {
+          agent.output.push(data);
+          if (agent.output.length > 10000) {
+            agent.output = agent.output.slice(-5000);
+          }
+          agent.lastActivity = new Date().toISOString();
+          // Check for waiting state
+          const recentOutput = agent.output.slice(-20).join('');
+          const isWaiting = CLAUDE_PATTERNS.waitingForInput.some(p => p.test(recentOutput));
+          if (isWaiting && agent.status === 'running') {
+            agent.status = 'waiting';
+          }
+          // Emit to renderer
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('agent:output', { agentId: agent.id, data });
+          }
+        });
+
+        ptyProcess.onExit(({ exitCode }) => {
+          agent.status = exitCode === 0 ? 'completed' : 'error';
+          if (exitCode !== 0) {
+            agent.error = `Process exited with code ${exitCode}`;
+          }
+          agent.lastActivity = new Date().toISOString();
+          ptyProcesses.delete(ptyId);
+          saveAgents();
+        });
+
+        sendJson({ success: true, agent: { id: agent.id, status: agent.status } });
+        return;
+      }
+
+      // POST /api/agents/:id/stop - Stop agent
+      const stopMatch = pathname.match(/^\/api\/agents\/([^/]+)\/stop$/);
+      if (stopMatch && req.method === 'POST') {
+        const agent = agents.get(stopMatch[1]);
+        if (!agent) {
+          sendJson({ error: 'Agent not found' }, 404);
+          return;
+        }
+
+        if (agent.ptyId) {
+          const ptyProcess = ptyProcesses.get(agent.ptyId);
+          if (ptyProcess) {
+            ptyProcess.kill();
+            ptyProcesses.delete(agent.ptyId);
+          }
+        }
+        agent.status = 'idle';
+        agent.currentTask = undefined;
+        agent.lastActivity = new Date().toISOString();
+        saveAgents();
+        sendJson({ success: true });
+        return;
+      }
+
+      // POST /api/agents/:id/message - Send input to agent
+      const messageMatch = pathname.match(/^\/api\/agents\/([^/]+)\/message$/);
+      if (messageMatch && req.method === 'POST') {
+        const agent = agents.get(messageMatch[1]);
+        if (!agent) {
+          sendJson({ error: 'Agent not found' }, 404);
+          return;
+        }
+
+        const { message } = body as { message: string };
+        if (!message) {
+          sendJson({ error: 'message is required' }, 400);
+          return;
+        }
+
+        if (agent.ptyId) {
+          const ptyProcess = ptyProcesses.get(agent.ptyId);
+          if (ptyProcess) {
+            ptyProcess.write(message);
+            agent.status = 'running';
+            agent.lastActivity = new Date().toISOString();
+            sendJson({ success: true });
+            return;
+          }
+        }
+        sendJson({ error: 'Agent is not running' }, 400);
+        return;
+      }
+
+      // DELETE /api/agents/:id - Remove agent
+      const deleteMatch = pathname.match(/^\/api\/agents\/([^/]+)$/);
+      if (deleteMatch && req.method === 'DELETE') {
+        const agent = agents.get(deleteMatch[1]);
+        if (!agent) {
+          sendJson({ error: 'Agent not found' }, 404);
+          return;
+        }
+
+        // Stop if running
+        if (agent.ptyId) {
+          const ptyProcess = ptyProcesses.get(agent.ptyId);
+          if (ptyProcess) {
+            ptyProcess.kill();
+            ptyProcesses.delete(agent.ptyId);
+          }
+        }
+        agents.delete(deleteMatch[1]);
+        saveAgents();
+        sendJson({ success: true });
+        return;
+      }
+
+      // 404 for unknown routes
+      sendJson({ error: 'Not found' }, 404);
+    } catch (error) {
+      console.error('API error:', error);
+      sendJson({ error: 'Internal server error' }, 500);
+    }
+  });
+
+  apiServer.listen(API_PORT, '127.0.0.1', () => {
+    console.log(`Agent API server running on http://127.0.0.1:${API_PORT}`);
+  });
+
+  apiServer.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE') {
+      console.log(`Port ${API_PORT} is in use, API server not started`);
+    } else {
+      console.error('API server error:', err);
+    }
+  });
+}
+
+function stopApiServer() {
+  if (apiServer) {
+    apiServer.close();
+    apiServer = null;
+  }
+}
 
 // Patterns to detect Claude Code state from terminal output
 const CLAUDE_PATTERNS = {
@@ -853,11 +1165,17 @@ app.whenReady().then(() => {
   }
 
   createWindow();
+
+  // Start the HTTP API server for MCP orchestrator integration
+  startApiServer();
 });
 
 app.on('window-all-closed', () => {
   // Save agents before quitting
   saveAgents();
+
+  // Stop the API server
+  stopApiServer();
 
   // Kill all PTY processes
   ptyProcesses.forEach((ptyProcess) => {

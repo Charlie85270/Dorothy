@@ -203,7 +203,7 @@ function HeroSection() {
           className="flex flex-col sm:flex-row items-center justify-center gap-4"
         >
           <a
-            href="https://github.com/Charlie85270/claude-mgr/releases/download/0.0.5/claude.mgr-0.2.0-arm64.dmg"
+            href="https://github.com/Charlie85270/claude-mgr/releases/download/0.0.5/claude.mgr-0.0.5-arm64.dmg"
             className="group flex items-center gap-3 px-8 py-4 rounded-xl bg-gradient-to-r from-[#22d3ee] to-[#60a5fa] text-[#0a0a0f] font-semibold text-lg hover:opacity-90 transition-all shine-effect"
           >
             <Download className="w-5 h-5" />
@@ -753,7 +753,7 @@ function DownloadSection() {
             {/* Download buttons */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
               <a
-                href="https://github.com/Charlie85270/claude-mgr/releases/download/0.0.5/claude.mgr-0.2.0-arm64.dmg"
+                href="https://github.com/Charlie85270/claude-mgr/releases/download/0.0.5/claude.mgr-0.0.5-arm64.dmg"
                 className="group flex items-center gap-3 px-8 py-4 rounded-xl bg-gradient-to-r from-[#22d3ee] to-[#60a5fa] text-[#0a0a0f] font-semibold text-lg hover:opacity-90 transition-all"
               >
                 <Download className="w-5 h-5" />

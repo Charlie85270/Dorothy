@@ -51,13 +51,13 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
         initial={false}
         animate={{ width: sidebarWidth }}
         transition={{ duration: 0.2, ease: 'easeInOut' }}
-        className="fixed left-0 top-0 h-screen bg-bg-secondary border-r border-border-primary flex-col z-50 hidden lg:flex"
+        className="fixed left-0 top-0 h-screen bg-card border-r border-border flex-col z-50 hidden lg:flex"
       >
         {/* Logo */}
-        <div className="h-16 flex items-center px-4 border-b border-border-primary">
+        <div className="h-16 flex items-center px-4 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-accent-cyan to-accent-blue flex items-center justify-center glow-cyan">
-              <Bot className="w-5 h-5 text-bg-primary" />
+            <div className="w-10 h-10 bg-white flex items-center justify-center">
+              <Bot className="w-5 h-5 text-black" />
             </div>
             {showLabels && (
               <motion.div
@@ -65,15 +65,15 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
-                <span className="font-bold text-sm tracking-wide">CLAUDE</span>
-                <span className="text-accent-cyan font-bold text-sm">.MGR</span>
+                <span className="font-semibold text-sm tracking-wide text-foreground">Claude</span>
+                <span className="text-muted-foreground font-semibold text-sm"> Manager</span>
               </motion.div>
             )}
           </div>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
+        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const isActive = item.href === '/'
               ? pathname === '/'
@@ -83,29 +83,24 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
                 key={item.href}
                 href={item.href}
                 className={`
-                  group flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200
+                  group flex items-center gap-3 px-3 py-2.5 transition-all duration-150
                   ${isActive
-                    ? 'bg-accent-cyan/10 text-accent-cyan'
-                    : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
+                    ? 'bg-white text-black font-medium'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
                   }
                 `}
               >
                 <div className="relative">
-                  <item.icon className={`w-5 h-5 ${isActive ? 'text-accent-cyan' : ''}`} />
+                  <item.icon className="w-5 h-5" />
                 </div>
                 {showLabels && (
                   <motion.span
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="text-sm font-medium flex-1"
+                    className="text-sm flex-1"
                   >
                     {item.label}
                   </motion.span>
-                )}
-                {showLabels && (
-                  <span className="text-xs text-text-muted opacity-0 group-hover:opacity-100 transition-opacity">
-                    {item.shortcut}
-                  </span>
                 )}
               </Link>
             );
@@ -114,11 +109,11 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
 
         {/* Status indicator */}
         {showLabels && (
-          <div className="px-4 py-3 border-t border-border-primary">
-            <div className="flex items-center gap-2 text-xs text-text-muted">
+          <div className="px-4 py-3 border-t border-border">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-green opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-accent-green"></span>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
               </span>
               <span>Claude Code Connected</span>
             </div>
@@ -126,12 +121,15 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
         )}
 
         {/* Settings & Collapse */}
-        <div className="border-t border-border-primary">
+        <div className="border-t border-border">
           <Link
             href="/settings"
             className={`
-              flex items-center gap-3 px-5 py-3 text-text-secondary hover:text-text-primary transition-colors
-              ${pathname === '/settings' || pathname.startsWith('/settings/') ? 'text-accent-cyan' : ''}
+              flex items-center gap-3 px-5 py-3 transition-colors
+              ${pathname === '/settings' || pathname.startsWith('/settings/')
+                ? 'bg-white text-black'
+                : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+              }
             `}
           >
             <Settings className="w-5 h-5" />
@@ -139,7 +137,7 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
           </Link>
           <button
             onClick={toggleSidebar}
-            className="w-full flex items-center gap-3 px-5 py-3 text-text-muted hover:text-text-primary transition-colors"
+            className="w-full flex items-center gap-3 px-5 py-3 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
           >
             {sidebarCollapsed ? (
               <ChevronRight className="w-5 h-5" />
@@ -164,24 +162,24 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
           animate={{ x: 0 }}
           exit={{ x: -sidebarWidth }}
           transition={{ duration: 0.2, ease: 'easeInOut' }}
-          className="fixed left-0 top-0 h-screen bg-bg-secondary border-r border-border-primary flex flex-col z-50 lg:hidden"
+          className="fixed left-0 top-0 h-screen bg-card border-r border-border flex flex-col z-50 lg:hidden"
           style={{ width: sidebarWidth }}
         >
           {/* Logo */}
-          <div className="h-14 flex items-center px-4 border-b border-border-primary">
+          <div className="h-14 flex items-center px-4 border-b border-border">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-accent-cyan to-accent-blue flex items-center justify-center glow-cyan">
-                <Bot className="w-5 h-5 text-bg-primary" />
+              <div className="w-10 h-10 bg-white flex items-center justify-center">
+                <Bot className="w-5 h-5 text-black" />
               </div>
               <div>
-                <span className="font-bold text-sm tracking-wide">CLAUDE</span>
-                <span className="text-accent-cyan font-bold text-sm">.MGR</span>
+                <span className="font-semibold text-sm tracking-wide text-foreground">Claude</span>
+                <span className="text-muted-foreground font-semibold text-sm"> Manager</span>
               </div>
             </div>
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
+          <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
             {navItems.map((item) => {
               const isActive = item.href === '/'
                 ? pathname === '/'
@@ -192,17 +190,17 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
                   href={item.href}
                   onClick={handleNavClick}
                   className={`
-                    group flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200
+                    group flex items-center gap-3 px-3 py-2.5 transition-all duration-150
                     ${isActive
-                      ? 'bg-accent-cyan/10 text-accent-cyan'
-                      : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
+                      ? 'bg-white text-black font-medium'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
                     }
                   `}
                 >
                   <div className="relative">
-                    <item.icon className={`w-5 h-5 ${isActive ? 'text-accent-cyan' : ''}`} />
+                    <item.icon className="w-5 h-5" />
                   </div>
-                  <span className="text-sm font-medium flex-1">
+                  <span className="text-sm flex-1">
                     {item.label}
                   </span>
                 </Link>
@@ -211,24 +209,27 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
           </nav>
 
           {/* Status indicator */}
-          <div className="px-4 py-3 border-t border-border-primary">
-            <div className="flex items-center gap-2 text-xs text-text-muted">
+          <div className="px-4 py-3 border-t border-border">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-green opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-accent-green"></span>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
               </span>
               <span>Claude Code Connected</span>
             </div>
           </div>
 
           {/* Settings */}
-          <div className="border-t border-border-primary">
+          <div className="border-t border-border">
             <Link
               href="/settings"
               onClick={handleNavClick}
               className={`
-                flex items-center gap-3 px-5 py-3 text-text-secondary hover:text-text-primary transition-colors
-                ${pathname === '/settings' || pathname.startsWith('/settings/') ? 'text-accent-cyan' : ''}
+                flex items-center gap-3 px-5 py-3 transition-colors
+                ${pathname === '/settings' || pathname.startsWith('/settings/')
+                  ? 'bg-white text-black'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+                }
               `}
             >
               <Settings className="w-5 h-5" />

@@ -15,13 +15,23 @@ var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (
 }) : function(o, v) {
     o["default"] = v;
 });
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -392,100 +402,100 @@ const CLAUDE_PATTERNS = {
     // Comprehensive list of all Claude Code prompt patterns
     waitingForInput: [
         // === Claude Code prompt indicators (highest priority) ===
-        /❯\s*$/m,
-        /❯$/m,
-        /^❯\s*$/m,
-        /\n❯\s*$/,
-        /●.*\n\s*❯/,
-        /^\s*❯\s/m,
+        /❯\s*$/m, // Chevron at end of line (Claude prompt)
+        /❯$/m, // Chevron at very end
+        /^❯\s*$/m, // Chevron on its own line
+        /\n❯\s*$/, // Chevron after newline at end
+        /●.*\n\s*❯/, // Response bullet followed by prompt
+        /^\s*❯\s/m, // Chevron at start of line with space
         // === Claude Code UI indicators ===
-        /Esc to cancel/i,
-        /Tab to add additional/i,
-        /shift\+Tab/i,
-        /shift-Tab/i,
-        /Enter to confirm/i,
-        /Press Enter/i,
+        /Esc to cancel/i, // Claude Code prompt footer
+        /Tab to add additional/i, // Claude Code prompt footer
+        /shift\+Tab/i, // Claude Code keyboard hint
+        /shift-Tab/i, // Alternative format
+        /Enter to confirm/i, // Confirmation hint
+        /Press Enter/i, // Press enter prompt
         // === Selection/Menu prompts (inquirer.js style) ===
-        /❯\s*\d/,
-        />\s*\d+\.\s/,
-        /\(Use arrow keys\)/i,
-        /Use arrow keys/i,
+        /❯\s*\d/, // Chevron with number (selected option)
+        />\s*\d+\.\s/, // "> 1." style selection
+        /\(Use arrow keys\)/i, // Arrow key hint
+        /Use arrow keys/i, // Arrow key hint variant
         // === Yes/No/Confirmation prompts ===
-        /\[Y\/n\]/i,
-        /\[y\/N\]/i,
-        /\(y\/n\)/i,
-        /\[yes\/no\]/i,
-        /\d+\.\s*Yes\b/i,
-        /\d+\.\s*No\b/i,
-        /\d+\.\s*Cancel\b/i,
-        /\d+\.\s*Skip\b/i,
+        /\[Y\/n\]/i, // [Y/n] prompt
+        /\[y\/N\]/i, // [y/N] prompt
+        /\(y\/n\)/i, // (y/n) prompt
+        /\[yes\/no\]/i, // [yes/no] prompt
+        /\d+\.\s*Yes\b/i, // "1. Yes" numbered option
+        /\d+\.\s*No\b/i, // "2. No" numbered option
+        /\d+\.\s*Cancel\b/i, // "3. Cancel" numbered option
+        /\d+\.\s*Skip\b/i, // "4. Skip" numbered option
         // === File operation prompts ===
-        /Do you want to create/i,
-        /Do you want to edit/i,
-        /Do you want to delete/i,
-        /Do you want to write/i,
-        /Do you want to read/i,
-        /Do you want to run/i,
-        /Do you want to execute/i,
-        /Do you want to allow/i,
-        /Do you want to proceed/i,
-        /Do you want to continue/i,
-        /Do you want to overwrite/i,
-        /Do you want to replace/i,
-        /Do you want to install/i,
-        /Do you want to update/i,
-        /Do you want to remove/i,
-        /Do you want to/i,
+        /Do you want to create/i, // Create file prompt
+        /Do you want to edit/i, // Edit file prompt
+        /Do you want to delete/i, // Delete file prompt
+        /Do you want to write/i, // Write file prompt
+        /Do you want to read/i, // Read file prompt
+        /Do you want to run/i, // Run command prompt
+        /Do you want to execute/i, // Execute prompt
+        /Do you want to allow/i, // Permission prompt
+        /Do you want to proceed/i, // Proceed prompt
+        /Do you want to continue/i, // Continue prompt
+        /Do you want to overwrite/i, // Overwrite prompt
+        /Do you want to replace/i, // Replace prompt
+        /Do you want to install/i, // Install prompt
+        /Do you want to update/i, // Update prompt
+        /Do you want to remove/i, // Remove prompt
+        /Do you want to/i, // Generic "Do you want to" catch-all
         // === Permission/Approval prompts ===
-        /Allow this/i,
-        /Allow .+ to/i,
-        /Approve this/i,
-        /Confirm this/i,
-        /Accept this/i,
+        /Allow this/i, // "Allow this edit?"
+        /Allow .+ to/i, // "Allow X to run?"
+        /Approve this/i, // Approval prompt
+        /Confirm this/i, // Confirmation prompt
+        /Accept this/i, // Accept prompt
         // === Question prompts / Claude asking what to do ===
-        /Let me know what/i,
-        /let me know if/i,
-        /What would you like/i,
-        /What should I/i,
-        /How would you like/i,
-        /How can I help/i,
-        /What do you think/i,
-        /Which .+ would you/i,
-        /Which .+ should/i,
-        /Would you like to/i,
-        /Would you like me to/i,
-        /Should I\s/i,
-        /Can I\s/i,
-        /May I\s/i,
-        /Shall I\s/i,
-        /What else/i,
-        /Anything else/i,
-        /Is there anything/i,
+        /Let me know what/i, // "Let me know what you want..."
+        /let me know if/i, // "Let me know if you need..."
+        /What would you like/i, // "What would you like..."
+        /What should I/i, // "What should I..."
+        /How would you like/i, // "How would you like..."
+        /How can I help/i, // "How can I help..."
+        /What do you think/i, // "What do you think..."
+        /Which .+ would you/i, // "Which option would you..."
+        /Which .+ should/i, // "Which file should..."
+        /Would you like to/i, // "Would you like to..."
+        /Would you like me to/i, // "Would you like me to..."
+        /Should I\s/i, // "Should I..."
+        /Can I\s/i, // "Can I..."
+        /May I\s/i, // "May I..."
+        /Shall I\s/i, // "Shall I..."
+        /What else/i, // "What else would you like..."
+        /Anything else/i, // "Anything else?"
+        /Is there anything/i, // "Is there anything else..."
         // === Input prompts ===
-        /Enter your/i,
-        /Enter a /i,
-        /Type your/i,
-        /Input:/i,
-        /Provide /i,
-        /Specify /i,
-        /Choose /i,
-        /Select /i,
-        /Pick /i,
+        /Enter your/i, // "Enter your message..."
+        /Enter a /i, // "Enter a value..."
+        /Type your/i, // "Type your response..."
+        /Input:/i, // "Input:" prompt
+        /Provide /i, // "Provide a value..."
+        /Specify /i, // "Specify the..."
+        /Choose /i, // "Choose an option..."
+        /Select /i, // "Select a file..."
+        /Pick /i, // "Pick one..."
         // === Wait/Ready indicators ===
-        /waiting for/i,
-        /ready for/i,
-        /awaiting/i,
+        /waiting for/i, // "Waiting for input"
+        /ready for/i, // "Ready for your input"
+        /awaiting/i, // "Awaiting response"
         // === Bash/Terminal prompts ===
-        /\$\s*$/m,
+        /\$\s*$/m, // Shell prompt "$"
         />\s*$/m, // Simple prompt ">"
     ],
     // Claude is actively working (spinner or progress)
     // These patterns indicate Claude is processing, not waiting for input
     working: [
         // === Spinner characters (highest confidence) ===
-        /⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏/,
-        /◐|◓|◑|◒/,
-        /⣾|⣽|⣻|⢿|⡿|⣟|⣯|⣷/,
+        /⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏/, // Braille spinner characters
+        /◐|◓|◑|◒/, // Circle spinner
+        /⣾|⣽|⣻|⢿|⡿|⣟|⣯|⣷/, // Dot spinner
         // === Progress indicators with "..." ===
         /Thinking\.\.\./i,
         /Working\.\.\./i,
@@ -497,15 +507,15 @@ const CLAUDE_PATTERNS = {
         /Compiling\.\.\./i,
         /Building\.\.\./i,
         // === Active operation messages (must have context) ===
-        /Reading .+\.\.\./i,
-        /Writing .+\.\.\./i,
-        /Searching .+\.\.\./i,
-        /Running .+\.\.\./i,
-        /Executing .+\.\.\./i,
-        /Installing .+\.\.\./i,
-        /Updating .+\.\.\./i,
-        /Creating .+\.\.\./i,
-        /Downloading .+\.\.\./i,
+        /Reading .+\.\.\./i, // "Reading file..."
+        /Writing .+\.\.\./i, // "Writing to file..."
+        /Searching .+\.\.\./i, // "Searching in..."
+        /Running .+\.\.\./i, // "Running command..."
+        /Executing .+\.\.\./i, // "Executing..."
+        /Installing .+\.\.\./i, // "Installing package..."
+        /Updating .+\.\.\./i, // "Updating..."
+        /Creating .+\.\.\./i, // "Creating file..."
+        /Downloading .+\.\.\./i, // "Downloading..."
         /Uploading .+\.\.\./i, // "Uploading..."
     ],
     // Claude finished a task (look for these in recent output)
@@ -515,10 +525,10 @@ const CLAUDE_PATTERNS = {
         /Finished!/i,
         /Complete!/i,
         /Successfully/i,
-        /✓/,
-        /✔/,
+        /✓/, // Checkmark
+        /✔/, // Another checkmark
         /\[done\]/i,
-        /Worked for \d+/i,
+        /Worked for \d+/i, // "Worked for 38s" - Claude Code completion indicator
         /\* Worked for/i, // "* Worked for" variant
     ],
     // Claude encountered an error
@@ -527,8 +537,8 @@ const CLAUDE_PATTERNS = {
         /Failed:/i,
         /Exception:/i,
         /FATAL/i,
-        /✗/,
-        /✘/,
+        /✗/, // X mark
+        /✘/, // Another X mark
         /\[error\]/i,
         /Permission denied/i,
         /not found/i,
@@ -689,18 +699,18 @@ function detectAgentStatus(agent) {
         /\(y\/n\)/i,
         /\[yes\/no\]/i,
         // Claude Code specific prompts for accepting edits/commits
-        /accept edits/i,
-        /shift\+?Tab to cycle/i,
-        />\s*Commit this/i,
-        /❯\s*Commit/i,
-        /Press Enter to/i,
-        /\(enter to confirm\)/i,
-        /\(esc to cancel\)/i,
+        /accept edits/i, // "accept edits on (shift+Tab to cycle)"
+        /shift\+?Tab to cycle/i, // The cycling hint
+        />\s*Commit this/i, // "> Commit this" prompt
+        /❯\s*Commit/i, // "❯ Commit" prompt
+        /Press Enter to/i, // Press enter prompts
+        /\(enter to confirm\)/i, // Enter confirmation
+        /\(esc to cancel\)/i, // Esc to cancel hints
         // Selection/Menu prompts with numbered options
         /\d+\.\s*(Yes|No|Cancel|Skip|Allow|Deny|Accept|Reject)\b/i,
-        /❯\s*\d+\./,
-        />\s*\d+\.\s/,
-        /\(Use arrow keys\)/i,
+        /❯\s*\d+\./, // Chevron with numbered selection
+        />\s*\d+\.\s/, // "> 1." style selection
+        /\(Use arrow keys\)/i, // Selection menu hint
         // Permission/Approval prompts (Claude asking to do something)
         /Do you want to (create|edit|delete|write|read|run|execute|allow|proceed|continue|overwrite|replace|install|update|remove)/i,
         /Allow this/i,
@@ -737,8 +747,8 @@ function detectAgentStatus(agent) {
     // Patterns that indicate Claude finished and is back to idle prompt
     // These are prompts WITHOUT an accompanying question
     const idlePromptPatterns = [
-        /❯\s*$/m,
-        /^\s*❯\s*$/m,
+        /❯\s*$/m, // Just the chevron prompt at end
+        /^\s*❯\s*$/m, // Chevron on its own line
         /\$\s*$/m, // Shell prompt at end
     ];
     // Check for completion patterns
@@ -1415,7 +1425,7 @@ function saveAgents() {
             ...agent,
             // Don't persist runtime-only fields
             ptyId: undefined,
-            pathMissing: undefined,
+            pathMissing: undefined, // Recalculated on load
             // Limit output to last 100 entries to avoid huge files
             output: agent.output.slice(-100),
             // Reset running status to idle on save (will be restarted manually)

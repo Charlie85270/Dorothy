@@ -124,7 +124,7 @@ export default function Terminal({ ptyId, onData, className = '' }: TerminalProp
   return (
     <div
       ref={terminalRef}
-      className={`bg-[#0a0a0f] rounded-lg overflow-hidden ${className}`}
+      className={`bg-[#0a0a0f] rounded-none overflow-hidden ${className}`}
       style={{ minHeight: '200px' }}
     />
   );

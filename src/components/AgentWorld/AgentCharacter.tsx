@@ -632,7 +632,7 @@ export default function AgentCharacter({
       >
         <div
           className={`
-            px-2 py-1 rounded-lg text-xs font-bold whitespace-nowrap
+            px-2 py-1 rounded-none text-xs font-bold whitespace-nowrap
             shadow-lg transition-all
             ${isWorking
               ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white'

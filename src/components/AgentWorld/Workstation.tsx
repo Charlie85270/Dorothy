@@ -201,7 +201,7 @@ export default function Workstation({
       >
         <div
           className={`
-            px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap
+            px-3 py-1.5 rounded-none text-xs font-bold whitespace-nowrap
             shadow-lg transition-all
             ${agentWorking
               ? 'bg-gradient-to-r from-cyan-500 to-teal-500 text-white'

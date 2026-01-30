@@ -1,26 +1,28 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FolderKanban,
   MessageSquare,
-  Clock,
-  ChevronRight,
-  ChevronLeft,
+  X,
   Loader2,
   ExternalLink,
   Terminal,
   FolderOpen,
+  Folder,
   Star,
   Layers,
   Bot,
   Play,
   RotateCcw,
   Plus,
-  GitBranch,
   Trash2,
   FolderPlus,
+  ChevronDown,
+  GitBranch,
+  RefreshCw,
+  Search,
 } from 'lucide-react';
 import { useClaude, useSessionMessages } from '@/hooks/useClaude';
 import { useElectronAgents, useElectronFS, useElectronSkills, isElectron } from '@/hooks/useElectron';
@@ -31,7 +33,14 @@ import NewChatModal from '@/components/NewChatModal';
 // Generate consistent colors for projects based on name
 const getProjectColor = (name: string) => {
   const colors = [
-    '#22d3ee', '#a78bfa', '#4ade80', '#fbbf24', '#f87171', '#60a5fa', '#f472b6', '#34d399',
+    { main: '#3B82F6', bg: 'rgba(59, 130, 246, 0.15)', border: 'rgba(59, 130, 246, 0.3)' },   // blue
+    { main: '#8B5CF6', bg: 'rgba(139, 92, 246, 0.15)', border: 'rgba(139, 92, 246, 0.3)' },   // purple
+    { main: '#22C55E', bg: 'rgba(34, 197, 94, 0.15)', border: 'rgba(34, 197, 94, 0.3)' },     // green
+    { main: '#F59E0B', bg: 'rgba(245, 158, 11, 0.15)', border: 'rgba(245, 158, 11, 0.3)' },   // amber
+    { main: '#EF4444', bg: 'rgba(239, 68, 68, 0.15)', border: 'rgba(239, 68, 68, 0.3)' },     // red
+    { main: '#06B6D4', bg: 'rgba(6, 182, 212, 0.15)', border: 'rgba(6, 182, 212, 0.3)' },     // cyan
+    { main: '#EC4899', bg: 'rgba(236, 72, 153, 0.15)', border: 'rgba(236, 72, 153, 0.3)' },   // pink
+    { main: '#F97316', bg: 'rgba(249, 115, 22, 0.15)', border: 'rgba(249, 115, 22, 0.3)' },   // orange
   ];
   const hash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
   return colors[hash % colors.length];
@@ -61,11 +70,17 @@ const CHARACTER_EMOJIS: Record<string, string> = {
 
 // Agent status colors
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  running: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
+  running: { bg: 'bg-green-500/20', text: 'text-green-400' },
   waiting: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
-  idle: { bg: 'bg-gray-500/20', text: 'text-gray-400' },
+  idle: { bg: 'bg-white/10', text: 'text-white/60' },
   completed: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
   error: { bg: 'bg-red-500/20', text: 'text-red-400' },
+};
+
+// Strip ANSI codes from git output
+const stripAnsi = (str: string): string => {
+  // eslint-disable-next-line no-control-regex
+  return str.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '');
 };
 
 export default function ProjectsPage() {
@@ -78,10 +93,49 @@ export default function ProjectsPage() {
   const [activeTab, setActiveTab] = useState<'all' | 'favorites'>('all');
   const [favorites, setFavorites] = useState<string[]>([]);
   const [customProjects, setCustomProjects] = useState<CustomProject[]>([]);
-  const [mobileShowDetail, setMobileShowDetail] = useState(false);
+  const [gitBranch, setGitBranch] = useState<string | null>(null);
+  const [gitLoading, setGitLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Agent dialog state
   const [showAgentDialog, setShowAgentDialog] = useState(false);
+
+  // Load git branch for selected project
+  const loadGitBranch = useCallback(async (projectPath: string) => {
+    if (!projectPath || typeof window === 'undefined' || !window.electronAPI?.shell?.exec) {
+      setGitBranch(null);
+      return;
+    }
+
+    setGitLoading(true);
+    try {
+      const result = await window.electronAPI.shell.exec({
+        command: 'git branch --show-current 2>/dev/null || git rev-parse --abbrev-ref HEAD 2>/dev/null',
+        cwd: projectPath,
+      });
+
+      if (result.success && result.output) {
+        const branch = stripAnsi(result.output).replace(/\r/g, '').trim();
+        setGitBranch(branch || null);
+      } else {
+        setGitBranch(null);
+      }
+    } catch (err) {
+      console.error('Failed to get git branch:', err);
+      setGitBranch(null);
+    } finally {
+      setGitLoading(false);
+    }
+  }, []);
+
+  // Load git branch when project is selected
+  useEffect(() => {
+    if (selectedProject) {
+      loadGitBranch(selectedProject.path);
+    } else {
+      setGitBranch(null);
+    }
+  }, [selectedProject, loadGitBranch]);
 
   // Load custom projects from localStorage
   useEffect(() => {
@@ -129,7 +183,6 @@ export default function ProjectsPage() {
     saveCustomProjects(customProjects.filter(p => p.path !== projectPath));
     if (selectedProject?.path === projectPath) {
       setSelectedProject(null);
-      setMobileShowDetail(false);
     }
   };
 
@@ -269,46 +322,24 @@ export default function ProjectsPage() {
     return merged;
   }, [claudeProjects, customProjects]);
 
-  // Filter projects based on active tab
-  const projects = activeTab === 'favorites'
-    ? allProjects.filter(p => favorites.includes(p.id))
-    : allProjects;
+  // Filter projects based on active tab and search query
+  const projects = useMemo(() => {
+    let filtered = activeTab === 'favorites'
+      ? allProjects.filter(p => favorites.includes(p.id))
+      : allProjects;
+
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(p =>
+        p.name.toLowerCase().includes(query) ||
+        p.path.toLowerCase().includes(query)
+      );
+    }
+
+    return filtered;
+  }, [allProjects, activeTab, favorites, searchQuery]);
 
   const favoritesCount = allProjects.filter(p => favorites.includes(p.id)).length;
-
-  // Handle project selection
-  const handleSelectProject = (project: ClaudeProject) => {
-    setSelectedProject(project);
-    setSelectedSession(null);
-    setMobileShowDetail(true);
-  };
-
-  // Handle back button on mobile
-  const handleBackToList = () => {
-    setMobileShowDetail(false);
-  };
-
-  if (loading && !data) {
-    return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-accent-cyan mx-auto mb-4" />
-          <p className="text-text-secondary">Loading projects...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <div className="text-center text-accent-red">
-          <p className="mb-2">Failed to load projects</p>
-          <p className="text-sm text-text-muted">{error}</p>
-        </div>
-      </div>
-    );
-  }
 
   const formatDate = (date: Date) => {
     const d = new Date(date);
@@ -340,423 +371,74 @@ export default function ProjectsPage() {
     return 'Message content';
   };
 
-  // Project List Component
-  const ProjectList = () => (
-    <div className="flex flex-col h-full">
-      {/* Tabs */}
-      <div className="flex items-center gap-2 p-3 border-b border-border-primary overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('all')}
-          className={`
-            flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-xs transition-all shrink-0
-            ${activeTab === 'all'
-              ? 'bg-accent-cyan/20 text-accent-cyan'
-              : 'bg-bg-tertiary text-text-secondary'
-            }
-          `}
-        >
-          <Layers className="w-3.5 h-3.5" />
-          All
-          <span className={`px-1.5 py-0.5 rounded text-[10px] ${
-            activeTab === 'all' ? 'bg-accent-cyan/20' : 'bg-bg-secondary'
-          }`}>
-            {allProjects.length}
-          </span>
-        </button>
-        <button
-          onClick={() => setActiveTab('favorites')}
-          className={`
-            flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-xs transition-all shrink-0
-            ${activeTab === 'favorites'
-              ? 'bg-accent-amber/20 text-accent-amber'
-              : 'bg-bg-tertiary text-text-secondary'
-            }
-          `}
-        >
-          <Star className="w-3.5 h-3.5" />
-          Favorites
-          <span className={`px-1.5 py-0.5 rounded text-[10px] ${
-            activeTab === 'favorites' ? 'bg-accent-amber/20' : 'bg-bg-secondary'
-          }`}>
-            {favoritesCount}
-          </span>
-        </button>
-      </div>
+  // Get short path for display
+  const getShortPath = (path: string) => {
+    const parts = path.split('/');
+    if (parts.length <= 3) return path;
+    return '~/' + parts.slice(-2).join('/');
+  };
 
-      {/* Project Items */}
-      <div className="flex-1 overflow-y-auto">
-        <div>
-          {projects.map((project) => {
-            const color = getProjectColor(project.name);
-            const isSelected = selectedProject?.id === project.id;
-            const linkedAgents = agents.filter(a => pathsMatch(a.projectPath, project.path));
-
-            return (
-              <div
-                key={project.id}
-                onClick={() => handleSelectProject(project)}
-                className={`
-                  p-4 cursor-pointer transition-all border-b border-border-primary/30 active:bg-bg-tertiary
-                  ${isSelected ? 'bg-accent-cyan/10' : 'hover:bg-bg-tertiary/50'}
-                `}
-              >
-                <div className="flex items-center gap-3">
-                  {/* Avatar */}
-                  <div
-                    className="w-12 h-12 rounded-full flex items-center justify-center shrink-0"
-                    style={{ backgroundColor: `${color}20` }}
-                  >
-                    <FolderOpen className="w-5 h-5" style={{ color }} />
-                  </div>
-
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-semibold text-sm truncate">{project.name}</h4>
-                      {isFavorite(project.id) && (
-                        <Star className="w-3.5 h-3.5 text-accent-amber fill-accent-amber shrink-0" />
-                      )}
-                    </div>
-                    <p className="text-[11px] text-text-muted mt-0.5">
-                      {project.sessions.length} sessions · {formatDate(project.lastActivity)}
-                    </p>
-                    {linkedAgents.length > 0 && (
-                      <div className="flex items-center gap-1 mt-1">
-                        <Bot className="w-3 h-3 text-accent-cyan" />
-                        <span className="text-[10px] text-accent-cyan">
-                          {linkedAgents.length} agent{linkedAgents.length !== 1 ? 's' : ''}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  <ChevronRight className="w-5 h-5 text-text-muted shrink-0" />
-                </div>
-              </div>
-            );
-          })}
+  if (loading && !data) {
+    return (
+      <div className="flex items-center justify-center h-[60vh]">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-white mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading projects...</p>
         </div>
-
-        {projects.length === 0 && (
-          <div className="p-8 text-center">
-            <FolderKanban className="w-12 h-12 mx-auto text-text-muted/30 mb-3" />
-            <p className="text-text-muted text-sm">
-              {activeTab === 'favorites' ? 'No favorite projects' : 'No projects found'}
-            </p>
-          </div>
-        )}
       </div>
-    </div>
-  );
+    );
+  }
 
-  // Project Detail Component
-  const ProjectDetail = () => (
-    <div className="flex flex-col h-full overflow-y-auto">
-      {selectedProject ? (
-        <>
-          {/* Header */}
-          <div className="px-4 py-3 border-b border-border-primary flex items-center gap-3 bg-bg-secondary sticky top-0 z-10">
-            <button
-              onClick={handleBackToList}
-              className="lg:hidden p-1.5 -ml-1.5 rounded-lg hover:bg-bg-tertiary transition-colors"
-            >
-              <ChevronLeft className="w-6 h-6" />
-            </button>
-
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center"
-              style={{ backgroundColor: `${getProjectColor(selectedProject.name)}20` }}
-            >
-              <FolderOpen className="w-5 h-5" style={{ color: getProjectColor(selectedProject.name) }} />
-            </div>
-
-            <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-sm truncate">{selectedProject.name}</h3>
-              <p className="text-xs text-text-muted truncate">
-                {selectedProject.path.split('/').slice(-2).join('/')}
-              </p>
-            </div>
-
-            <button
-              onClick={(e) => toggleFavorite(selectedProject.id, e)}
-              className={`p-2 rounded-lg transition-all ${
-                isFavorite(selectedProject.id)
-                  ? 'text-accent-amber'
-                  : 'text-text-muted'
-              }`}
-            >
-              <Star className={`w-5 h-5 ${isFavorite(selectedProject.id) ? 'fill-current' : ''}`} />
-            </button>
-          </div>
-
-          {/* Content */}
-          <div className="flex-1 p-4 space-y-4 bg-bg-primary">
-            {/* Quick Actions */}
-            <div className="flex gap-2">
-              <button
-                onClick={() => window.open(`cursor://file${selectedProject.path}`, '_blank')}
-                className="flex-1 px-4 py-2.5 rounded-xl border border-border-primary bg-bg-secondary text-sm flex items-center justify-center gap-2"
-              >
-                <ExternalLink className="w-4 h-4" />
-                Open in Cursor
-              </button>
-              {hasElectron && (
-                <button
-                  onClick={() => setShowAgentDialog(true)}
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-accent-cyan text-bg-primary text-sm font-medium flex items-center justify-center gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  Launch Agent
-                </button>
-              )}
-            </div>
-
-            {/* Project Agents */}
-            {hasElectron && projectAgents.length > 0 && (
-              <div className="rounded-xl border border-border-primary bg-bg-secondary p-4">
-                <h3 className="text-sm font-medium flex items-center gap-2 mb-3">
-                  <Bot className="w-4 h-4 text-accent-cyan" />
-                  Agents ({projectAgents.length})
-                </h3>
-
-                <div className="space-y-2">
-                  {projectAgents.map((agent) => {
-                    const statusColor = STATUS_COLORS[agent.status] || STATUS_COLORS.idle;
-                    const charEmoji = CHARACTER_EMOJIS[agent.character || 'robot'] || '🤖';
-                    const isIdle = agent.status === 'idle' || agent.status === 'completed';
-
-                    return (
-                      <div
-                        key={agent.id}
-                        className="p-3 rounded-lg bg-bg-tertiary/50 border border-border-primary"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-lg">{charEmoji}</span>
-                            <div className="min-w-0">
-                              <p className="font-medium text-sm truncate">
-                                {agent.name || `Agent ${agent.id.slice(0, 6)}`}
-                              </p>
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${statusColor.bg} ${statusColor.text}`}>
-                                {agent.status}
-                              </span>
-                            </div>
-                          </div>
-
-                          {isIdle && (
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => handleRestartAgent(agent, true)}
-                                className="p-1.5 rounded-lg text-accent-cyan hover:bg-accent-cyan/20"
-                              >
-                                <RotateCcw className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleRestartAgent(agent, false)}
-                                className="p-1.5 rounded-lg text-emerald-400 hover:bg-emerald-500/20"
-                              >
-                                <Play className="w-4 h-4" />
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Sessions */}
-            <div className="rounded-xl border border-border-primary bg-bg-secondary p-4">
-              <h3 className="text-sm font-medium flex items-center gap-2 mb-3">
-                <Terminal className="w-4 h-4 text-text-muted" />
-                Sessions ({selectedProject.sessions.length})
-              </h3>
-
-              {selectedProject.sessions.length === 0 ? (
-                <p className="text-sm text-text-muted text-center py-4">No sessions yet</p>
-              ) : (
-                <div className="space-y-2">
-                  {selectedProject.sessions.map((session) => (
-                    <button
-                      key={session.id}
-                      onClick={() => setSelectedSession(selectedSession === session.id ? null : session.id)}
-                      className={`
-                        w-full text-left p-3 rounded-lg transition-all
-                        ${selectedSession === session.id
-                          ? 'bg-accent-cyan/10 border border-accent-cyan/30'
-                          : 'bg-bg-tertiary/50 border border-transparent'
-                        }
-                      `}
-                    >
-                      <p className="text-xs font-mono text-text-muted truncate">
-                        {session.id.slice(0, 8)}...
-                      </p>
-                      <p className="text-xs text-text-secondary mt-1">
-                        {formatDate(session.lastActivity)}
-                      </p>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Session Messages */}
-            {selectedSession && (
-              <div className="rounded-xl border border-border-primary bg-bg-secondary p-4">
-                <h3 className="text-sm font-medium flex items-center gap-2 mb-3">
-                  <MessageSquare className="w-4 h-4 text-text-muted" />
-                  Messages
-                </h3>
-
-                {messagesLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin text-accent-cyan" />
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {messages.slice(0, 10).map((message) => (
-                      <div
-                        key={message.uuid}
-                        className={`p-3 rounded-lg ${
-                          message.type === 'user'
-                            ? 'bg-accent-cyan/10'
-                            : 'bg-bg-tertiary'
-                        }`}
-                      >
-                        <p className="text-[10px] text-text-muted mb-1">
-                          {message.type === 'user' ? 'You' : 'Claude'}
-                        </p>
-                        <p className="text-xs text-text-secondary">
-                          {getMessagePreview(message.content)}
-                        </p>
-                      </div>
-                    ))}
-                    {messages.length === 0 && (
-                      <p className="text-sm text-text-muted text-center py-4">
-                        No messages found
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Path Info */}
-            <div className="rounded-xl border border-border-primary bg-bg-secondary p-4">
-              <h3 className="text-sm font-medium mb-2">Project Path</h3>
-              <p className="font-mono text-xs text-text-muted break-all">
-                {selectedProject.path}
-              </p>
-            </div>
-          </div>
-        </>
-      ) : (
-        <div className="flex-1 flex items-center justify-center bg-bg-primary">
-          <div className="text-center p-8">
-            <div className="w-20 h-20 rounded-full bg-bg-secondary flex items-center justify-center mx-auto mb-4">
-              <FolderKanban className="w-10 h-10 text-text-muted/30" />
-            </div>
-            <h3 className="font-semibold text-lg mb-2">Select a project</h3>
-            <p className="text-text-muted text-sm">
-              Choose a project to view details
-            </p>
-          </div>
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-[60vh]">
+        <div className="text-center text-red-400">
+          <p className="mb-2">Failed to load projects</p>
+          <p className="text-sm text-muted-foreground">{error}</p>
         </div>
-      )}
-    </div>
-  );
+      </div>
+    );
+  }
 
   return (
-    <div className="h-[calc(100vh-7rem)] lg:h-[calc(100vh-3rem)] flex flex-col -m-4 lg:m-0">
-      {/* Mobile: Show either list or detail */}
-      <div className="lg:hidden flex-1 flex flex-col">
-        <AnimatePresence mode="wait">
-          {!mobileShowDetail ? (
-            <motion.div
-              key="list"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="flex-1 flex flex-col bg-bg-secondary"
-            >
-              {/* Mobile Header */}
-              <div className="px-4 py-3 border-b border-border-primary flex items-center justify-between">
-                <div>
-                  <h1 className="text-xl font-bold">Projects</h1>
-                  <p className="text-xs text-text-muted mt-0.5">
-                    {allProjects.length} project{allProjects.length !== 1 ? 's' : ''}
-                  </p>
-                </div>
-                {hasElectron && (
-                  <button
-                    onClick={handleAddProject}
-                    className="p-2 rounded-lg bg-accent-cyan/20 text-accent-cyan"
-                  >
-                    <FolderPlus className="w-5 h-5" />
-                  </button>
-                )}
-              </div>
-              <ProjectList />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="detail"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              className="flex-1 flex flex-col"
-            >
-              <ProjectDetail />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* Desktop: Side by side */}
-      <div className="hidden lg:block pt-6">
-        <div className="space-y-6">
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
-              <p className="text-text-secondary text-sm mt-1">
-                Browse your Claude Code projects and conversations
-              </p>
-            </div>
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-text-muted">
-                {allProjects.length} project{allProjects.length !== 1 ? 's' : ''}
-              </span>
-              {hasElectron && (
-                <button
-                  onClick={handleAddProject}
-                  className="flex items-center gap-2 px-4 py-2 bg-accent-cyan/20 text-accent-cyan rounded-lg hover:bg-accent-cyan/30 transition-colors"
-                >
-                  <FolderPlus className="w-4 h-4" />
-                  Add Project
-                </button>
-              )}
-            </div>
+    <div className="min-h-screen p-6">
+      {/* Header */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
+            <p className="text-muted-foreground text-sm mt-1">
+              {allProjects.length} project{allProjects.length !== 1 ? 's' : ''}
+            </p>
           </div>
+          {hasElectron && (
+            <button
+              onClick={handleAddProject}
+              className="flex items-center gap-2 px-4 py-2 bg-white text-black text-sm font-medium hover:bg-white/90 transition-colors"
+            >
+              <FolderPlus className="w-4 h-4" />
+              Add Project
+            </button>
+          )}
+        </div>
 
-          {/* Tabs */}
+        {/* Tabs and Search */}
+        <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setActiveTab('all')}
               className={`
-                flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all
+                flex items-center gap-2 px-3 py-2 text-sm font-medium transition-all
                 ${activeTab === 'all'
-                  ? 'bg-accent-cyan/20 text-accent-cyan border border-accent-cyan/30'
-                  : 'bg-bg-tertiary text-text-secondary hover:text-text-primary border border-transparent'
+                  ? 'bg-white text-black'
+                  : 'bg-secondary text-muted-foreground hover:text-foreground border border-border'
                 }
               `}
             >
               <Layers className="w-4 h-4" />
-              All Projects
-              <span className={`px-1.5 py-0.5 rounded text-xs ${
-                activeTab === 'all' ? 'bg-accent-cyan/20' : 'bg-bg-secondary'
+              All
+              <span className={`px-1.5 py-0.5 text-xs ${
+                activeTab === 'all' ? 'bg-black/10' : 'bg-white/10'
               }`}>
                 {allProjects.length}
               </span>
@@ -764,135 +446,461 @@ export default function ProjectsPage() {
             <button
               onClick={() => setActiveTab('favorites')}
               className={`
-                flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all
+                flex items-center gap-2 px-3 py-2 text-sm font-medium transition-all
                 ${activeTab === 'favorites'
-                  ? 'bg-accent-amber/20 text-accent-amber border border-accent-amber/30'
-                  : 'bg-bg-tertiary text-text-secondary hover:text-text-primary border border-transparent'
+                  ? 'bg-white text-black'
+                  : 'bg-secondary text-muted-foreground hover:text-foreground border border-border'
                 }
               `}
             >
               <Star className="w-4 h-4" />
               Favorites
-              <span className={`px-1.5 py-0.5 rounded text-xs ${
-                activeTab === 'favorites' ? 'bg-accent-amber/20' : 'bg-bg-secondary'
+              <span className={`px-1.5 py-0.5 text-xs ${
+                activeTab === 'favorites' ? 'bg-black/10' : 'bg-white/10'
               }`}>
                 {favoritesCount}
               </span>
             </button>
           </div>
 
-          {/* Main Content */}
-          <div className="grid grid-cols-3 gap-6">
-            {/* Project List */}
-            <div className="col-span-2 space-y-3">
-              {projects.map((project) => {
-                const color = getProjectColor(project.name);
-                const isSelected = selectedProject?.id === project.id;
-                const linkedAgents = agents.filter(a => pathsMatch(a.projectPath, project.path));
-
-                return (
-                  <div
-                    key={project.id}
-                    onClick={() => {
-                      setSelectedProject(project);
-                      setSelectedSession(null);
-                    }}
-                    className={`
-                      relative rounded-xl border bg-bg-secondary p-5 cursor-pointer transition-all overflow-hidden
-                      ${isSelected ? 'border-accent-cyan shadow-[0_0_20px_rgba(34,211,238,0.15)]' : 'border-border-primary hover:border-border-accent'}
-                    `}
-                  >
-                      <div
-                        className="absolute left-0 top-0 bottom-0 w-1"
-                        style={{ backgroundColor: color }}
-                      />
-
-                      <div className="pl-4 flex items-start justify-between">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-3">
-                            <FolderOpen className="w-5 h-5" style={{ color }} />
-                            <h3 className="font-semibold text-lg">{project.name}</h3>
-                            {isFavorite(project.id) && (
-                              <Star className="w-4 h-4 text-accent-amber fill-accent-amber" />
-                            )}
-                            {isCustomProject(project.path) && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent-purple/20 text-accent-purple">
-                                Custom
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-text-muted mt-2 font-mono truncate">
-                            {project.path}
-                          </p>
-
-                          {linkedAgents.length > 0 && (
-                            <div className="flex items-center gap-1 mt-1">
-                              <Bot className="w-3.5 h-3.5 text-accent-cyan" />
-                              <span className="text-xs text-accent-cyan">
-                                {linkedAgents.length} agent{linkedAgents.length !== 1 ? 's' : ''} linked
-                              </span>
-                            </div>
-                          )}
-
-                          <div className="flex items-center gap-6 mt-3 text-xs text-text-muted">
-                            <div className="flex items-center gap-1">
-                              <MessageSquare className="w-3.5 h-3.5" />
-                              <span>{project.sessions.length} sessions</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Clock className="w-3.5 h-3.5" />
-                              <span>Last active: {formatDate(project.lastActivity)}</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            onClick={(e) => toggleFavorite(project.id, e)}
-                            className={`p-2 rounded-lg transition-all ${
-                              isFavorite(project.id)
-                                ? 'text-accent-amber hover:bg-accent-amber/20'
-                                : 'text-text-muted hover:text-accent-amber hover:bg-bg-tertiary'
-                            }`}
-                          >
-                            <Star className={`w-5 h-5 ${isFavorite(project.id) ? 'fill-current' : ''}`} />
-                          </button>
-                          {isCustomProject(project.path) && (
-                            <button
-                              onClick={(e) => handleRemoveProject(project.path, e)}
-                              className="p-2 rounded-lg text-text-muted hover:text-accent-red hover:bg-accent-red/10 transition-all"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
-                        <ChevronRight className={`w-5 h-5 text-text-muted transition-transform ${isSelected ? 'rotate-90' : ''}`} />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {projects.length === 0 && (
-                <div className="rounded-xl border border-border-primary bg-bg-secondary p-12 text-center">
-                  <FolderKanban className="w-12 h-12 mx-auto text-text-muted mb-4" />
-                  <h3 className="font-medium text-lg mb-2">
-                    {activeTab === 'favorites' ? 'No favorite projects' : 'No projects found'}
-                  </h3>
-                  <p className="text-text-secondary text-sm">
-                    {activeTab === 'favorites'
-                      ? 'Click the star icon to add favorites'
-                      : 'Start using Claude Code to see projects here'}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Project Details Panel */}
-            <div className="space-y-4">
-              <ProjectDetail />
-            </div>
+          {/* Search Bar */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search projects..."
+              className="w-64 pl-9 pr-3 py-2 bg-secondary border border-border text-sm placeholder:text-muted-foreground focus:border-white/50 focus:outline-none transition-colors"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-white transition-colors"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Projects Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+        {projects.map((project) => {
+          const isSelected = selectedProject?.id === project.id;
+          const linkedAgents = agents.filter(a => pathsMatch(a.projectPath, project.path));
+          const color = getProjectColor(project.name);
+
+          return (
+            <motion.div
+              key={project.id}
+              layoutId={project.id}
+              onClick={() => setSelectedProject(isSelected ? null : project)}
+              className="group relative cursor-pointer"
+              whileHover={{ y: -4 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              {/* Folder Card */}
+              <div
+                className={`
+                  relative bg-card border p-4 transition-all h-full
+                  ${isSelected
+                    ? 'border-white shadow-lg shadow-white/10'
+                    : 'border-border hover:border-white/30'
+                  }
+                `}
+                style={{
+                  borderBottomColor: isSelected ? color.main : undefined,
+                  borderBottomWidth: isSelected ? '2px' : undefined,
+                }}
+              >
+                {/* Folder Icon with Color */}
+                <div className="flex items-center justify-center mb-3 pt-1">
+                  <div
+                    className="relative w-14 h-11 flex items-center justify-center rounded-sm"
+                    style={{ backgroundColor: color.bg }}
+                  >
+                    {isSelected ? (
+                      <FolderOpen className="w-8 h-8" style={{ color: color.main }} />
+                    ) : (
+                      <Folder
+                        className="w-8 h-8 transition-colors"
+                        style={{ color: color.main }}
+                      />
+                    )}
+                    {/* Agent badge */}
+                    {linkedAgents.length > 0 && (
+                      <div
+                        className="absolute -top-1.5 -right-1.5 w-4 h-4 text-[9px] font-bold flex items-center justify-center text-white"
+                        style={{ backgroundColor: color.main }}
+                      >
+                        {linkedAgents.length}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Project Info */}
+                <div className="text-center space-y-1">
+                  <h3 className="font-medium text-sm truncate" title={project.name}>
+                    {project.name}
+                  </h3>
+                  <p className="text-[10px] text-muted-foreground font-mono truncate" title={project.path}>
+                    {getShortPath(project.path)}
+                  </p>
+                  <div className="flex items-center justify-center gap-2 text-[10px] text-muted-foreground">
+                    <span>{project.sessions.length} sessions</span>
+                    <span>·</span>
+                    <span>{formatDate(project.lastActivity)}</span>
+                  </div>
+                </div>
+
+                {/* Favorite Star */}
+                <button
+                  onClick={(e) => toggleFavorite(project.id, e)}
+                  className={`
+                    absolute top-2 right-2 p-1.5 transition-all
+                    ${isFavorite(project.id)
+                      ? 'opacity-100 text-yellow-400'
+                      : 'opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-yellow-400'
+                    }
+                  `}
+                >
+                  <Star className={`w-4 h-4 ${isFavorite(project.id) ? 'fill-current' : ''}`} />
+                </button>
+
+                {/* Custom badge */}
+                {isCustomProject(project.path) && (
+                  <div className="absolute top-2 left-2">
+                    <span className="text-[9px] px-1.5 py-0.5 bg-purple-500/20 text-purple-400">
+                      Custom
+                    </span>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          );
+        })}
+
+        {/* Add Project Card */}
+        {hasElectron && (
+          <motion.div
+            onClick={handleAddProject}
+            className="cursor-pointer"
+            whileHover={{ y: -4 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            <div className="relative bg-card border border-dashed border-border p-4 hover:border-white/30 transition-all h-full min-h-[140px] flex flex-col items-center justify-center gap-2">
+              <div className="w-14 h-11 flex items-center justify-center rounded-sm bg-white/5">
+                <Plus className="w-6 h-6 text-muted-foreground" />
+              </div>
+              <span className="text-xs text-muted-foreground">Add Project</span>
+            </div>
+          </motion.div>
+        )}
+      </div>
+
+      {/* Empty State */}
+      {projects.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-20">
+          <FolderKanban className="w-16 h-16 text-muted-foreground/30 mb-4" />
+          <h3 className="font-medium text-lg mb-2">
+            {activeTab === 'favorites' ? 'No favorite projects' : 'No projects found'}
+          </h3>
+          <p className="text-muted-foreground text-sm">
+            {activeTab === 'favorites'
+              ? 'Click the star icon to add favorites'
+              : 'Start using Claude Code to see projects here'}
+          </p>
+        </div>
+      )}
+
+      {/* Project Detail Panel (Slide-out) */}
+      <AnimatePresence>
+        {selectedProject && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedProject(null)}
+              className="fixed inset-0 bg-black/60 z-40"
+            />
+
+            {/* Panel */}
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed right-0 top-0 bottom-0 w-full max-w-lg bg-background border-l border-border z-50 overflow-y-auto"
+            >
+              {/* Header with color accent */}
+              <div
+                className="sticky top-0 bg-card border-b border-border z-10"
+                style={{ borderBottomColor: getProjectColor(selectedProject.name).main, borderBottomWidth: '2px' }}
+              >
+                <div className="p-4 flex items-start justify-between">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div
+                      className="w-12 h-12 flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: getProjectColor(selectedProject.name).bg }}
+                    >
+                      <FolderOpen className="w-7 h-7" style={{ color: getProjectColor(selectedProject.name).main }} />
+                    </div>
+                    <div className="min-w-0 pt-1">
+                      <h2 className="font-semibold text-lg truncate">{selectedProject.name}</h2>
+                      <p className="text-xs text-muted-foreground font-mono truncate mt-0.5">
+                        {selectedProject.path}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSelectedProject(null)}
+                    className="p-2 hover:bg-secondary transition-colors shrink-0"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Git Branch */}
+                {hasElectron && (
+                  <div className="px-4 pb-3 flex items-center gap-2">
+                    <GitBranch className="w-4 h-4 text-orange-400" />
+                    {gitLoading ? (
+                      <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
+                    ) : gitBranch ? (
+                      <span className="text-sm px-2 py-0.5 bg-orange-500/15 text-orange-400 font-mono">
+                        {gitBranch}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">Not a git repository</span>
+                    )}
+                    <button
+                      onClick={() => loadGitBranch(selectedProject.path)}
+                      className="p-1 hover:bg-secondary rounded transition-colors ml-auto"
+                      title="Refresh"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 text-muted-foreground ${gitLoading ? 'animate-spin' : ''}`} />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Content */}
+              <div className="p-4 space-y-4">
+                {/* Quick Actions */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => window.open(`cursor://file${selectedProject.path}`, '_blank')}
+                    className="flex-1 px-4 py-2.5 border border-border bg-secondary text-sm flex items-center justify-center gap-2 hover:bg-white/5 transition-colors"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    Open in Cursor
+                  </button>
+                  {hasElectron && (
+                    <button
+                      onClick={() => setShowAgentDialog(true)}
+                      className="flex-1 px-4 py-2.5 bg-white text-black text-sm font-medium flex items-center justify-center gap-2 hover:bg-white/90 transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Launch Agent
+                    </button>
+                  )}
+                </div>
+
+                {/* Stats */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-card border border-border p-3 text-center">
+                    <p className="text-2xl font-bold">{selectedProject.sessions.length}</p>
+                    <p className="text-xs text-muted-foreground">Sessions</p>
+                  </div>
+                  <div className="bg-card border border-border p-3 text-center">
+                    <p className="text-2xl font-bold">{projectAgents.length}</p>
+                    <p className="text-xs text-muted-foreground">Agents</p>
+                  </div>
+                  <div className="bg-card border border-border p-3 text-center">
+                    <p className="text-sm font-medium">{formatDate(selectedProject.lastActivity)}</p>
+                    <p className="text-xs text-muted-foreground">Last Active</p>
+                  </div>
+                </div>
+
+                {/* Project Agents */}
+                {hasElectron && projectAgents.length > 0 && (
+                  <div className="border border-border bg-card p-4">
+                    <h3 className="text-sm font-medium flex items-center gap-2 mb-3">
+                      <Bot className="w-4 h-4" />
+                      Agents ({projectAgents.length})
+                    </h3>
+
+                    <div className="space-y-2">
+                      {projectAgents.map((agent) => {
+                        const statusColor = STATUS_COLORS[agent.status] || STATUS_COLORS.idle;
+                        const charEmoji = CHARACTER_EMOJIS[agent.character || 'robot'] || '🤖';
+                        const isIdle = agent.status === 'idle' || agent.status === 'completed';
+
+                        return (
+                          <div
+                            key={agent.id}
+                            className="p-3 bg-secondary border border-border"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-lg">{charEmoji}</span>
+                                <div className="min-w-0">
+                                  <p className="font-medium text-sm truncate">
+                                    {agent.name || `Agent ${agent.id.slice(0, 6)}`}
+                                  </p>
+                                  <span className={`text-[10px] px-1.5 py-0.5 ${statusColor.bg} ${statusColor.text}`}>
+                                    {agent.status}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {isIdle && (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => handleRestartAgent(agent, true)}
+                                    className="p-1.5 text-muted-foreground hover:text-white hover:bg-white/10 transition-colors"
+                                    title="Resume"
+                                  >
+                                    <RotateCcw className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleRestartAgent(agent, false)}
+                                    className="p-1.5 text-muted-foreground hover:text-white hover:bg-white/10 transition-colors"
+                                    title="Start"
+                                  >
+                                    <Play className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Sessions */}
+                <div className="border border-border bg-card p-4">
+                  <h3 className="text-sm font-medium flex items-center gap-2 mb-3">
+                    <Terminal className="w-4 h-4" />
+                    Sessions ({selectedProject.sessions.length})
+                  </h3>
+
+                  {selectedProject.sessions.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">No sessions yet</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {selectedProject.sessions.slice(0, 5).map((session) => (
+                        <button
+                          key={session.id}
+                          onClick={() => setSelectedSession(selectedSession === session.id ? null : session.id)}
+                          className={`
+                            w-full text-left p-3 transition-all border
+                            ${selectedSession === session.id
+                              ? 'bg-white/10 border-white/30'
+                              : 'bg-secondary border-border hover:border-white/20'
+                            }
+                          `}
+                        >
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-mono text-muted-foreground truncate">
+                              {session.id.slice(0, 12)}...
+                            </p>
+                            <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${
+                              selectedSession === session.id ? 'rotate-180' : ''
+                            }`} />
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {formatDate(session.lastActivity)}
+                          </p>
+                        </button>
+                      ))}
+                      {selectedProject.sessions.length > 5 && (
+                        <p className="text-xs text-muted-foreground text-center pt-2">
+                          +{selectedProject.sessions.length - 5} more sessions
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Session Messages */}
+                <AnimatePresence>
+                  {selectedSession && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="border border-border bg-card p-4 overflow-hidden"
+                    >
+                      <h3 className="text-sm font-medium flex items-center gap-2 mb-3">
+                        <MessageSquare className="w-4 h-4" />
+                        Messages
+                      </h3>
+
+                      {messagesLoading ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="w-6 h-6 animate-spin" />
+                        </div>
+                      ) : (
+                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                          {messages.slice(0, 10).map((message) => (
+                            <div
+                              key={message.uuid}
+                              className={`p-3 ${
+                                message.type === 'user'
+                                  ? 'bg-white/10 border-l-2 border-white'
+                                  : 'bg-secondary'
+                              }`}
+                            >
+                              <p className="text-[10px] text-muted-foreground mb-1">
+                                {message.type === 'user' ? 'You' : 'Claude'}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {getMessagePreview(message.content)}
+                              </p>
+                            </div>
+                          ))}
+                          {messages.length === 0 && (
+                            <p className="text-sm text-muted-foreground text-center py-4">
+                              No messages found
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Project Path */}
+                <div className="border border-border bg-card p-4">
+                  <h3 className="text-sm font-medium mb-2">Full Path</h3>
+                  <p className="font-mono text-xs text-muted-foreground break-all select-all">
+                    {selectedProject.path}
+                  </p>
+                </div>
+
+                {/* Delete Custom Project */}
+                {isCustomProject(selectedProject.path) && (
+                  <button
+                    onClick={(e) => handleRemoveProject(selectedProject.path, e)}
+                    className="w-full px-4 py-2.5 border border-red-500/30 text-red-400 text-sm flex items-center justify-center gap-2 hover:bg-red-500/10 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Remove Project
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Launch Agent Modal */}
       <NewChatModal

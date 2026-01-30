@@ -41,7 +41,7 @@ export default function LiveActivityFeed({ history, projects }: LiveActivityFeed
   };
 
   return (
-    <div className="rounded-xl border border-border-primary bg-bg-secondary overflow-hidden">
+    <div className="rounded-none border border-border-primary bg-bg-secondary overflow-hidden">
       {/* Header */}
       <div className="px-5 py-4 border-b border-border-primary flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -70,7 +70,7 @@ export default function LiveActivityFeed({ history, projects }: LiveActivityFeed
               className="px-5 py-4 hover:bg-bg-tertiary/50 transition-colors"
             >
               <div className="flex items-start gap-3">
-                <div className="mt-0.5 p-1.5 rounded-lg bg-accent-cyan/10">
+                <div className="mt-0.5 p-1.5 rounded-none bg-accent-cyan/10">
                   <MessageSquare className="w-3.5 h-3.5 text-accent-cyan" />
                 </div>
                 <div className="flex-1 min-w-0">

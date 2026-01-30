@@ -179,7 +179,7 @@ function StatusIndicator({ status }: { status: string }) {
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
       >
-        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-cyan-500/20 border-2 border-cyan-500 shadow-lg shadow-cyan-500/30">
+        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-cyan-500/20 border border-cyan-500 shadow-lg shadow-cyan-500/30">
           <motion.div
             animate={{ rotate: 360 }}
             transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
@@ -378,7 +378,7 @@ function AgentNodeCard({
       <StatusIndicator status={node.status} />
 
       <div
-        className={`w-72 rounded-xl border backdrop-blur-sm transition-all duration-200 ${isSelected
+        className={`w-72 rounded-none border backdrop-blur-sm transition-all duration-200 ${isSelected
             ? 'bg-zinc-900/95 border-cyan-500/50 shadow-lg shadow-cyan-500/20'
             : node.status === 'waiting'
               ? 'bg-zinc-900/95 border-amber-500/50 shadow-lg shadow-amber-500/20'
@@ -414,7 +414,7 @@ function AgentNodeCard({
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: -5 }}
                     transition={{ duration: 0.1 }}
-                    className="absolute right-0 top-full mt-1 w-36 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl z-50 overflow-hidden"
+                    className="absolute right-0 top-full mt-1 w-36 bg-zinc-800 border border-zinc-700 rounded-none shadow-xl z-50 overflow-hidden"
                   >
                     <button
                       onClick={(e) => {
@@ -472,7 +472,7 @@ function AgentNodeCard({
             {isRunning ? (
               <button
                 onClick={(e) => { e.stopPropagation(); onToggleAgent(); }}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors text-xs"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-none bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors text-xs"
               >
                 <Square className="w-3 h-3" />
                 Stop
@@ -480,7 +480,7 @@ function AgentNodeCard({
             ) : (
               <button
                 onClick={(e) => { e.stopPropagation(); onToggleAgent(); }}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 transition-colors text-xs"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-none bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 transition-colors text-xs"
               >
                 <Play className="w-3 h-3" />
                 Start
@@ -490,7 +490,7 @@ function AgentNodeCard({
             {(node.status === 'running' || node.status === 'waiting') && (
               <button
                 onClick={(e) => { e.stopPropagation(); onOpenTerminal(); }}
-                className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-700/50 text-zinc-300 hover:bg-zinc-700 transition-colors text-xs"
+                className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-none bg-zinc-700/50 text-zinc-300 hover:bg-zinc-700 transition-colors text-xs"
               >
                 <Terminal className="w-3 h-3" />
                 Terminal
@@ -500,7 +500,7 @@ function AgentNodeCard({
         </div>
 
         {/* Connection point */}
-        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-zinc-800 border-2 border-cyan-500/50" />
+        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-zinc-800 border border-cyan-500/50" />
       </div>
     </motion.div>
   );
@@ -626,13 +626,13 @@ function ProjectNodeCard({
       onTouchEnd={handleTouchEnd}
     >
       <div
-        className={`w-56 rounded-xl border backdrop-blur-sm transition-all duration-200 ${isSelected
+        className={`w-56 rounded-none border backdrop-blur-sm transition-all duration-200 ${isSelected
             ? 'bg-zinc-900/95 border-purple-500/50 shadow-lg shadow-purple-500/20'
             : 'bg-zinc-900/80 border-zinc-700/50 hover:border-zinc-600'
           }`}
       >
         {/* Connection point */}
-        <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-zinc-800 border-2 border-purple-500/50" />
+        <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-zinc-800 border border-purple-500/50" />
 
         {/* Header */}
         <div className="flex items-center gap-2 p-3 border-b border-zinc-700/50">
@@ -663,7 +663,7 @@ function ProjectNodeCard({
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95, y: -5 }}
                   transition={{ duration: 0.1 }}
-                  className="absolute right-0 top-full mt-1 w-40 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl z-50 overflow-hidden"
+                  className="absolute right-0 top-full mt-1 w-40 bg-zinc-800 border border-zinc-700 rounded-none shadow-xl z-50 overflow-hidden"
                 >
                   <button
                     onClick={(e) => {
@@ -741,7 +741,7 @@ function CanvasToolbar({
             placeholder="Search..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 pr-4 py-2 rounded-lg bg-zinc-900/90 border border-zinc-700 text-sm text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-cyan-500/50 w-40"
+            className="pl-9 pr-4 py-2 rounded-none bg-zinc-900/90 border border-zinc-700 text-sm text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-cyan-500/50 w-40"
           />
         </div>
 
@@ -750,7 +750,7 @@ function CanvasToolbar({
           <select
             value={projectFilter}
             onChange={(e) => setProjectFilter(e.target.value)}
-            className="pl-3 pr-8 py-2 rounded-lg bg-zinc-900/90 border border-zinc-700 text-xs lg:text-sm text-zinc-200 focus:outline-none focus:border-cyan-500/50 appearance-none cursor-pointer min-w-[100px] lg:min-w-[140px]"
+            className="pl-3 pr-8 py-2 rounded-none bg-zinc-900/90 border border-zinc-700 text-xs lg:text-sm text-zinc-200 focus:outline-none focus:border-cyan-500/50 appearance-none cursor-pointer min-w-[100px] lg:min-w-[140px]"
           >
             <option value="all">All Projects</option>
             {projects.map((p) => (
@@ -763,13 +763,13 @@ function CanvasToolbar({
         </div>
 
         {/* Status filter - compact on mobile */}
-        <div className="flex items-center gap-0.5 lg:gap-1 p-1 rounded-lg bg-zinc-900/90 border border-zinc-700">
+        <div className="flex items-center gap-0.5 lg:gap-1 p-1 rounded-none bg-zinc-900/90 border border-zinc-700">
           <Filter className="w-4 h-4 text-zinc-500 ml-1 lg:ml-2 hidden sm:block" />
           {(['all', 'running', 'idle', 'stopped'] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`px-2 lg:px-3 py-1.5 rounded-md text-[10px] lg:text-xs font-medium transition-all ${filter === f
+              className={`px-2 lg:px-3 py-1.5 rounded-none text-[10px] lg:text-xs font-medium transition-all ${filter === f
                   ? 'bg-cyan-500/20 text-cyan-400'
                   : 'text-zinc-400 hover:text-zinc-200'
                 }`}
@@ -790,10 +790,10 @@ function CanvasToolbar({
             onClick={onSuperAgentClick}
           />
         )}
-        <div className="flex items-center gap-1 p-1 rounded-lg bg-zinc-900/90 border border-zinc-700">
+        <div className="flex items-center gap-1 p-1 rounded-none bg-zinc-900/90 border border-zinc-700">
           <button
             onClick={() => setZoom(Math.max(0.3, zoom - 0.1))}
-            className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+            className="p-1.5 rounded-none text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
           >
             <ZoomOut className="w-4 h-4" />
           </button>
@@ -802,14 +802,14 @@ function CanvasToolbar({
           </span>
           <button
             onClick={() => setZoom(Math.min(2, zoom + 0.1))}
-            className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+            className="p-1.5 rounded-none text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
           >
             <ZoomIn className="w-4 h-4" />
           </button>
         </div>
         <button
           onClick={onResetView}
-          className="p-2 rounded-lg bg-zinc-900/90 border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+          className="p-2 rounded-none bg-zinc-900/90 border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
           title="Reset view"
         >
           <RotateCcw className="w-4 h-4" />
@@ -846,7 +846,7 @@ function SuperAgentButton({
       disabled={isCreating}
       className={`
         flex items-center gap-2 px-3 py-2
-        rounded-lg border backdrop-blur-sm
+        rounded-none border backdrop-blur-sm
         transition-all duration-200
         ${superAgent
           ? superAgent.status === 'running' || superAgent.status === 'waiting'
@@ -880,7 +880,7 @@ function SuperAgentButton({
 // Status bar
 function CanvasStatusBar({ agentCount, runningCount, projectCount, waitingCount }: { agentCount: number; runningCount: number; projectCount: number; waitingCount: number }) {
   return (
-    <div className="absolute bottom-3 left-3 lg:bottom-4 lg:left-4 flex items-center gap-3 lg:gap-6 px-3 lg:px-4 py-2 rounded-lg bg-zinc-900/90 border border-zinc-700 text-[10px] lg:text-xs text-zinc-400 z-40">
+    <div className="absolute bottom-3 left-3 lg:bottom-4 lg:left-4 flex items-center gap-3 lg:gap-6 px-3 lg:px-4 py-2 rounded-none bg-zinc-900/90 border border-zinc-700 text-[10px] lg:text-xs text-zinc-400 z-40">
       <div className="flex items-center gap-1.5 lg:gap-2">
         <Bot className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-cyan-400" />
         <span>{agentCount}</span>
@@ -932,7 +932,7 @@ function NotificationPanel({
       initial={false}
       animate={{ opacity: 1, x: 0 }}
       transition={{ type: 'spring', stiffness: 500, damping: 40 }}
-      className={`p-3 rounded-lg border transition-colors cursor-pointer hover:bg-zinc-800/50 ${agent.status === 'waiting'
+      className={`p-3 rounded-none border transition-colors cursor-pointer hover:bg-zinc-800/50 ${agent.status === 'waiting'
           ? 'bg-amber-500/5 border-amber-500/30'
           : agent.status === 'running'
             ? 'bg-cyan-500/5 border-cyan-500/20'
@@ -1001,7 +1001,7 @@ function NotificationPanel({
       {/* Toggle button */}
       <button
         onClick={onToggle}
-        className="flex items-center justify-center w-8 h-12 my-auto -mr-1 rounded-l-lg bg-zinc-900/95 border border-r-0 border-zinc-700 hover:bg-zinc-800 transition-colors z-10"
+        className="flex items-center justify-center w-8 h-12 my-auto -mr-1 rounded-none bg-zinc-900/95 border border-r-0 border-zinc-700 hover:bg-zinc-800 transition-colors z-10"
       >
         {isCollapsed ? (
           <div className="relative">
@@ -1024,7 +1024,7 @@ function NotificationPanel({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="flex-1 bg-zinc-900/95 border border-zinc-700 rounded-xl overflow-hidden flex flex-col"
+            className="flex-1 bg-zinc-900/95 border border-zinc-700 rounded-none overflow-hidden flex flex-col"
           >
             {/* Header */}
             <div className="px-4 py-3 border-b border-zinc-700/50 bg-zinc-800/30">
@@ -1783,7 +1783,7 @@ Say hello and list the current agents.`;
       {/* Empty state */}
       {agentNodes.length === 0 && projectNodes.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center z-30 p-4">
-          <div className="text-center p-4 lg:p-8 rounded-xl bg-zinc-900/80 border border-zinc-700 max-w-[280px] lg:max-w-md">
+          <div className="text-center p-4 lg:p-8 rounded-none bg-zinc-900/80 border border-zinc-700 max-w-[280px] lg:max-w-md">
             <Bot className="w-8 h-8 lg:w-12 lg:h-12 text-zinc-600 mx-auto mb-3 lg:mb-4" />
             <h3 className="text-base lg:text-lg font-medium text-zinc-300 mb-1.5 lg:mb-2">No agents yet</h3>
             <p className="text-xs lg:text-sm text-zinc-500 mb-3 lg:mb-4">
@@ -1791,7 +1791,7 @@ Say hello and list the current agents.`;
             </p>
             <button
               onClick={() => router.push('/agents')}
-              className="px-3 lg:px-4 py-1.5 lg:py-2 rounded-lg bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/30 transition-colors text-xs lg:text-sm"
+              className="px-3 lg:px-4 py-1.5 lg:py-2 rounded-none bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/30 transition-colors text-xs lg:text-sm"
             >
               Go to Agents
             </button>

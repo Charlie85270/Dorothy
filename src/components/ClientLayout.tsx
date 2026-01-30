@@ -33,7 +33,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const mainMarginLeft = isMobile ? 0 : (sidebarCollapsed ? 72 : 240);
 
   return (
-    <div className="min-h-screen bg-bg-primary grid-pattern noise-overlay relative">
+    <div className="min-h-screen bg-bg-primary relative">
       {/* Mobile Header */}
       <div className="lg:hidden fixed top-0 left-0 right-0 h-14 bg-bg-secondary border-b border-border-primary z-40 flex items-center px-4">
         <button
@@ -44,8 +44,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
         <div className="flex items-center gap-2 ml-2">
-          <span className="font-bold text-sm tracking-wide">CLAUDE</span>
-          <span className="text-accent-cyan font-bold text-sm">.MGR</span>
+          <span className="font-semibold text-sm tracking-wide">Claude</span>
+          <span className="text-accent-blue font-semibold text-sm"> Manager</span>
         </div>
       </div>
 

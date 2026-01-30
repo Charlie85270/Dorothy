@@ -135,7 +135,7 @@ function OrchestratorModeToggle({
   }
 
   return (
-    <div className="p-4 rounded-xl border border-accent-purple/30 bg-accent-purple/5">
+    <div className="p-4 rounded-none border border-accent-purple/30 bg-accent-purple/5">
       <div className="flex items-start gap-3">
         <button
           onClick={() => {
@@ -145,7 +145,7 @@ function OrchestratorModeToggle({
           }}
           disabled={status !== 'configured'}
           className={`
-            mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center transition-all shrink-0
+            mt-0.5 w-5 h-5 rounded border flex items-center justify-center transition-all shrink-0
             ${isOrchestrator && status === 'configured'
               ? 'bg-accent-purple border-accent-purple'
               : 'border-accent-purple/50 hover:border-accent-purple'
@@ -181,7 +181,7 @@ function OrchestratorModeToggle({
               <button
                 onClick={handleSetup}
                 disabled={isSettingUp}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-accent-purple/20 text-accent-purple text-sm font-medium hover:bg-accent-purple/30 transition-colors disabled:opacity-50"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-none bg-accent-purple/20 text-accent-purple text-sm font-medium hover:bg-accent-purple/30 transition-colors disabled:opacity-50"
               >
                 {isSettingUp ? (
                   <>
@@ -596,13 +596,13 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
           onClick={(e) => e.stopPropagation()}
-          className="w-full max-w-4xl mx-4 bg-bg-secondary border border-border-primary rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] lg:max-h-[90vh] flex flex-col"
+          className="w-full max-w-4xl mx-4 bg-card border border-border shadow-2xl overflow-hidden max-h-[85vh] lg:max-h-[90vh] flex flex-col"
         >
           {/* Header */}
-          <div className="px-4 lg:px-6 py-3 lg:py-4 border-b border-border-primary flex items-center justify-between bg-bg-tertiary/30">
+          <div className="px-4 lg:px-6 py-3 lg:py-4 border-b border-border flex items-center justify-between bg-secondary">
             <div className="flex items-center gap-2 lg:gap-3">
-              <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-xl bg-gradient-to-br from-accent-cyan to-accent-blue flex items-center justify-center">
-                <Bot className="w-4 h-4 lg:w-5 lg:h-5 text-bg-primary" />
+              <div className="w-8 h-8 lg:w-10 lg:h-10 bg-white flex items-center justify-center">
+                <Bot className="w-4 h-4 lg:w-5 lg:h-5 text-black" />
               </div>
               <div>
                 <h2 className="font-semibold text-base lg:text-lg">Create New Agent</h2>
@@ -611,18 +611,18 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
             </div>
             <button
               onClick={onClose}
-              className="p-2 rounded-lg hover:bg-bg-tertiary transition-colors"
+              className="p-2 rounded-none hover:bg-bg-tertiary transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
           {/* Progress Bar */}
-          <div className="h-1 bg-bg-tertiary">
+          <div className="h-1 bg-secondary">
             <motion.div
               initial={{ width: '33%' }}
               animate={{ width: `${(step / 3) * 100}%` }}
-              className="h-full bg-gradient-to-r from-accent-cyan to-accent-blue"
+              className="h-full bg-white"
             />
           </div>
 
@@ -633,7 +633,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
               <div className="space-y-6">
                 <div>
                   <h3 className="text-lg font-medium mb-2 flex items-center gap-2">
-                    <FolderOpen className="w-5 h-5 text-accent-cyan" />
+                    <FolderOpen className="w-5 h-5 text-accent-blue" />
                     Select Project
                   </h3>
                   <p className="text-text-secondary text-sm mb-4">
@@ -651,9 +651,9 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                         setCustomPath('');
                       }}
                       className={`
-                        text-left p-4 rounded-xl border transition-all
+                        text-left p-4 rounded-none border transition-all
                         ${selectedProject === project.path
-                          ? 'border-accent-cyan bg-accent-cyan/10'
+                          ? 'border-accent-blue bg-accent-blue/10'
                           : 'border-border-primary hover:border-border-accent bg-bg-tertiary/30'
                         }
                       `}
@@ -664,7 +664,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                           <span className="font-medium">{project.name}</span>
                         </div>
                         {selectedProject === project.path && (
-                          <Check className="w-4 h-4 text-accent-cyan" />
+                          <Check className="w-4 h-4 text-accent-blue" />
                         )}
                       </div>
                       <p className="text-xs text-text-muted mt-1 truncate font-mono">
@@ -686,7 +686,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                         setSelectedProject('');
                       }}
                       placeholder="/path/to/your/project"
-                      className="flex-1 px-4 py-3 rounded-xl font-mono text-sm"
+                      className="flex-1 px-4 py-3 rounded-none font-mono text-sm"
                     />
                     {onBrowseFolder && (
                       <button
@@ -698,9 +698,9 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                             setSelectedProject('');
                           }
                         }}
-                        className="px-4 py-3 rounded-xl bg-bg-tertiary border border-border-primary hover:border-accent-cyan transition-colors flex items-center gap-2"
+                        className="px-4 py-3 rounded-none bg-bg-tertiary border border-border-primary hover:border-accent-blue transition-colors flex items-center gap-2"
                       >
-                        <FolderOpen className="w-4 h-4 text-accent-cyan" />
+                        <FolderOpen className="w-4 h-4 text-accent-blue" />
                         <span className="text-sm">Browse</span>
                       </button>
                     )}
@@ -708,7 +708,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                 </div>
 
                 {/* Secondary Project (Collapsible) */}
-                <div className="border border-border-primary rounded-xl overflow-hidden">
+                <div className="border border-border-primary rounded-none overflow-hidden">
                   <button
                     onClick={() => setShowSecondaryProject(!showSecondaryProject)}
                     className="w-full flex items-center justify-between px-4 py-3 bg-bg-tertiary/30 hover:bg-bg-tertiary/50 transition-colors"
@@ -753,7 +753,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                                     setCustomSecondaryPath('');
                                   }}
                                   className={`
-                                    text-left p-3 rounded-lg border transition-all text-sm
+                                    text-left p-3 rounded-none border transition-all text-sm
                                     ${selectedSecondaryProject === project.path
                                       ? 'border-accent-purple bg-accent-purple/10'
                                       : 'border-border-primary hover:border-border-accent bg-bg-tertiary/30'
@@ -789,7 +789,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                                 setSelectedSecondaryProject('');
                               }}
                               placeholder="/path/to/secondary/project"
-                              className="flex-1 px-3 py-2 rounded-lg font-mono text-sm"
+                              className="flex-1 px-3 py-2 rounded-none font-mono text-sm"
                             />
                             {onBrowseFolder && (
                               <button
@@ -801,7 +801,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                                     setSelectedSecondaryProject('');
                                   }
                                 }}
-                                className="px-3 py-2 rounded-lg bg-bg-tertiary border border-border-primary hover:border-accent-purple transition-colors flex items-center gap-2"
+                                className="px-3 py-2 rounded-none bg-bg-tertiary border border-border-primary hover:border-accent-purple transition-colors flex items-center gap-2"
                               >
                                 <FolderOpen className="w-4 h-4 text-accent-purple" />
                                 <span className="text-sm">Browse</span>
@@ -850,7 +850,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
 
                 {/* Selected Skills */}
                 {selectedSkills.length > 0 && (
-                  <div className="flex flex-wrap gap-2 p-3 rounded-lg bg-accent-purple/10 border border-accent-purple/20">
+                  <div className="flex flex-wrap gap-2 p-3 rounded-none bg-accent-purple/10 border border-accent-purple/20">
                     {selectedSkills.map((skill) => (
                       <button
                         key={skill}
@@ -866,7 +866,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
 
                 {/* Installed Skills Section */}
                 {allInstalledSkills.length > 0 && (
-                  <div className="rounded-xl border border-accent-green/30 bg-accent-green/5 p-4">
+                  <div className="rounded-none border border-accent-green/30 bg-accent-green/5 p-4">
                     <h4 className="text-sm font-medium mb-3 flex items-center gap-2 text-accent-green">
                       <CheckCircle className="w-4 h-4" />
                       Your Installed Skills ({allInstalledSkills.length})
@@ -884,7 +884,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                         };
                         const sourceColors: Record<string, { bg: string; text: string; selected: string }> = {
                           project: { bg: 'bg-accent-purple/10', text: 'text-accent-purple', selected: 'bg-accent-purple/30 border-accent-purple' },
-                          user: { bg: 'bg-accent-cyan/10', text: 'text-accent-cyan', selected: 'bg-accent-cyan/30 border-accent-cyan' },
+                          user: { bg: 'bg-accent-blue/10', text: 'text-accent-blue', selected: 'bg-accent-blue/30 border-accent-blue' },
                           plugin: { bg: 'bg-accent-amber/10', text: 'text-accent-amber', selected: 'bg-accent-amber/30 border-accent-amber' },
                         };
                         const colors = sourceColors[sourceType];
@@ -900,7 +900,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                                     key={`${skill.source}-${skill.name}-${idx}`}
                                     onClick={() => toggleSkill(skill.name)}
                                     className={`
-                                      flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all border
+                                      flex items-center gap-2 px-3 py-1.5 rounded-none text-sm transition-all border
                                       ${isSelected
                                         ? colors.selected
                                         : `${colors.bg} ${colors.text} border-transparent hover:border-current`
@@ -939,13 +939,13 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                         value={skillSearch}
                         onChange={(e) => setSkillSearch(e.target.value)}
                         placeholder="Search skills marketplace..."
-                        className="w-full pl-10 pr-4 py-2 rounded-lg text-sm"
+                        className="w-full pl-10 pr-4 py-2 rounded-none text-sm"
                       />
                     </div>
                     <div className="relative">
                       <button
                         onClick={() => setSelectedCategory(selectedCategory ? null : SKILL_CATEGORIES[0])}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-bg-tertiary text-text-secondary hover:text-text-primary transition-colors"
+                        className="flex items-center gap-2 px-4 py-2 rounded-none bg-bg-tertiary text-text-secondary hover:text-text-primary transition-colors"
                       >
                         <Filter className="w-4 h-4" />
                         {selectedCategory || 'All'}
@@ -958,7 +958,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                 {/* Skills by Category from Marketplace */}
                 <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
                   {Object.entries(skillsByCategory).map(([category, skills]) => (
-                    <div key={category} className="border border-border-primary rounded-xl overflow-hidden">
+                    <div key={category} className="border border-border-primary rounded-none overflow-hidden">
                       <button
                         onClick={() => toggleCategory(category)}
                         className="w-full flex items-center justify-between px-4 py-3 bg-bg-tertiary/50 hover:bg-bg-tertiary transition-colors"
@@ -990,7 +990,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                                   <div
                                     key={skill.name}
                                     className={`
-                                      text-left p-3 rounded-lg transition-all
+                                      text-left p-3 rounded-none transition-all
                                       ${isSelected
                                         ? 'bg-accent-purple/20 border-accent-purple/50'
                                         : installed
@@ -1018,7 +1018,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                                             e.stopPropagation();
                                             handleInstallSkill(skill);
                                           }}
-                                          className="flex items-center gap-1 text-xs text-accent-cyan px-2 py-1 rounded bg-accent-cyan/10 hover:bg-accent-cyan/20 transition-colors"
+                                          className="flex items-center gap-1 text-xs text-accent-blue px-2 py-1 rounded bg-accent-blue/10 hover:bg-accent-blue/20 transition-colors"
                                         >
                                           <Download className="w-3 h-3" />
                                           Install
@@ -1027,7 +1027,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                                     </div>
                                     <p className="text-xs text-text-muted mt-1 font-mono">{skill.repo}</p>
                                     <div className="flex items-center justify-between mt-1">
-                                      <p className="text-xs text-accent-cyan">{skill.installs} installs</p>
+                                      <p className="text-xs text-accent-blue">{skill.installs} installs</p>
                                       {installed && (
                                         <button
                                           onClick={() => toggleSkill(skill.name)}
@@ -1068,7 +1068,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                 </div>
 
                 {/* Summary */}
-                <div className="p-4 rounded-xl bg-bg-tertiary/50 border border-border-primary space-y-3">
+                <div className="p-4 rounded-none bg-bg-tertiary/50 border border-border-primary space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-text-muted">Project:</span>
                     <span className="font-mono text-sm truncate max-w-xs">{projectPath}</span>
@@ -1114,7 +1114,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                           key={char.id}
                           onClick={() => setAgentCharacter(char.id)}
                           className={`
-                            p-3 rounded-xl border transition-all text-center
+                            p-3 rounded-none border transition-all text-center
                             ${agentCharacter === char.id
                               ? 'border-accent-purple bg-accent-purple/10'
                               : 'border-border-primary hover:border-border-accent bg-bg-tertiary/30'
@@ -1135,7 +1135,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                       value={agentName}
                       onChange={(e) => setAgentName(e.target.value)}
                       placeholder={`${CHARACTER_OPTIONS.find(c => c.id === agentCharacter)?.name || 'Agent'} on ${projectPath.split('/').pop() || 'project'}`}
-                      className="w-full px-4 py-2 rounded-lg text-sm bg-bg-primary border border-border-primary focus:border-accent-cyan focus:outline-none"
+                      className="w-full px-4 py-2 rounded-none text-sm bg-bg-primary border border-border-primary focus:border-accent-blue focus:outline-none"
                     />
                   </div>
                 </div>
@@ -1149,14 +1149,14 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                         key={m}
                         onClick={() => setModel(m)}
                         className={`
-                          p-3 rounded-xl border transition-all text-center
+                          p-3 rounded-none border transition-all text-center
                           ${model === m
-                            ? 'border-accent-cyan bg-accent-cyan/10'
+                            ? 'border-accent-blue bg-accent-blue/10'
                             : 'border-border-primary hover:border-border-accent'
                           }
                         `}
                       >
-                        <Zap className={`w-5 h-5 mx-auto mb-1 ${model === m ? 'text-accent-cyan' : 'text-text-muted'}`} />
+                        <Zap className={`w-5 h-5 mx-auto mb-1 ${model === m ? 'text-accent-blue' : 'text-text-muted'}`} />
                         <span className="font-medium capitalize">{m}</span>
                         <p className="text-xs text-text-muted mt-0.5">
                           {m === 'opus' ? 'Most capable' : m === 'sonnet' ? 'Balanced' : 'Fastest'}
@@ -1167,12 +1167,12 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                 </div>
 
                 {/* Git Worktree Option */}
-                <div className="p-4 rounded-xl border border-border-primary bg-bg-tertiary/30">
+                <div className="p-4 rounded-none border border-border-primary bg-bg-tertiary/30">
                   <div className="flex items-start gap-3">
                     <button
                       onClick={() => setUseWorktree(!useWorktree)}
                       className={`
-                        mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center transition-all shrink-0
+                        mt-0.5 w-5 h-5 rounded border flex items-center justify-center transition-all shrink-0
                         ${useWorktree
                           ? 'bg-accent-purple border-accent-purple'
                           : 'border-border-primary hover:border-accent-purple'
@@ -1201,7 +1201,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                           >
                             <div className="mt-3 pt-3 border-t border-border-primary">
                               <label className="block text-xs font-medium mb-2 flex items-center gap-2">
-                                <GitBranch className="w-3.5 h-3.5 text-accent-cyan" />
+                                <GitBranch className="w-3.5 h-3.5 text-accent-blue" />
                                 Branch Name
                               </label>
                               <input
@@ -1209,7 +1209,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                                 value={branchName}
                                 onChange={(e) => setBranchName(e.target.value.replace(/\s+/g, '-'))}
                                 placeholder="feature/my-task"
-                                className="w-full px-3 py-2 rounded-lg text-sm font-mono bg-bg-primary border border-border-primary focus:border-accent-cyan focus:outline-none"
+                                className="w-full px-3 py-2 rounded-none text-sm font-mono bg-bg-primary border border-border-primary focus:border-accent-blue focus:outline-none"
                               />
                               <p className="text-xs text-text-muted mt-1.5">
                                 The agent will work in a separate worktree on this branch
@@ -1223,12 +1223,12 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                 </div>
 
                 {/* Skip Permissions Option */}
-                <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5">
+                <div className="p-4 rounded-none border border-amber-500/30 bg-amber-500/5">
                   <div className="flex items-start gap-3">
                     <button
                       onClick={() => setSkipPermissions(!skipPermissions)}
                       className={`
-                        mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center transition-all shrink-0
+                        mt-0.5 w-5 h-5 rounded border flex items-center justify-center transition-all shrink-0
                         ${skipPermissions
                           ? 'bg-amber-500 border-amber-500'
                           : 'border-amber-500/50 hover:border-amber-500'
@@ -1274,7 +1274,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                       : "What would you like Claude to help you with?"
                     }
                     rows={4}
-                    className="w-full px-4 py-3 rounded-xl text-sm resize-none"
+                    className="w-full px-4 py-3 rounded-none text-sm resize-none"
                   />
                   {selectedSkills.length > 0 && !prompt && (
                     <p className="text-xs text-accent-purple mt-2">
@@ -1287,11 +1287,11 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-4 border-t border-border-primary flex items-center justify-between bg-bg-tertiary/30">
+          <div className="px-6 py-4 border-t border-border flex items-center justify-between bg-secondary">
             <button
               onClick={() => step > 1 && setStep(step - 1)}
               disabled={step === 1}
-              className="px-4 py-2 text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Back
             </button>
@@ -1299,7 +1299,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
             <div className="flex items-center gap-3">
               <button
                 onClick={onClose}
-                className="px-4 py-2 text-text-secondary hover:text-text-primary transition-colors"
+                className="px-4 py-2 text-muted-foreground hover:text-foreground transition-colors"
               >
                 Cancel
               </button>
@@ -1308,7 +1308,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                 <button
                   onClick={() => setStep(step + 1)}
                   disabled={step === 1 && !projectPath}
-                  className="flex items-center gap-2 px-4 py-2 bg-accent-cyan text-bg-primary font-medium rounded-lg hover:bg-accent-cyan/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-4 py-2 bg-white text-black font-medium hover:bg-white/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Continue
                   <ChevronRight className="w-4 h-4" />
@@ -1317,7 +1317,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                 <button
                   onClick={handleSubmit}
                   disabled={(!prompt.trim() && selectedSkills.length === 0) || (useWorktree && !branchName.trim())}
-                  className="flex items-center gap-2 px-4 py-2 bg-accent-green text-bg-primary font-medium rounded-lg hover:bg-accent-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-4 py-2 bg-white text-black font-medium hover:bg-white/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Play className="w-4 h-4" />
                   Start Agent
@@ -1342,16 +1342,16 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-3xl bg-bg-secondary border border-border-primary rounded-2xl overflow-hidden"
+                className="w-full max-w-3xl bg-bg-secondary border border-border-primary rounded-none overflow-hidden"
               >
                 <div className="flex items-center justify-between px-5 py-4 border-b border-border-primary">
                   <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                    <div className={`w-8 h-8 rounded-none flex items-center justify-center ${
                       installComplete
                         ? installExitCode === 0
                           ? 'bg-accent-green/20'
                           : 'bg-accent-red/20'
-                        : 'bg-accent-cyan/20'
+                        : 'bg-accent-blue/20'
                     }`}>
                       {installComplete ? (
                         installExitCode === 0 ? (
@@ -1360,7 +1360,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                           <XCircle className="w-4 h-4 text-accent-red" />
                         )
                       ) : (
-                        <Loader2 className="w-4 h-4 text-accent-cyan animate-spin" />
+                        <Loader2 className="w-4 h-4 text-accent-blue animate-spin" />
                       )}
                     </div>
                     <div>
@@ -1378,7 +1378,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                   </div>
                   <button
                     onClick={closeInstallTerminal}
-                    className="p-2 hover:bg-bg-tertiary rounded-lg"
+                    className="p-2 hover:bg-bg-tertiary rounded-none"
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -1390,7 +1390,7 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                   </p>
                   <div
                     ref={terminalRef}
-                    className="bg-[#0a0a0f] rounded-lg overflow-hidden"
+                    className="bg-[#0a0a0f] rounded-none overflow-hidden"
                     style={{ height: '350px' }}
                   />
                 </div>
@@ -1403,9 +1403,9 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                   </p>
                   <button
                     onClick={closeInstallTerminal}
-                    className={`px-4 py-2 rounded-lg font-medium ${
+                    className={`px-4 py-2 rounded-none font-medium ${
                       installComplete
-                        ? 'bg-accent-cyan text-bg-primary hover:bg-accent-cyan/90'
+                        ? 'bg-accent-blue text-bg-primary hover:bg-accent-blue/90'
                         : 'bg-accent-red/20 text-accent-red hover:bg-accent-red/30'
                     }`}
                   >

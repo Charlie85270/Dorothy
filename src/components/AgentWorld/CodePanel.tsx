@@ -379,7 +379,7 @@ export default function CodePanel({ projectPath, className = '' }: CodePanelProp
       {/* Search Bar */}
       <div className="px-2 py-2 border-b border-border-primary bg-bg-tertiary/30 shrink-0">
         <div className="flex items-center gap-1">
-          <div className="flex-1 flex items-center gap-1 bg-bg-primary rounded-md px-2 py-1">
+          <div className="flex-1 flex items-center gap-1 bg-bg-primary rounded-none px-2 py-1">
             {searchMode === 'file' ? (
               <Search className="w-3 h-3 text-text-muted shrink-0" />
             ) : (

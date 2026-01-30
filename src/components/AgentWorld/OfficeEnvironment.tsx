@@ -408,7 +408,7 @@ function LargeMeetingRoom({ position, label, chairs = 8, tableColor = '#FBBF24' 
 
       {/* Label */}
       <Html position={[0, 2.5, 0]} center distanceFactor={10} zIndexRange={[100, 0]}>
-        <div className="px-3 py-1 bg-amber-500 text-white text-sm font-bold rounded-lg shadow-lg whitespace-nowrap">
+        <div className="px-3 py-1 bg-amber-500 text-white text-sm font-bold rounded-none shadow-lg whitespace-nowrap">
           {label}
         </div>
       </Html>
@@ -459,7 +459,7 @@ function SmallMeetingRoom({ position, label, chairs = 4, color = '#6366F1' }: {
 
       {/* Label */}
       <Html position={[0, 2.5, 0]} center distanceFactor={10} zIndexRange={[100, 0]}>
-        <div className="px-2 py-1 bg-indigo-500 text-white text-xs font-bold rounded-lg shadow-lg whitespace-nowrap">
+        <div className="px-2 py-1 bg-indigo-500 text-white text-xs font-bold rounded-none shadow-lg whitespace-nowrap">
           {label}
         </div>
       </Html>
@@ -561,7 +561,7 @@ function ChillZoneOrange({ position }: { position: [number, number, number] }) {
 
       {/* Label */}
       <Html position={[-0.5, 1.5, 0.5]} center distanceFactor={10} zIndexRange={[100, 0]}>
-        <div className="px-3 py-1 bg-orange-500 text-white text-xs font-bold rounded-lg shadow-lg whitespace-nowrap">
+        <div className="px-3 py-1 bg-orange-500 text-white text-xs font-bold rounded-none shadow-lg whitespace-nowrap">
           CHILL ZONE ORANGE
         </div>
       </Html>
@@ -617,7 +617,7 @@ function StorageMEC({ position }: { position: [number, number, number] }) {
 
       {/* Label */}
       <Html position={[0, 2.8, 0]} center distanceFactor={10} zIndexRange={[100, 0]}>
-        <div className="px-2 py-1 bg-slate-600 text-white text-xs font-bold rounded-lg shadow-lg">
+        <div className="px-2 py-1 bg-slate-600 text-white text-xs font-bold rounded-none shadow-lg">
           STORAGE/MEC
         </div>
       </Html>
@@ -691,7 +691,7 @@ function Cafeteria({ position, tables = 4 }: { position: [number, number, number
 
       {/* Label */}
       <Html position={[1, 2.2, 0]} center distanceFactor={10} zIndexRange={[100, 0]}>
-        <div className="px-3 py-1 bg-emerald-500 text-white text-sm font-bold rounded-lg shadow-lg">
+        <div className="px-3 py-1 bg-emerald-500 text-white text-sm font-bold rounded-none shadow-lg">
           CAFETERIA
         </div>
       </Html>
@@ -747,7 +747,7 @@ function MainEntrance({ position }: { position: [number, number, number] }) {
 
       {/* Label */}
       <Html position={[0, 2.6, 0]} center distanceFactor={10} zIndexRange={[100, 0]}>
-        <div className="px-3 py-1 bg-cyan-500 text-white text-xs font-bold rounded-lg shadow-lg">
+        <div className="px-3 py-1 bg-cyan-500 text-white text-xs font-bold rounded-none shadow-lg">
           MAIN ENTRANCE
         </div>
       </Html>

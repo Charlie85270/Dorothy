@@ -36,7 +36,7 @@ export default function TerminalLog({ history }: TerminalLogProps) {
   };
 
   return (
-    <div className="rounded-xl border border-border-primary bg-bg-secondary overflow-hidden">
+    <div className="rounded-none border border-border-primary bg-bg-secondary overflow-hidden">
       {/* Header - looks like terminal titlebar */}
       <div className="px-4 py-3 border-b border-border-primary bg-bg-tertiary flex items-center justify-between">
         <div className="flex items-center gap-2">

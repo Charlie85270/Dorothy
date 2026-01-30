@@ -311,8 +311,8 @@ export default function SkillsPage() {
     return (
       <div className="flex items-center justify-center h-[60vh]">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-accent-cyan mx-auto mb-4" />
-          <p className="text-text-secondary">Loading skills...</p>
+          <Loader2 className="w-8 h-8 animate-spin text-white mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading skills...</p>
         </div>
       </div>
     );
@@ -321,22 +321,22 @@ export default function SkillsPage() {
   if (error) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
-        <div className="text-center text-accent-red">
+        <div className="text-center text-red-400">
           <p className="mb-2">Failed to load skills</p>
-          <p className="text-sm text-text-muted">{error}</p>
+          <p className="text-sm text-muted-foreground">{error}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4 lg:space-y-6 pt-4 lg:pt-6">
+    <div className="flex flex-col h-[calc(100vh-7rem)] lg:h-[calc(100vh-3rem)] pt-4 lg:pt-6 overflow-hidden">
       {/* Header */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-xl lg:text-2xl font-bold tracking-tight">Skills Marketplace</h1>
-            <p className="text-text-secondary text-xs lg:text-sm mt-1 hidden sm:block">
+            <p className="text-muted-foreground text-xs lg:text-sm mt-1 hidden sm:block">
               {hasElectron
                 ? 'Install skills directly to enhance your Claude agents'
                 : 'Browse and copy install commands for skills'
@@ -345,7 +345,7 @@ export default function SkillsPage() {
           </div>
           <button
             onClick={() => setShowCustomInstall(true)}
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-accent-purple text-white font-medium rounded-lg hover:bg-accent-purple/90 transition-colors text-sm shrink-0"
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-white text-black font-medium hover:bg-white/90 transition-colors text-sm shrink-0"
           >
             <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">Custom Install</span>
@@ -356,14 +356,14 @@ export default function SkillsPage() {
         {/* Badges row - below on mobile */}
         <div className="flex flex-wrap items-center gap-2">
           {!hasElectron && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-accent-amber/10 text-accent-amber text-xs">
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-yellow-500/10 text-yellow-400 text-xs">
               <MonitorDown className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Desktop app for direct install</span>
               <span className="sm:hidden">Desktop only</span>
             </div>
           )}
-          <div className="text-xs lg:text-sm text-text-muted">
-            <span className="text-accent-purple font-medium">{SKILLS_DATABASE.length}</span> skills
+          <div className="text-xs lg:text-sm text-muted-foreground">
+            <span className="text-white font-medium">{SKILLS_DATABASE.length}</span> skills
           </div>
         </div>
       </div>
@@ -375,12 +375,12 @@ export default function SkillsPage() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className={`p-4 rounded-xl border flex items-center justify-between ${
+            className={`p-4 border flex items-center justify-between ${
               showToast.type === 'success'
-                ? 'bg-accent-green/10 border-accent-green/30 text-accent-green'
+                ? 'bg-green-500/10 border-green-500/30 text-green-400'
                 : showToast.type === 'error'
-                ? 'bg-accent-red/10 border-accent-red/30 text-accent-red'
-                : 'bg-accent-cyan/10 border-accent-cyan/30 text-accent-cyan'
+                ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                : 'bg-white/10 border-white/30 text-white'
             }`}
           >
             <div className="flex items-center gap-3">
@@ -413,14 +413,14 @@ export default function SkillsPage() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md bg-bg-secondary border border-border-primary rounded-2xl p-6"
+              className="w-full max-w-md bg-card border border-border rounded-none p-6"
             >
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-semibold flex items-center gap-2">
-                  <TerminalIcon className="w-5 h-5 text-accent-cyan" />
+                  <TerminalIcon className="w-5 h-5 text-muted-foreground" />
                   Install Custom Skill
                 </h3>
-                <button onClick={() => setShowCustomInstall(false)} className="p-1 hover:bg-bg-tertiary rounded">
+                <button onClick={() => setShowCustomInstall(false)} className="p-1 hover:bg-secondary rounded-none">
                   <X className="w-5 h-5" />
                 </button>
               </div>
@@ -433,7 +433,7 @@ export default function SkillsPage() {
                     value={customRepo}
                     onChange={(e) => setCustomRepo(e.target.value)}
                     placeholder="e.g., anthropics/skills"
-                    className="w-full px-4 py-2.5 rounded-lg font-mono text-sm"
+                    className="w-full px-4 py-2.5 rounded-none font-mono text-sm"
                   />
                 </div>
 
@@ -444,21 +444,21 @@ export default function SkillsPage() {
                     value={customSkillName}
                     onChange={(e) => setCustomSkillName(e.target.value)}
                     placeholder="e.g., frontend-design"
-                    className="w-full px-4 py-2.5 rounded-lg font-mono text-sm"
+                    className="w-full px-4 py-2.5 rounded-none font-mono text-sm"
                   />
-                  <p className="text-xs text-text-muted mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     Leave empty to install all skills from the repository
                   </p>
                 </div>
 
-                <div className="p-3 rounded-lg bg-bg-tertiary/50 border border-border-primary font-mono text-xs text-text-muted">
+                <div className="p-3 rounded-none bg-secondary/50 border border-border font-mono text-xs text-muted-foreground">
                   npx skills add https://github.com/{customRepo}{customSkillName ? ` --skill ${customSkillName}` : ''}
                 </div>
 
                 <button
                   onClick={handleCustomInstall}
                   disabled={!customRepo || installingSkill === 'custom'}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-accent-cyan text-bg-primary font-medium rounded-lg hover:bg-accent-cyan/90 transition-colors disabled:opacity-50"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white text-black font-medium rounded-none hover:bg-white/90 transition-colors disabled:opacity-50"
                 >
                   {installingSkill === 'custom' ? (
                     <>
@@ -479,7 +479,7 @@ export default function SkillsPage() {
                 </button>
 
                 {!hasElectron && (
-                  <p className="text-xs text-text-muted text-center">
+                  <p className="text-xs text-muted-foreground text-center">
                     After copying, open your terminal and paste the command to install
                   </p>
                 )}
@@ -492,20 +492,20 @@ export default function SkillsPage() {
       {/* Search & Filter */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search skills..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-lg text-sm"
+            className="w-full pl-10 pr-4 py-2.5 rounded-none text-sm"
           />
         </div>
 
         <div className="relative">
           <button
             onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-bg-tertiary text-text-secondary hover:text-text-primary transition-colors w-full sm:w-auto sm:min-w-[140px] text-sm"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-none bg-secondary text-muted-foreground hover:text-foreground transition-colors w-full sm:w-auto sm:min-w-[140px] text-sm"
           >
             <Filter className="w-4 h-4" />
             {selectedCategory || 'All Categories'}
@@ -518,15 +518,15 @@ export default function SkillsPage() {
                 initial={{ opacity: 0, y: 5 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 5 }}
-                className="absolute top-full mt-2 right-0 w-48 bg-bg-secondary border border-border-primary rounded-xl shadow-lg z-10 py-2 max-h-80 overflow-y-auto"
+                className="absolute top-full mt-2 right-0 w-48 bg-card border border-border rounded-none shadow-lg z-10 py-2 max-h-80 overflow-y-auto"
               >
                 <button
                   onClick={() => {
                     setSelectedCategory(null);
                     setShowCategoryDropdown(false);
                   }}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-bg-tertiary ${
-                    !selectedCategory ? 'text-accent-cyan' : 'text-text-secondary'
+                  className={`w-full text-left px-4 py-2 text-sm hover:bg-secondary ${
+                    !selectedCategory ? 'text-white' : 'text-muted-foreground'
                   }`}
                 >
                   All Categories
@@ -538,8 +538,8 @@ export default function SkillsPage() {
                       setSelectedCategory(cat);
                       setShowCategoryDropdown(false);
                     }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-bg-tertiary ${
-                      selectedCategory === cat ? 'text-accent-cyan' : 'text-text-secondary'
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-secondary ${
+                      selectedCategory === cat ? 'text-white' : 'text-muted-foreground'
                     }`}
                   >
                     {cat}
@@ -551,213 +551,111 @@ export default function SkillsPage() {
         </div>
       </div>
 
-      {/* Installed Skills Section */}
-      {installedSkillsFromClaude.length > 0 && (
-        <div className="rounded-xl border border-accent-green/30 bg-accent-green/5 p-5">
-          <h3 className="text-sm font-medium mb-4 flex items-center gap-2 text-accent-green">
-            <CheckCircle className="w-4 h-4" />
-            Installed Skills ({installedSkillsFromClaude.length})
-          </h3>
-          <div className="space-y-3">
-            {/* Group by source */}
-            {['project', 'user', 'plugin'].map((sourceType) => {
-              const sourceSkills = installedSkillsFromClaude.filter(s => s.source === sourceType);
-              if (sourceSkills.length === 0) return null;
+      {/* Skills Table */}
+      <div className="flex-1 border border-border bg-card overflow-hidden flex flex-col min-h-0 mt-4">
+        <table className="w-full">
+          <thead className="sticky top-0 z-10">
+            <tr className="border-b border-border bg-secondary">
+              <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">#</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Skill</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground hidden md:table-cell">Repository</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground hidden sm:table-cell">Category</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground hidden lg:table-cell">Installs</th>
+              <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground">Status</th>
+            </tr>
+          </thead>
+        </table>
+        <div className="flex-1 overflow-y-auto">
+          <table className="w-full">
+            <tbody>
+              {filteredSkills.map((skill) => {
+                const installed = isSkillInstalled(skill.name);
+                const justCopied = copiedSkill === skill.name;
+                const isInstalling = installingSkill === skill.name;
 
-              const sourceLabels: Record<string, string> = {
-                project: 'Project Skills',
-                user: 'User Skills',
-                plugin: 'Plugin Skills',
-              };
-              const sourceColors: Record<string, string> = {
-                project: 'bg-accent-purple/20 text-accent-purple',
-                user: 'bg-accent-cyan/20 text-accent-cyan',
-                plugin: 'bg-accent-amber/20 text-accent-amber',
-              };
-
-              return (
-                <div key={sourceType}>
-                  <p className="text-xs text-text-muted mb-2">{sourceLabels[sourceType]} ({sourceSkills.length})</p>
-                  <div className="flex flex-wrap gap-2">
-                    {sourceSkills.map((skill, idx) => (
-                      <div
-                        key={`${skill.source}-${skill.name}-${idx}`}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm ${sourceColors[sourceType]}`}
-                        title={skill.description || skill.path}
-                      >
-                        <CheckCircle className="w-3.5 h-3.5" />
-                        <span>{skill.name}</span>
-                        {skill.projectName && (
-                          <span className="text-xs opacity-60">({skill.projectName})</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Skills Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredSkills.map((skill, index) => {
-          const installed = isSkillInstalled(skill.name);
-          const justCopied = copiedSkill === skill.name;
-          const isInstalling = installingSkill === skill.name;
-
-          return (
-            <motion.div
-              key={`${skill.repo}-${skill.name}`}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.02 }}
-              className={`rounded-xl border bg-bg-secondary p-5 hover:border-border-accent transition-all group ${
-                installed ? 'border-accent-green/30' : 'border-border-primary'
-              }`}
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                    installed
-                      ? 'bg-accent-green/20'
-                      : 'bg-gradient-to-br from-accent-purple/20 to-accent-cyan/20'
-                  }`}>
-                    {installed ? (
-                      <CheckCircle className="w-5 h-5 text-accent-green" />
-                    ) : (
-                      <Package className="w-5 h-5 text-accent-purple" />
-                    )}
-                  </div>
-                  <div>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-bg-tertiary text-text-muted">
-                      #{skill.rank}
-                    </span>
-                  </div>
-                </div>
-                {installed ? (
-                  <span className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent-green/10 text-accent-green text-xs font-medium">
-                    <Check className="w-3.5 h-3.5" />
-                    Installed
-                  </span>
-                ) : (
-                  <button
-                    onClick={() => handleDirectInstall(skill.repo, skill.name)}
-                    disabled={isInstalling}
-                    className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                      isInstalling
-                        ? 'bg-accent-purple/20 text-accent-purple'
-                        : justCopied
-                        ? 'bg-accent-green/20 text-accent-green'
-                        : 'bg-accent-cyan/10 text-accent-cyan hover:bg-accent-cyan/20'
-                    }`}
+                return (
+                  <tr
+                    key={`${skill.repo}-${skill.name}`}
+                    className="border-b border-border/50 hover:bg-secondary/50 transition-colors"
                   >
-                    {isInstalling ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        Installing...
-                      </>
-                    ) : justCopied ? (
-                      <>
-                        <Check className="w-3.5 h-3.5" />
-                        Copied!
-                      </>
-                    ) : hasElectron ? (
-                      <>
-                        <Download className="w-3.5 h-3.5" />
-                        Install
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5" />
-                        Copy Install
-                      </>
-                    )}
-                  </button>
-                )}
-              </div>
-
-              <h3 className="font-semibold text-base mb-1">{skill.name}</h3>
-              <p className="text-xs text-text-muted font-mono mb-3">{skill.repo}</p>
-
-              <div className="flex items-center justify-between text-xs">
-                <span className="px-2 py-1 rounded-full bg-bg-tertiary text-text-muted">
-                  {skill.category}
-                </span>
-                <span className="flex items-center gap-1 text-accent-cyan">
-                  <TrendingUp className="w-3.5 h-3.5" />
-                  {skill.installs}
-                </span>
-              </div>
-            </motion.div>
-          );
-        })}
+                    <td className="px-4 py-3 text-xs text-muted-foreground w-12">
+                      {skill.rank}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 flex items-center justify-center shrink-0 ${
+                          installed ? 'bg-green-500/20' : 'bg-secondary'
+                        }`}>
+                          {installed ? (
+                            <CheckCircle className="w-4 h-4 text-green-400" />
+                          ) : (
+                            <Package className="w-4 h-4 text-muted-foreground" />
+                          )}
+                        </div>
+                        <span className="font-medium text-sm">{skill.name}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 hidden md:table-cell">
+                      <span className="text-xs text-muted-foreground font-mono">{skill.repo}</span>
+                    </td>
+                    <td className="px-4 py-3 hidden sm:table-cell">
+                      <span className="text-xs px-2 py-1 bg-secondary text-muted-foreground">
+                        {skill.category}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 hidden lg:table-cell">
+                      <span className="text-xs text-muted-foreground">{skill.installs}</span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {installed ? (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-500/20 text-green-400 text-xs font-medium">
+                          <Check className="w-3 h-3" />
+                          Installed
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleDirectInstall(skill.repo, skill.name)}
+                          disabled={isInstalling}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+                            isInstalling
+                              ? 'bg-secondary text-muted-foreground'
+                              : justCopied
+                              ? 'bg-green-500/20 text-green-400'
+                              : 'bg-white text-black hover:bg-white/90'
+                          }`}
+                        >
+                          {isInstalling ? (
+                            <>
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              Installing...
+                            </>
+                          ) : justCopied ? (
+                            <>
+                              <Check className="w-3 h-3" />
+                              Copied!
+                            </>
+                          ) : hasElectron ? (
+                            <>
+                              <Download className="w-3 h-3" />
+                              Install
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" />
+                              Copy
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {filteredSkills.length === 0 && (
-        <div className="rounded-xl border border-border-primary bg-bg-secondary p-12 text-center">
-          <Sparkles className="w-12 h-12 mx-auto text-text-muted mb-4" />
-          <h3 className="font-medium text-lg mb-2">No skills found</h3>
-          <p className="text-text-secondary text-sm">
-            Try adjusting your search or filter
-          </p>
-        </div>
-      )}
-
-      {/* How to Install */}
-      <div className="rounded-xl border border-border-primary bg-bg-secondary p-5">
-        <h3 className="text-sm font-medium mb-4 flex items-center gap-2">
-          <TerminalIcon className="w-4 h-4 text-text-muted" />
-          CLI Installation
-        </h3>
-        <div className="space-y-3 text-sm text-text-secondary">
-          <p>You can also install skills using the CLI:</p>
-          <div className="space-y-2">
-            <div className="p-3 rounded-lg bg-bg-tertiary font-mono text-xs">
-              <span className="text-accent-cyan">$</span> npx skills add https://github.com/owner/repo
-              <span className="text-text-muted"> # Install all skills from repo</span>
-            </div>
-            <div className="p-3 rounded-lg bg-bg-tertiary font-mono text-xs">
-              <span className="text-accent-cyan">$</span> npx skills add https://github.com/owner/repo --skill skill-name
-              <span className="text-text-muted"> # Install specific skill</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Settings Overview */}
-      {settings && (
-        <div className="rounded-xl border border-border-primary bg-bg-secondary p-5">
-          <h3 className="text-sm font-medium mb-4 flex items-center gap-2">
-            <Zap className="w-4 h-4 text-accent-amber" />
-            Claude Code Settings
-          </h3>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div className="p-4 rounded-lg bg-bg-tertiary">
-              <p className="text-xs text-text-muted mb-1">Co-authored By</p>
-              <p className={`font-medium ${settings.includeCoAuthoredBy ? 'text-accent-green' : 'text-text-muted'}`}>
-                {settings.includeCoAuthoredBy ? 'Enabled' : 'Disabled'}
-              </p>
-            </div>
-
-            <div className="p-4 rounded-lg bg-bg-tertiary">
-              <p className="text-xs text-text-muted mb-1">Permissions</p>
-              <p className="font-medium">
-                {settings.permissions.allow.length} allowed, {settings.permissions.deny.length} denied
-              </p>
-            </div>
-
-            <div className="p-4 rounded-lg bg-bg-tertiary">
-              <p className="text-xs text-text-muted mb-1">Environment Variables</p>
-              <p className="font-medium">
-                {Object.keys(settings.env).length} configured
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Installation Terminal Modal */}
       <AnimatePresence>
@@ -773,25 +671,25 @@ export default function SkillsPage() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-4xl bg-bg-secondary border border-border-primary rounded-2xl overflow-hidden"
+              className="w-full max-w-4xl bg-card border border-border rounded-none overflow-hidden"
             >
-              <div className="flex items-center justify-between px-5 py-4 border-b border-border-primary">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                 <div className="flex items-center gap-3">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                  <div className={`w-8 h-8 rounded-none flex items-center justify-center ${
                     installComplete
                       ? installExitCode === 0
-                        ? 'bg-accent-green/20'
-                        : 'bg-accent-red/20'
-                      : 'bg-accent-cyan/20'
+                        ? 'bg-green-500/20'
+                        : 'bg-red-500/20'
+                      : 'bg-secondary'
                   }`}>
                     {installComplete ? (
                       installExitCode === 0 ? (
-                        <CheckCircle className="w-4 h-4 text-accent-green" />
+                        <CheckCircle className="w-4 h-4 text-green-400" />
                       ) : (
-                        <XCircle className="w-4 h-4 text-accent-red" />
+                        <XCircle className="w-4 h-4 text-red-400" />
                       )
                     ) : (
-                      <Loader2 className="w-4 h-4 text-accent-cyan animate-spin" />
+                      <Loader2 className="w-4 h-4 text-white animate-spin" />
                     )}
                   </div>
                   <div>
@@ -802,7 +700,7 @@ export default function SkillsPage() {
                           : 'Installation Failed'
                         : 'Installing Skill...'}
                     </h3>
-                    <p className="text-xs text-text-muted font-mono">{currentInstallRepo}</p>
+                    <p className="text-xs text-muted-foreground font-mono">{currentInstallRepo}</p>
                   </div>
                 </div>
                 <button
@@ -819,25 +717,25 @@ export default function SkillsPage() {
                       xtermRef.current = null;
                     }
                   }}
-                  className="p-2 hover:bg-bg-tertiary rounded-lg"
+                  className="p-2 hover:bg-secondary rounded-none"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
               <div className="p-4">
-                <p className="text-xs text-text-muted mb-3">
+                <p className="text-xs text-muted-foreground mb-3">
                   This is an interactive terminal. Type your responses and press Enter when prompted.
                 </p>
                 <div
                   ref={terminalRef}
-                  className="bg-[#0a0a0f] rounded-lg overflow-hidden"
+                  className="bg-[#0a0a0f] rounded-none overflow-hidden"
                   style={{ height: '400px' }}
                 />
               </div>
 
-              <div className="px-5 py-4 border-t border-border-primary flex items-center justify-between">
-                <p className="text-xs text-text-muted">
+              <div className="px-5 py-4 border-t border-border flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">
                   {installComplete
                     ? `Exited with code ${installExitCode}`
                     : 'Waiting for installation to complete...'}
@@ -863,10 +761,10 @@ export default function SkillsPage() {
                       setTimeout(() => setShowToast(null), 4000);
                     }
                   }}
-                  className={`px-4 py-2 rounded-lg font-medium ${
+                  className={`px-4 py-2 rounded-none font-medium ${
                     installComplete
-                      ? 'bg-accent-cyan text-bg-primary hover:bg-accent-cyan/90'
-                      : 'bg-accent-red/20 text-accent-red hover:bg-accent-red/30'
+                      ? 'bg-white text-black hover:bg-white/90'
+                      : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
                   }`}
                 >
                   {installComplete ? 'Close' : 'Cancel'}

@@ -32,7 +32,7 @@ export default function ProjectsOverview({ projects }: ProjectsOverviewProps) {
   };
 
   return (
-    <div className="rounded-xl border border-border-primary bg-bg-secondary overflow-hidden">
+    <div className="rounded-none border border-border-primary bg-bg-secondary overflow-hidden">
       {/* Header */}
       <div className="px-5 py-4 border-b border-border-primary flex items-center justify-between">
         <div className="flex items-center gap-2">

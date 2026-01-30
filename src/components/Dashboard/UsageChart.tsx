@@ -16,7 +16,7 @@ export default function UsageChart({ stats }: UsageChartProps) {
   const maxMessages = Math.max(...recentActivity.map(d => d.messageCount));
 
   return (
-    <div className="rounded-xl border border-border-primary bg-bg-secondary overflow-hidden">
+    <div className="rounded-none border border-border-primary bg-bg-secondary overflow-hidden">
       <div className="px-5 py-4 border-b border-border-primary flex items-center justify-between">
         <div className="flex items-center gap-2">
           <BarChart3 className="w-4 h-4 text-accent-cyan" />
@@ -48,14 +48,14 @@ export default function UsageChart({ stats }: UsageChartProps) {
                     initial={{ height: 0 }}
                     animate={{ height: `${messageHeight}%` }}
                     transition={{ delay: index * 0.05, duration: 0.3 }}
-                    className="flex-1 bg-accent-cyan/80 rounded-t"
+                    className="flex-1 bg-accent-cyan/80 rounded-none"
                     title={`${day.messageCount} messages`}
                   />
                   <motion.div
                     initial={{ height: 0 }}
                     animate={{ height: `${toolHeight}%` }}
                     transition={{ delay: index * 0.05 + 0.1, duration: 0.3 }}
-                    className="flex-1 bg-accent-purple/80 rounded-t"
+                    className="flex-1 bg-accent-purple/80 rounded-none"
                     title={`${day.toolCallCount} tool calls`}
                   />
                 </div>

@@ -162,7 +162,7 @@ const DialogHeader = memo(function DialogHeader({
           <>
             <button
               onClick={onOpenInFinder}
-              className="p-2 hover:bg-bg-tertiary rounded-lg transition-colors"
+              className="p-2 hover:bg-bg-tertiary rounded-none transition-colors"
               title="Open in Finder"
             >
               <FolderOpen className="w-4 h-4 text-text-muted" />
@@ -172,14 +172,14 @@ const DialogHeader = memo(function DialogHeader({
         )}
         <button
           onClick={onToggleFullscreen}
-          className="p-2 hover:bg-bg-tertiary rounded-lg transition-colors"
+          className="p-2 hover:bg-bg-tertiary rounded-none transition-colors"
           title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
         >
           {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
         </button>
         <button
           onClick={onClose}
-          className="p-2 hover:bg-bg-tertiary rounded-lg transition-colors"
+          className="p-2 hover:bg-bg-tertiary rounded-none transition-colors"
           title="Close"
         >
           <X className="w-5 h-5" />
@@ -256,7 +256,7 @@ const SecondaryProjectContent = memo(function SecondaryProjectContent({
           <p className="text-[10px] text-text-muted mb-1.5 uppercase tracking-wide">Active Context</p>
           <button
             onClick={() => onSetSecondaryProject(null)}
-            className="w-full text-left px-2 py-1.5 rounded-lg text-xs transition-colors flex items-center justify-between bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30"
+            className="w-full text-left px-2 py-1.5 rounded-none text-xs transition-colors flex items-center justify-between bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30"
           >
             <div className="flex items-center gap-2 min-w-0">
               <FolderPlus className="w-3 h-3 shrink-0" />
@@ -275,7 +275,7 @@ const SecondaryProjectContent = memo(function SecondaryProjectContent({
             {unselectedProjects.slice(0, 6).map((project) => (
               <div
                 key={project.path}
-                className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-xs hover:bg-bg-tertiary/50"
+                className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-none text-xs hover:bg-bg-tertiary/50"
               >
                 <div className="flex items-center gap-2 min-w-0 text-text-secondary">
                   <FolderPlus className="w-3 h-3 shrink-0" />
@@ -390,7 +390,7 @@ const SuperAgentSidebar = memo(function SuperAgentSidebar({
                 {runningAgents.map((agent) => (
                   <div
                     key={agent.id}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-accent-cyan/10 border border-accent-cyan/20"
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-none bg-accent-cyan/10 border border-accent-cyan/20"
                   >
                     <span className="text-lg">
                       {CHARACTER_FACES[agent.character as keyof typeof CHARACTER_FACES] || '🤖'}
@@ -418,7 +418,7 @@ const SuperAgentSidebar = memo(function SuperAgentSidebar({
                 {errorAgents.map((agent) => (
                   <div
                     key={agent.id}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-accent-red/10 border border-accent-red/20"
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-none bg-accent-red/10 border border-accent-red/20"
                   >
                     <span className="text-lg">
                       {CHARACTER_FACES[agent.character as keyof typeof CHARACTER_FACES] || '🤖'}
@@ -445,7 +445,7 @@ const SuperAgentSidebar = memo(function SuperAgentSidebar({
                 {idleAgents.map((agent) => (
                   <div
                     key={agent.id}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-bg-tertiary/50"
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-none hover:bg-bg-tertiary/50"
                   >
                     <span className="text-lg opacity-60">
                       {CHARACTER_FACES[agent.character as keyof typeof CHARACTER_FACES] || '🤖'}
@@ -495,7 +495,7 @@ const SuperAgentSidebar = memo(function SuperAgentSidebar({
                 return (
                   <div
                     key={project.path}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-bg-tertiary/50"
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-none hover:bg-bg-tertiary/50"
                   >
                     <Folder className="w-4 h-4 text-accent-purple shrink-0" />
                     <div className="flex-1 min-w-0">
@@ -528,7 +528,7 @@ const SuperAgentSidebar = memo(function SuperAgentSidebar({
 
       {/* MCP Tools Info */}
       <div className="p-3">
-        <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/5">
+        <div className="p-3 rounded-none border border-amber-500/30 bg-amber-500/5">
           <div className="flex items-start gap-2">
             <Crown className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
             <div>
@@ -561,7 +561,7 @@ const DialogFooter = memo(function DialogFooter({
   return (
     <div className="px-5 py-3 border-t border-border-primary bg-bg-tertiary/30">
       {agent.pathMissing && (
-        <div className="flex items-center gap-2 px-3 py-2 mb-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400 text-sm">
+        <div className="flex items-center gap-2 px-3 py-2 mb-3 bg-amber-500/10 border border-amber-500/30 rounded-none text-amber-400 text-sm">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           <span>
             Project path no longer exists: <code className="font-mono text-xs">{agent.projectPath}</code>
@@ -577,7 +577,7 @@ const DialogFooter = memo(function DialogFooter({
             onKeyDown={(e) => e.key === 'Enter' && !agent.pathMissing && onStart()}
             placeholder={agent.pathMissing ? 'Cannot start - path not found' : 'Enter a task for this agent...'}
             disabled={agent.pathMissing}
-            className={`flex-1 px-4 py-2 bg-bg-primary border border-border-primary rounded-lg text-sm focus:outline-none focus:border-accent-cyan ${
+            className={`flex-1 px-4 py-2 bg-bg-primary border border-border-primary rounded-none text-sm focus:outline-none focus:border-accent-cyan ${
               agent.pathMissing ? 'opacity-50 cursor-not-allowed' : ''
             }`}
             autoFocus={!agent.pathMissing}
@@ -585,7 +585,7 @@ const DialogFooter = memo(function DialogFooter({
           <button
             onClick={onStart}
             disabled={!prompt.trim() || agent.pathMissing}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors disabled:opacity-50 ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-none transition-colors disabled:opacity-50 ${
               agent.pathMissing
                 ? 'bg-bg-tertiary text-text-muted cursor-not-allowed'
                 : 'bg-accent-green/20 text-accent-green hover:bg-accent-green/30'
@@ -603,7 +603,7 @@ const DialogFooter = memo(function DialogFooter({
           </div>
           <button
             onClick={onStop}
-            className="flex items-center gap-2 px-4 py-2 bg-accent-red/20 text-accent-red rounded-lg hover:bg-accent-red/30 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-accent-red/20 text-accent-red rounded-none hover:bg-accent-red/30 transition-colors"
           >
             <Square className="w-4 h-4" />
             Stop
@@ -1169,7 +1169,7 @@ export default function AgentTerminalDialog({
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.9, opacity: 0 }}
           onClick={(e) => e.stopPropagation()}
-          className={`bg-bg-secondary border border-border-primary rounded-2xl overflow-hidden shadow-2xl ${dialogClass} flex flex-col`}
+          className={`bg-bg-secondary border border-border-primary rounded-none overflow-hidden shadow-2xl ${dialogClass} flex flex-col`}
         >
           <DialogHeader
             agent={agent}
@@ -1363,13 +1363,13 @@ export default function AgentTerminalDialog({
                       <div className="overflow-hidden">
                         <div className="p-3 space-y-4">
                           {/* Skip Permissions Toggle */}
-                          <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/5">
+                          <div className="p-3 rounded-none border border-amber-500/30 bg-amber-500/5">
                             <div className="flex items-start gap-3">
                               <button
                                 onClick={() => handleSaveSkipPermissions(!editSkipPermissions)}
                                 disabled={isSavingSettings}
                                 className={`
-                                  mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center transition-all shrink-0
+                                  mt-0.5 w-5 h-5 rounded border flex items-center justify-center transition-all shrink-0
                                   ${editSkipPermissions
                                     ? 'bg-amber-500 border-amber-500'
                                     : 'border-amber-500/50 hover:border-amber-500'

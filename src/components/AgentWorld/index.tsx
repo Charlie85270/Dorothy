@@ -410,7 +410,7 @@ function AgentListItem({
     <button
       onClick={onClick}
       className={`
-        w-full p-3 rounded-lg text-left transition-all
+        w-full p-3 rounded-none text-left transition-all
         ${isSelected
           ? 'bg-accent-cyan/20 border border-accent-cyan'
           : 'bg-bg-tertiary hover:bg-bg-tertiary/80 border border-transparent'
@@ -421,12 +421,12 @@ function AgentListItem({
       <div className="flex items-start gap-3">
         {/* Character avatar */}
         <div className="relative">
-          <div className={`w-10 h-10 rounded-lg ${agent.name?.toLowerCase() === 'bitwonka' ? 'bg-accent-green/20' : 'bg-bg-secondary'} flex items-center justify-center text-xl`}>
+          <div className={`w-10 h-10 rounded-none ${agent.name?.toLowerCase() === 'bitwonka' ? 'bg-accent-green/20' : 'bg-bg-secondary'} flex items-center justify-center text-xl`}>
             {agent.name?.toLowerCase() === 'bitwonka' ? '🐸' : (characterEmojis[agent.character || 'robot'] || '🤖')}
           </div>
           {/* Status dot */}
           <div
-            className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-bg-primary ${statusColors[agent.status]}`}
+            className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border border-bg-primary ${statusColors[agent.status]}`}
           />
           {/* Attention indicator */}
           {needsAttention && (
@@ -592,7 +592,7 @@ export default function AgentWorld() {
         </Suspense>
 
         {/* Agent count indicator */}
-        <div className="absolute top-4 left-4 px-4 py-2.5 bg-bg-secondary/90 backdrop-blur-sm border border-border-primary rounded-xl shadow-lg">
+        <div className="absolute top-4 left-4 px-4 py-2.5 bg-bg-secondary/90 backdrop-blur-sm border border-border-primary rounded-none shadow-lg">
           <div className="flex items-center gap-3 text-sm">
             <span className="text-text-muted font-medium">Agents:</span>
             <span className="font-bold text-accent-cyan">{agents.length}</span>
@@ -612,7 +612,7 @@ export default function AgentWorld() {
         </div>
 
         {/* Instructions */}
-        <div className="absolute bottom-4 left-4 px-4 py-2.5 bg-bg-secondary/90 backdrop-blur-sm border border-border-primary rounded-xl shadow-lg text-xs text-text-secondary">
+        <div className="absolute bottom-4 left-4 px-4 py-2.5 bg-bg-secondary/90 backdrop-blur-sm border border-border-primary rounded-none shadow-lg text-xs text-text-secondary">
           <p className="font-medium">Click on an agent to open terminal</p>
           <p className="text-text-muted mt-0.5">Drag to rotate | Scroll to zoom</p>
         </div>
@@ -646,7 +646,7 @@ export default function AgentWorld() {
               <button
                 onClick={() => setProjectFilter(null)}
                 className={`
-                  flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all
+                  flex items-center gap-1.5 px-2.5 py-1.5 rounded-none text-xs font-medium transition-all
                   ${projectFilter === null
                     ? 'bg-accent-cyan/20 text-accent-cyan border border-accent-cyan/30'
                     : 'bg-bg-tertiary text-text-muted hover:text-text-primary border border-transparent'
@@ -672,7 +672,7 @@ export default function AgentWorld() {
                     key={path}
                     onClick={() => setProjectFilter(path)}
                     className={`
-                      flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all
+                      flex items-center gap-1.5 px-2.5 py-1.5 rounded-none text-xs font-medium transition-all
                       ${isActive
                         ? `${projectColor.bg} ${projectColor.text} border ${projectColor.border}`
                         : 'bg-bg-tertiary text-text-muted hover:text-text-primary border border-transparent'

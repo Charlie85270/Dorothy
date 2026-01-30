@@ -36,24 +36,24 @@ import type { AgentStatus } from '@/types/electron';
 import 'xterm/css/xterm.css';
 
 const STATUS_COLORS: Record<AgentStatus['status'], { bg: string; text: string; icon: typeof Circle }> = {
-  idle: { bg: 'bg-text-muted/20', text: 'text-text-muted', icon: Circle },
-  running: { bg: 'bg-accent-cyan/20', text: 'text-accent-cyan', icon: Activity },
-  completed: { bg: 'bg-accent-green/20', text: 'text-accent-green', icon: CheckCircle },
-  error: { bg: 'bg-accent-red/20', text: 'text-accent-red', icon: AlertCircle },
-  waiting: { bg: 'bg-accent-amber/20', text: 'text-accent-amber', icon: Pause },
+  idle: { bg: 'bg-white/10', text: 'text-muted-foreground', icon: Circle },
+  running: { bg: 'bg-green-500/20', text: 'text-green-400', icon: Activity },
+  completed: { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: CheckCircle },
+  error: { bg: 'bg-red-500/20', text: 'text-red-400', icon: AlertCircle },
+  waiting: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', icon: Pause },
 };
 
 // Generate consistent color for project based on name
 const getProjectColor = (name: string) => {
   const colors = [
-    { bg: 'bg-cyan-500/20', text: 'text-cyan-400', border: 'border-cyan-500/30' },
-    { bg: 'bg-purple-500/20', text: 'text-purple-400', border: 'border-purple-500/30' },
-    { bg: 'bg-emerald-500/20', text: 'text-emerald-400', border: 'border-emerald-500/30' },
-    { bg: 'bg-amber-500/20', text: 'text-amber-400', border: 'border-amber-500/30' },
-    { bg: 'bg-rose-500/20', text: 'text-rose-400', border: 'border-rose-500/30' },
-    { bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500/30' },
-    { bg: 'bg-pink-500/20', text: 'text-pink-400', border: 'border-pink-500/30' },
-    { bg: 'bg-teal-500/20', text: 'text-teal-400', border: 'border-teal-500/30' },
+    { bg: 'bg-white/10', text: 'text-white/80', border: 'border-white/20' },
+    { bg: 'bg-white/15', text: 'text-white/90', border: 'border-white/25' },
+    { bg: 'bg-white/8', text: 'text-white/70', border: 'border-white/15' },
+    { bg: 'bg-white/12', text: 'text-white/85', border: 'border-white/22' },
+    { bg: 'bg-white/10', text: 'text-white/80', border: 'border-white/20' },
+    { bg: 'bg-white/15', text: 'text-white/90', border: 'border-white/25' },
+    { bg: 'bg-white/8', text: 'text-white/70', border: 'border-white/15' },
+    { bg: 'bg-white/12', text: 'text-white/85', border: 'border-white/22' },
   ];
   const hash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
   return colors[hash % colors.length];
@@ -200,16 +200,30 @@ Say hello and list the current agents.`;
     return name.includes('super agent') || name.includes('orchestrator');
   };
 
-  // Filter agents by selected project, with Super Agent always at top
+  // Filter agents by selected project, with Super Agent always at top, then sorted by status
   const filteredAgents = useMemo(() => {
     let filtered = projectFilter ? agents.filter(a => a.projectPath === projectFilter) : agents;
-    // Sort to put Super Agent first
+
+    // Status priority: running = 0, waiting = 1, idle/completed/error = 2
+    const getStatusPriority = (status: string) => {
+      if (status === 'running') return 0;
+      if (status === 'waiting') return 1;
+      return 2;
+    };
+
+    // Sort: Super Agent first, then by status (running > waiting > idle)
     return [...filtered].sort((a, b) => {
       const aIsSuper = isSuperAgentCheck(a);
       const bIsSuper = isSuperAgentCheck(b);
+
+      // Super Agent always first
       if (aIsSuper && !bIsSuper) return -1;
       if (!aIsSuper && bIsSuper) return 1;
-      return 0;
+
+      // Then sort by status priority
+      const aPriority = getStatusPriority(a.status);
+      const bPriority = getStatusPriority(b.status);
+      return aPriority - bPriority;
     });
   }, [agents, projectFilter]);
 
@@ -465,7 +479,7 @@ Say hello and list the current agents.`;
     return (
       <div className="flex items-center justify-center h-[60vh]">
         <div className="text-center max-w-md">
-          <div className="w-20 h-20 rounded-2xl bg-accent-purple/20 flex items-center justify-center mx-auto mb-6">
+          <div className="w-20 h-20 rounded-none bg-accent-purple/20 flex items-center justify-center mx-auto mb-6">
             <MonitorDown className="w-10 h-10 text-accent-purple" />
           </div>
           <h2 className="text-2xl font-bold mb-3">Desktop App Required</h2>
@@ -473,9 +487,9 @@ Say hello and list the current agents.`;
             The Agent Control Center requires the desktop application to run terminal commands and manage Claude Code agents directly on your machine.
           </p>
           <div className="space-y-3">
-            <div className="p-4 rounded-lg bg-bg-tertiary border border-border-primary">
+            <div className="p-4 rounded-none bg-bg-tertiary border border-border-primary">
               <p className="text-sm font-medium mb-2">To run the desktop app:</p>
-              <code className="block p-2 rounded bg-[#0d0e12] text-accent-cyan text-xs font-mono">
+              <code className="block p-2 rounded bg-[#0d0e12] text-accent-blue text-xs font-mono">
                 npm run electron:dev
               </code>
             </div>
@@ -492,7 +506,7 @@ Say hello and list the current agents.`;
     return (
       <div className="flex items-center justify-center h-[60vh]">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-accent-cyan mx-auto mb-4" />
+          <Loader2 className="w-8 h-8 animate-spin text-accent-blue mx-auto mb-4" />
           <p className="text-text-secondary">Loading agents...</p>
         </div>
       </div>
@@ -504,8 +518,8 @@ Say hello and list the current agents.`;
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 lg:mb-6">
         <div>
-          <h1 className="text-xl lg:text-2xl font-bold tracking-tight">Agent Control Center</h1>
-          <p className="text-text-secondary text-xs lg:text-sm mt-1 hidden sm:block">
+          <h1 className="text-xl lg:text-2xl font-bold tracking-tight text-foreground">Agent Control Center</h1>
+          <p className="text-muted-foreground text-xs lg:text-sm mt-1 hidden sm:block">
             Manage and monitor your Claude Code agents in real-time
           </p>
         </div>
@@ -515,7 +529,7 @@ Say hello and list the current agents.`;
             onClick={handleSuperAgentClick}
             disabled={isCreatingSuperAgent}
             className={`
-              flex items-center justify-center gap-2 px-3 lg:px-4 py-2 font-medium rounded-lg transition-all text-sm lg:text-base
+              flex items-center justify-center gap-2 px-3 lg:px-4 py-2 font-medium rounded-none transition-all text-sm lg:text-base
               ${superAgent
                 ? superAgent.status === 'running' || superAgent.status === 'waiting'
                   ? 'bg-purple-500/20 border border-purple-500/50 text-purple-300 hover:bg-purple-500/30 shadow-lg shadow-purple-500/20'
@@ -550,7 +564,7 @@ Say hello and list the current agents.`;
           {/* New Agent Button */}
           <button
             onClick={() => setShowNewChatModal(true)}
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-accent-cyan text-bg-primary font-medium rounded-lg hover:bg-accent-cyan/90 transition-colors text-sm lg:text-base"
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-white text-black font-medium hover:bg-white/90 transition-colors text-sm lg:text-base"
           >
             <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">New Agent</span>
@@ -559,76 +573,73 @@ Say hello and list the current agents.`;
         </div>
       </div>
 
+      {/* Project Filter Tabs - Horizontal */}
+      {uniqueProjects.length > 0 && (
+        <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-2">
+          {/* All tab */}
+          <button
+            onClick={() => setProjectFilter(null)}
+            className={`
+              flex items-center gap-2 px-3 py-2 text-sm font-medium transition-all whitespace-nowrap
+              ${projectFilter === null
+                ? 'bg-white text-black'
+                : 'bg-secondary text-muted-foreground hover:text-foreground border border-border'
+              }
+            `}
+          >
+            <Layers className="w-4 h-4" />
+            All Projects
+            <span className={`px-1.5 py-0.5 text-xs ${
+              projectFilter === null ? 'bg-black/10' : 'bg-white/10'
+            }`}>
+              {agents.length}
+            </span>
+          </button>
+
+          {/* Project tabs */}
+          {uniqueProjects.map(({ path, name }) => {
+            const agentCount = agents.filter(a => a.projectPath === path).length;
+            const isActive = projectFilter === path;
+
+            return (
+              <button
+                key={path}
+                onClick={() => setProjectFilter(path)}
+                className={`
+                  flex items-center gap-2 px-3 py-2 text-sm font-medium transition-all whitespace-nowrap
+                  ${isActive
+                    ? 'bg-white text-black'
+                    : 'bg-secondary text-muted-foreground hover:text-foreground border border-border'
+                  }
+                `}
+                title={path}
+              >
+                <FolderOpen className="w-4 h-4" />
+                <span className="truncate max-w-[150px]">{name}</span>
+                <span className={`px-1.5 py-0.5 text-xs ${
+                  isActive ? 'bg-black/10' : 'bg-white/10'
+                }`}>
+                  {agentCount}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Main Content */}
       <div className="flex-1 flex flex-col lg:flex-row gap-4 lg:gap-6 min-h-0">
         {/* Agent List */}
-        <div className="w-full lg:w-96 flex flex-col rounded-xl border border-border-primary bg-bg-secondary overflow-hidden lg:shrink-0 h-48 lg:h-auto">
-          <div className="px-4 py-3 border-b border-border-primary bg-bg-tertiary flex items-center justify-between">
-            <span className="text-sm font-medium flex items-center gap-2">
-              <Bot className="w-4 h-4 text-accent-purple" />
+        <div className="w-full lg:w-96 flex flex-col border border-border bg-card overflow-hidden lg:shrink-0 h-48 lg:h-auto">
+          <div className="px-4 py-3 border-b border-border bg-secondary flex items-center justify-between">
+            <span className="text-sm font-medium flex items-center gap-2 text-foreground">
+              <Bot className="w-4 h-4 text-muted-foreground" />
               Active Agents
             </span>
-            <span className="text-xs text-text-muted">
+            <span className="text-xs text-muted-foreground">
               {agents.filter((a) => a.status === 'running').length} running
             </span>
           </div>
-
-          {/* Project Filter Tabs */}
-          {uniqueProjects.length > 0 && (
-            <div className="p-2 border-b border-border-primary">
-              <div className="flex flex-wrap gap-1.5">
-                {/* All tab */}
-                <button
-                  onClick={() => setProjectFilter(null)}
-                  className={`
-                    flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all
-                    ${projectFilter === null
-                      ? 'bg-accent-cyan/20 text-accent-cyan border border-accent-cyan/30'
-                      : 'bg-bg-tertiary text-text-muted hover:text-text-primary border border-transparent'
-                    }
-                  `}
-                >
-                  <Layers className="w-3.5 h-3.5" />
-                  All
-                  <span className={`px-1 py-0.5 rounded text-[10px] ${
-                    projectFilter === null ? 'bg-accent-cyan/30' : 'bg-bg-secondary'
-                  }`}>
-                    {agents.length}
-                  </span>
-                </button>
-
-                {/* Project tabs */}
-                {uniqueProjects.map(({ path, name }) => {
-                  const projectColor = getProjectColor(name);
-                  const agentCount = agents.filter(a => a.projectPath === path).length;
-                  const isActive = projectFilter === path;
-
-                  return (
-                    <button
-                      key={path}
-                      onClick={() => setProjectFilter(path)}
-                      className={`
-                        flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all
-                        ${isActive
-                          ? `${projectColor.bg} ${projectColor.text} border ${projectColor.border}`
-                          : 'bg-bg-tertiary text-text-muted hover:text-text-primary border border-transparent'
-                        }
-                      `}
-                      title={path}
-                    >
-                      <FolderOpen className="w-3.5 h-3.5" />
-                      <span className="truncate max-w-[80px]">{name}</span>
-                      <span className={`px-1 py-0.5 rounded text-[10px] ${
-                        isActive ? `${projectColor.bg}` : 'bg-bg-secondary'
-                      }`}>
-                        {agentCount}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
           <div className="flex-1 overflow-y-auto">
             <div>
@@ -649,7 +660,7 @@ Say hello and list the current agents.`;
                       ${isSuper
                         ? 'bg-gradient-to-r from-amber-500/10 via-yellow-500/5 to-transparent border-l-2 border-l-amber-500/50 border-b border-amber-500/20'
                         : 'border-b border-border-primary/50'}
-                      ${isSelected ? 'bg-accent-cyan/10' : isSuper ? '' : 'hover:bg-bg-tertiary/50'}
+                      ${isSelected ? 'bg-accent-blue/10' : isSuper ? '' : 'hover:bg-bg-tertiary/50'}
                     `}
                   >
                     {/* Subtle gold shimmer for Super Agent */}
@@ -657,7 +668,7 @@ Say hello and list the current agents.`;
                       <div className="absolute inset-0 bg-gradient-to-r from-amber-400/5 to-transparent pointer-events-none" />
                     )}
                     <div className="flex items-start gap-3 relative">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 relative ${
+                      <div className={`w-10 h-10 rounded-none flex items-center justify-center shrink-0 relative ${
                         isSuper
                           ? 'bg-gradient-to-br from-amber-500/30 to-yellow-600/20 ring-1 ring-amber-500/30'
                           : agent.name?.toLowerCase() === 'bitwonka'
@@ -676,7 +687,7 @@ Say hello and list the current agents.`;
                           <StatusIcon className={`w-5 h-5 ${statusConfig.text}`} />
                         )}
                         {agent.status === 'running' && (agent.character || agent.name?.toLowerCase() === 'bitwonka' || isSuper) && (
-                          <span className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full animate-pulse ${isSuper ? 'bg-amber-400' : 'bg-accent-cyan'}`} />
+                          <span className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full animate-pulse ${isSuper ? 'bg-amber-400' : 'bg-accent-blue'}`} />
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -694,7 +705,7 @@ Say hello and list the current agents.`;
                               className="p-1 hover:bg-bg-tertiary rounded transition-colors"
                               title="Edit agent"
                             >
-                              <Pencil className="w-3.5 h-3.5 text-text-muted hover:text-accent-cyan" />
+                              <Pencil className="w-3.5 h-3.5 text-text-muted hover:text-accent-blue" />
                             </button>
                             <span className={`text-xs px-2 py-0.5 rounded-full ${
                               isSuper && agent.status === 'running'
@@ -764,14 +775,14 @@ Say hello and list the current agents.`;
                 {agents.length === 0 ? (
                   <button
                     onClick={() => setShowNewChatModal(true)}
-                    className="mt-3 text-accent-cyan text-sm hover:underline"
+                    className="mt-3 text-accent-blue text-sm hover:underline"
                   >
                     Create your first agent
                   </button>
                 ) : (
                   <button
                     onClick={() => setProjectFilter(null)}
-                    className="mt-3 text-accent-cyan text-sm hover:underline"
+                    className="mt-3 text-accent-blue text-sm hover:underline"
                   >
                     View all agents
                   </button>
@@ -782,13 +793,13 @@ Say hello and list the current agents.`;
         </div>
 
         {/* Agent Details / Live View */}
-        <div className="flex-1 flex flex-col rounded-xl border border-border-primary bg-bg-secondary overflow-hidden">
+        <div className="flex-1 flex flex-col border border-border bg-card overflow-hidden">
           {selectedAgentData ? (
             <>
               {/* Agent Header */}
               <div className="px-3 lg:px-5 py-3 lg:py-4 border-b border-border-primary flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-bg-tertiary/30">
                 <div className="flex items-center gap-3">
-                  <div className={`w-12 h-12 rounded-xl ${selectedAgentData.name?.toLowerCase() === 'bitwonka' ? 'bg-accent-green/20' : STATUS_COLORS[selectedAgentData.status].bg} flex items-center justify-center relative`}>
+                  <div className={`w-12 h-12 rounded-none ${selectedAgentData.name?.toLowerCase() === 'bitwonka' ? 'bg-accent-green/20' : STATUS_COLORS[selectedAgentData.status].bg} flex items-center justify-center relative`}>
                     {selectedAgentData.name?.toLowerCase() === 'bitwonka' ? (
                       <span className="text-2xl">🐸</span>
                     ) : selectedAgentData.character ? (
@@ -799,7 +810,7 @@ Say hello and list the current agents.`;
                       <Bot className={`w-6 h-6 ${STATUS_COLORS[selectedAgentData.status].text}`} />
                     )}
                     {selectedAgentData.status === 'running' && (
-                      <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-accent-cyan animate-pulse border-2 border-bg-secondary" />
+                      <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-accent-blue animate-pulse border border-bg-secondary" />
                     )}
                   </div>
                   <div>
@@ -835,7 +846,7 @@ Say hello and list the current agents.`;
 
                 <div className="flex items-center gap-2 flex-wrap">
                   {selectedAgentData.pathMissing && (
-                    <div className="flex items-center gap-2 px-2 lg:px-3 py-1 lg:py-1.5 bg-accent-amber/20 text-accent-amber rounded-lg text-xs lg:text-sm">
+                    <div className="flex items-center gap-2 px-2 lg:px-3 py-1 lg:py-1.5 bg-accent-amber/20 text-accent-amber rounded-none text-xs lg:text-sm">
                       <AlertTriangle className="w-3 h-3 lg:w-4 lg:h-4" />
                       <span className="hidden sm:inline">Path not found</span>
                     </div>
@@ -843,7 +854,7 @@ Say hello and list the current agents.`;
                   {selectedAgentData.status === 'running' ? (
                     <button
                       onClick={() => stopAgent(selectedAgentData.id)}
-                      className="flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1 lg:py-1.5 bg-accent-red/20 text-accent-red rounded-lg hover:bg-accent-red/30 transition-colors text-xs lg:text-sm"
+                      className="flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1 lg:py-1.5 bg-accent-red/20 text-accent-red rounded-none hover:bg-accent-red/30 transition-colors text-xs lg:text-sm"
                     >
                       <Square className="w-3 h-3 lg:w-4 lg:h-4" />
                       Stop
@@ -856,7 +867,7 @@ Say hello and list the current agents.`;
                         setTimeout(() => startPromptInputRef.current?.focus(), 100);
                       }}
                       disabled={selectedAgentData.pathMissing}
-                      className={`flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1 lg:py-1.5 rounded-lg transition-colors text-xs lg:text-sm ${
+                      className={`flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1 lg:py-1.5 rounded-none transition-colors text-xs lg:text-sm ${
                         selectedAgentData.pathMissing
                           ? 'bg-bg-tertiary text-text-muted cursor-not-allowed'
                           : 'bg-accent-green/20 text-accent-green hover:bg-accent-green/30'
@@ -871,7 +882,7 @@ Say hello and list the current agents.`;
                       removeAgent(selectedAgentData.id);
                       setSelectedAgent(null);
                     }}
-                    className="flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1 lg:py-1.5 bg-bg-tertiary text-text-muted rounded-lg hover:text-accent-red transition-colors"
+                    className="flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1 lg:py-1.5 bg-bg-tertiary text-text-muted rounded-none hover:text-accent-red transition-colors"
                   >
                     <Trash2 className="w-3 h-3 lg:w-4 lg:h-4" />
                   </button>
@@ -915,12 +926,12 @@ Say hello and list the current agents.`;
               <div className="px-4 py-2 border-t border-border-primary bg-bg-tertiary flex items-center justify-between text-xs">
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
-                    <TerminalIcon className="w-4 h-4 text-accent-cyan" />
+                    <TerminalIcon className="w-4 h-4 text-accent-blue" />
                     <span className="text-text-muted">Interactive Terminal</span>
                   </div>
                   {selectedAgentData.status === 'running' && (
-                    <span className="flex items-center gap-1 text-accent-cyan">
-                      <span className="w-2 h-2 rounded-full bg-accent-cyan animate-pulse" />
+                    <span className="flex items-center gap-1 text-accent-blue">
+                      <span className="w-2 h-2 rounded-full bg-accent-blue animate-pulse" />
                       Agent is running
                     </span>
                   )}
@@ -946,7 +957,7 @@ Say hello and list the current agents.`;
                 </p>
                 <button
                   onClick={() => setShowNewChatModal(true)}
-                  className="text-accent-cyan hover:underline"
+                  className="text-accent-blue hover:underline"
                 >
                   Create new agent
                 </button>
@@ -982,7 +993,7 @@ Say hello and list the current agents.`;
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-bg-secondary border border-border-primary rounded-xl p-6 w-full max-w-lg mx-4 shadow-2xl"
+              className="bg-bg-secondary border border-border-primary rounded-none p-6 w-full max-w-lg mx-4 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -1008,7 +1019,7 @@ Say hello and list the current agents.`;
                   }
                 }}
                 placeholder="e.g., Fix the bug in login.tsx..."
-                className="w-full px-4 py-3 bg-bg-primary border border-border-primary rounded-lg text-sm focus:outline-none focus:border-accent-cyan mb-4"
+                className="w-full px-4 py-3 bg-bg-primary border border-border-primary rounded-none text-sm focus:outline-none focus:border-accent-cyan mb-4"
                 autoFocus
               />
               <div className="flex justify-end gap-3">
@@ -1027,7 +1038,7 @@ Say hello and list the current agents.`;
                     }
                   }}
                   disabled={!startPromptValue.trim()}
-                  className="px-4 py-2 text-sm bg-accent-green/20 text-accent-green rounded-lg hover:bg-accent-green/30 transition-colors disabled:opacity-50"
+                  className="px-4 py-2 text-sm bg-accent-green/20 text-accent-green rounded-none hover:bg-accent-green/30 transition-colors disabled:opacity-50"
                 >
                   Start Agent
                 </button>

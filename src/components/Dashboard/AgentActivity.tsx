@@ -24,7 +24,7 @@ export default function AgentActivity() {
   const { agents, projects, tasks } = useStore();
 
   return (
-    <div className="rounded-xl border border-border-primary bg-bg-secondary overflow-hidden">
+    <div className="rounded-none-none border border-border-primary bg-bg-secondary overflow-hidden">
       {/* Header */}
       <div className="px-5 py-4 border-b border-border-primary flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -54,11 +54,11 @@ export default function AgentActivity() {
             >
               <div className="flex items-start gap-3">
                 {/* Avatar */}
-                <div className={`relative w-10 h-10 rounded-lg ${config.bg} flex items-center justify-center`}>
+                <div className={`relative w-10 h-10 rounded-none-none ${config.bg} flex items-center justify-center`}>
                   <Bot className={`w-5 h-5 ${config.color}`} />
                   {agent.status === 'running' && (
-                    <span className="absolute -bottom-1 -right-1 w-3 h-3 bg-accent-green rounded-full border-2 border-bg-secondary">
-                      <span className="absolute inset-0 rounded-full bg-accent-green animate-ping opacity-75" />
+                    <span className="absolute -bottom-1 -right-1 w-3 h-3 bg-accent-green rounded-full border border-bg-secondary">
+                      <span className="absolute inset-0 rounded-none-full bg-accent-green animate-ping opacity-75" />
                     </span>
                   )}
                 </div>
@@ -67,10 +67,10 @@ export default function AgentActivity() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-sm">{agent.name}</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${modelColors[agent.model]}`}>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-none ${modelColors[agent.model]}`}>
                       {agent.model.toUpperCase()}
                     </span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${config.bg} ${config.color}`}>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-none ${config.bg} ${config.color}`}>
                       {config.label}
                     </span>
                   </div>
@@ -82,13 +82,13 @@ export default function AgentActivity() {
                   )}
 
                   {currentTask && agent.status === 'running' && (
-                    <div className="mt-2 p-2 rounded bg-bg-tertiary/50 border border-border-primary">
+                    <div className="mt-2 p-2 rounded-none bg-bg-tertiary/50 border border-border-primary">
                       <p className="text-xs text-text-secondary truncate">{currentTask.title}</p>
-                      <div className="mt-1.5 h-1 bg-bg-primary rounded-full overflow-hidden">
+                      <div className="mt-1.5 h-1 bg-bg-primary rounded-none-full overflow-hidden">
                         <motion.div
                           initial={{ width: 0 }}
                           animate={{ width: `${currentTask.progress}%` }}
-                          className="h-full bg-accent-cyan rounded-full"
+                          className="h-full bg-accent-cyan rounded-none-full"
                         />
                       </div>
                     </div>

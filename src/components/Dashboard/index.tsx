@@ -27,10 +27,10 @@ import dynamic from 'next/dynamic';
 const CanvasView = dynamic(() => import('@/components/CanvasView'), {
   ssr: false,
   loading: () => (
-    <div className="flex items-center justify-center h-full min-h-[600px] bg-bg-secondary rounded-xl border border-border-primary">
+    <div className="flex items-center justify-center h-full min-h-[600px] bg-card border border-border">
       <div className="text-center">
-        <Loader2 className="w-8 h-8 animate-spin text-accent-cyan mx-auto mb-4" />
-        <p className="text-text-secondary">Loading Board...</p>
+        <Loader2 className="w-8 h-8 animate-spin text-foreground mx-auto mb-4" />
+        <p className="text-muted-foreground">Loading Board...</p>
       </div>
     </div>
   ),
@@ -50,16 +50,16 @@ class WorldErrorBoundary extends Component<{ children: ReactNode }, { hasError: 
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex items-center justify-center h-full min-h-[600px] bg-bg-secondary rounded-xl border border-border-primary">
+        <div className="flex items-center justify-center h-full min-h-[600px] bg-card border border-border">
           <div className="text-center p-8">
-            <AlertTriangle className="w-12 h-12 text-accent-amber mx-auto mb-4" />
-            <h3 className="text-lg font-medium mb-2">3D World Failed to Load</h3>
-            <p className="text-text-muted text-sm mb-4">
+            <AlertTriangle className="w-12 h-12 text-warning mx-auto mb-4" />
+            <h3 className="text-lg font-medium mb-2 text-foreground">3D World Failed to Load</h3>
+            <p className="text-muted-foreground text-sm mb-4">
               {this.state.error?.message || 'An error occurred loading the 3D view'}
             </p>
             <button
               onClick={() => this.setState({ hasError: false })}
-              className="px-4 py-2 bg-accent-cyan/20 text-accent-cyan rounded-lg hover:bg-accent-cyan/30"
+              className="px-4 py-2 bg-white text-black hover:bg-white/80"
             >
               Try Again
             </button>
@@ -75,10 +75,10 @@ class WorldErrorBoundary extends Component<{ children: ReactNode }, { hasError: 
 const AgentWorld = dynamic(() => import('@/components/AgentWorld'), {
   ssr: false,
   loading: () => (
-    <div className="flex items-center justify-center h-full min-h-[600px] bg-bg-secondary rounded-xl border border-border-primary">
+    <div className="flex items-center justify-center h-full min-h-[600px] bg-card border border-border">
       <div className="text-center">
-        <Loader2 className="w-8 h-8 animate-spin text-accent-cyan mx-auto mb-4" />
-        <p className="text-text-secondary">Loading 3D World...</p>
+        <Loader2 className="w-8 h-8 animate-spin text-foreground mx-auto mb-4" />
+        <p className="text-muted-foreground">Loading 3D World...</p>
       </div>
     </div>
   ),
@@ -200,8 +200,8 @@ export default function Dashboard() {
     return (
       <div className="flex items-center justify-center h-[60vh]">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-accent-cyan mx-auto mb-4" />
-          <p className="text-text-secondary">Loading Claude Code data...</p>
+          <Loader2 className="w-8 h-8 animate-spin text-foreground mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading Claude Code data...</p>
         </div>
       </div>
     );
@@ -210,9 +210,9 @@ export default function Dashboard() {
   if (error) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
-        <div className="text-center text-accent-red">
+        <div className="text-center text-danger">
           <p className="mb-2">Failed to load Claude Code data</p>
-          <p className="text-sm text-text-muted">{error}</p>
+          <p className="text-sm text-muted-foreground">{error}</p>
         </div>
       </div>
     );
@@ -235,21 +235,21 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl lg:text-2xl font-bold tracking-tight">Mission Control</h1>
-          <p className="text-text-secondary text-xs lg:text-sm mt-1 hidden sm:block">
+          <h1 className="text-xl lg:text-2xl font-bold tracking-tight text-foreground">Dashboard</h1>
+          <p className="text-muted-foreground text-xs lg:text-sm mt-1 hidden sm:block">
             Monitor your Claude Code agents in real-time
           </p>
         </div>
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
           {/* View Mode Toggle */}
-          <div className="flex items-center gap-1 p-1 bg-bg-tertiary rounded-lg border border-border-primary">
+          <div className="flex items-center gap-1 p-1 bg-secondary border border-border">
             <button
               onClick={() => setViewMode('world')}
               className={`
-                flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1.5 rounded-md text-xs lg:text-sm font-medium transition-all
+                flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1.5 text-xs lg:text-sm font-medium transition-all
                 ${viewMode === 'world'
-                  ? 'bg-accent-cyan/20 text-accent-cyan'
-                  : 'text-text-muted hover:text-text-primary'
+                  ? 'bg-white text-black'
+                  : 'text-muted-foreground hover:text-foreground'
                 }
               `}
             >
@@ -260,10 +260,10 @@ export default function Dashboard() {
             <button
               onClick={() => setViewMode('canvas')}
               className={`
-                flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1.5 rounded-md text-xs lg:text-sm font-medium transition-all
+                flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1.5 text-xs lg:text-sm font-medium transition-all
                 ${viewMode === 'canvas'
-                  ? 'bg-accent-green/20 text-accent-green'
-                  : 'text-text-muted hover:text-text-primary'
+                  ? 'bg-white text-black'
+                  : 'text-muted-foreground hover:text-foreground'
                 }
               `}
             >
@@ -273,10 +273,10 @@ export default function Dashboard() {
             <button
               onClick={() => setViewMode('stats')}
               className={`
-                flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1.5 rounded-md text-xs lg:text-sm font-medium transition-all
+                flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1.5 text-xs lg:text-sm font-medium transition-all
                 ${viewMode === 'stats'
-                  ? 'bg-accent-purple/20 text-accent-purple'
-                  : 'text-text-muted hover:text-text-primary'
+                  ? 'bg-white text-black'
+                  : 'text-muted-foreground hover:text-foreground'
                 }
               `}
             >
@@ -285,11 +285,11 @@ export default function Dashboard() {
             </button>
           </div>
 
-          <div className="text-right text-xs text-text-muted hidden sm:block">
+          <div className="text-right text-xs text-muted-foreground hidden sm:block">
             <div className="flex items-center gap-2 justify-end">
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-green opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-accent-green"></span>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
               </span>
               <span>{activeSessions.length} active session{activeSessions.length !== 1 ? 's' : ''}</span>
             </div>
@@ -308,7 +308,7 @@ export default function Dashboard() {
       {/* 3D World View */}
       {viewMode === 'world' && (
         <div
-          className="rounded-xl border border-border-primary bg-bg-secondary overflow-hidden"
+          className="border border-border bg-card overflow-hidden"
           style={{ height: 'calc(100vh - 200px)', minHeight: '400px' }}
         >
           <WorldErrorBoundary>
@@ -320,7 +320,7 @@ export default function Dashboard() {
       {/* Canvas View */}
       {viewMode === 'canvas' && (
         <div
-          className="rounded-xl border border-border-primary bg-bg-secondary overflow-hidden"
+          className="border border-border bg-card overflow-hidden"
           style={{ height: 'calc(100vh - 200px)', minHeight: '400px' }}
         >
           <CanvasView />
@@ -396,9 +396,9 @@ export default function Dashboard() {
 
           {/* Model Usage */}
           {stats?.modelUsage && Object.keys(stats.modelUsage).length > 0 && (
-            <div className="rounded-xl border border-border-primary bg-bg-secondary p-5">
-              <h3 className="text-sm font-medium mb-4 flex items-center gap-2">
-                <Bot className="w-4 h-4 text-text-muted" />
+            <div className="border border-border bg-card p-6">
+              <h3 className="text-sm font-medium mb-4 flex items-center gap-2 text-foreground">
+                <Bot className="w-4 h-4 text-muted-foreground" />
                 Model Usage
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -407,34 +407,34 @@ export default function Dashboard() {
                   const totalTokens = usage.inputTokens + usage.outputTokens;
 
                   return (
-                    <div key={model} className="p-4 rounded-lg bg-bg-tertiary border border-border-primary">
+                    <div key={model} className="p-4 bg-secondary border border-border hover:border-white/30 transition-all">
                       <div className="flex items-center justify-between mb-2">
-                        <span className={`font-medium ${model.includes('opus') ? 'text-accent-purple' : 'text-accent-cyan'}`}>
+                        <span className="font-medium text-foreground">
                           {modelName}
                         </span>
-                        <span className="text-xs text-text-muted">
+                        <span className="text-xs text-muted-foreground">
                           ${usage.costUSD?.toFixed(2) || '0.00'}
                         </span>
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         <div>
-                          <span className="text-text-muted">Input:</span>
-                          <span className="ml-1">{(usage.inputTokens / 1000).toFixed(0)}k</span>
+                          <span className="text-muted-foreground">Input:</span>
+                          <span className="ml-1 text-foreground">{(usage.inputTokens / 1000).toFixed(0)}k</span>
                         </div>
                         <div>
-                          <span className="text-text-muted">Output:</span>
-                          <span className="ml-1">{(usage.outputTokens / 1000).toFixed(0)}k</span>
+                          <span className="text-muted-foreground">Output:</span>
+                          <span className="ml-1 text-foreground">{(usage.outputTokens / 1000).toFixed(0)}k</span>
                         </div>
                         <div>
-                          <span className="text-text-muted">Cache Read:</span>
-                          <span className="ml-1">{(usage.cacheReadInputTokens / 1000000).toFixed(1)}M</span>
+                          <span className="text-muted-foreground">Cache Read:</span>
+                          <span className="ml-1 text-foreground">{(usage.cacheReadInputTokens / 1000000).toFixed(1)}M</span>
                         </div>
                         <div>
-                          <span className="text-text-muted">Cache Create:</span>
-                          <span className="ml-1">{(usage.cacheCreationInputTokens / 1000000).toFixed(1)}M</span>
+                          <span className="text-muted-foreground">Cache Create:</span>
+                          <span className="ml-1 text-foreground">{(usage.cacheCreationInputTokens / 1000000).toFixed(1)}M</span>
                         </div>
                       </div>
-                      <div className="mt-2 pt-2 border-t border-border-primary text-xs text-text-muted">
+                      <div className="mt-2 pt-2 border-t border-border text-xs text-muted-foreground">
                         Total: {(totalTokens / 1000000).toFixed(2)}M tokens
                       </div>
                     </div>
@@ -445,11 +445,11 @@ export default function Dashboard() {
           )}
 
           {/* Activity by Hour */}
-          <div className="rounded-xl border border-border-primary bg-bg-secondary p-4">
-            <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
-              <Clock className="w-4 h-4 text-text-muted" />
+          <div className="border border-border bg-card p-4">
+            <h3 className="text-sm font-medium mb-3 flex items-center gap-2 text-foreground">
+              <Clock className="w-4 h-4 text-muted-foreground" />
               Activity by Hour
-              <span className="text-xs text-text-muted font-normal ml-2">
+              <span className="text-xs text-muted-foreground font-normal ml-2">
                 (Total: {hourData.hours.reduce((a, b) => a + b, 0)} sessions)
               </span>
             </h3>
@@ -461,22 +461,22 @@ export default function Dashboard() {
                   <div key={hour} className="flex-1 flex flex-col items-center gap-1 group">
                     <div className="relative w-full flex justify-center">
                       {/* Tooltip on hover */}
-                      <div className="absolute -top-6 opacity-0 group-hover:opacity-100 transition-opacity bg-bg-primary border border-border-primary rounded px-1.5 py-0.5 text-[10px] whitespace-nowrap z-10">
+                      <div className="absolute -top-6 opacity-0 group-hover:opacity-100 transition-opacity bg-background border border-border px-1.5 py-0.5 text-[10px] whitespace-nowrap z-10 text-foreground">
                         {hour}:00 - {count} sessions
                       </div>
                       <div
-                        className={`w-full rounded-t transition-all ${count > 0 ? 'bg-accent-cyan' : 'bg-bg-tertiary'}`}
+                        className={`w-full transition-all ${count > 0 ? 'bg-white' : 'bg-secondary'}`}
                         style={{ height: `${Math.max(height, 4)}%`, minHeight: count > 0 ? '8px' : '4px' }}
                       />
                     </div>
                     {hour % 6 === 0 && (
-                      <span className="text-[10px] text-text-muted">{hour}</span>
+                      <span className="text-[10px] text-muted-foreground">{hour}</span>
                     )}
                   </div>
                 );
               })}
             </div>
-            <div className="flex justify-between mt-1 text-[10px] text-text-muted">
+            <div className="flex justify-between mt-1 text-[10px] text-muted-foreground">
               <span>12 AM</span>
               <span>6 AM</span>
               <span>12 PM</span>
@@ -487,9 +487,9 @@ export default function Dashboard() {
 
           {/* Recent Messages */}
           {recentHistory.length > 0 && (
-            <div className="rounded-xl border border-border-primary bg-bg-secondary p-5">
-              <h3 className="text-sm font-medium mb-4 flex items-center gap-2">
-                <History className="w-4 h-4 text-text-muted" />
+            <div className="border border-border bg-card p-6">
+              <h3 className="text-sm font-medium mb-4 flex items-center gap-2 text-foreground">
+                <History className="w-4 h-4 text-muted-foreground" />
                 Recent Messages
               </h3>
               <div className="space-y-3">
@@ -508,11 +508,11 @@ export default function Dashboard() {
                   return (
                     <div
                       key={`${entry.timestamp}-${index}`}
-                      className="p-3 rounded-lg bg-bg-tertiary border border-border-primary"
+                      className="p-3 bg-secondary border border-border hover:border-white/30 transition-all"
                     >
                       <div className="flex items-start gap-3">
                         {/* Agent avatar or default */}
-                        <div className={`w-8 h-8 rounded-lg ${agent?.name?.toLowerCase() === 'bitwonka' ? 'bg-accent-green/20' : 'bg-bg-secondary'} flex items-center justify-center text-sm shrink-0`}>
+                        <div className={`w-8 h-8 ${agent?.name?.toLowerCase() === 'bitwonka' ? 'bg-green-500/20' : 'bg-card'} flex items-center justify-center text-sm shrink-0`}>
                           {agent ? (agent.name?.toLowerCase() === 'bitwonka' ? '🐸' : (characterEmojis[agent.character || 'robot'] || '🤖')) : '💬'}
                         </div>
 
@@ -520,20 +520,20 @@ export default function Dashboard() {
                           {/* Header row */}
                           <div className="flex items-center gap-2 mb-1">
                             {agent && (
-                              <span className="text-xs font-medium text-accent-cyan">
+                              <span className="text-xs font-medium text-foreground">
                                 {agent.name || `Agent ${agent.id.slice(0, 6)}`}
                               </span>
                             )}
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-accent-purple/20 text-accent-purple">
+                            <span className="text-xs px-1.5 py-0.5 bg-white/10 text-muted-foreground">
                               {projectName}
                             </span>
-                            <span className="text-xs text-text-muted ml-auto shrink-0">
+                            <span className="text-xs text-muted-foreground ml-auto shrink-0">
                               {date} {time}
                             </span>
                           </div>
 
                           {/* Message */}
-                          <p className="text-sm text-text-secondary line-clamp-2">
+                          <p className="text-sm text-muted-foreground line-clamp-2">
                             {entry.display}
                           </p>
                         </div>
@@ -547,48 +547,48 @@ export default function Dashboard() {
 
           {/* Agents Overview */}
           {agents.length > 0 && (
-            <div className="rounded-xl border border-border-primary bg-bg-secondary p-5">
-              <h3 className="text-sm font-medium mb-4 flex items-center gap-2">
-                <Bot className="w-4 h-4 text-text-muted" />
+            <div className="border border-border bg-card p-6">
+              <h3 className="text-sm font-medium mb-4 flex items-center gap-2 text-foreground">
+                <Bot className="w-4 h-4 text-muted-foreground" />
                 Agents Overview
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {agents.slice(0, 6).map((agent) => {
                   const projectName = agent.projectPath.split('/').pop() || 'Unknown';
                   const statusColors: Record<string, string> = {
-                    running: 'bg-accent-green',
-                    waiting: 'bg-accent-amber',
+                    running: 'bg-green-500',
+                    waiting: 'bg-yellow-500',
                     idle: 'bg-gray-400',
-                    error: 'bg-accent-red',
-                    completed: 'bg-accent-cyan',
+                    error: 'bg-red-500',
+                    completed: 'bg-white',
                   };
 
                   return (
                     <div
                       key={agent.id}
-                      className="p-3 rounded-lg bg-bg-tertiary border border-border-primary flex items-center gap-3"
+                      className="p-3 bg-secondary border border-border flex items-center gap-3 hover:border-white/30 transition-all"
                     >
                       <div className="relative">
-                        <div className={`w-10 h-10 rounded-lg ${agent.name?.toLowerCase() === 'bitwonka' ? 'bg-accent-green/20' : 'bg-bg-secondary'} flex items-center justify-center text-xl`}>
+                        <div className={`w-10 h-10 ${agent.name?.toLowerCase() === 'bitwonka' ? 'bg-green-500/20' : 'bg-card'} flex items-center justify-center text-xl`}>
                           {agent.name?.toLowerCase() === 'bitwonka' ? '🐸' : (characterEmojis[agent.character || 'robot'] || '🤖')}
                         </div>
                         <div
-                          className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-bg-tertiary ${statusColors[agent.status]}`}
+                          className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border border-secondary ${statusColors[agent.status]}`}
                         />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate">
+                        <p className="font-medium text-sm truncate text-foreground">
                           {agent.name || `Agent ${agent.id.slice(0, 6)}`}
                         </p>
-                        <p className="text-xs text-text-muted truncate">{projectName}</p>
+                        <p className="text-xs text-muted-foreground truncate">{projectName}</p>
                       </div>
                       <span
                         className={`
-                          text-[10px] px-2 py-0.5 rounded-full font-medium
-                          ${agent.status === 'running' ? 'bg-accent-green/20 text-accent-green' : ''}
-                          ${agent.status === 'waiting' ? 'bg-accent-amber/20 text-accent-amber' : ''}
+                          text-[10px] px-2 py-0.5 font-medium
+                          ${agent.status === 'running' ? 'bg-green-500/20 text-green-400' : ''}
+                          ${agent.status === 'waiting' ? 'bg-yellow-500/20 text-yellow-400' : ''}
                           ${agent.status === 'idle' ? 'bg-gray-500/20 text-gray-400' : ''}
-                          ${agent.status === 'error' ? 'bg-accent-red/20 text-accent-red' : ''}
+                          ${agent.status === 'error' ? 'bg-red-500/20 text-red-400' : ''}
                         `}
                       >
                         {agent.status}
@@ -598,7 +598,7 @@ export default function Dashboard() {
                 })}
               </div>
               {agents.length > 6 && (
-                <p className="text-xs text-text-muted mt-3 text-center">
+                <p className="text-xs text-muted-foreground mt-3 text-center">
                   +{agents.length - 6} more agents
                 </p>
               )}

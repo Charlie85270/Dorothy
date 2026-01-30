@@ -341,7 +341,7 @@ export default function UsagePage() {
     return (
       <div className="flex items-center justify-center h-[60vh]">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-accent-cyan mx-auto mb-4" />
+          <Loader2 className="w-8 h-8 animate-spin text-accent-blue mx-auto mb-4" />
           <p className="text-text-secondary">Loading usage data...</p>
         </div>
       </div>
@@ -382,10 +382,10 @@ export default function UsagePage() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-xl border border-border-primary bg-bg-secondary p-5"
+          className="rounded-none border border-border-primary bg-bg-secondary p-5"
         >
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-lg bg-accent-green/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-none bg-accent-green/20 flex items-center justify-center">
               <DollarSign className="w-5 h-5 text-accent-green" />
             </div>
             <div>
@@ -402,10 +402,10 @@ export default function UsagePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          className="rounded-xl border border-border-primary bg-bg-secondary p-5"
+          className="rounded-none border border-border-primary bg-bg-secondary p-5"
         >
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-lg bg-accent-amber/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-none bg-accent-amber/20 flex items-center justify-center">
               <DollarSign className="w-5 h-5 text-accent-amber" />
             </div>
             <div>
@@ -422,10 +422,10 @@ export default function UsagePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="rounded-xl border border-border-primary bg-bg-secondary p-5"
+          className="rounded-none border border-border-primary bg-bg-secondary p-5"
         >
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-lg bg-accent-purple/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-none bg-accent-purple/20 flex items-center justify-center">
               <Zap className="w-5 h-5 text-accent-purple" />
             </div>
             <div>
@@ -442,15 +442,15 @@ export default function UsagePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
-          className="rounded-xl border border-border-primary bg-bg-secondary p-5"
+          className="rounded-none border border-border-primary bg-bg-secondary p-5"
         >
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-lg bg-accent-cyan/20 flex items-center justify-center">
-              <Activity className="w-5 h-5 text-accent-cyan" />
+            <div className="w-10 h-10 rounded-none bg-accent-blue/20 flex items-center justify-center">
+              <Activity className="w-5 h-5 text-accent-blue" />
             </div>
             <div>
               <p className="text-xs text-text-muted">Cache Savings</p>
-              <p className="text-xl lg:text-2xl font-bold text-accent-cyan">{(totalUsage.totalCacheRead / 1000000).toFixed(2)}M</p>
+              <p className="text-xl lg:text-2xl font-bold text-accent-blue">{(totalUsage.totalCacheRead / 1000000).toFixed(2)}M</p>
             </div>
           </div>
           <p className="text-xs text-text-muted">
@@ -464,14 +464,14 @@ export default function UsagePage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
-        className="rounded-xl border border-border-primary bg-bg-secondary p-5"
+        className="rounded-none border border-border-primary bg-bg-secondary p-5"
       >
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-medium flex items-center gap-2">
             <DollarSign className="w-4 h-4 text-accent-green" />
             Cost Over Time
           </h3>
-          <div className="flex items-center gap-1 p-1 bg-bg-tertiary rounded-lg border border-border-primary">
+          <div className="flex items-center gap-1 p-1 bg-bg-tertiary rounded-none border border-border-primary">
             {(['daily', 'weekly', 'monthly'] as TimeRange[]).map((range) => (
               <button
                 key={range}
@@ -508,7 +508,7 @@ export default function UsagePage() {
                       initial={{ height: 0 }}
                       animate={{ height: `${Math.max(height, 4)}%` }}
                       transition={{ delay: 0.2 + i * 0.05, duration: 0.5 }}
-                      className="w-full max-w-12 bg-gradient-to-t from-accent-green to-accent-cyan rounded-t"
+                      className="w-full max-w-12 bg-gradient-to-t from-accent-green to-accent-cyan rounded-none"
                     />
                   </div>
                   <span className="text-[10px] text-text-muted text-center">{item.label}</span>
@@ -525,7 +525,7 @@ export default function UsagePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.25 }}
-          className="rounded-xl border border-border-primary bg-bg-secondary p-5"
+          className="rounded-none border border-border-primary bg-bg-secondary p-5"
         >
           <h3 className="text-sm font-medium mb-4 flex items-center gap-2">
             <Bot className="w-4 h-4 text-text-muted" />
@@ -538,7 +538,7 @@ export default function UsagePage() {
               const colorClass = isOpus ? 'accent-purple' : isSonnet ? 'accent-cyan' : 'accent-amber';
 
               return (
-                <div key={model.modelId} className="p-4 rounded-lg bg-bg-tertiary border border-border-primary">
+                <div key={model.modelId} className="p-4 rounded-none bg-bg-tertiary border border-border-primary">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <div className={`w-3 h-3 rounded-full bg-${colorClass}`} />
@@ -593,7 +593,7 @@ export default function UsagePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="rounded-xl border border-border-primary bg-bg-secondary p-5"
+          className="rounded-none border border-border-primary bg-bg-secondary p-5"
         >
           <h3 className="text-sm font-medium mb-4 flex items-center gap-2">
             <Calendar className="w-4 h-4 text-text-muted" />
@@ -618,7 +618,7 @@ export default function UsagePage() {
                         initial={{ height: 0 }}
                         animate={{ height: `${Math.max(height, 4)}%` }}
                         transition={{ delay: 0.3 + i * 0.05, duration: 0.5 }}
-                        className="w-full max-w-8 bg-gradient-to-t from-accent-cyan to-accent-purple rounded-t"
+                        className="w-full max-w-8 bg-gradient-to-t from-accent-cyan to-accent-purple rounded-none"
                       />
                     </div>
                     <span className="text-[10px] text-text-muted">{dayLabel}</span>
@@ -634,26 +634,26 @@ export default function UsagePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.35 }}
-          className="rounded-xl border border-border-primary bg-bg-secondary p-5"
+          className="rounded-none border border-border-primary bg-bg-secondary p-5"
         >
           <h3 className="text-sm font-medium mb-4 flex items-center gap-2">
             <MessageSquare className="w-4 h-4 text-text-muted" />
             Session Statistics
           </h3>
           <div className="grid grid-cols-2 gap-4">
-            <div className="p-4 rounded-lg bg-bg-tertiary">
+            <div className="p-4 rounded-none bg-bg-tertiary">
               <p className="text-xs text-text-muted mb-1">Total Sessions</p>
               <p className="text-2xl font-bold">{stats?.totalSessions?.toLocaleString() || 0}</p>
             </div>
-            <div className="p-4 rounded-lg bg-bg-tertiary">
+            <div className="p-4 rounded-none bg-bg-tertiary">
               <p className="text-xs text-text-muted mb-1">Total Messages</p>
               <p className="text-2xl font-bold">{stats?.totalMessages?.toLocaleString() || 0}</p>
             </div>
-            <div className="p-4 rounded-lg bg-bg-tertiary">
+            <div className="p-4 rounded-none bg-bg-tertiary">
               <p className="text-xs text-text-muted mb-1">Recent Sessions</p>
               <p className="text-2xl font-bold">{todayActivity?.sessionCount || 0}</p>
             </div>
-            <div className="p-4 rounded-lg bg-bg-tertiary">
+            <div className="p-4 rounded-none bg-bg-tertiary">
               <p className="text-xs text-text-muted mb-1">Recent Tool Calls</p>
               <p className="text-2xl font-bold">{todayActivity?.toolCallCount || 0}</p>
             </div>
@@ -667,7 +667,7 @@ export default function UsagePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="rounded-xl border border-border-primary bg-bg-secondary p-5"
+          className="rounded-none border border-border-primary bg-bg-secondary p-5"
         >
           <h3 className="text-sm font-medium mb-4 flex items-center gap-2">
             <Clock className="w-4 h-4 text-text-muted" />
@@ -685,7 +685,7 @@ export default function UsagePage() {
                     initial={{ height: 0 }}
                     animate={{ height: `${Math.max(height, 4)}%` }}
                     transition={{ delay: 0.4 + hour * 0.02, duration: 0.3 }}
-                    className={`w-full rounded-t transition-all ${count > 0 ? 'bg-accent-cyan' : 'bg-bg-tertiary'}`}
+                    className={`w-full rounded-none transition-all ${count > 0 ? 'bg-accent-blue' : 'bg-bg-tertiary'}`}
                     title={`${hour}:00 - ${count} sessions`}
                   />
                   {hour % 4 === 0 && (
@@ -710,7 +710,7 @@ export default function UsagePage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.45 }}
-        className="rounded-xl border border-border-primary bg-bg-secondary p-5"
+        className="rounded-none border border-border-primary bg-bg-secondary p-5"
       >
         <button
           onClick={() => setShowPricingTable(!showPricingTable)}

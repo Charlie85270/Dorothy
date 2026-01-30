@@ -169,7 +169,7 @@ export default function SettingsPage() {
     return (
       <div className="flex items-center justify-center h-[60vh]">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-accent-cyan mx-auto mb-4" />
+          <Loader2 className="w-8 h-8 animate-spin text-accent-blue mx-auto mb-4" />
           <p className="text-text-secondary">Loading settings...</p>
         </div>
       </div>
@@ -195,7 +195,7 @@ export default function SettingsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-xl lg:text-2xl font-bold tracking-tight flex items-center gap-2 lg:gap-3">
-              <Settings className="w-6 h-6 lg:w-7 lg:h-7 text-accent-cyan" />
+              <Settings className="w-6 h-6 lg:w-7 lg:h-7 text-accent-blue" />
               Settings
             </h1>
             <p className="text-text-secondary text-xs lg:text-sm mt-1 hidden sm:block">
@@ -205,7 +205,7 @@ export default function SettingsPage() {
           <div className="flex gap-2 sm:gap-3">
             <button
               onClick={fetchSettings}
-              className="px-3 lg:px-4 py-2 rounded-lg border border-border-primary text-text-secondary hover:text-text-primary hover:border-border-accent transition-colors flex items-center gap-2 text-sm"
+              className="px-3 lg:px-4 py-2 rounded-none border border-border-primary text-text-secondary hover:text-text-primary hover:border-border-accent transition-colors flex items-center gap-2 text-sm"
             >
               <RefreshCw className="w-4 h-4" />
               <span className="hidden sm:inline">Refresh</span>
@@ -213,9 +213,9 @@ export default function SettingsPage() {
             <button
               onClick={handleSave}
               disabled={saving || !hasChanges}
-              className={`px-3 lg:px-4 py-2 rounded-lg flex items-center gap-2 transition-all text-sm ${
+              className={`px-3 lg:px-4 py-2 rounded-none flex items-center gap-2 transition-all text-sm ${
                 hasChanges
-                  ? 'bg-accent-cyan text-bg-primary hover:bg-accent-cyan/90'
+                  ? 'bg-accent-blue text-bg-primary hover:bg-accent-blue/90'
                   : 'bg-bg-tertiary text-text-muted cursor-not-allowed'
               }`}
             >
@@ -235,7 +235,7 @@ export default function SettingsPage() {
 
       {/* Error message */}
       {error && settings && (
-        <div className="p-4 rounded-lg bg-accent-red/10 border border-accent-red/30 text-accent-red text-sm">
+        <div className="p-4 rounded-none bg-accent-red/10 border border-accent-red/30 text-accent-red text-sm">
           {error}
         </div>
       )}
@@ -246,10 +246,10 @@ export default function SettingsPage() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-xl border border-border-primary bg-bg-secondary p-6"
+          className="rounded-none border border-border-primary bg-bg-secondary p-6"
         >
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-lg bg-accent-purple/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-none bg-accent-purple/20 flex items-center justify-center">
               <GitCommit className="w-5 h-5 text-accent-purple" />
             </div>
             <div>
@@ -267,7 +267,7 @@ export default function SettingsPage() {
               <button
                 onClick={() => updateSettings({ includeCoAuthoredBy: !settings?.includeCoAuthoredBy })}
                 className={`w-12 h-6 rounded-full transition-colors ${
-                  settings?.includeCoAuthoredBy ? 'bg-accent-cyan' : 'bg-bg-tertiary'
+                  settings?.includeCoAuthoredBy ? 'bg-accent-blue' : 'bg-bg-tertiary'
                 }`}
               >
                 <div
@@ -285,10 +285,10 @@ export default function SettingsPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="rounded-xl border border-border-primary bg-bg-secondary p-6"
+          className="rounded-none border border-border-primary bg-bg-secondary p-6"
         >
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-lg bg-accent-amber/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-none bg-accent-amber/20 flex items-center justify-center">
               {appSettings.notificationsEnabled ? (
                 <Bell className="w-5 h-5 text-accent-amber" />
               ) : (
@@ -310,7 +310,7 @@ export default function SettingsPage() {
               <button
                 onClick={() => handleSaveAppSettings({ notificationsEnabled: !appSettings.notificationsEnabled })}
                 className={`w-12 h-6 rounded-full transition-colors ${
-                  appSettings.notificationsEnabled ? 'bg-accent-cyan' : 'bg-bg-tertiary'
+                  appSettings.notificationsEnabled ? 'bg-accent-blue' : 'bg-bg-tertiary'
                 }`}
               >
                 <div
@@ -330,7 +330,7 @@ export default function SettingsPage() {
                 <button
                   onClick={() => handleSaveAppSettings({ notifyOnWaiting: !appSettings.notifyOnWaiting })}
                   className={`w-12 h-6 rounded-full transition-colors ${
-                    appSettings.notifyOnWaiting ? 'bg-accent-cyan' : 'bg-bg-tertiary'
+                    appSettings.notifyOnWaiting ? 'bg-accent-blue' : 'bg-bg-tertiary'
                   }`}
                 >
                   <div
@@ -349,7 +349,7 @@ export default function SettingsPage() {
                 <button
                   onClick={() => handleSaveAppSettings({ notifyOnComplete: !appSettings.notifyOnComplete })}
                   className={`w-12 h-6 rounded-full transition-colors ${
-                    appSettings.notifyOnComplete ? 'bg-accent-cyan' : 'bg-bg-tertiary'
+                    appSettings.notifyOnComplete ? 'bg-accent-blue' : 'bg-bg-tertiary'
                   }`}
                 >
                   <div
@@ -368,7 +368,7 @@ export default function SettingsPage() {
                 <button
                   onClick={() => handleSaveAppSettings({ notifyOnError: !appSettings.notifyOnError })}
                   className={`w-12 h-6 rounded-full transition-colors ${
-                    appSettings.notifyOnError ? 'bg-accent-cyan' : 'bg-bg-tertiary'
+                    appSettings.notifyOnError ? 'bg-accent-blue' : 'bg-bg-tertiary'
                   }`}
                 >
                   <div
@@ -387,10 +387,10 @@ export default function SettingsPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
-          className="rounded-xl border border-border-primary bg-bg-secondary p-6"
+          className="rounded-none border border-border-primary bg-bg-secondary p-6"
         >
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-none bg-blue-500/20 flex items-center justify-center">
               <Send className="w-5 h-5 text-blue-400" />
             </div>
             <div>
@@ -445,7 +445,7 @@ export default function SettingsPage() {
                     }
                   }}
                   placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz..."
-                  className="w-full px-3 py-2 pr-10 rounded-lg bg-bg-tertiary border border-border-primary text-sm font-mono focus:border-blue-500 focus:outline-none"
+                  className="w-full px-3 py-2 pr-10 rounded-none bg-bg-tertiary border border-border-primary text-sm font-mono focus:border-blue-500 focus:outline-none"
                 />
                 <button
                   onClick={() => setShowBotToken(!showBotToken)}
@@ -474,7 +474,7 @@ export default function SettingsPage() {
                 type="text"
                 value={appSettings.telegramChatId || 'Not connected yet'}
                 readOnly
-                className="w-full px-3 py-2 rounded-lg bg-bg-tertiary border border-border-primary text-sm font-mono text-text-muted"
+                className="w-full px-3 py-2 rounded-none bg-bg-tertiary border border-border-primary text-sm font-mono text-text-muted"
               />
               <p className="text-[10px] text-text-muted mt-1.5">
                 Auto-detected when you send /start to your bot
@@ -503,7 +503,7 @@ export default function SettingsPage() {
                     }
                   }}
                   disabled={!appSettings.telegramBotToken || testingTelegram}
-                  className="px-4 py-2 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm flex items-center gap-2"
+                  className="px-4 py-2 rounded-none bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm flex items-center gap-2"
                 >
                   {testingTelegram ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -531,14 +531,14 @@ export default function SettingsPage() {
                     }
                   }}
                   disabled={!appSettings.telegramChatId || testingTelegram}
-                  className="px-4 py-2 rounded-lg bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm flex items-center gap-2"
+                  className="px-4 py-2 rounded-none bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm flex items-center gap-2"
                 >
                   <Send className="w-4 h-4" />
                   Send Test
                 </button>
               </div>
               {telegramTestResult && (
-                <div className={`mt-3 p-2 rounded-lg text-xs ${
+                <div className={`mt-3 p-2 rounded-none text-xs ${
                   telegramTestResult.success
                     ? 'bg-accent-green/10 text-accent-green'
                     : 'bg-accent-red/10 text-accent-red'
@@ -549,7 +549,7 @@ export default function SettingsPage() {
             </div>
 
             {/* Help */}
-            <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/20">
+            <div className="p-3 rounded-none bg-blue-500/5 border border-blue-500/20">
               <p className="text-xs text-blue-300 font-medium mb-1">Quick Setup:</p>
               <ol className="text-[10px] text-text-muted space-y-0.5 list-decimal list-inside">
                 <li>Open Telegram and search for @BotFather</li>
@@ -567,10 +567,10 @@ export default function SettingsPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="rounded-xl border border-border-primary bg-bg-secondary p-6"
+          className="rounded-none border border-border-primary bg-bg-secondary p-6"
         >
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-lg bg-accent-green/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-none bg-accent-green/20 flex items-center justify-center">
               <Shield className="w-5 h-5 text-accent-green" />
             </div>
             <div>
@@ -582,13 +582,13 @@ export default function SettingsPage() {
           <div className="space-y-4">
             <div>
               <label className="block text-sm text-text-secondary mb-2">Allowed Permissions</label>
-              <div className="p-3 rounded-lg bg-bg-tertiary border border-border-primary min-h-[60px]">
+              <div className="p-3 rounded-none bg-bg-tertiary border border-border-primary min-h-[60px]">
                 {settings?.permissions?.allow && settings.permissions.allow.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {settings.permissions.allow.map((perm, i) => (
                       <span
                         key={i}
-                        className="px-2 py-1 rounded-md bg-accent-green/20 text-accent-green text-xs font-mono"
+                        className="px-2 py-1 rounded-none bg-accent-green/20 text-accent-green text-xs font-mono"
                       >
                         {perm}
                       </span>
@@ -602,13 +602,13 @@ export default function SettingsPage() {
 
             <div>
               <label className="block text-sm text-text-secondary mb-2">Denied Permissions</label>
-              <div className="p-3 rounded-lg bg-bg-tertiary border border-border-primary min-h-[60px]">
+              <div className="p-3 rounded-none bg-bg-tertiary border border-border-primary min-h-[60px]">
                 {settings?.permissions?.deny && settings.permissions.deny.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {settings.permissions.deny.map((perm, i) => (
                       <span
                         key={i}
-                        className="px-2 py-1 rounded-md bg-accent-red/20 text-accent-red text-xs font-mono"
+                        className="px-2 py-1 rounded-none bg-accent-red/20 text-accent-red text-xs font-mono"
                       >
                         {perm}
                       </span>
@@ -621,7 +621,7 @@ export default function SettingsPage() {
             </div>
 
             <p className="text-xs text-text-muted">
-              Permissions are managed through Claude Code CLI. Use <code className="text-accent-cyan">claude config</code> to modify.
+              Permissions are managed through Claude Code CLI. Use <code className="text-accent-blue">claude config</code> to modify.
             </p>
           </div>
         </motion.div>
@@ -631,11 +631,11 @@ export default function SettingsPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="rounded-xl border border-border-primary bg-bg-secondary p-6 lg:col-span-2"
+          className="rounded-none border border-border-primary bg-bg-secondary p-6 lg:col-span-2"
         >
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-accent-amber/20 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-none bg-accent-amber/20 flex items-center justify-center">
                 <Sparkles className="w-5 h-5 text-accent-amber" />
               </div>
               <div>
@@ -647,7 +647,7 @@ export default function SettingsPage() {
               href="https://skills.sh"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-accent-amber/10 text-accent-amber text-sm hover:bg-accent-amber/20 transition-colors"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-none bg-accent-amber/10 text-accent-amber text-sm hover:bg-accent-amber/20 transition-colors"
             >
               <span>skills.sh</span>
               <ExternalLink className="w-3.5 h-3.5" />
@@ -659,7 +659,7 @@ export default function SettingsPage() {
             {/* User Skills */}
             <div>
               <h3 className="text-sm font-medium text-text-secondary mb-3 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-accent-cyan" />
+                <span className="w-2 h-2 rounded-full bg-accent-blue" />
                 User Skills
                 <span className="text-text-muted">({skills.filter(s => s.source === 'user').length})</span>
               </h3>
@@ -668,7 +668,7 @@ export default function SettingsPage() {
                   skills.filter(s => s.source === 'user').map((skill) => (
                     <div
                       key={skill.path}
-                      className="flex items-center justify-between py-2 px-3 rounded-lg bg-bg-tertiary border border-border-primary"
+                      className="flex items-center justify-between py-2 px-3 rounded-none bg-bg-tertiary border border-border-primary"
                     >
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{skill.name}</p>
@@ -676,7 +676,7 @@ export default function SettingsPage() {
                           <p className="text-xs text-text-muted truncate">{skill.description}</p>
                         )}
                       </div>
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-accent-cyan/20 text-accent-cyan ml-2">
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-accent-blue/20 text-accent-blue ml-2">
                         User
                       </span>
                     </div>
@@ -699,7 +699,7 @@ export default function SettingsPage() {
                   skills.filter(s => s.source === 'plugin').map((skill) => (
                     <div
                       key={skill.path}
-                      className="flex items-center justify-between py-2 px-3 rounded-lg bg-bg-tertiary border border-border-primary"
+                      className="flex items-center justify-between py-2 px-3 rounded-none bg-bg-tertiary border border-border-primary"
                     >
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{skill.name}</p>
@@ -730,7 +730,7 @@ export default function SettingsPage() {
                   {skills.filter(s => s.source === 'project').map((skill) => (
                     <div
                       key={skill.path}
-                      className="flex items-center justify-between py-2 px-3 rounded-lg bg-bg-tertiary border border-border-primary"
+                      className="flex items-center justify-between py-2 px-3 rounded-none bg-bg-tertiary border border-border-primary"
                     >
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{skill.name}</p>
@@ -758,7 +758,7 @@ export default function SettingsPage() {
                   {Object.entries(settings.enabledPlugins).map(([plugin, enabled]) => (
                     <div
                       key={plugin}
-                      className="flex items-center justify-between py-2 px-3 rounded-lg bg-bg-tertiary border border-border-primary"
+                      className="flex items-center justify-between py-2 px-3 rounded-none bg-bg-tertiary border border-border-primary"
                     >
                       <span className="text-sm font-mono truncate">{plugin.split('@')[0]}</span>
                       <span
@@ -798,11 +798,11 @@ export default function SettingsPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="rounded-xl border border-border-primary bg-bg-secondary p-6"
+          className="rounded-none border border-border-primary bg-bg-secondary p-6"
         >
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-lg bg-accent-cyan/20 flex items-center justify-center">
-              <Info className="w-5 h-5 text-accent-cyan" />
+            <div className="w-10 h-10 rounded-none bg-accent-blue/20 flex items-center justify-center">
+              <Info className="w-5 h-5 text-accent-blue" />
             </div>
             <div>
               <h2 className="font-semibold">System Information</h2>
@@ -835,7 +835,7 @@ export default function SettingsPage() {
                       window.electronAPI.shell.exec({ command: `open "${info.configPath}"` });
                     }
                   }}
-                  className="flex items-center gap-2 text-sm text-accent-cyan hover:underline"
+                  className="flex items-center gap-2 text-sm text-accent-blue hover:underline"
                 >
                   <FolderOpen className="w-4 h-4" />
                   Open Config Folder

@@ -158,13 +158,26 @@ export interface ElectronAPI {
       notifyOnWaiting: boolean;
       notifyOnComplete: boolean;
       notifyOnError: boolean;
+      telegramEnabled: boolean;
+      telegramBotToken: string;
+      telegramChatId: string;
     }>;
     save: (settings: {
       notificationsEnabled?: boolean;
       notifyOnWaiting?: boolean;
       notifyOnComplete?: boolean;
       notifyOnError?: boolean;
+      telegramEnabled?: boolean;
+      telegramBotToken?: string;
+      telegramChatId?: string;
     }) => Promise<{ success: boolean; error?: string }>;
+    onUpdated?: (callback: (settings: unknown) => void) => () => void;
+  };
+
+  // Telegram bot
+  telegram?: {
+    test: () => Promise<{ success: boolean; botName?: string; error?: string }>;
+    sendTest: () => Promise<{ success: boolean; error?: string }>;
   };
 
   // Dialogs
@@ -183,6 +196,27 @@ export interface ElectronAPI {
     killPty?: (params: { ptyId: string }) => Promise<{ success: boolean }>;
     onPtyOutput?: (callback: (event: { ptyId: string; data: string }) => void) => () => void;
     onPtyExit?: (callback: (event: { ptyId: string; exitCode: number }) => void) => () => void;
+  };
+
+  // Orchestrator (Super Agent) management
+  orchestrator?: {
+    getStatus: () => Promise<{
+      configured: boolean;
+      orchestratorPath?: string;
+      orchestratorExists?: boolean;
+      currentConfig?: unknown;
+      reason?: string;
+      error?: string;
+    }>;
+    setup: () => Promise<{
+      success: boolean;
+      path?: string;
+      error?: string;
+    }>;
+    remove: () => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
   };
 
   // Platform info

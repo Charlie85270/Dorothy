@@ -24,6 +24,7 @@ import {
   Layers,
   AlertTriangle,
   Pencil,
+  Crown,
 } from 'lucide-react';
 import { useElectronAgents, useElectronFS, useElectronSkills, isElectron } from '@/hooks/useElectron';
 import { useClaude } from '@/hooks/useClaude';
@@ -92,6 +93,96 @@ export default function AgentsPage() {
   const [projectFilter, setProjectFilter] = useState<string | null>(null); // null = All
   const startPromptInputRef = useRef<HTMLInputElement>(null);
   const [editAgentId, setEditAgentId] = useState<string | null>(null); // For edit dialog
+  const [isCreatingSuperAgent, setIsCreatingSuperAgent] = useState(false);
+
+  // Find existing super agent
+  const superAgent = useMemo(() => {
+    return agents.find(a =>
+      a.name?.toLowerCase().includes('super agent') ||
+      a.name?.toLowerCase().includes('orchestrator')
+    ) || null;
+  }, [agents]);
+
+  // Orchestrator prompt for Super Agent
+  const orchestratorPrompt = `You are the Super Agent - an orchestrator that manages other agents using MCP tools.
+
+AVAILABLE MCP TOOLS (from "claude-mgr-orchestrator"):
+- list_agents: List all agents with status, project, ID
+- get_agent_output: Read agent's terminal output (use to see responses!)
+- start_agent: Start agent with a prompt (auto-sends to running agents too)
+- send_message: Send message to agent (auto-starts idle agents)
+- stop_agent: Stop a running agent
+- create_agent: Create a new agent
+- remove_agent: Delete an agent
+
+WORKFLOW - When asked to talk to an agent:
+1. Use start_agent or send_message with your question (both auto-handle idle/running states)
+2. Wait 5-10 seconds for the agent to process
+3. Use get_agent_output to read their response
+4. Report the response back to the user
+
+IMPORTANT:
+- ALWAYS check get_agent_output after sending a message to see the response
+- Keep responses concise
+- NEVER explore codebases - you only manage agents
+
+Say hello and list the current agents.`;
+
+  // Handle Super Agent button click
+  const handleSuperAgentClick = async () => {
+    // If super agent exists
+    if (superAgent) {
+      // If idle, restart it with the orchestrator prompt
+      if (superAgent.status === 'idle' || superAgent.status === 'completed' || superAgent.status === 'error') {
+        await startAgent(superAgent.id, orchestratorPrompt);
+      }
+      setSelectedAgent(superAgent.id);
+      return;
+    }
+
+    // Check if orchestrator is configured
+    if (!window.electronAPI?.orchestrator?.getStatus) {
+      console.error('Orchestrator API not available');
+      return;
+    }
+
+    const status = await window.electronAPI.orchestrator.getStatus();
+
+    // If not configured, set it up first
+    if (!status.configured && window.electronAPI?.orchestrator?.setup) {
+      const setupResult = await window.electronAPI.orchestrator.setup();
+      if (!setupResult.success) {
+        console.error('Failed to setup orchestrator:', setupResult.error);
+        return;
+      }
+    }
+
+    // Create a new super agent
+    setIsCreatingSuperAgent(true);
+    try {
+      // Use the first project path or a default
+      const projectPath = projects[0]?.path || '/tmp';
+
+      const agent = await createAgent({
+        projectPath,
+        skills: [],
+        character: 'wizard',
+        name: 'Super Agent (Orchestrator)',
+        skipPermissions: true,
+      });
+
+      setSelectedAgent(agent.id);
+
+      // Start with orchestrator instructions
+      setTimeout(async () => {
+        await startAgent(agent.id, orchestratorPrompt);
+      }, 600);
+    } catch (error) {
+      console.error('Failed to create super agent:', error);
+    } finally {
+      setIsCreatingSuperAgent(false);
+    }
+  };
 
   // Get unique projects from agents
   const uniqueProjects = useMemo(() => {
@@ -103,10 +194,23 @@ export default function AgentsPage() {
     return Array.from(projectSet.entries()).map(([path, name]) => ({ path, name }));
   }, [agents]);
 
-  // Filter agents by selected project
+  // Helper to detect super agent
+  const isSuperAgentCheck = (agent: AgentStatus) => {
+    const name = agent.name?.toLowerCase() || '';
+    return name.includes('super agent') || name.includes('orchestrator');
+  };
+
+  // Filter agents by selected project, with Super Agent always at top
   const filteredAgents = useMemo(() => {
-    if (!projectFilter) return agents;
-    return agents.filter(a => a.projectPath === projectFilter);
+    let filtered = projectFilter ? agents.filter(a => a.projectPath === projectFilter) : agents;
+    // Sort to put Super Agent first
+    return [...filtered].sort((a, b) => {
+      const aIsSuper = isSuperAgentCheck(a);
+      const bIsSuper = isSuperAgentCheck(b);
+      if (aIsSuper && !bIsSuper) return -1;
+      if (!aIsSuper && bIsSuper) return 1;
+      return 0;
+    });
   }, [agents, projectFilter]);
 
   // xterm refs
@@ -396,7 +500,7 @@ export default function AgentsPage() {
   }
 
   return (
-    <div className="h-[calc(100vh-7rem)] lg:h-[calc(100vh-3rem)] flex flex-col">
+    <div className="h-[calc(100vh-7rem)] lg:h-[calc(100vh-3rem)] flex flex-col pt-4 lg:pt-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 lg:mb-6">
         <div>
@@ -405,14 +509,54 @@ export default function AgentsPage() {
             Manage and monitor your Claude Code agents in real-time
           </p>
         </div>
-        <button
-          onClick={() => setShowNewChatModal(true)}
-          className="flex items-center justify-center gap-2 px-4 py-2 bg-accent-cyan text-bg-primary font-medium rounded-lg hover:bg-accent-cyan/90 transition-colors text-sm lg:text-base"
-        >
-          <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">New Agent</span>
-          <span className="sm:hidden">New</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Super Agent Button */}
+          <button
+            onClick={handleSuperAgentClick}
+            disabled={isCreatingSuperAgent}
+            className={`
+              flex items-center justify-center gap-2 px-3 lg:px-4 py-2 font-medium rounded-lg transition-all text-sm lg:text-base
+              ${superAgent
+                ? superAgent.status === 'running' || superAgent.status === 'waiting'
+                  ? 'bg-purple-500/20 border border-purple-500/50 text-purple-300 hover:bg-purple-500/30 shadow-lg shadow-purple-500/20'
+                  : 'bg-bg-tertiary border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 hover:border-purple-500/50'
+                : 'bg-bg-tertiary border border-border-primary text-text-secondary hover:bg-bg-secondary hover:border-purple-500/50 hover:text-purple-400'
+              }
+              disabled:opacity-50 disabled:cursor-not-allowed
+            `}
+            title={superAgent ? `Super Agent (${superAgent.status})` : 'Create Super Agent'}
+          >
+            {isCreatingSuperAgent ? (
+              <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+            ) : (
+              <div className="relative">
+                <Crown className={`w-4 h-4 ${superAgent ? 'text-amber-400' : ''}`} />
+                {superAgent && (
+                  <span className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-bg-tertiary ${
+                    superAgent.status === 'running' ? 'bg-green-400 animate-pulse' :
+                    superAgent.status === 'waiting' ? 'bg-amber-400 animate-pulse' :
+                    superAgent.status === 'error' ? 'bg-red-400' :
+                    superAgent.status === 'completed' ? 'bg-cyan-400' :
+                    'bg-zinc-500'
+                  }`} />
+                )}
+              </div>
+            )}
+            <span className="hidden sm:inline">
+              {isCreatingSuperAgent ? 'Creating...' : 'Super Agent'}
+            </span>
+          </button>
+
+          {/* New Agent Button */}
+          <button
+            onClick={() => setShowNewChatModal(true)}
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-accent-cyan text-bg-primary font-medium rounded-lg hover:bg-accent-cyan/90 transition-colors text-sm lg:text-base"
+          >
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">New Agent</span>
+            <span className="sm:hidden">New</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Content */}
@@ -494,19 +638,35 @@ export default function AgentsPage() {
                 const isSelected = selectedAgent === agent.id;
                 const projectName = agent.projectPath.split('/').pop() || 'Unknown';
                 const projectColor = getProjectColor(projectName);
+                const isSuper = isSuperAgentCheck(agent);
 
                 return (
                   <div
                     key={agent.id}
                     onClick={() => setSelectedAgent(agent.id)}
                     className={`
-                      p-4 cursor-pointer transition-all border-b border-border-primary/50
-                      ${isSelected ? 'bg-accent-cyan/10' : 'hover:bg-bg-tertiary/50'}
+                      p-4 cursor-pointer transition-all relative
+                      ${isSuper
+                        ? 'bg-gradient-to-r from-amber-500/10 via-yellow-500/5 to-transparent border-l-2 border-l-amber-500/50 border-b border-amber-500/20'
+                        : 'border-b border-border-primary/50'}
+                      ${isSelected ? 'bg-accent-cyan/10' : isSuper ? '' : 'hover:bg-bg-tertiary/50'}
                     `}
                   >
-                    <div className="flex items-start gap-3">
-                      <div className={`w-10 h-10 rounded-lg ${agent.name?.toLowerCase() === 'bitwonka' ? 'bg-accent-green/20' : statusConfig.bg} flex items-center justify-center shrink-0 relative`}>
-                        {agent.name?.toLowerCase() === 'bitwonka' ? (
+                    {/* Subtle gold shimmer for Super Agent */}
+                    {isSuper && (
+                      <div className="absolute inset-0 bg-gradient-to-r from-amber-400/5 to-transparent pointer-events-none" />
+                    )}
+                    <div className="flex items-start gap-3 relative">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 relative ${
+                        isSuper
+                          ? 'bg-gradient-to-br from-amber-500/30 to-yellow-600/20 ring-1 ring-amber-500/30'
+                          : agent.name?.toLowerCase() === 'bitwonka'
+                            ? 'bg-accent-green/20'
+                            : statusConfig.bg
+                      }`}>
+                        {isSuper ? (
+                          <span className="text-xl">👑</span>
+                        ) : agent.name?.toLowerCase() === 'bitwonka' ? (
                           <span className="text-xl">🐸</span>
                         ) : agent.character ? (
                           <span className="text-xl">{CHARACTER_FACES[agent.character] || '🤖'}</span>
@@ -515,13 +675,14 @@ export default function AgentsPage() {
                         ) : (
                           <StatusIcon className={`w-5 h-5 ${statusConfig.text}`} />
                         )}
-                        {agent.status === 'running' && (agent.character || agent.name?.toLowerCase() === 'bitwonka') && (
-                          <span className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-accent-cyan animate-pulse" />
+                        {agent.status === 'running' && (agent.character || agent.name?.toLowerCase() === 'bitwonka' || isSuper) && (
+                          <span className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full animate-pulse ${isSuper ? 'bg-amber-400' : 'bg-accent-cyan'}`} />
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2">
-                          <h4 className="font-medium text-sm truncate">
+                          <h4 className={`font-medium text-sm truncate flex items-center gap-1.5 ${isSuper ? 'text-amber-200' : ''}`}>
+                            {isSuper && <Crown className="w-3.5 h-3.5 text-amber-400" />}
                             {agent.name || 'Unnamed Agent'}
                           </h4>
                           <div className="flex items-center gap-1.5 shrink-0">
@@ -535,7 +696,11 @@ export default function AgentsPage() {
                             >
                               <Pencil className="w-3.5 h-3.5 text-text-muted hover:text-accent-cyan" />
                             </button>
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${statusConfig.bg} ${statusConfig.text}`}>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${
+                              isSuper && agent.status === 'running'
+                                ? 'bg-amber-500/20 text-amber-400'
+                                : `${statusConfig.bg} ${statusConfig.text}`
+                            }`}>
                               {agent.status}
                             </span>
                           </div>
@@ -880,6 +1045,7 @@ export default function AgentsPage() {
         onStart={handleStartAgent}
         onStop={stopAgent}
         projects={projects.map(p => ({ path: p.path, name: p.name }))}
+        agents={agents}
         onBrowseFolder={isElectron() ? openFolderDialog : undefined}
         initialPanel="settings"
       />

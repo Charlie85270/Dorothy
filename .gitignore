@@ -41,3 +41,7 @@ yarn-error.log*
 next-env.d.ts
 
 release/
+
+# mcp-orchestrator
+mcp-orchestrator/node_modules
+mcp-orchestrator/dist

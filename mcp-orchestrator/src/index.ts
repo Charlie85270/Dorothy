@@ -188,7 +188,7 @@ server.tool(
 // Tool: Start agent
 server.tool(
   "start_agent",
-  "Start an agent with a specific task/prompt. The agent will begin working on the task immediately.",
+  "Start an agent with a specific task/prompt. If agent is already running/waiting, sends the prompt as a message instead.",
   {
     id: z.string().describe("The agent ID"),
     prompt: z.string().describe("The task or instruction for the agent to work on"),
@@ -196,6 +196,27 @@ server.tool(
   },
   async ({ id, prompt, model }) => {
     try {
+      // First check agent status
+      const agentData = await apiRequest(`/api/agents/${id}`) as {
+        agent: { status: string; name?: string };
+      };
+      const agentName = agentData.agent.name || id;
+      const status = agentData.agent.status;
+
+      // If agent is already running or waiting, send message instead
+      if (status === "running" || status === "waiting") {
+        await apiRequest(`/api/agents/${id}/message`, "POST", { message: prompt });
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Agent "${agentName}" was already ${status}. Sent message: "${prompt}"`,
+            },
+          ],
+        };
+      }
+
+      // Start the agent
       const data = await apiRequest(`/api/agents/${id}/start`, "POST", {
         prompt,
         model,
@@ -204,7 +225,7 @@ server.tool(
         content: [
           {
             type: "text",
-            text: `Started agent ${id}. Status: ${data.agent.status}\nTask: ${prompt}`,
+            text: `Started agent "${agentName}". Status: ${data.agent.status}\nTask: ${prompt}`,
           },
         ],
       };
@@ -257,19 +278,41 @@ server.tool(
 // Tool: Send message to agent
 server.tool(
   "send_message",
-  "Send input/message to an agent that is waiting for input. Use this to respond to prompts or provide additional instructions.",
+  "Send input/message to an agent. If the agent is idle, this will START the agent with the message as the prompt. If the agent is running/waiting, this sends the message as input.",
   {
     id: z.string().describe("The agent ID"),
     message: z.string().describe("The message to send to the agent"),
   },
   async ({ id, message }) => {
     try {
+      // First check agent status
+      const agentData = await apiRequest(`/api/agents/${id}`) as {
+        agent: { status: string; name?: string };
+      };
+      const status = agentData.agent.status;
+
+      // If agent is idle/completed/error, START it with the message as prompt
+      if (status === "idle" || status === "completed" || status === "error") {
+        const startResult = await apiRequest(`/api/agents/${id}/start`, "POST", {
+          prompt: message,
+        }) as { success: boolean; agent: { status: string } };
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Agent ${agentData.agent.name || id} was ${status}, started it with prompt: "${message}". New status: ${startResult.agent.status}`,
+            },
+          ],
+        };
+      }
+
+      // Agent is running or waiting - send message as input
       await apiRequest(`/api/agents/${id}/message`, "POST", { message });
       return {
         content: [
           {
             type: "text",
-            text: `Sent message to agent ${id}: "${message}"`,
+            text: `Sent message to agent ${agentData.agent.name || id}: "${message}"`,
           },
         ],
       };
@@ -322,7 +365,7 @@ server.tool(
 // Tool: Wait for agent completion
 server.tool(
   "wait_for_agent",
-  "Poll an agent's status until it completes, errors, or times out. Useful for synchronizing multiple agents.",
+  "Poll an agent's status until it completes, errors, or needs input. Returns immediately if agent is idle (use start_agent first) or waiting for input (use send_message).",
   {
     id: z.string().describe("The agent ID"),
     timeoutSeconds: z.number().optional().describe("Maximum time to wait in seconds (default: 300)"),
@@ -334,9 +377,27 @@ server.tool(
     const pollIntervalMs = pollIntervalSeconds * 1000;
 
     try {
+      // First check current status
+      const initialData = await apiRequest(`/api/agents/${id}`) as {
+        agent: { status: string; error?: string; currentTask?: string; name?: string };
+      };
+      const agentName = initialData.agent.name || id;
+
+      // If agent is idle, tell user to start it first
+      if (initialData.agent.status === "idle") {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Agent "${agentName}" is idle and not running. Use start_agent or send_message to give it a task first.`,
+            },
+          ],
+        };
+      }
+
       while (Date.now() - startTime < timeoutMs) {
         const data = await apiRequest(`/api/agents/${id}`) as {
-          agent: { status: string; error?: string; currentTask?: string };
+          agent: { status: string; error?: string; currentTask?: string; name?: string };
         };
         const status = data.agent.status;
 
@@ -345,7 +406,7 @@ server.tool(
             content: [
               {
                 type: "text",
-                text: `Agent ${id} completed successfully.`,
+                text: `Agent "${agentName}" completed successfully.`,
               },
             ],
           };
@@ -356,7 +417,7 @@ server.tool(
             content: [
               {
                 type: "text",
-                text: `Agent ${id} encountered an error: ${data.agent.error || "Unknown error"}`,
+                text: `Agent "${agentName}" encountered an error: ${data.agent.error || "Unknown error"}`,
               },
             ],
             isError: true,
@@ -368,21 +429,34 @@ server.tool(
             content: [
               {
                 type: "text",
-                text: `Agent ${id} is idle (not running).`,
+                text: `Agent "${agentName}" finished and is now idle.`,
               },
             ],
           };
         }
 
-        // Still running or waiting, continue polling
+        // If waiting for input, return immediately - user needs to send a message
+        if (status === "waiting") {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Agent "${agentName}" is waiting for input. Use send_message to respond, or check get_agent_output to see what it's asking.`,
+              },
+            ],
+          };
+        }
+
+        // Still running, continue polling
         await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
       }
 
+      const finalStatus = (await apiRequest(`/api/agents/${id}`) as { agent: { status: string } }).agent.status;
       return {
         content: [
           {
             type: "text",
-            text: `Timeout waiting for agent ${id} after ${timeoutSeconds} seconds. Agent is still in '${(await apiRequest(`/api/agents/${id}`) as { agent: { status: string } }).agent.status}' state.`,
+            text: `Timeout after ${timeoutSeconds}s. Agent "${agentName}" is still '${finalStatus}'. Check get_agent_output to see progress.`,
           },
         ],
         isError: true,
@@ -393,6 +467,38 @@ server.tool(
           {
             type: "text",
             text: `Error waiting for agent: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+);
+
+// Tool: Send message to Telegram
+server.tool(
+  "send_telegram",
+  "Send a message to Telegram. Use this to respond to the user when the request came from Telegram.",
+  {
+    message: z.string().describe("The message to send to Telegram"),
+  },
+  async ({ message }) => {
+    try {
+      await apiRequest("/api/telegram/send", "POST", { message });
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Message sent to Telegram: "${message.slice(0, 100)}${message.length > 100 ? '...' : ''}"`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error sending to Telegram: ${error instanceof Error ? error.message : String(error)}`,
           },
         ],
         isError: true,

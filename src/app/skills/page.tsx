@@ -330,7 +330,7 @@ export default function SkillsPage() {
   }
 
   return (
-    <div className="space-y-4 lg:space-y-6">
+    <div className="space-y-4 lg:space-y-6 pt-4 lg:pt-6">
       {/* Header */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">

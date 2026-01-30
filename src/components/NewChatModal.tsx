@@ -46,6 +46,205 @@ import type { ClaudeSkill } from '@/lib/claude-code';
 // Import xterm CSS
 import 'xterm/css/xterm.css';
 
+// Orchestrator Mode Toggle Component
+function OrchestratorModeToggle({
+  isOrchestrator,
+  onToggle,
+}: {
+  isOrchestrator: boolean;
+  onToggle: (enabled: boolean) => void;
+}) {
+  const [status, setStatus] = useState<'idle' | 'loading' | 'configured' | 'not-configured' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSettingUp, setIsSettingUp] = useState(false);
+
+  // Check orchestrator status on mount
+  useEffect(() => {
+    const checkStatus = async () => {
+      if (!window.electronAPI?.orchestrator?.getStatus) {
+        setStatus('error');
+        setErrorMessage('Orchestrator API not available');
+        return;
+      }
+
+      setStatus('loading');
+      try {
+        const result = await window.electronAPI.orchestrator.getStatus();
+        if (result.error) {
+          setStatus('error');
+          setErrorMessage(result.error);
+        } else if (result.configured) {
+          setStatus('configured');
+        } else {
+          setStatus('not-configured');
+        }
+      } catch (err) {
+        setStatus('error');
+        setErrorMessage(err instanceof Error ? err.message : 'Unknown error');
+      }
+    };
+
+    checkStatus();
+  }, []);
+
+  const handleSetup = async () => {
+    if (!window.electronAPI?.orchestrator?.setup) return;
+
+    setIsSettingUp(true);
+    setErrorMessage(null);
+
+    try {
+      const result = await window.electronAPI.orchestrator.setup();
+      if (result.success) {
+        setStatus('configured');
+        onToggle(true);
+      } else {
+        setErrorMessage(result.error || 'Setup failed');
+      }
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setIsSettingUp(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    if (!window.electronAPI?.orchestrator?.remove) return;
+
+    setIsSettingUp(true);
+    setErrorMessage(null);
+
+    try {
+      const result = await window.electronAPI.orchestrator.remove();
+      if (result.success) {
+        setStatus('not-configured');
+        onToggle(false);
+      } else {
+        setErrorMessage(result.error || 'Remove failed');
+      }
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setIsSettingUp(false);
+    }
+  };
+
+  // Don't show if API not available (web mode)
+  if (!isElectron()) {
+    return null;
+  }
+
+  return (
+    <div className="p-4 rounded-xl border border-accent-purple/30 bg-accent-purple/5">
+      <div className="flex items-start gap-3">
+        <button
+          onClick={() => {
+            if (status === 'configured') {
+              onToggle(!isOrchestrator);
+            }
+          }}
+          disabled={status !== 'configured'}
+          className={`
+            mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center transition-all shrink-0
+            ${isOrchestrator && status === 'configured'
+              ? 'bg-accent-purple border-accent-purple'
+              : 'border-accent-purple/50 hover:border-accent-purple'
+            }
+            ${status !== 'configured' ? 'opacity-50 cursor-not-allowed' : ''}
+          `}
+        >
+          {isOrchestrator && status === 'configured' && <Check className="w-3 h-3 text-white" />}
+        </button>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <Crown className="w-4 h-4 text-accent-purple" />
+            <span className="font-medium text-sm">Orchestrator Mode (Super Agent)</span>
+            {status === 'loading' && (
+              <Loader2 className="w-3.5 h-3.5 text-accent-purple animate-spin" />
+            )}
+            {status === 'configured' && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-accent-green/20 text-accent-green">
+                Ready
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-text-muted mt-1">
+            This agent can create, manage, and coordinate other agents. It has full control over the agent fleet.
+          </p>
+
+          {/* Status-based content */}
+          {status === 'not-configured' && (
+            <div className="mt-3 pt-3 border-t border-border-primary">
+              <p className="text-xs text-text-muted mb-2">
+                Enable orchestrator capabilities by adding the MCP server to Claude&apos;s configuration.
+              </p>
+              <button
+                onClick={handleSetup}
+                disabled={isSettingUp}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-accent-purple/20 text-accent-purple text-sm font-medium hover:bg-accent-purple/30 transition-colors disabled:opacity-50"
+              >
+                {isSettingUp ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Setting up...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-3.5 h-3.5" />
+                    Enable Orchestrator
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+
+          {status === 'configured' && (
+            <div className="mt-3 pt-3 border-t border-border-primary">
+              <div className="flex items-center gap-2 mb-2">
+                <CheckCircle className="w-3.5 h-3.5 text-accent-green" />
+                <span className="text-xs text-accent-green">MCP orchestrator is configured</span>
+              </div>
+              <button
+                onClick={handleRemove}
+                disabled={isSettingUp}
+                className="text-xs text-text-muted hover:text-accent-red transition-colors flex items-center gap-1"
+              >
+                {isSettingUp ? (
+                  <>
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Removing...
+                  </>
+                ) : (
+                  <>
+                    <X className="w-3 h-3" />
+                    Remove orchestrator config
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+
+          {status === 'error' && (
+            <div className="mt-3 pt-3 border-t border-border-primary">
+              <div className="flex items-center gap-2 text-accent-red">
+                <XCircle className="w-3.5 h-3.5" />
+                <span className="text-xs">{errorMessage || 'An error occurred'}</span>
+              </div>
+            </div>
+          )}
+
+          {errorMessage && status !== 'error' && (
+            <div className="mt-2 text-xs text-accent-red flex items-center gap-1">
+              <XCircle className="w-3 h-3" />
+              {errorMessage}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface Project {
   path: string;
   name: string;
@@ -1051,113 +1250,16 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
                 </div>
 
                 {/* Orchestrator Mode Option */}
-                <div className={`p-4 rounded-xl border transition-all ${isOrchestrator ? 'border-purple-500/50 bg-purple-500/10' : 'border-purple-500/30 bg-purple-500/5'}`}>
-                  <div className="flex items-start gap-3">
-                    <button
-                      onClick={() => {
-                        setIsOrchestrator(!isOrchestrator);
-                        if (!isOrchestrator) {
-                          setSkipPermissions(true); // Orchestrators need full autonomy
-                          setAgentCharacter('wizard'); // Set wizard character
-                        }
-                      }}
-                      className={`
-                        mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center transition-all shrink-0
-                        ${isOrchestrator
-                          ? 'bg-purple-500 border-purple-500'
-                          : 'border-purple-500/50 hover:border-purple-500'
-                        }
-                      `}
-                    >
-                      {isOrchestrator && <Check className="w-3 h-3 text-white" />}
-                    </button>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <Crown className="w-4 h-4 text-purple-400" />
-                        <span className="font-medium text-sm">Orchestrator Mode (Super Agent)</span>
-                      </div>
-                      <p className="text-xs text-text-muted mt-1">
-                        This agent can create, start, stop, and monitor other agents. Requires MCP server setup.
-                      </p>
-
-                      {isOrchestrator && (
-                        <div className="mt-3">
-                          <button
-                            onClick={() => setShowMcpInstructions(!showMcpInstructions)}
-                            className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 transition-colors"
-                          >
-                            <ChevronRight className={`w-3 h-3 transition-transform ${showMcpInstructions ? 'rotate-90' : ''}`} />
-                            {showMcpInstructions ? 'Hide' : 'Show'} MCP Setup Instructions
-                          </button>
-
-                          <AnimatePresence>
-                            {showMcpInstructions && (
-                              <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: 'auto', opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                className="overflow-hidden"
-                              >
-                                <div className="mt-3 p-3 rounded-lg bg-bg-primary border border-border-primary">
-                                  <p className="text-xs text-text-secondary mb-2">
-                                    Add this to your Claude Code MCP config (<code className="text-purple-400">~/.claude/mcp.json</code>):
-                                  </p>
-                                  <div className="relative">
-                                    <pre className="text-[10px] p-2 rounded bg-bg-tertiary overflow-x-auto font-mono text-text-muted">
-{`{
-  "mcpServers": {
-    "claude-mgr-orchestrator": {
-      "command": "npx",
-      "args": ["tsx", "${typeof window !== 'undefined' ? window.location.origin : ''}/mcp-orchestrator/src/index.ts"]
-    }
-  }
-}`}
-                                    </pre>
-                                    <button
-                                      onClick={() => {
-                                        const config = JSON.stringify({
-                                          mcpServers: {
-                                            "claude-mgr-orchestrator": {
-                                              command: "node",
-                                              args: ["/path/to/claude-manager/mcp-orchestrator/dist/index.js"]
-                                            }
-                                          }
-                                        }, null, 2);
-                                        navigator.clipboard.writeText(config);
-                                        setCopiedMcp(true);
-                                        setTimeout(() => setCopiedMcp(false), 2000);
-                                      }}
-                                      className="absolute top-2 right-2 p-1.5 rounded bg-bg-secondary hover:bg-bg-tertiary transition-colors"
-                                      title="Copy to clipboard"
-                                    >
-                                      {copiedMcp ? (
-                                        <Check className="w-3 h-3 text-green-400" />
-                                      ) : (
-                                        <Copy className="w-3 h-3 text-text-muted" />
-                                      )}
-                                    </button>
-                                  </div>
-                                  <p className="text-[10px] text-text-muted mt-2">
-                                    Then install dependencies: <code className="text-purple-400">cd mcp-orchestrator && npm install && npm run build</code>
-                                  </p>
-                                  <a
-                                    href="https://github.com/Charlie85270/claude-mgr#orchestrator"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-1 text-[10px] text-purple-400 hover:text-purple-300 mt-2"
-                                  >
-                                    <ExternalLink className="w-3 h-3" />
-                                    Full setup guide
-                                  </a>
-                                </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                <OrchestratorModeToggle
+                  isOrchestrator={isOrchestrator}
+                  onToggle={(enabled) => {
+                    setIsOrchestrator(enabled);
+                    if (enabled) {
+                      setSkipPermissions(true);
+                      setAgentCharacter('wizard');
+                    }
+                  }}
+                />
 
                 {/* Prompt */}
                 <div>

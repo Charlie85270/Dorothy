@@ -364,7 +364,7 @@ export default function UsagePage() {
   const maxCost = Math.max(...costChartData.map(d => d.cost), 0.01);
 
   return (
-    <div className="space-y-4 lg:space-y-6">
+    <div className="space-y-4 lg:space-y-6 pt-4 lg:pt-6">
       {/* Header */}
       <div>
         <h1 className="text-xl lg:text-2xl font-bold tracking-tight flex items-center gap-2 lg:gap-3">

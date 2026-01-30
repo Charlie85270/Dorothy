@@ -172,8 +172,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
       notifyOnWaiting?: boolean;
       notifyOnComplete?: boolean;
       notifyOnError?: boolean;
+      telegramEnabled?: boolean;
+      telegramBotToken?: string;
+      telegramChatId?: string;
     }) =>
       ipcRenderer.invoke('app:saveSettings', settings),
+    onUpdated: (callback: (settings: unknown) => void) => {
+      const listener = (_: unknown, settings: unknown) => callback(settings);
+      ipcRenderer.on('settings:updated', listener);
+      return () => ipcRenderer.removeListener('settings:updated', listener);
+    },
+  },
+
+  // Telegram bot
+  telegram: {
+    test: () =>
+      ipcRenderer.invoke('telegram:test'),
+    sendTest: () =>
+      ipcRenderer.invoke('telegram:sendTest'),
   },
 
   // Dialogs
@@ -208,6 +224,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('shell:ptyExit', listener);
       return () => ipcRenderer.removeListener('shell:ptyExit', listener);
     },
+  },
+
+  // Orchestrator (Super Agent) management
+  orchestrator: {
+    getStatus: () =>
+      ipcRenderer.invoke('orchestrator:getStatus'),
+    setup: () =>
+      ipcRenderer.invoke('orchestrator:setup'),
+    remove: () =>
+      ipcRenderer.invoke('orchestrator:remove'),
   },
 
   // Platform info

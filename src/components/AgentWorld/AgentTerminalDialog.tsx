@@ -25,6 +25,10 @@ import {
   Check,
   Code2,
   Settings2,
+  Crown,
+  Users,
+  Folder,
+  Circle,
 } from 'lucide-react';
 import type { AgentStatus } from '@/types/electron';
 import { isElectron } from '@/hooks/useElectron';
@@ -51,6 +55,13 @@ const CodePanel = dynamic(() => import('./CodePanel'), {
 // Store PTY IDs per agent to persist terminals across dialog open/close
 const persistentTerminals = new Map<string, { ptyId: string; outputBuffer: string[] }>();
 
+// Helper to detect Super Agent
+const isSuperAgent = (agent: { name?: string } | null) => {
+  if (!agent) return false;
+  const name = agent.name?.toLowerCase() || '';
+  return name.includes('super agent') || name.includes('orchestrator');
+};
+
 interface AgentTerminalDialogProps {
   agent: AgentStatus | null;
   open: boolean;
@@ -58,6 +69,7 @@ interface AgentTerminalDialogProps {
   onStart: (agentId: string, prompt: string) => void;
   onStop: (agentId: string) => void;
   projects?: { path: string; name: string }[];
+  agents?: AgentStatus[]; // All agents (for Super Agent sidebar)
   onBrowseFolder?: () => Promise<string | null>;
   onAgentUpdated?: (agent: AgentStatus) => void;
   onUpdateAgent?: (params: {
@@ -81,6 +93,7 @@ const DialogHeader = memo(function DialogHeader({
   character,
   isFullscreen,
   hasSecondaryProject,
+  isSuperAgentMode,
   onOpenInFinder,
   onToggleFullscreen,
   onClose,
@@ -89,6 +102,7 @@ const DialogHeader = memo(function DialogHeader({
   character: string;
   isFullscreen: boolean;
   hasSecondaryProject: boolean;
+  isSuperAgentMode: boolean;
   onOpenInFinder: () => void;
   onToggleFullscreen: () => void;
   onClose: () => void;
@@ -96,7 +110,9 @@ const DialogHeader = memo(function DialogHeader({
   return (
     <div className="px-5 py-3 border-b border-border-primary flex items-center justify-between bg-bg-tertiary/30">
       <div className="flex items-center gap-3">
-        <span className="text-2xl">{CHARACTER_FACES[character as keyof typeof CHARACTER_FACES] || '🤖'}</span>
+        <span className="text-2xl">
+          {isSuperAgentMode ? '👑' : CHARACTER_FACES[character as keyof typeof CHARACTER_FACES] || '🤖'}
+        </span>
         <div>
           <h3 className="font-semibold flex items-center gap-2">
             {agent.name || 'Agent'}
@@ -113,34 +129,47 @@ const DialogHeader = memo(function DialogHeader({
             </span>
           </h3>
           <div className="flex items-center gap-2 text-xs text-text-muted">
-            <span className="font-mono truncate max-w-[200px]">
-              {agent.projectPath.split('/').pop()}
-            </span>
-            {agent.branchName && (
-              <span className="text-accent-purple flex items-center gap-1">
-                <GitBranch className="w-3 h-3" />
-                {agent.branchName}
-              </span>
-            )}
-            {hasSecondaryProject && (
+            {isSuperAgentMode ? (
               <span className="text-amber-400 flex items-center gap-1">
-                <Layers className="w-3 h-3" />
-                +1 context
+                <Crown className="w-3 h-3" />
+                Orchestrator
               </span>
+            ) : (
+              <>
+                <span className="font-mono truncate max-w-[200px]">
+                  {agent.projectPath.split('/').pop()}
+                </span>
+                {agent.branchName && (
+                  <span className="text-accent-purple flex items-center gap-1">
+                    <GitBranch className="w-3 h-3" />
+                    {agent.branchName}
+                  </span>
+                )}
+                {hasSecondaryProject && (
+                  <span className="text-amber-400 flex items-center gap-1">
+                    <Layers className="w-3 h-3" />
+                    +1 context
+                  </span>
+                )}
+              </>
             )}
           </div>
         </div>
       </div>
 
       <div className="flex items-center gap-1">
-        <button
-          onClick={onOpenInFinder}
-          className="p-2 hover:bg-bg-tertiary rounded-lg transition-colors"
-          title="Open in Finder"
-        >
-          <FolderOpen className="w-4 h-4 text-text-muted" />
-        </button>
-        <div className="w-px h-5 bg-border-primary mx-1" />
+        {!isSuperAgentMode && (
+          <>
+            <button
+              onClick={onOpenInFinder}
+              className="p-2 hover:bg-bg-tertiary rounded-lg transition-colors"
+              title="Open in Finder"
+            >
+              <FolderOpen className="w-4 h-4 text-text-muted" />
+            </button>
+            <div className="w-px h-5 bg-border-primary mx-1" />
+          </>
+        )}
         <button
           onClick={onToggleFullscreen}
           className="p-2 hover:bg-bg-tertiary rounded-lg transition-colors"
@@ -304,6 +333,217 @@ const SecondaryProjectContent = memo(function SecondaryProjectContent({
   );
 });
 
+// Super Agent Sidebar showing agents and projects
+const SuperAgentSidebar = memo(function SuperAgentSidebar({
+  agents,
+  projects,
+}: {
+  agents: AgentStatus[];
+  projects: { path: string; name: string }[];
+}) {
+  // Filter out the super agent itself from the list
+  const otherAgents = agents.filter(a => !isSuperAgent(a));
+
+  // Group agents by status
+  const runningAgents = otherAgents.filter(a => a.status === 'running');
+  const idleAgents = otherAgents.filter(a => a.status === 'idle' || a.status === 'completed');
+  const errorAgents = otherAgents.filter(a => a.status === 'error');
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'running': return 'text-accent-cyan';
+      case 'completed': return 'text-accent-green';
+      case 'error': return 'text-accent-red';
+      default: return 'text-text-muted';
+    }
+  };
+
+  const getStatusBgColor = (status: string) => {
+    switch (status) {
+      case 'running': return 'bg-accent-cyan/20';
+      case 'completed': return 'bg-accent-green/20';
+      case 'error': return 'bg-accent-red/20';
+      default: return 'bg-text-muted/20';
+    }
+  };
+
+  return (
+    <div className="h-full overflow-y-auto">
+      {/* Agents Section */}
+      <div className="border-b border-border-primary">
+        <div className="px-3 py-2.5 flex items-center gap-2 bg-bg-tertiary/30">
+          <Users className="w-4 h-4 text-accent-cyan" />
+          <span className="text-sm font-medium">Agents</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent-cyan/20 text-accent-cyan">
+            {otherAgents.length}
+          </span>
+        </div>
+        <div className="p-3 space-y-3">
+          {/* Running Agents */}
+          {runningAgents.length > 0 && (
+            <div>
+              <p className="text-[10px] text-accent-cyan mb-1.5 uppercase tracking-wide flex items-center gap-1">
+                <Circle className="w-2 h-2 fill-accent-cyan animate-pulse" />
+                Running ({runningAgents.length})
+              </p>
+              <div className="space-y-1">
+                {runningAgents.map((agent) => (
+                  <div
+                    key={agent.id}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-accent-cyan/10 border border-accent-cyan/20"
+                  >
+                    <span className="text-lg">
+                      {CHARACTER_FACES[agent.character as keyof typeof CHARACTER_FACES] || '🤖'}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{agent.name}</p>
+                      <p className="text-[10px] text-text-muted truncate">
+                        {agent.currentTask?.slice(0, 40) || agent.projectPath.split('/').pop()}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Error Agents */}
+          {errorAgents.length > 0 && (
+            <div>
+              <p className="text-[10px] text-accent-red mb-1.5 uppercase tracking-wide flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" />
+                Error ({errorAgents.length})
+              </p>
+              <div className="space-y-1">
+                {errorAgents.map((agent) => (
+                  <div
+                    key={agent.id}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-accent-red/10 border border-accent-red/20"
+                  >
+                    <span className="text-lg">
+                      {CHARACTER_FACES[agent.character as keyof typeof CHARACTER_FACES] || '🤖'}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{agent.name}</p>
+                      <p className="text-[10px] text-text-muted truncate">
+                        {agent.projectPath.split('/').pop()}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Idle/Completed Agents */}
+          {idleAgents.length > 0 && (
+            <div>
+              <p className="text-[10px] text-text-muted mb-1.5 uppercase tracking-wide">
+                Idle ({idleAgents.length})
+              </p>
+              <div className="space-y-1">
+                {idleAgents.map((agent) => (
+                  <div
+                    key={agent.id}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-bg-tertiary/50"
+                  >
+                    <span className="text-lg opacity-60">
+                      {CHARACTER_FACES[agent.character as keyof typeof CHARACTER_FACES] || '🤖'}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-text-secondary truncate">{agent.name}</p>
+                      <p className="text-[10px] text-text-muted truncate">
+                        {agent.projectPath.split('/').pop()}
+                      </p>
+                    </div>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${getStatusBgColor(agent.status)} ${getStatusColor(agent.status)}`}>
+                      {agent.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {otherAgents.length === 0 && (
+            <p className="text-xs text-text-muted text-center py-4">
+              No agents created yet
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Projects Section */}
+      <div className="border-b border-border-primary">
+        <div className="px-3 py-2.5 flex items-center gap-2 bg-bg-tertiary/30">
+          <Folder className="w-4 h-4 text-accent-purple" />
+          <span className="text-sm font-medium">Projects</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent-purple/20 text-accent-purple">
+            {projects.length}
+          </span>
+        </div>
+        <div className="p-3">
+          {projects.length > 0 ? (
+            <div className="space-y-1">
+              {projects.map((project) => {
+                // Count agents on this project
+                const projectAgents = otherAgents.filter(
+                  a => a.projectPath === project.path || a.worktreePath?.startsWith(project.path)
+                );
+                const runningCount = projectAgents.filter(a => a.status === 'running').length;
+
+                return (
+                  <div
+                    key={project.path}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-bg-tertiary/50"
+                  >
+                    <Folder className="w-4 h-4 text-accent-purple shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{project.name}</p>
+                      <p className="text-[10px] text-text-muted font-mono truncate">
+                        {project.path.split('/').slice(-2).join('/')}
+                      </p>
+                    </div>
+                    {projectAgents.length > 0 && (
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-bg-tertiary text-text-muted">
+                          {projectAgents.length} agent{projectAgents.length !== 1 ? 's' : ''}
+                        </span>
+                        {runningCount > 0 && (
+                          <span className="w-2 h-2 bg-accent-cyan rounded-full animate-pulse" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-text-muted text-center py-4">
+              No projects added yet
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* MCP Tools Info */}
+      <div className="p-3">
+        <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/5">
+          <div className="flex items-start gap-2">
+            <Crown className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-medium text-amber-400">Orchestrator Mode</p>
+              <p className="text-[10px] text-text-muted mt-1">
+                Use MCP tools to manage agents: create_agent, start_agent, stop_agent, list_agents, send_prompt
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 // Memoized footer component
 const DialogFooter = memo(function DialogFooter({
   agent,
@@ -381,11 +621,14 @@ export default function AgentTerminalDialog({
   onStart,
   onStop,
   projects = [],
+  agents = [],
   onBrowseFolder,
   onAgentUpdated,
   onUpdateAgent,
   initialPanel,
 }: AgentTerminalDialogProps) {
+  // Check if this is a Super Agent
+  const isSuperAgentMode = isSuperAgent(agent);
   const [terminalReady, setTerminalReady] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [prompt, setPrompt] = useState('');
@@ -933,6 +1176,7 @@ export default function AgentTerminalDialog({
             character={character}
             isFullscreen={isFullscreen}
             hasSecondaryProject={hasSecondaryProject}
+            isSuperAgentMode={isSuperAgentMode}
             onOpenInFinder={handleOpenInFinder}
             onToggleFullscreen={handleToggleFullscreen}
             onClose={onClose}
@@ -955,12 +1199,15 @@ export default function AgentTerminalDialog({
               )}
             </div>
 
-            {/* Right Sidebar with Panels */}
+            {/* Right Sidebar - Different for Super Agent */}
             <div
               className="border-l border-border-primary bg-bg-tertiary/20 flex flex-col overflow-hidden"
               style={{ width: '480px' }}
             >
-              <div className="flex-1 overflow-y-auto">
+              {isSuperAgentMode ? (
+                <SuperAgentSidebar agents={agents} projects={projects} />
+              ) : (
+                <div className="flex-1 overflow-y-auto">
                   {/* Code Panel */}
                   <div className="border-b border-border-primary">
                     <PanelHeader
@@ -1170,6 +1417,7 @@ export default function AgentTerminalDialog({
                     </div>
                   </div>
                 </div>
+              )}
             </div>
           </div>
 

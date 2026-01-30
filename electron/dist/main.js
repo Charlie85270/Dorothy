@@ -15,30 +15,25 @@ var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (
 }) : function(o, v) {
     o["default"] = v;
 });
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
 const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
 const os = __importStar(require("os"));
+const http = __importStar(require("http"));
 const uuid_1 = require("uuid");
 const pty = __importStar(require("node-pty"));
+const node_telegram_bot_api_1 = __importDefault(require("node-telegram-bot-api"));
 // Get the base path for static assets
 function getAppBasePath() {
     let appPath = electron_1.app.getAppPath();
@@ -74,106 +69,423 @@ const mimeTypes = {
 // PTY instances for terminals
 const ptyProcesses = new Map();
 const agents = new Map();
+// HTTP API Server for MCP orchestrator integration
+const API_PORT = 31415;
+let apiServer = null;
+function startApiServer() {
+    if (apiServer)
+        return;
+    apiServer = http.createServer(async (req, res) => {
+        // CORS headers for local access
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        if (req.method === 'OPTIONS') {
+            res.writeHead(200);
+            res.end();
+            return;
+        }
+        const url = new URL(req.url || '/', `http://localhost:${API_PORT}`);
+        const pathname = url.pathname;
+        // Parse JSON body for POST requests
+        let body = {};
+        if (req.method === 'POST') {
+            try {
+                const chunks = [];
+                for await (const chunk of req) {
+                    chunks.push(chunk);
+                }
+                const data = Buffer.concat(chunks).toString();
+                if (data) {
+                    body = JSON.parse(data);
+                }
+            }
+            catch {
+                // Ignore parse errors
+            }
+        }
+        const sendJson = (data, status = 200) => {
+            res.writeHead(status, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(data));
+        };
+        try {
+            // GET /api/agents - List all agents
+            if (pathname === '/api/agents' && req.method === 'GET') {
+                const agentList = Array.from(agents.values()).map(a => ({
+                    id: a.id,
+                    name: a.name,
+                    status: a.status,
+                    projectPath: a.projectPath,
+                    secondaryProjectPath: a.secondaryProjectPath,
+                    skills: a.skills,
+                    currentTask: a.currentTask,
+                    lastActivity: a.lastActivity,
+                    character: a.character,
+                    branchName: a.branchName,
+                    error: a.error,
+                }));
+                sendJson({ agents: agentList });
+                return;
+            }
+            // GET /api/agents/:id - Get single agent
+            const agentMatch = pathname.match(/^\/api\/agents\/([^/]+)$/);
+            if (agentMatch && req.method === 'GET') {
+                const agent = agents.get(agentMatch[1]);
+                if (!agent) {
+                    sendJson({ error: 'Agent not found' }, 404);
+                    return;
+                }
+                sendJson({ agent });
+                return;
+            }
+            // GET /api/agents/:id/output - Get agent output
+            const outputMatch = pathname.match(/^\/api\/agents\/([^/]+)\/output$/);
+            if (outputMatch && req.method === 'GET') {
+                const agent = agents.get(outputMatch[1]);
+                if (!agent) {
+                    sendJson({ error: 'Agent not found' }, 404);
+                    return;
+                }
+                // Return last N lines of output
+                const lines = parseInt(url.searchParams.get('lines') || '100', 10);
+                const output = agent.output.slice(-lines).join('');
+                sendJson({ output, status: agent.status });
+                return;
+            }
+            // POST /api/agents - Create new agent
+            if (pathname === '/api/agents' && req.method === 'POST') {
+                const { projectPath, name, skills = [], character, skipPermissions, secondaryProjectPath } = body;
+                if (!projectPath) {
+                    sendJson({ error: 'projectPath is required' }, 400);
+                    return;
+                }
+                const id = (0, uuid_1.v4)();
+                const agent = {
+                    id,
+                    status: 'idle',
+                    projectPath,
+                    secondaryProjectPath,
+                    skills,
+                    output: [],
+                    lastActivity: new Date().toISOString(),
+                    character,
+                    name: name || `Agent ${id.slice(0, 6)}`,
+                    skipPermissions,
+                };
+                agents.set(id, agent);
+                saveAgents();
+                sendJson({ agent });
+                return;
+            }
+            // POST /api/agents/:id/start - Start agent with task
+            const startMatch = pathname.match(/^\/api\/agents\/([^/]+)\/start$/);
+            if (startMatch && req.method === 'POST') {
+                const agent = agents.get(startMatch[1]);
+                if (!agent) {
+                    sendJson({ error: 'Agent not found' }, 404);
+                    return;
+                }
+                const { prompt, model } = body;
+                if (!prompt) {
+                    sendJson({ error: 'prompt is required' }, 400);
+                    return;
+                }
+                // Start the agent (similar to agent:start IPC handler)
+                const workingDir = agent.worktreePath || agent.projectPath;
+                let command = `cd '${workingDir}' && claude`;
+                // Check if this is the Super Agent (orchestrator)
+                const isSuperAgentApi = agent.name?.toLowerCase().includes('super agent') ||
+                    agent.name?.toLowerCase().includes('orchestrator');
+                // Add explicit MCP config for Super Agent
+                if (isSuperAgentApi) {
+                    const mcpConfigPath = path.join(electron_1.app.getPath('home'), '.claude', 'mcp.json');
+                    if (fs.existsSync(mcpConfigPath)) {
+                        command += ` --mcp-config '${mcpConfigPath}'`;
+                    }
+                }
+                if (agent.secondaryProjectPath) {
+                    command += ` --add-dir '${agent.secondaryProjectPath}'`;
+                }
+                if (agent.skipPermissions) {
+                    command += ' --dangerously-skip-permissions';
+                }
+                if (model) {
+                    command += ` --model ${model}`;
+                }
+                command += ` '${prompt.replace(/'/g, "'\\''")}'`;
+                const shell = process.env.SHELL || '/bin/zsh';
+                const ptyProcess = pty.spawn(shell, ['-l', '-c', command], {
+                    name: 'xterm-256color',
+                    cols: 120,
+                    rows: 40,
+                    cwd: workingDir,
+                    env: { ...process.env, TERM: 'xterm-256color' },
+                });
+                const ptyId = (0, uuid_1.v4)();
+                ptyProcesses.set(ptyId, ptyProcess);
+                agent.ptyId = ptyId;
+                agent.status = 'running';
+                agent.currentTask = prompt;
+                agent.output = [];
+                agent.lastActivity = new Date().toISOString();
+                saveAgents();
+                ptyProcess.onData((data) => {
+                    agent.output.push(data);
+                    if (agent.output.length > 10000) {
+                        agent.output = agent.output.slice(-5000);
+                    }
+                    agent.lastActivity = new Date().toISOString();
+                    // Check for waiting state
+                    const recentOutput = agent.output.slice(-20).join('');
+                    const isWaiting = CLAUDE_PATTERNS.waitingForInput.some(p => p.test(recentOutput));
+                    if (isWaiting && agent.status === 'running') {
+                        agent.status = 'waiting';
+                    }
+                    // Emit to renderer
+                    if (mainWindow && !mainWindow.isDestroyed()) {
+                        mainWindow.webContents.send('agent:output', { agentId: agent.id, data });
+                    }
+                });
+                ptyProcess.onExit(({ exitCode }) => {
+                    agent.status = exitCode === 0 ? 'completed' : 'error';
+                    if (exitCode !== 0) {
+                        agent.error = `Process exited with code ${exitCode}`;
+                    }
+                    agent.lastActivity = new Date().toISOString();
+                    ptyProcesses.delete(ptyId);
+                    saveAgents();
+                });
+                sendJson({ success: true, agent: { id: agent.id, status: agent.status } });
+                return;
+            }
+            // POST /api/agents/:id/stop - Stop agent
+            const stopMatch = pathname.match(/^\/api\/agents\/([^/]+)\/stop$/);
+            if (stopMatch && req.method === 'POST') {
+                const agent = agents.get(stopMatch[1]);
+                if (!agent) {
+                    sendJson({ error: 'Agent not found' }, 404);
+                    return;
+                }
+                if (agent.ptyId) {
+                    const ptyProcess = ptyProcesses.get(agent.ptyId);
+                    if (ptyProcess) {
+                        ptyProcess.kill();
+                        ptyProcesses.delete(agent.ptyId);
+                    }
+                }
+                agent.status = 'idle';
+                agent.currentTask = undefined;
+                agent.lastActivity = new Date().toISOString();
+                saveAgents();
+                sendJson({ success: true });
+                return;
+            }
+            // POST /api/agents/:id/message - Send input to agent
+            const messageMatch = pathname.match(/^\/api\/agents\/([^/]+)\/message$/);
+            if (messageMatch && req.method === 'POST') {
+                const agent = agents.get(messageMatch[1]);
+                if (!agent) {
+                    sendJson({ error: 'Agent not found' }, 404);
+                    return;
+                }
+                const { message } = body;
+                if (!message) {
+                    sendJson({ error: 'message is required' }, 400);
+                    return;
+                }
+                // Initialize PTY if needed
+                if (!agent.ptyId || !ptyProcesses.has(agent.ptyId)) {
+                    const ptyId = await initAgentPty(agent);
+                    agent.ptyId = ptyId;
+                }
+                const ptyProcess = ptyProcesses.get(agent.ptyId);
+                if (ptyProcess) {
+                    // Write message then send Enter separately
+                    ptyProcess.write(message);
+                    ptyProcess.write('\r');
+                    agent.status = 'running';
+                    agent.lastActivity = new Date().toISOString();
+                    saveAgents();
+                    sendJson({ success: true });
+                    return;
+                }
+                sendJson({ error: 'Failed to send message - PTY not available' }, 500);
+                return;
+            }
+            // DELETE /api/agents/:id - Remove agent
+            const deleteMatch = pathname.match(/^\/api\/agents\/([^/]+)$/);
+            if (deleteMatch && req.method === 'DELETE') {
+                const agent = agents.get(deleteMatch[1]);
+                if (!agent) {
+                    sendJson({ error: 'Agent not found' }, 404);
+                    return;
+                }
+                // Stop if running
+                if (agent.ptyId) {
+                    const ptyProcess = ptyProcesses.get(agent.ptyId);
+                    if (ptyProcess) {
+                        ptyProcess.kill();
+                        ptyProcesses.delete(agent.ptyId);
+                    }
+                }
+                agents.delete(deleteMatch[1]);
+                saveAgents();
+                sendJson({ success: true });
+                return;
+            }
+            // POST /api/telegram/send - Send message to Telegram
+            if (pathname === '/api/telegram/send' && req.method === 'POST') {
+                const { message } = body;
+                if (!message) {
+                    sendJson({ error: 'message is required' }, 400);
+                    return;
+                }
+                if (!telegramBot || !appSettings.telegramChatId) {
+                    sendJson({ error: 'Telegram not configured or no chat ID' }, 400);
+                    return;
+                }
+                try {
+                    await telegramBot.sendMessage(appSettings.telegramChatId, `👑 ${message}`, { parse_mode: 'Markdown' });
+                    sendJson({ success: true });
+                }
+                catch (err) {
+                    // Try without markdown
+                    try {
+                        await telegramBot.sendMessage(appSettings.telegramChatId, `👑 ${message}`);
+                        sendJson({ success: true });
+                    }
+                    catch (err2) {
+                        sendJson({ error: `Failed to send: ${err2}` }, 500);
+                    }
+                }
+                return;
+            }
+            // 404 for unknown routes
+            sendJson({ error: 'Not found' }, 404);
+        }
+        catch (error) {
+            console.error('API error:', error);
+            sendJson({ error: 'Internal server error' }, 500);
+        }
+    });
+    apiServer.listen(API_PORT, '127.0.0.1', () => {
+        console.log(`Agent API server running on http://127.0.0.1:${API_PORT}`);
+    });
+    apiServer.on('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+            console.log(`Port ${API_PORT} is in use, API server not started`);
+        }
+        else {
+            console.error('API server error:', err);
+        }
+    });
+}
+function stopApiServer() {
+    if (apiServer) {
+        apiServer.close();
+        apiServer = null;
+    }
+}
 // Patterns to detect Claude Code state from terminal output
 const CLAUDE_PATTERNS = {
     // Claude is waiting for user input (shows prompt)
     // Comprehensive list of all Claude Code prompt patterns
     waitingForInput: [
         // === Claude Code prompt indicators (highest priority) ===
-        /❯\s*$/m, // Chevron at end of line (Claude prompt)
-        /❯$/m, // Chevron at very end
-        /^❯\s*$/m, // Chevron on its own line
-        /\n❯\s*$/, // Chevron after newline at end
-        /●.*\n\s*❯/, // Response bullet followed by prompt
-        /^\s*❯\s/m, // Chevron at start of line with space
+        /❯\s*$/m,
+        /❯$/m,
+        /^❯\s*$/m,
+        /\n❯\s*$/,
+        /●.*\n\s*❯/,
+        /^\s*❯\s/m,
         // === Claude Code UI indicators ===
-        /Esc to cancel/i, // Claude Code prompt footer
-        /Tab to add additional/i, // Claude Code prompt footer
-        /shift\+Tab/i, // Claude Code keyboard hint
-        /shift-Tab/i, // Alternative format
-        /Enter to confirm/i, // Confirmation hint
-        /Press Enter/i, // Press enter prompt
+        /Esc to cancel/i,
+        /Tab to add additional/i,
+        /shift\+Tab/i,
+        /shift-Tab/i,
+        /Enter to confirm/i,
+        /Press Enter/i,
         // === Selection/Menu prompts (inquirer.js style) ===
-        /❯\s*\d/, // Chevron with number (selected option)
-        />\s*\d+\.\s/, // "> 1." style selection
-        /\(Use arrow keys\)/i, // Arrow key hint
-        /Use arrow keys/i, // Arrow key hint variant
+        /❯\s*\d/,
+        />\s*\d+\.\s/,
+        /\(Use arrow keys\)/i,
+        /Use arrow keys/i,
         // === Yes/No/Confirmation prompts ===
-        /\[Y\/n\]/i, // [Y/n] prompt
-        /\[y\/N\]/i, // [y/N] prompt
-        /\(y\/n\)/i, // (y/n) prompt
-        /\[yes\/no\]/i, // [yes/no] prompt
-        /\d+\.\s*Yes\b/i, // "1. Yes" numbered option
-        /\d+\.\s*No\b/i, // "2. No" numbered option
-        /\d+\.\s*Cancel\b/i, // "3. Cancel" numbered option
-        /\d+\.\s*Skip\b/i, // "4. Skip" numbered option
+        /\[Y\/n\]/i,
+        /\[y\/N\]/i,
+        /\(y\/n\)/i,
+        /\[yes\/no\]/i,
+        /\d+\.\s*Yes\b/i,
+        /\d+\.\s*No\b/i,
+        /\d+\.\s*Cancel\b/i,
+        /\d+\.\s*Skip\b/i,
         // === File operation prompts ===
-        /Do you want to create/i, // Create file prompt
-        /Do you want to edit/i, // Edit file prompt
-        /Do you want to delete/i, // Delete file prompt
-        /Do you want to write/i, // Write file prompt
-        /Do you want to read/i, // Read file prompt
-        /Do you want to run/i, // Run command prompt
-        /Do you want to execute/i, // Execute prompt
-        /Do you want to allow/i, // Permission prompt
-        /Do you want to proceed/i, // Proceed prompt
-        /Do you want to continue/i, // Continue prompt
-        /Do you want to overwrite/i, // Overwrite prompt
-        /Do you want to replace/i, // Replace prompt
-        /Do you want to install/i, // Install prompt
-        /Do you want to update/i, // Update prompt
-        /Do you want to remove/i, // Remove prompt
-        /Do you want to/i, // Generic "Do you want to" catch-all
+        /Do you want to create/i,
+        /Do you want to edit/i,
+        /Do you want to delete/i,
+        /Do you want to write/i,
+        /Do you want to read/i,
+        /Do you want to run/i,
+        /Do you want to execute/i,
+        /Do you want to allow/i,
+        /Do you want to proceed/i,
+        /Do you want to continue/i,
+        /Do you want to overwrite/i,
+        /Do you want to replace/i,
+        /Do you want to install/i,
+        /Do you want to update/i,
+        /Do you want to remove/i,
+        /Do you want to/i,
         // === Permission/Approval prompts ===
-        /Allow this/i, // "Allow this edit?"
-        /Allow .+ to/i, // "Allow X to run?"
-        /Approve this/i, // Approval prompt
-        /Confirm this/i, // Confirmation prompt
-        /Accept this/i, // Accept prompt
+        /Allow this/i,
+        /Allow .+ to/i,
+        /Approve this/i,
+        /Confirm this/i,
+        /Accept this/i,
         // === Question prompts / Claude asking what to do ===
-        /Let me know what/i, // "Let me know what you want..."
-        /let me know if/i, // "Let me know if you need..."
-        /What would you like/i, // "What would you like..."
-        /What should I/i, // "What should I..."
-        /How would you like/i, // "How would you like..."
-        /How can I help/i, // "How can I help..."
-        /What do you think/i, // "What do you think..."
-        /Which .+ would you/i, // "Which option would you..."
-        /Which .+ should/i, // "Which file should..."
-        /Would you like to/i, // "Would you like to..."
-        /Would you like me to/i, // "Would you like me to..."
-        /Should I\s/i, // "Should I..."
-        /Can I\s/i, // "Can I..."
-        /May I\s/i, // "May I..."
-        /Shall I\s/i, // "Shall I..."
-        /What else/i, // "What else would you like..."
-        /Anything else/i, // "Anything else?"
-        /Is there anything/i, // "Is there anything else..."
+        /Let me know what/i,
+        /let me know if/i,
+        /What would you like/i,
+        /What should I/i,
+        /How would you like/i,
+        /How can I help/i,
+        /What do you think/i,
+        /Which .+ would you/i,
+        /Which .+ should/i,
+        /Would you like to/i,
+        /Would you like me to/i,
+        /Should I\s/i,
+        /Can I\s/i,
+        /May I\s/i,
+        /Shall I\s/i,
+        /What else/i,
+        /Anything else/i,
+        /Is there anything/i,
         // === Input prompts ===
-        /Enter your/i, // "Enter your message..."
-        /Enter a /i, // "Enter a value..."
-        /Type your/i, // "Type your response..."
-        /Input:/i, // "Input:" prompt
-        /Provide /i, // "Provide a value..."
-        /Specify /i, // "Specify the..."
-        /Choose /i, // "Choose an option..."
-        /Select /i, // "Select a file..."
-        /Pick /i, // "Pick one..."
+        /Enter your/i,
+        /Enter a /i,
+        /Type your/i,
+        /Input:/i,
+        /Provide /i,
+        /Specify /i,
+        /Choose /i,
+        /Select /i,
+        /Pick /i,
         // === Wait/Ready indicators ===
-        /waiting for/i, // "Waiting for input"
-        /ready for/i, // "Ready for your input"
-        /awaiting/i, // "Awaiting response"
+        /waiting for/i,
+        /ready for/i,
+        /awaiting/i,
         // === Bash/Terminal prompts ===
-        /\$\s*$/m, // Shell prompt "$"
+        /\$\s*$/m,
         />\s*$/m, // Simple prompt ">"
     ],
     // Claude is actively working (spinner or progress)
     // These patterns indicate Claude is processing, not waiting for input
     working: [
         // === Spinner characters (highest confidence) ===
-        /⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏/, // Braille spinner characters
-        /◐|◓|◑|◒/, // Circle spinner
-        /⣾|⣽|⣻|⢿|⡿|⣟|⣯|⣷/, // Dot spinner
+        /⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏/,
+        /◐|◓|◑|◒/,
+        /⣾|⣽|⣻|⢿|⡿|⣟|⣯|⣷/,
         // === Progress indicators with "..." ===
         /Thinking\.\.\./i,
         /Working\.\.\./i,
@@ -185,15 +497,15 @@ const CLAUDE_PATTERNS = {
         /Compiling\.\.\./i,
         /Building\.\.\./i,
         // === Active operation messages (must have context) ===
-        /Reading .+\.\.\./i, // "Reading file..."
-        /Writing .+\.\.\./i, // "Writing to file..."
-        /Searching .+\.\.\./i, // "Searching in..."
-        /Running .+\.\.\./i, // "Running command..."
-        /Executing .+\.\.\./i, // "Executing..."
-        /Installing .+\.\.\./i, // "Installing package..."
-        /Updating .+\.\.\./i, // "Updating..."
-        /Creating .+\.\.\./i, // "Creating file..."
-        /Downloading .+\.\.\./i, // "Downloading..."
+        /Reading .+\.\.\./i,
+        /Writing .+\.\.\./i,
+        /Searching .+\.\.\./i,
+        /Running .+\.\.\./i,
+        /Executing .+\.\.\./i,
+        /Installing .+\.\.\./i,
+        /Updating .+\.\.\./i,
+        /Creating .+\.\.\./i,
+        /Downloading .+\.\.\./i,
         /Uploading .+\.\.\./i, // "Uploading..."
     ],
     // Claude finished a task (look for these in recent output)
@@ -203,10 +515,10 @@ const CLAUDE_PATTERNS = {
         /Finished!/i,
         /Complete!/i,
         /Successfully/i,
-        /✓/, // Checkmark
-        /✔/, // Another checkmark
+        /✓/,
+        /✔/,
         /\[done\]/i,
-        /Worked for \d+/i, // "Worked for 38s" - Claude Code completion indicator
+        /Worked for \d+/i,
         /\* Worked for/i, // "* Worked for" variant
     ],
     // Claude encountered an error
@@ -215,8 +527,8 @@ const CLAUDE_PATTERNS = {
         /Failed:/i,
         /Exception:/i,
         /FATAL/i,
-        /✗/, // X mark
-        /✘/, // Another X mark
+        /✗/,
+        /✘/,
         /\[error\]/i,
         /Permission denied/i,
         /not found/i,
@@ -296,14 +608,38 @@ function handleStatusChangeNotification(agent, newStatus) {
         // Update previous status and send notification
         previousAgentStatus.set(agent.id, newStatus);
         const agentName = currentAgent.name || `Agent ${currentAgent.id.slice(0, 6)}`;
-        if (newStatus === 'waiting' && appSettings.notifyOnWaiting) {
-            sendNotification(`${agentName} needs your attention`, 'The agent is waiting for your input.', currentAgent.id);
+        const isSuper = isSuperAgent(currentAgent);
+        // Skip "waiting" notifications for Super Agent - but send Telegram response if task came from Telegram
+        if (newStatus === 'waiting') {
+            if (!isSuper && appSettings.notifyOnWaiting) {
+                sendNotification(`${agentName} needs your attention`, 'The agent is waiting for your input.', currentAgent.id);
+            }
+            // Super Agent finished responding - send to Telegram
+            if (isSuper && superAgentTelegramTask) {
+                sendSuperAgentResponseToTelegram(currentAgent);
+                superAgentTelegramTask = false;
+            }
         }
         else if (newStatus === 'completed' && appSettings.notifyOnComplete) {
-            sendNotification(`${agentName} completed`, currentAgent.currentTask ? `Finished: ${currentAgent.currentTask.slice(0, 50)}...` : 'Task completed successfully.', currentAgent.id);
+            // Desktop notification for all agents
+            if (!isSuper) {
+                sendNotification(`${agentName} completed`, currentAgent.currentTask ? `Finished: ${currentAgent.currentTask.slice(0, 50)}...` : 'Task completed successfully.', currentAgent.id);
+            }
+            // Telegram response - only for Super Agent when task came from Telegram
+            if (isSuper && superAgentTelegramTask) {
+                sendSuperAgentResponseToTelegram(currentAgent);
+                superAgentTelegramTask = false;
+            }
         }
         else if (newStatus === 'error' && appSettings.notifyOnError) {
-            sendNotification(`${agentName} encountered an error`, currentAgent.error || 'An error occurred while running.', currentAgent.id);
+            if (!isSuper) {
+                sendNotification(`${agentName} encountered an error`, currentAgent.error || 'An error occurred while running.', currentAgent.id);
+            }
+            // Telegram notification for Super Agent errors
+            if (isSuper && superAgentTelegramTask) {
+                sendTelegramMessage(`🔴 Super Agent error: ${currentAgent.error || 'An error occurred.'}`);
+                superAgentTelegramTask = false;
+            }
         }
     }, 5000); // 5 second debounce
     pendingStatusChanges.set(agent.id, {
@@ -353,18 +689,18 @@ function detectAgentStatus(agent) {
         /\(y\/n\)/i,
         /\[yes\/no\]/i,
         // Claude Code specific prompts for accepting edits/commits
-        /accept edits/i, // "accept edits on (shift+Tab to cycle)"
-        /shift\+?Tab to cycle/i, // The cycling hint
-        />\s*Commit this/i, // "> Commit this" prompt
-        /❯\s*Commit/i, // "❯ Commit" prompt
-        /Press Enter to/i, // Press enter prompts
-        /\(enter to confirm\)/i, // Enter confirmation
-        /\(esc to cancel\)/i, // Esc to cancel hints
+        /accept edits/i,
+        /shift\+?Tab to cycle/i,
+        />\s*Commit this/i,
+        /❯\s*Commit/i,
+        /Press Enter to/i,
+        /\(enter to confirm\)/i,
+        /\(esc to cancel\)/i,
         // Selection/Menu prompts with numbered options
         /\d+\.\s*(Yes|No|Cancel|Skip|Allow|Deny|Accept|Reject)\b/i,
-        /❯\s*\d+\./, // Chevron with numbered selection
-        />\s*\d+\.\s/, // "> 1." style selection
-        /\(Use arrow keys\)/i, // Selection menu hint
+        /❯\s*\d+\./,
+        />\s*\d+\.\s/,
+        /\(Use arrow keys\)/i,
         // Permission/Approval prompts (Claude asking to do something)
         /Do you want to (create|edit|delete|write|read|run|execute|allow|proceed|continue|overwrite|replace|install|update|remove)/i,
         /Allow this/i,
@@ -401,8 +737,8 @@ function detectAgentStatus(agent) {
     // Patterns that indicate Claude finished and is back to idle prompt
     // These are prompts WITHOUT an accompanying question
     const idlePromptPatterns = [
-        /❯\s*$/m, // Just the chevron prompt at end
-        /^\s*❯\s*$/m, // Chevron on its own line
+        /❯\s*$/m,
+        /^\s*❯\s*$/m,
         /\$\s*$/m, // Shell prompt at end
     ];
     // Check for completion patterns
@@ -453,21 +789,25 @@ function ensureDataDir() {
 }
 // App settings functions
 function loadAppSettings() {
+    const defaults = {
+        notificationsEnabled: true,
+        notifyOnWaiting: true,
+        notifyOnComplete: true,
+        notifyOnError: true,
+        telegramEnabled: false,
+        telegramBotToken: '',
+        telegramChatId: '',
+    };
     try {
         if (fs.existsSync(APP_SETTINGS_FILE)) {
-            return JSON.parse(fs.readFileSync(APP_SETTINGS_FILE, 'utf-8'));
+            const saved = JSON.parse(fs.readFileSync(APP_SETTINGS_FILE, 'utf-8'));
+            return { ...defaults, ...saved };
         }
     }
     catch (err) {
         console.error('Failed to load app settings:', err);
     }
-    // Default settings
-    return {
-        notificationsEnabled: true,
-        notifyOnWaiting: true,
-        notifyOnComplete: true,
-        notifyOnError: true,
-    };
+    return defaults;
 }
 function saveAppSettings(settings) {
     try {
@@ -479,6 +819,587 @@ function saveAppSettings(settings) {
     }
 }
 let appSettings = loadAppSettings();
+// ============== Telegram Bot Service ==============
+let telegramBot = null;
+// Track if Super Agent task was initiated from Telegram (to send response back)
+let superAgentTelegramTask = false;
+let superAgentOutputBuffer = [];
+// Character emoji mapping for Telegram
+const TG_CHARACTER_FACES = {
+    robot: '🤖', ninja: '🥷', wizard: '🧙', astronaut: '👨‍🚀',
+    knight: '⚔️', pirate: '🏴‍☠️', alien: '👽', viking: '🪓', frog: '🐸',
+};
+// Helper to detect super agent
+function isSuperAgent(agent) {
+    const name = agent.name?.toLowerCase() || '';
+    return name.includes('super agent') || name.includes('orchestrator');
+}
+// Find or get the super agent
+function getSuperAgent() {
+    return Array.from(agents.values()).find(a => isSuperAgent(a));
+}
+// Format agent status for Telegram
+function formatAgentStatus(agent) {
+    const isSuper = isSuperAgent(agent);
+    const emoji = isSuper ? '👑' : (TG_CHARACTER_FACES[agent.character || ''] || '🤖');
+    const statusEmoji = {
+        idle: '⚪', running: '🟢', completed: '✅', error: '🔴', waiting: '🟡'
+    }[agent.status] || '⚪';
+    let text = `${emoji} *${agent.name || 'Unnamed'}* ${statusEmoji}\n`;
+    text += `   Status: ${agent.status}\n`;
+    if (agent.currentTask) {
+        text += `   Task: ${agent.currentTask.slice(0, 50)}${agent.currentTask.length > 50 ? '...' : ''}\n`;
+    }
+    // Don't show project for Super Agent
+    if (!isSuper) {
+        text += `   Project: \`${agent.projectPath.split('/').pop()}\``;
+    }
+    return text;
+}
+// Send message to Telegram
+function sendTelegramMessage(text, parseMode = 'Markdown') {
+    if (!telegramBot || !appSettings.telegramChatId)
+        return;
+    try {
+        // Telegram has a 4096 char limit, truncate if needed
+        const maxLen = 4000;
+        const truncated = text.length > maxLen ? text.slice(0, maxLen) + '\n\n_(truncated)_' : text;
+        telegramBot.sendMessage(appSettings.telegramChatId, truncated, { parse_mode: parseMode });
+    }
+    catch (err) {
+        console.error('Failed to send Telegram message:', err);
+        // Try without markdown if it fails (in case of formatting issues)
+        try {
+            telegramBot.sendMessage(appSettings.telegramChatId, text.replace(/[*_`\[\]]/g, ''));
+        }
+        catch {
+            // Give up
+        }
+    }
+}
+// Extract meaningful response from Super Agent output and send to Telegram
+function sendSuperAgentResponseToTelegram(agent) {
+    // Use the captured output buffer if available, otherwise use agent output
+    const rawOutput = superAgentOutputBuffer.length > 0
+        ? superAgentOutputBuffer.join('')
+        : agent.output.slice(-100).join('');
+    // Remove ANSI escape codes
+    const cleanOutput = rawOutput
+        .replace(/\x1b\[[0-9;]*m/g, '')
+        .replace(/\x1b\[\?[0-9]*[hl]/g, '')
+        .replace(/\x1b\][^\x07]*\x07/g, '') // OSC sequences
+        .replace(/[\x00-\x09\x0B-\x1F]/g, ''); // Control chars except newline
+    const lines = cleanOutput.split('\n');
+    // Find the actual response content - it usually comes after tool results
+    // Look for text that's NOT:
+    // - Tool use indicators (MCP, ⎿, ●, ⏺)
+    // - System messages (---, ctrl+, claude-mgr)
+    // - Empty lines at the edges
+    const responseLines = [];
+    let foundToolResult = false;
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+        // Skip empty
+        if (!trimmed)
+            continue;
+        // Track when we've seen tool results
+        if (trimmed.includes('⎿') || trimmed.includes('(MCP)')) {
+            foundToolResult = true;
+            continue;
+        }
+        // Skip system indicators
+        if (trimmed.startsWith('●') || trimmed.startsWith('⏺') ||
+            trimmed.includes('ctrl+') || trimmed.startsWith('---') ||
+            trimmed.startsWith('>') || trimmed.startsWith('$') ||
+            trimmed.includes('╭') || trimmed.includes('╰') ||
+            trimmed.includes('│') && trimmed.length < 5) {
+            continue;
+        }
+        // After tool results, collect the response text
+        if (foundToolResult && trimmed.length > 3) {
+            responseLines.push(trimmed);
+        }
+    }
+    // If we found response lines, send them
+    if (responseLines.length > 0) {
+        // Get the most relevant parts (last portion, likely the summary)
+        const response = responseLines.slice(-40).join('\n')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+        if (response.length > 10) {
+            sendTelegramMessage(`👑 ${response}`);
+            superAgentOutputBuffer = [];
+            return;
+        }
+    }
+    // Fallback: just send the last meaningful text we can find
+    const fallbackLines = lines
+        .map(l => l.trim())
+        .filter(l => l.length > 10 &&
+        !l.includes('(MCP)') &&
+        !l.includes('⎿') &&
+        !l.startsWith('●') &&
+        !l.startsWith('⏺') &&
+        !l.includes('ctrl+'))
+        .slice(-20);
+    if (fallbackLines.length > 0) {
+        sendTelegramMessage(`👑 ${fallbackLines.join('\n')}`);
+    }
+    else {
+        sendTelegramMessage(`✅ Super Agent completed the task.`);
+    }
+    superAgentOutputBuffer = [];
+}
+// Initialize Telegram bot
+function initTelegramBot() {
+    // Stop existing bot if any
+    if (telegramBot) {
+        telegramBot.stopPolling();
+        telegramBot = null;
+    }
+    if (!appSettings.telegramEnabled || !appSettings.telegramBotToken) {
+        console.log('Telegram bot disabled or no token');
+        return;
+    }
+    try {
+        telegramBot = new node_telegram_bot_api_1.default(appSettings.telegramBotToken, { polling: true });
+        console.log('Telegram bot started');
+        // Handle /start command
+        telegramBot.onText(/\/start/, (msg) => {
+            const chatId = msg.chat.id.toString();
+            // Save chat ID for future messages
+            if (appSettings.telegramChatId !== chatId) {
+                appSettings.telegramChatId = chatId;
+                saveAppSettings(appSettings);
+                // Notify frontend of chat ID change
+                mainWindow?.webContents.send('settings:updated', appSettings);
+            }
+            telegramBot?.sendMessage(chatId, `👑 *Claude Manager Bot Connected!*\n\n` +
+                `I'll help you manage your agents remotely.\n\n` +
+                `*Commands:*\n` +
+                `/status - Show all agents status\n` +
+                `/agents - List agents with details\n` +
+                `/projects - List all projects\n` +
+                `/start\\_agent <name> <task> - Start an agent\n` +
+                `/stop\\_agent <name> - Stop an agent\n` +
+                `/ask <message> - Send to Super Agent\n` +
+                `/help - Show this help message\n\n` +
+                `Or just type a message to talk to the Super Agent!`, { parse_mode: 'Markdown' });
+        });
+        // Handle /help command
+        telegramBot.onText(/\/help/, (msg) => {
+            telegramBot?.sendMessage(msg.chat.id, `📖 *Available Commands*\n\n` +
+                `/status - Quick overview of all agents\n` +
+                `/agents - Detailed list of all agents\n` +
+                `/projects - List all projects with their agents\n` +
+                `/start\\_agent <name> <task> - Start an agent with a task\n` +
+                `/stop\\_agent <name> - Stop a running agent\n` +
+                `/ask <message> - Send a message to Super Agent\n` +
+                `/help - Show this help message\n\n` +
+                `💡 *Tips:*\n` +
+                `• Just type a message to talk directly to Super Agent\n` +
+                `• Super Agent can manage other agents for you\n` +
+                `• Use /status to monitor progress`, { parse_mode: 'Markdown' });
+        });
+        // Handle /projects command
+        telegramBot.onText(/\/projects/, (msg) => {
+            const agentList = Array.from(agents.values()).filter(a => !isSuperAgent(a));
+            if (agentList.length === 0) {
+                telegramBot?.sendMessage(msg.chat.id, '📭 No projects with agents yet.');
+                return;
+            }
+            // Group agents by project path
+            const projectsMap = new Map();
+            agentList.forEach(agent => {
+                const path = agent.projectPath;
+                if (!projectsMap.has(path)) {
+                    projectsMap.set(path, []);
+                }
+                projectsMap.get(path).push(agent);
+            });
+            let text = `📂 *Projects*\n\n`;
+            projectsMap.forEach((projectAgents, path) => {
+                const projectName = path.split('/').pop() || 'Unknown';
+                text += `📁 *${projectName}*\n`;
+                text += `   \`${path}\`\n`;
+                text += `   👥 Agents: ${projectAgents.map(a => {
+                    const emoji = TG_CHARACTER_FACES[a.character || ''] || '🤖';
+                    const status = a.status === 'running' ? '🟢' : a.status === 'waiting' ? '🟡' : a.status === 'error' ? '🔴' : '⚪';
+                    return `${emoji}${a.name}${status}`;
+                }).join(', ')}\n\n`;
+            });
+            telegramBot?.sendMessage(msg.chat.id, text, { parse_mode: 'Markdown' });
+        });
+        // Handle /status command
+        telegramBot.onText(/\/status/, (msg) => {
+            const agentList = Array.from(agents.values());
+            if (agentList.length === 0) {
+                telegramBot?.sendMessage(msg.chat.id, '📭 No agents created yet.');
+                return;
+            }
+            // Helper to format agent info
+            const formatAgent = (a) => {
+                const isSuper = isSuperAgent(a);
+                const emoji = isSuper ? '👑' : (TG_CHARACTER_FACES[a.character || ''] || '🤖');
+                const skills = a.skills.length > 0 ? a.skills.slice(0, 2).join(', ') + (a.skills.length > 2 ? '...' : '') : '';
+                let line = `  ${emoji} *${a.name}*\n`;
+                // Don't show project for Super Agent
+                if (!isSuper) {
+                    const project = a.projectPath.split('/').pop() || 'Unknown';
+                    line += `      📁 \`${project}\``;
+                    if (skills)
+                        line += ` | 🛠 ${skills}`;
+                }
+                else if (skills) {
+                    line += `      🛠 ${skills}`;
+                }
+                if (a.currentTask && a.status === 'running') {
+                    line += `\n      💬 _${a.currentTask.slice(0, 40)}${a.currentTask.length > 40 ? '...' : ''}_`;
+                }
+                return line;
+            };
+            // Sort to put Super Agent first
+            const sortSuperFirst = (agents) => [...agents].sort((a, b) => (isSuperAgent(b) ? 1 : 0) - (isSuperAgent(a) ? 1 : 0));
+            const running = sortSuperFirst(agentList.filter(a => a.status === 'running'));
+            const waiting = sortSuperFirst(agentList.filter(a => a.status === 'waiting'));
+            const idle = sortSuperFirst(agentList.filter(a => a.status === 'idle' || a.status === 'completed'));
+            const error = sortSuperFirst(agentList.filter(a => a.status === 'error'));
+            let text = `📊 *Agents Status*\n\n`;
+            if (running.length > 0) {
+                text += `🟢 *Running (${running.length}):*\n`;
+                running.forEach(a => {
+                    text += formatAgent(a) + '\n';
+                });
+                text += '\n';
+            }
+            if (waiting.length > 0) {
+                text += `🟡 *Waiting (${waiting.length}):*\n`;
+                waiting.forEach(a => {
+                    text += formatAgent(a) + '\n';
+                });
+                text += '\n';
+            }
+            if (error.length > 0) {
+                text += `🔴 *Error (${error.length}):*\n`;
+                error.forEach(a => {
+                    text += formatAgent(a) + '\n';
+                });
+                text += '\n';
+            }
+            if (idle.length > 0) {
+                text += `⚪ *Idle (${idle.length}):*\n`;
+                idle.forEach(a => {
+                    text += formatAgent(a) + '\n';
+                });
+            }
+            telegramBot?.sendMessage(msg.chat.id, text, { parse_mode: 'Markdown' });
+        });
+        // Handle /agents command (detailed list)
+        telegramBot.onText(/\/agents/, (msg) => {
+            const agentList = Array.from(agents.values());
+            if (agentList.length === 0) {
+                telegramBot?.sendMessage(msg.chat.id, '📭 No agents created yet.');
+                return;
+            }
+            let text = `🤖 *All Agents*\n\n`;
+            agentList.forEach(a => {
+                text += formatAgentStatus(a) + '\n\n';
+            });
+            telegramBot?.sendMessage(msg.chat.id, text, { parse_mode: 'Markdown' });
+        });
+        // Handle /start_agent command
+        telegramBot.onText(/\/start_agent\s+(.+)/, async (msg, match) => {
+            if (!match)
+                return;
+            const input = match[1].trim();
+            const firstSpaceIndex = input.indexOf(' ');
+            let agentName;
+            let task;
+            if (firstSpaceIndex === -1) {
+                telegramBot?.sendMessage(msg.chat.id, '⚠️ Usage: /start\\_agent <agent name> <task>', { parse_mode: 'Markdown' });
+                return;
+            }
+            agentName = input.substring(0, firstSpaceIndex).toLowerCase();
+            task = input.substring(firstSpaceIndex + 1).trim();
+            const agent = Array.from(agents.values()).find(a => a.name?.toLowerCase().includes(agentName) || a.id === agentName);
+            if (!agent) {
+                telegramBot?.sendMessage(msg.chat.id, `❌ Agent "${agentName}" not found.`);
+                return;
+            }
+            if (agent.status === 'running') {
+                telegramBot?.sendMessage(msg.chat.id, `⚠️ ${agent.name} is already running.`);
+                return;
+            }
+            try {
+                // Start the agent using the existing IPC mechanism
+                const workingPath = (agent.worktreePath || agent.projectPath).replace(/'/g, "'\\''");
+                // Initialize PTY if needed
+                if (!agent.ptyId || !ptyProcesses.has(agent.ptyId)) {
+                    const ptyId = await initAgentPty(agent);
+                    agent.ptyId = ptyId;
+                }
+                const ptyProcess = ptyProcesses.get(agent.ptyId);
+                if (!ptyProcess) {
+                    telegramBot?.sendMessage(msg.chat.id, '❌ Failed to initialize agent terminal.');
+                    return;
+                }
+                // Build command
+                let command = 'claude';
+                if (agent.skipPermissions)
+                    command += ' --dangerously-skip-permissions';
+                if (agent.secondaryProjectPath) {
+                    command += ` --add-dir '${agent.secondaryProjectPath.replace(/'/g, "'\\''")}'`;
+                }
+                command += ` '${task.replace(/'/g, "'\\''")}'`;
+                agent.status = 'running';
+                agent.currentTask = task.slice(0, 100);
+                agent.lastActivity = new Date().toISOString();
+                ptyProcess.write(`cd '${workingPath}' && ${command}`);
+                ptyProcess.write('\r');
+                saveAgents();
+                const emoji = isSuperAgent(agent) ? '👑' : (TG_CHARACTER_FACES[agent.character || ''] || '🤖');
+                telegramBot?.sendMessage(msg.chat.id, `🚀 Started *${agent.name}*\n\n${emoji} Task: ${task}`, { parse_mode: 'Markdown' });
+            }
+            catch (err) {
+                console.error('Failed to start agent from Telegram:', err);
+                telegramBot?.sendMessage(msg.chat.id, `❌ Failed to start agent: ${err}`);
+            }
+        });
+        // Handle /stop_agent command
+        telegramBot.onText(/\/stop_agent\s+(.+)/, (msg, match) => {
+            if (!match)
+                return;
+            const agentName = match[1].trim().toLowerCase();
+            const agent = Array.from(agents.values()).find(a => a.name?.toLowerCase().includes(agentName) || a.id === agentName);
+            if (!agent) {
+                telegramBot?.sendMessage(msg.chat.id, `❌ Agent "${agentName}" not found.`);
+                return;
+            }
+            if (agent.status !== 'running' && agent.status !== 'waiting') {
+                telegramBot?.sendMessage(msg.chat.id, `⚠️ ${agent.name} is not running.`);
+                return;
+            }
+            // Stop the agent
+            if (agent.ptyId) {
+                const ptyProcess = ptyProcesses.get(agent.ptyId);
+                if (ptyProcess) {
+                    ptyProcess.write('\x03'); // Ctrl+C
+                }
+            }
+            agent.status = 'idle';
+            agent.currentTask = undefined;
+            saveAgents();
+            telegramBot?.sendMessage(msg.chat.id, `🛑 Stopped *${agent.name}*`, { parse_mode: 'Markdown' });
+        });
+        // Handle /ask command (send to Super Agent)
+        telegramBot.onText(/\/ask\s+(.+)/, async (msg, match) => {
+            if (!match)
+                return;
+            const message = match[1].trim();
+            await sendToSuperAgent(msg.chat.id.toString(), message);
+        });
+        // Handle regular messages (forward to Super Agent)
+        telegramBot.on('message', async (msg) => {
+            // Ignore commands
+            if (msg.text?.startsWith('/'))
+                return;
+            if (!msg.text)
+                return;
+            // Save chat ID if not saved
+            const chatId = msg.chat.id.toString();
+            if (appSettings.telegramChatId !== chatId) {
+                appSettings.telegramChatId = chatId;
+                saveAppSettings(appSettings);
+            }
+            await sendToSuperAgent(chatId, msg.text);
+        });
+        // Handle polling errors
+        telegramBot.on('polling_error', (error) => {
+            console.error('Telegram polling error:', error);
+        });
+    }
+    catch (err) {
+        console.error('Failed to initialize Telegram bot:', err);
+    }
+}
+// Send message to Super Agent
+async function sendToSuperAgent(chatId, message) {
+    const superAgent = getSuperAgent();
+    if (!superAgent) {
+        telegramBot?.sendMessage(chatId, '👑 No Super Agent found.\n\nCreate one in Claude Manager first, or use /start\\_agent to start a specific agent.', { parse_mode: 'Markdown' });
+        return;
+    }
+    try {
+        // Initialize PTY if needed
+        if (!superAgent.ptyId || !ptyProcesses.has(superAgent.ptyId)) {
+            const ptyId = await initAgentPty(superAgent);
+            superAgent.ptyId = ptyId;
+        }
+        const ptyProcess = ptyProcesses.get(superAgent.ptyId);
+        if (!ptyProcess) {
+            telegramBot?.sendMessage(chatId, '❌ Failed to connect to Super Agent terminal.');
+            return;
+        }
+        // If agent is running or waiting, send message to the existing Claude session
+        if (superAgent.status === 'running' || superAgent.status === 'waiting') {
+            // Track that this input came from Telegram
+            superAgentTelegramTask = true;
+            superAgentOutputBuffer = [];
+            superAgent.currentTask = message.slice(0, 100);
+            superAgent.lastActivity = new Date().toISOString();
+            saveAgents();
+            // Include Telegram context in the message - strip any newlines from Telegram input
+            const telegramMessage = `[FROM TELEGRAM - Use send_telegram MCP tool to respond!] ${message.replace(/\r?\n/g, ' ').trim()}`;
+            // Write the message first, then send Enter separately
+            ptyProcess.write(telegramMessage);
+            ptyProcess.write('\r');
+            telegramBot?.sendMessage(chatId, `👑 Super Agent is processing...`);
+        }
+        else if (superAgent.status === 'idle' || superAgent.status === 'completed' || superAgent.status === 'error') {
+            // No active session, start a new one
+            const workingPath = (superAgent.worktreePath || superAgent.projectPath).replace(/'/g, "'\\''");
+            // Build orchestrator prompt with user's message
+            const orchestratorPrompt = `You are the Super Agent - an orchestrator that manages other agents using MCP tools.
+
+THIS REQUEST IS FROM TELEGRAM - You MUST use send_telegram to respond!
+
+AVAILABLE MCP TOOLS (from "claude-mgr-orchestrator"):
+- list_agents: List all agents with status, project, ID
+- get_agent_output: Read agent's terminal output (use to see responses!)
+- start_agent: Start agent with a prompt (auto-sends to running agents too)
+- send_message: Send message to agent (auto-starts idle agents)
+- stop_agent: Stop a running agent
+- create_agent: Create a new agent
+- remove_agent: Delete an agent
+- send_telegram: Send your response back to Telegram (USE THIS!)
+
+WORKFLOW FOR TELEGRAM REQUESTS:
+1. Use start_agent or send_message with your task/question
+2. Wait 5-10 seconds for the agent to process
+3. Use get_agent_output to read their response
+4. Use send_telegram to send a summary/response back to the user
+
+IMPORTANT - AUTONOMOUS MODE:
+When giving tasks to agents, ALWAYS include these instructions in your prompt:
+- "Work autonomously without asking for user feedback or choices"
+- "Make decisions on your own and proceed with the best approach"
+- "Do not wait for user confirmation - execute the task fully"
+This is because the user is on Telegram and cannot respond to agent questions.
+
+CRITICAL: This request came from Telegram. When you have an answer, you MUST call send_telegram with your response. The user is waiting on Telegram for your reply!
+
+USER REQUEST: ${message}`;
+            let command = 'claude';
+            // Add MCP config
+            const mcpConfigPath = path.join(electron_1.app.getPath('home'), '.claude', 'mcp.json');
+            if (fs.existsSync(mcpConfigPath)) {
+                command += ` --mcp-config '${mcpConfigPath}'`;
+            }
+            if (superAgent.skipPermissions)
+                command += ' --dangerously-skip-permissions';
+            command += ` '${orchestratorPrompt.replace(/'/g, "'\\''")}'`;
+            superAgent.status = 'running';
+            superAgent.currentTask = message.slice(0, 100);
+            superAgent.lastActivity = new Date().toISOString();
+            // Track that this task came from Telegram
+            superAgentTelegramTask = true;
+            superAgentOutputBuffer = [];
+            // Start new Claude session
+            ptyProcess.write(`cd '${workingPath}' && ${command}`);
+            ptyProcess.write('\r');
+            saveAgents();
+            telegramBot?.sendMessage(chatId, `👑 Super Agent is processing your request...`);
+        }
+        else {
+            telegramBot?.sendMessage(chatId, `👑 Super Agent is in ${superAgent.status} state. Try again in a moment.`);
+        }
+    }
+    catch (err) {
+        console.error('Failed to send to Super Agent:', err);
+        telegramBot?.sendMessage(chatId, `❌ Error: ${err}`);
+    }
+}
+// Stop Telegram bot
+function stopTelegramBot() {
+    if (telegramBot) {
+        telegramBot.stopPolling();
+        telegramBot = null;
+        console.log('Telegram bot stopped');
+    }
+}
+// Auto-start the Super Agent on app startup
+async function autoStartSuperAgent() {
+    const superAgent = getSuperAgent();
+    if (!superAgent) {
+        console.log('No Super Agent found - skipping auto-start');
+        return;
+    }
+    console.log(`Found Super Agent: ${superAgent.name} (status: ${superAgent.status})`);
+    // Only auto-start if idle, completed, or error
+    if (superAgent.status !== 'idle' && superAgent.status !== 'completed' && superAgent.status !== 'error') {
+        console.log(`Super Agent is ${superAgent.status} - skipping auto-start`);
+        return;
+    }
+    try {
+        // Initialize PTY if needed
+        if (!superAgent.ptyId || !ptyProcesses.has(superAgent.ptyId)) {
+            console.log('Initializing PTY for Super Agent...');
+            const ptyId = await initAgentPty(superAgent);
+            superAgent.ptyId = ptyId;
+        }
+        const ptyProcess = ptyProcesses.get(superAgent.ptyId);
+        if (!ptyProcess) {
+            console.error('Failed to get PTY process for Super Agent');
+            return;
+        }
+        // Build orchestrator prompt
+        const orchestratorPrompt = `You are the Super Agent - an orchestrator that manages other agents using MCP tools.
+
+AVAILABLE MCP TOOLS (from "claude-mgr-orchestrator"):
+- list_agents: List all agents with status, project, ID
+- get_agent_output: Read agent's terminal output (use to see responses!)
+- start_agent: Start agent with a prompt (auto-sends to running agents too)
+- send_message: Send message to agent (auto-starts idle agents)
+- stop_agent: Stop a running agent
+- create_agent: Create a new agent
+- remove_agent: Delete an agent
+
+WORKFLOW - When asked to talk to an agent:
+1. Use start_agent or send_message with your question (both auto-handle idle/running states)
+2. Wait 5-10 seconds for the agent to process
+3. Use get_agent_output to read their response
+4. Report the response back to the user
+
+IMPORTANT:
+- ALWAYS check get_agent_output after sending a message to see the response
+- Keep responses concise
+- NEVER explore codebases - you only manage agents
+
+Say hello and list the current agents.`;
+        const workingPath = (superAgent.worktreePath || superAgent.projectPath).replace(/'/g, "'\\''");
+        let command = 'claude';
+        // Add MCP config
+        const mcpConfigPath = path.join(electron_1.app.getPath('home'), '.claude', 'mcp.json');
+        if (fs.existsSync(mcpConfigPath)) {
+            command += ` --mcp-config '${mcpConfigPath}'`;
+        }
+        if (superAgent.skipPermissions)
+            command += ' --dangerously-skip-permissions';
+        command += ` '${orchestratorPrompt.replace(/'/g, "'\\''")}'`;
+        superAgent.status = 'running';
+        superAgent.currentTask = 'Initializing Super Agent...';
+        superAgent.lastActivity = new Date().toISOString();
+        console.log('Auto-starting Super Agent...');
+        ptyProcess.write(`cd '${workingPath}' && ${command}`);
+        ptyProcess.write('\r');
+        saveAgents();
+        console.log('Super Agent auto-started successfully');
+    }
+    catch (err) {
+        console.error('Failed to auto-start Super Agent:', err);
+    }
+}
 // Track if agents have been loaded (to prevent saving empty state before load)
 let agentsLoaded = false;
 // Save agents to disk
@@ -494,7 +1415,7 @@ function saveAgents() {
             ...agent,
             // Don't persist runtime-only fields
             ptyId: undefined,
-            pathMissing: undefined, // Recalculated on load
+            pathMissing: undefined,
             // Limit output to last 100 entries to avoid huge files
             output: agent.output.slice(-100),
             // Reset running status to idle on save (will be restarted manually)
@@ -590,6 +1511,14 @@ async function initAgentPty(agent) {
         if (agentData) {
             agentData.output.push(data);
             agentData.lastActivity = new Date().toISOString();
+            // Capture Super Agent output for Telegram
+            if (superAgentTelegramTask && isSuperAgent(agentData)) {
+                superAgentOutputBuffer.push(data);
+                // Keep buffer reasonable
+                if (superAgentOutputBuffer.length > 200) {
+                    superAgentOutputBuffer = superAgentOutputBuffer.slice(-100);
+                }
+            }
             // Check if agent was manually stopped recently (within 3 seconds)
             // If so, don't override the status with detection
             const manuallyStoppedAt = agentData._manuallyStoppedAt;
@@ -693,9 +1622,13 @@ electron_1.protocol.registerSchemesAsPrivileged([
         },
     },
 ]);
-electron_1.app.whenReady().then(() => {
+electron_1.app.whenReady().then(async () => {
     // Load persisted agents before creating window
     loadAgents();
+    // Initialize Telegram bot if enabled
+    initTelegramBot();
+    // Auto-start Super Agent if it exists
+    await autoStartSuperAgent();
     // Register the app:// protocol handler
     const isDev = process.env.NODE_ENV === 'development';
     if (!isDev) {
@@ -743,10 +1676,16 @@ electron_1.app.whenReady().then(() => {
         });
     }
     createWindow();
+    // Start the HTTP API server for MCP orchestrator integration
+    startApiServer();
 });
 electron_1.app.on('window-all-closed', () => {
     // Save agents before quitting
     saveAgents();
+    // Stop the API server
+    stopApiServer();
+    // Stop Telegram bot
+    stopTelegramBot();
     // Kill all PTY processes
     ptyProcesses.forEach((ptyProcess) => {
         ptyProcess.kill();
@@ -916,6 +1855,7 @@ electron_1.ipcMain.handle('agent:create', async (_event, config) => {
         ptyId,
         character: config.character || 'robot',
         name: config.name || `Agent ${id.slice(0, 4)}`,
+        skipPermissions: config.skipPermissions || false,
     };
     agents.set(id, status);
     // Save agents to disk
@@ -926,6 +1866,14 @@ electron_1.ipcMain.handle('agent:create', async (_event, config) => {
         if (agent) {
             agent.output.push(data);
             agent.lastActivity = new Date().toISOString();
+            // Capture Super Agent output for Telegram
+            if (superAgentTelegramTask && isSuperAgent(agent)) {
+                superAgentOutputBuffer.push(data);
+                // Keep buffer reasonable
+                if (superAgentOutputBuffer.length > 200) {
+                    superAgentOutputBuffer = superAgentOutputBuffer.slice(-100);
+                }
+            }
             // Check if agent was manually stopped recently (within 3 seconds)
             // If so, don't override the status with detection
             const manuallyStoppedAt = agent._manuallyStoppedAt;
@@ -993,11 +1941,25 @@ electron_1.ipcMain.handle('agent:start', async (_event, { id, prompt, options })
         throw new Error('PTY not found');
     // Build Claude Code command
     let command = 'claude';
+    // Check if this is the Super Agent (orchestrator)
+    const isSuperAgent = agent.name?.toLowerCase().includes('super agent') ||
+        agent.name?.toLowerCase().includes('orchestrator');
+    // Add explicit MCP config for Super Agent to ensure orchestrator tools are loaded
+    if (isSuperAgent) {
+        const mcpConfigPath = path.join(electron_1.app.getPath('home'), '.claude', 'mcp.json');
+        if (fs.existsSync(mcpConfigPath)) {
+            command += ` --mcp-config '${mcpConfigPath}'`;
+        }
+    }
     if (options?.model) {
         command += ` --model ${options.model}`;
     }
     if (options?.resume) {
         command += ' --resume';
+    }
+    // Add skip permissions flag if enabled
+    if (agent.skipPermissions) {
+        command += ' --dangerously-skip-permissions';
     }
     // Add secondary project path with --add-dir flag if set
     if (agent.secondaryProjectPath) {
@@ -1013,7 +1975,8 @@ electron_1.ipcMain.handle('agent:start', async (_event, { id, prompt, options })
     agent.lastActivity = new Date().toISOString();
     // First cd to the appropriate directory (worktree if exists, otherwise project), then run claude
     const workingPath = (agent.worktreePath || agent.projectPath).replace(/'/g, "'\\''");
-    ptyProcess.write(`cd '${workingPath}' && ${command}\r`);
+    ptyProcess.write(`cd '${workingPath}' && ${command}`);
+    ptyProcess.write('\r');
     // Save updated status
     saveAgents();
     return { success: true };
@@ -1034,6 +1997,40 @@ electron_1.ipcMain.handle('agent:get', async (_event, id) => {
 // Get all agents
 electron_1.ipcMain.handle('agent:list', async () => {
     return Array.from(agents.values());
+});
+// Update an agent (can update skills, secondaryProjectPath, skipPermissions, name, character)
+electron_1.ipcMain.handle('agent:update', async (_event, params) => {
+    const agent = agents.get(params.id);
+    if (!agent) {
+        return { success: false, error: 'Agent not found' };
+    }
+    // Update fields if provided
+    if (params.skills !== undefined) {
+        agent.skills = params.skills;
+    }
+    if (params.secondaryProjectPath !== undefined) {
+        if (params.secondaryProjectPath === null) {
+            agent.secondaryProjectPath = undefined;
+        }
+        else if (fs.existsSync(params.secondaryProjectPath)) {
+            agent.secondaryProjectPath = params.secondaryProjectPath;
+        }
+        else {
+            return { success: false, error: 'Secondary project path does not exist' };
+        }
+    }
+    if (params.skipPermissions !== undefined) {
+        agent.skipPermissions = params.skipPermissions;
+    }
+    if (params.name !== undefined) {
+        agent.name = params.name;
+    }
+    if (params.character !== undefined) {
+        agent.character = params.character;
+    }
+    agent.lastActivity = new Date().toISOString();
+    saveAgents();
+    return { success: true, agent };
 });
 // Stop an agent
 electron_1.ipcMain.handle('agent:stop', async (_event, id) => {
@@ -1187,7 +2184,8 @@ electron_1.ipcMain.handle('skill:install-start', async (_event, { repo, cols, ro
         command = `npx skills add https://github.com/${repo}`;
     }
     setTimeout(() => {
-        ptyProcess.write(`${command}\r`);
+        ptyProcess.write(command);
+        ptyProcess.write('\r');
     }, 500);
     return { id, repo };
 });
@@ -1554,12 +2552,151 @@ electron_1.ipcMain.handle('app:getSettings', async () => {
 // Save app settings
 electron_1.ipcMain.handle('app:saveSettings', async (_event, newSettings) => {
     try {
+        const telegramChanged = newSettings.telegramEnabled !== undefined ||
+            newSettings.telegramBotToken !== undefined;
         appSettings = { ...appSettings, ...newSettings };
         saveAppSettings(appSettings);
+        // Reinitialize Telegram bot if settings changed
+        if (telegramChanged) {
+            initTelegramBot();
+        }
         return { success: true };
     }
     catch (err) {
         console.error('Failed to save app settings:', err);
+        return { success: false, error: String(err) };
+    }
+});
+// Test Telegram connection
+electron_1.ipcMain.handle('telegram:test', async () => {
+    if (!appSettings.telegramBotToken) {
+        return { success: false, error: 'No bot token configured' };
+    }
+    try {
+        const testBot = new node_telegram_bot_api_1.default(appSettings.telegramBotToken);
+        const me = await testBot.getMe();
+        return { success: true, botName: me.username };
+    }
+    catch (err) {
+        console.error('Telegram test failed:', err);
+        return { success: false, error: String(err) };
+    }
+});
+// Send test message to Telegram
+electron_1.ipcMain.handle('telegram:sendTest', async () => {
+    if (!telegramBot || !appSettings.telegramChatId) {
+        return { success: false, error: 'Bot not connected or no chat ID. Send /start to the bot first.' };
+    }
+    try {
+        await telegramBot.sendMessage(appSettings.telegramChatId, '✅ Test message from Claude Manager!');
+        return { success: true };
+    }
+    catch (err) {
+        console.error('Telegram send test failed:', err);
+        return { success: false, error: String(err) };
+    }
+});
+// ============== Orchestrator MCP Setup ==============
+// Get the path to the bundled MCP orchestrator
+function getMcpOrchestratorPath() {
+    let appPath = electron_1.app.getAppPath();
+    // If running from asar, use unpacked path
+    if (appPath.includes('app.asar')) {
+        appPath = appPath.replace('app.asar', 'app.asar.unpacked');
+    }
+    return path.join(appPath, 'mcp-orchestrator', 'dist', 'index.js');
+}
+// Check if orchestrator is configured in Claude's mcp.json
+electron_1.ipcMain.handle('orchestrator:getStatus', async () => {
+    try {
+        const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
+        const orchestratorPath = getMcpOrchestratorPath();
+        const orchestratorExists = fs.existsSync(orchestratorPath);
+        if (!fs.existsSync(mcpConfigPath)) {
+            return {
+                configured: false,
+                orchestratorPath,
+                orchestratorExists,
+                reason: 'mcp.json does not exist'
+            };
+        }
+        const mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
+        const isConfigured = mcpConfig?.mcpServers?.['claude-mgr-orchestrator'] !== undefined;
+        return {
+            configured: isConfigured,
+            orchestratorPath,
+            orchestratorExists,
+            currentConfig: mcpConfig?.mcpServers?.['claude-mgr-orchestrator']
+        };
+    }
+    catch (err) {
+        console.error('Failed to get orchestrator status:', err);
+        return { configured: false, error: String(err) };
+    }
+});
+// Setup orchestrator in Claude's mcp.json
+electron_1.ipcMain.handle('orchestrator:setup', async () => {
+    try {
+        const claudeDir = path.join(os.homedir(), '.claude');
+        const mcpConfigPath = path.join(claudeDir, 'mcp.json');
+        const orchestratorPath = getMcpOrchestratorPath();
+        // Check if orchestrator exists
+        if (!fs.existsSync(orchestratorPath)) {
+            return {
+                success: false,
+                error: `MCP orchestrator not found at ${orchestratorPath}. Try reinstalling the app.`
+            };
+        }
+        // Ensure .claude directory exists
+        if (!fs.existsSync(claudeDir)) {
+            fs.mkdirSync(claudeDir, { recursive: true });
+        }
+        // Read existing config or create new one
+        let mcpConfig = { mcpServers: {} };
+        if (fs.existsSync(mcpConfigPath)) {
+            try {
+                mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
+                if (!mcpConfig.mcpServers) {
+                    mcpConfig.mcpServers = {};
+                }
+            }
+            catch {
+                // If parse fails, start fresh but backup old file
+                const backupPath = mcpConfigPath + '.backup.' + Date.now();
+                fs.copyFileSync(mcpConfigPath, backupPath);
+                mcpConfig = { mcpServers: {} };
+            }
+        }
+        // Add/update orchestrator config
+        mcpConfig.mcpServers['claude-mgr-orchestrator'] = {
+            command: 'node',
+            args: [orchestratorPath]
+        };
+        // Write config
+        fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
+        return { success: true, path: mcpConfigPath };
+    }
+    catch (err) {
+        console.error('Failed to setup orchestrator:', err);
+        return { success: false, error: String(err) };
+    }
+});
+// Remove orchestrator from Claude's mcp.json
+electron_1.ipcMain.handle('orchestrator:remove', async () => {
+    try {
+        const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
+        if (!fs.existsSync(mcpConfigPath)) {
+            return { success: true }; // Nothing to remove
+        }
+        const mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
+        if (mcpConfig?.mcpServers?.['claude-mgr-orchestrator']) {
+            delete mcpConfig.mcpServers['claude-mgr-orchestrator'];
+            fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
+        }
+        return { success: true };
+    }
+    catch (err) {
+        console.error('Failed to remove orchestrator:', err);
         return { success: false, error: String(err) };
     }
 });

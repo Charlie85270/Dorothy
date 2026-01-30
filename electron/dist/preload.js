@@ -24,6 +24,7 @@ electron_1.contextBridge.exposeInMainWorld('electronAPI', {
     // Agent management
     agent: {
         create: (config) => electron_1.ipcRenderer.invoke('agent:create', config),
+        update: (params) => electron_1.ipcRenderer.invoke('agent:update', params),
         start: (params) => electron_1.ipcRenderer.invoke('agent:start', params),
         get: (id) => electron_1.ipcRenderer.invoke('agent:get', id),
         list: () => electron_1.ipcRenderer.invoke('agent:list'),
@@ -101,6 +102,16 @@ electron_1.contextBridge.exposeInMainWorld('electronAPI', {
     appSettings: {
         get: () => electron_1.ipcRenderer.invoke('app:getSettings'),
         save: (settings) => electron_1.ipcRenderer.invoke('app:saveSettings', settings),
+        onUpdated: (callback) => {
+            const listener = (_, settings) => callback(settings);
+            electron_1.ipcRenderer.on('settings:updated', listener);
+            return () => electron_1.ipcRenderer.removeListener('settings:updated', listener);
+        },
+    },
+    // Telegram bot
+    telegram: {
+        test: () => electron_1.ipcRenderer.invoke('telegram:test'),
+        sendTest: () => electron_1.ipcRenderer.invoke('telegram:sendTest'),
     },
     // Dialogs
     dialog: {
@@ -126,6 +137,12 @@ electron_1.contextBridge.exposeInMainWorld('electronAPI', {
             electron_1.ipcRenderer.on('shell:ptyExit', listener);
             return () => electron_1.ipcRenderer.removeListener('shell:ptyExit', listener);
         },
+    },
+    // Orchestrator (Super Agent) management
+    orchestrator: {
+        getStatus: () => electron_1.ipcRenderer.invoke('orchestrator:getStatus'),
+        setup: () => electron_1.ipcRenderer.invoke('orchestrator:setup'),
+        remove: () => electron_1.ipcRenderer.invoke('orchestrator:remove'),
     },
     // Platform info
     platform: process.platform,

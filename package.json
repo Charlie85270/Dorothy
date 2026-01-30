@@ -22,10 +22,13 @@
     },
     "files": [
       "electron/dist/**/*",
-      "out/**/*"
+      "out/**/*",
+      "mcp-orchestrator/dist/**/*",
+      "mcp-orchestrator/package.json"
     ],
     "asarUnpack": [
-      "out/**/*"
+      "out/**/*",
+      "mcp-orchestrator/**/*"
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
@@ -61,6 +64,7 @@
     "lucide-react": "^0.563.0",
     "next": "16.1.4",
     "node-pty": "^1.1.0",
+    "node-telegram-bot-api": "^0.67.0",
     "prism-react-renderer": "^2.4.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -74,6 +78,7 @@
     "@electron/rebuild": "^4.0.2",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/node-telegram-bot-api": "^0.64.13",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/uuid": "^9.0.8",

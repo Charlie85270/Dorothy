@@ -389,7 +389,7 @@ export default function ChatsPage() {
       </div>
 
       {/* Desktop: Side by side */}
-      <div className="hidden lg:flex flex-1 gap-6 p-4 lg:p-0">
+      <div className="hidden lg:flex flex-1 gap-6 p-4 lg:p-0 pt-6">
         {/* Header */}
         <div className="hidden">
           <h1 className="text-2xl font-bold tracking-tight">Conversations</h1>

@@ -17,6 +17,10 @@ import {
   ExternalLink,
   Bell,
   BellOff,
+  Send,
+  MessageCircle,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { isElectron } from '@/hooks/useElectron';
 
@@ -51,6 +55,9 @@ interface AppSettings {
   notifyOnWaiting: boolean;
   notifyOnComplete: boolean;
   notifyOnError: boolean;
+  telegramEnabled: boolean;
+  telegramBotToken: string;
+  telegramChatId: string;
 }
 
 export default function SettingsPage() {
@@ -60,7 +67,13 @@ export default function SettingsPage() {
     notifyOnWaiting: true,
     notifyOnComplete: true,
     notifyOnError: true,
+    telegramEnabled: false,
+    telegramBotToken: '',
+    telegramChatId: '',
   });
+  const [showBotToken, setShowBotToken] = useState(false);
+  const [testingTelegram, setTestingTelegram] = useState(false);
+  const [telegramTestResult, setTelegramTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [info, setInfo] = useState<ClaudeInfo | null>(null);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
@@ -176,7 +189,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-4 lg:space-y-6">
+    <div className="space-y-4 lg:space-y-6 pt-4 lg:pt-6">
       {/* Header */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -369,11 +382,191 @@ export default function SettingsPage() {
           </div>
         </motion.div>
 
-        {/* Permissions */}
+        {/* Telegram Integration */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
+          className="rounded-xl border border-border-primary bg-bg-secondary p-6"
+        >
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+              <Send className="w-5 h-5 text-blue-400" />
+            </div>
+            <div>
+              <h2 className="font-semibold">Telegram Integration</h2>
+              <p className="text-xs text-text-muted">Control agents remotely via Telegram</p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {/* Enable Toggle */}
+            <div className="flex items-center justify-between py-3 border-b border-border-primary">
+              <div>
+                <p className="text-sm font-medium">Enable Telegram Bot</p>
+                <p className="text-xs text-text-muted">Receive notifications and send commands via Telegram</p>
+              </div>
+              <button
+                onClick={() => handleSaveAppSettings({ telegramEnabled: !appSettings.telegramEnabled })}
+                className={`w-12 h-6 rounded-full transition-colors ${
+                  appSettings.telegramEnabled ? 'bg-blue-500' : 'bg-bg-tertiary'
+                }`}
+              >
+                <div
+                  className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                    appSettings.telegramEnabled ? 'translate-x-6' : 'translate-x-0.5'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Bot Token */}
+            <div className="py-3 border-b border-border-primary">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium">Bot Token</label>
+                <a
+                  href="https://t.me/BotFather"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                >
+                  Get from @BotFather
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+              <div className="relative">
+                <input
+                  type={showBotToken ? 'text' : 'password'}
+                  value={appSettings.telegramBotToken}
+                  onChange={(e) => setAppSettings({ ...appSettings, telegramBotToken: e.target.value })}
+                  onBlur={() => {
+                    if (appSettings.telegramBotToken) {
+                      handleSaveAppSettings({ telegramBotToken: appSettings.telegramBotToken });
+                    }
+                  }}
+                  placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz..."
+                  className="w-full px-3 py-2 pr-10 rounded-lg bg-bg-tertiary border border-border-primary text-sm font-mono focus:border-blue-500 focus:outline-none"
+                />
+                <button
+                  onClick={() => setShowBotToken(!showBotToken)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary"
+                >
+                  {showBotToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-[10px] text-text-muted mt-1.5">
+                1. Message @BotFather on Telegram → 2. Send /newbot → 3. Copy the token here
+              </p>
+            </div>
+
+            {/* Chat ID (auto-detected) */}
+            <div className="py-3 border-b border-border-primary">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium">Chat ID</label>
+                {appSettings.telegramChatId && (
+                  <span className="text-xs text-accent-green flex items-center gap-1">
+                    <Check className="w-3 h-3" />
+                    Connected
+                  </span>
+                )}
+              </div>
+              <input
+                type="text"
+                value={appSettings.telegramChatId || 'Not connected yet'}
+                readOnly
+                className="w-full px-3 py-2 rounded-lg bg-bg-tertiary border border-border-primary text-sm font-mono text-text-muted"
+              />
+              <p className="text-[10px] text-text-muted mt-1.5">
+                Auto-detected when you send /start to your bot
+              </p>
+            </div>
+
+            {/* Test Connection */}
+            <div className="py-3">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={async () => {
+                    if (!window.electronAPI?.telegram?.test) return;
+                    setTestingTelegram(true);
+                    setTelegramTestResult(null);
+                    try {
+                      const result = await window.electronAPI.telegram.test();
+                      if (result.success) {
+                        setTelegramTestResult({ success: true, message: `Bot @${result.botName} is valid!` });
+                      } else {
+                        setTelegramTestResult({ success: false, message: result.error || 'Invalid token' });
+                      }
+                    } catch (err) {
+                      setTelegramTestResult({ success: false, message: 'Failed to test connection' });
+                    } finally {
+                      setTestingTelegram(false);
+                    }
+                  }}
+                  disabled={!appSettings.telegramBotToken || testingTelegram}
+                  className="px-4 py-2 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm flex items-center gap-2"
+                >
+                  {testingTelegram ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <MessageCircle className="w-4 h-4" />
+                  )}
+                  Test Token
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!window.electronAPI?.telegram?.sendTest) return;
+                    setTestingTelegram(true);
+                    setTelegramTestResult(null);
+                    try {
+                      const result = await window.electronAPI.telegram.sendTest();
+                      if (result.success) {
+                        setTelegramTestResult({ success: true, message: 'Test message sent!' });
+                      } else {
+                        setTelegramTestResult({ success: false, message: result.error || 'Failed to send' });
+                      }
+                    } catch (err) {
+                      setTelegramTestResult({ success: false, message: 'Failed to send test message' });
+                    } finally {
+                      setTestingTelegram(false);
+                    }
+                  }}
+                  disabled={!appSettings.telegramChatId || testingTelegram}
+                  className="px-4 py-2 rounded-lg bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm flex items-center gap-2"
+                >
+                  <Send className="w-4 h-4" />
+                  Send Test
+                </button>
+              </div>
+              {telegramTestResult && (
+                <div className={`mt-3 p-2 rounded-lg text-xs ${
+                  telegramTestResult.success
+                    ? 'bg-accent-green/10 text-accent-green'
+                    : 'bg-accent-red/10 text-accent-red'
+                }`}>
+                  {telegramTestResult.message}
+                </div>
+              )}
+            </div>
+
+            {/* Help */}
+            <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/20">
+              <p className="text-xs text-blue-300 font-medium mb-1">Quick Setup:</p>
+              <ol className="text-[10px] text-text-muted space-y-0.5 list-decimal list-inside">
+                <li>Open Telegram and search for @BotFather</li>
+                <li>Send /newbot and follow the instructions</li>
+                <li>Copy the bot token and paste it above</li>
+                <li>Open your new bot and send /start</li>
+                <li>You are ready to control agents remotely!</li>
+              </ol>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Permissions */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
           className="rounded-xl border border-border-primary bg-bg-secondary p-6"
         >
           <div className="flex items-center gap-3 mb-6">

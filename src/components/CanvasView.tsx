@@ -31,6 +31,7 @@ import {
   MoreVertical,
   Pencil,
   Settings2,
+  Crown,
 } from 'lucide-react';
 import { useElectronAgents, useElectronFS, useElectronSkills, isElectron } from '@/hooks/useElectron';
 import { useClaude } from '@/hooks/useClaude';
@@ -708,6 +709,10 @@ function CanvasToolbar({
   onResetView,
   zoom,
   setZoom,
+  superAgent,
+  isCreatingSuperAgent,
+  onSuperAgentClick,
+  showSuperAgentButton,
 }: {
   filter: 'all' | 'running' | 'idle' | 'stopped';
   setFilter: (filter: 'all' | 'running' | 'idle' | 'stopped') => void;
@@ -719,6 +724,10 @@ function CanvasToolbar({
   onResetView: () => void;
   zoom: number;
   setZoom: (zoom: number) => void;
+  superAgent: { id: string; status: string } | null;
+  isCreatingSuperAgent: boolean;
+  onSuperAgentClick: () => void;
+  showSuperAgentButton: boolean;
 }) {
   return (
     <div className="absolute top-3 left-3 right-3 lg:top-4 lg:left-4 lg:right-4 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-2 z-40">
@@ -773,6 +782,14 @@ function CanvasToolbar({
 
       {/* Right side - View controls */}
       <div className="flex items-center gap-2 justify-end">
+        {/* Super Agent Button */}
+        {showSuperAgentButton && (
+          <SuperAgentButton
+            superAgent={superAgent}
+            isCreating={isCreatingSuperAgent}
+            onClick={onSuperAgentClick}
+          />
+        )}
         <div className="flex items-center gap-1 p-1 rounded-lg bg-zinc-900/90 border border-zinc-700">
           <button
             onClick={() => setZoom(Math.max(0.3, zoom - 0.1))}
@@ -799,6 +816,64 @@ function CanvasToolbar({
         </button>
       </div>
     </div>
+  );
+}
+
+// Super Agent status colors
+const SUPER_AGENT_STATUS_COLORS: Record<string, { dot: string; pulse: boolean }> = {
+  running: { dot: 'bg-green-400', pulse: true },
+  waiting: { dot: 'bg-amber-400', pulse: true },
+  idle: { dot: 'bg-zinc-500', pulse: false },
+  completed: { dot: 'bg-cyan-400', pulse: false },
+  error: { dot: 'bg-red-400', pulse: false },
+};
+
+// Super Agent Button Component
+function SuperAgentButton({
+  superAgent,
+  isCreating,
+  onClick,
+}: {
+  superAgent: { id: string; status: string } | null;
+  isCreating: boolean;
+  onClick: () => void;
+}) {
+  const statusColor = superAgent ? SUPER_AGENT_STATUS_COLORS[superAgent.status] || SUPER_AGENT_STATUS_COLORS.idle : null;
+
+  return (
+    <motion.button
+      onClick={onClick}
+      disabled={isCreating}
+      className={`
+        flex items-center gap-2 px-3 py-2
+        rounded-lg border backdrop-blur-sm
+        transition-all duration-200
+        ${superAgent
+          ? superAgent.status === 'running' || superAgent.status === 'waiting'
+            ? 'bg-purple-500/20 border-purple-500/50 text-purple-300 hover:bg-purple-500/30 shadow-lg shadow-purple-500/20'
+            : 'bg-zinc-900/90 border-purple-500/30 text-purple-400 hover:bg-purple-500/10 hover:border-purple-500/50'
+          : 'bg-zinc-900/90 border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:border-purple-500/50'
+        }
+        disabled:opacity-50 disabled:cursor-not-allowed
+      `}
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+      title={superAgent ? `Super Agent (${superAgent.status})` : 'Create Super Agent'}
+    >
+      {isCreating ? (
+        <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+      ) : (
+        <div className="relative">
+          <Crown className={`w-4 h-4 ${superAgent ? 'text-amber-400' : 'text-zinc-400'}`} />
+          {superAgent && statusColor && (
+            <span className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ${statusColor.dot} ${statusColor.pulse ? 'animate-pulse' : ''} border border-zinc-900`} />
+          )}
+        </div>
+      )}
+      <span className="text-xs font-medium hidden sm:inline">
+        {isCreating ? 'Creating...' : 'Super Agent'}
+      </span>
+    </motion.button>
   );
 }
 
@@ -1122,6 +1197,9 @@ export default function CanvasView() {
   const [showCreateAgentModal, setShowCreateAgentModal] = useState(false);
   const [createAgentProjectPath, setCreateAgentProjectPath] = useState<string | null>(null);
 
+  // Super Agent state
+  const [isCreatingSuperAgent, setIsCreatingSuperAgent] = useState(false);
+
   // Notification panel state
   const [notificationPanelCollapsed, setNotificationPanelCollapsed] = useState(
     savedState?.notificationPanelCollapsed ?? false
@@ -1144,47 +1222,57 @@ export default function CanvasView() {
     }
   }, [agentPositions, projectPositions, panOffset, zoom, notificationPanelCollapsed]);
 
-  // Build agent nodes from real data
-  const agentNodes: AgentNode[] = useMemo(() => {
-    return electronAgents.map((agent, index) => {
-      const defaultPos = { x: 100 + (index % 3) * 320, y: 80 + Math.floor(index / 3) * 200 };
-      const pos = agentPositions[agent.id] || defaultPos;
+  // Helper to check if an agent is a super agent
+  const isSuperAgent = (agent: { name?: string }) => {
+    const name = agent.name?.toLowerCase() || '';
+    return name.includes('super agent') || name.includes('orchestrator');
+  };
 
-      return {
-        id: agent.id,
-        type: 'agent' as const,
-        name: agent.name || `Agent ${agent.id.slice(0, 6)}`,
-        character: agent.character || 'robot',
-        status: agent.status as AgentNode['status'],
-        skills: agent.skills || [],
-        projectPath: agent.projectPath,
-        position: pos,
-      };
-    });
+  // Build agent nodes from real data (excluding super agent)
+  const agentNodes: AgentNode[] = useMemo(() => {
+    return electronAgents
+      .filter(agent => !isSuperAgent(agent))
+      .map((agent, index) => {
+        const defaultPos = { x: 100 + (index % 3) * 320, y: 80 + Math.floor(index / 3) * 200 };
+        const pos = agentPositions[agent.id] || defaultPos;
+
+        return {
+          id: agent.id,
+          type: 'agent' as const,
+          name: agent.name || `Agent ${agent.id.slice(0, 6)}`,
+          character: agent.character || 'robot',
+          status: agent.status as AgentNode['status'],
+          skills: agent.skills || [],
+          projectPath: agent.projectPath,
+          position: pos,
+        };
+      });
   }, [electronAgents, agentPositions]);
 
-  // Build project nodes from agents' projects only (projects with agents)
+  // Build project nodes from agents' projects only (projects with agents, excluding super agent)
   const projectNodes: ProjectNode[] = useMemo(() => {
     const projectMap = new Map<string, ProjectNode>();
 
-    // Only add projects that have agents
-    electronAgents.forEach((agent) => {
-      const projectPath = agent.projectPath;
-      const projectName = projectPath.split('/').pop() || projectPath;
+    // Only add projects that have agents (excluding super agent)
+    electronAgents
+      .filter(agent => !isSuperAgent(agent))
+      .forEach((agent) => {
+        const projectPath = agent.projectPath;
+        const projectName = projectPath.split('/').pop() || projectPath;
 
-      if (!projectMap.has(projectPath)) {
-        projectMap.set(projectPath, {
-          id: projectPath,
-          type: 'project',
-          name: projectName,
-          path: projectPath,
-          branch: agent.branchName || undefined,
-          position: projectPositions[projectPath] || { x: 0, y: 0 },
-          agentIds: [],
-        });
-      }
-      projectMap.get(projectPath)!.agentIds.push(agent.id);
-    });
+        if (!projectMap.has(projectPath)) {
+          projectMap.set(projectPath, {
+            id: projectPath,
+            type: 'project',
+            name: projectName,
+            path: projectPath,
+            branch: agent.branchName || undefined,
+            position: projectPositions[projectPath] || { x: 0, y: 0 },
+            agentIds: [],
+          });
+        }
+        projectMap.get(projectPath)!.agentIds.push(agent.id);
+      });
 
     // Assign default positions to projects
     const projects = Array.from(projectMap.values());
@@ -1334,6 +1422,89 @@ export default function CanvasView() {
       console.error('Failed to create agent:', error);
     }
   }, [createAgent, startAgent]);
+
+  // Find existing super agent (identified by name containing "Super Agent" or "Orchestrator")
+  const superAgent = useMemo(() => {
+    return electronAgents.find(a =>
+      a.name?.toLowerCase().includes('super agent') ||
+      a.name?.toLowerCase().includes('orchestrator')
+    ) || null;
+  }, [electronAgents]);
+
+  // Orchestrator prompt for Super Agent
+  const orchestratorPrompt = `You are the Super Agent - an orchestrator that ONLY manages other agents using MCP tools.
+
+IMPORTANT: You have MCP tools from "claude-mgr-orchestrator" server. Use ONLY these tools:
+- list_agents: List all agents
+- get_agent: Get agent details by ID
+- get_agent_output: Get agent terminal output
+- create_agent: Create a new agent (params: projectPath, name, skills[], character)
+- start_agent: Start an agent with a task (params: id, prompt)
+- stop_agent: Stop a running agent (params: id)
+- send_message: Send input to an agent (params: id, message)
+- remove_agent: Delete an agent (params: id)
+- wait_for_agent: Wait for agent completion (params: id)
+
+RULES:
+1. NEVER explore codebases or read files - you are ONLY an agent manager
+2. ALWAYS use the MCP tools above to manage agents
+3. When asked to create an agent, use create_agent with the specified project path
+4. Start by listing existing agents with list_agents
+
+Say hello and list the current agents.`;
+
+  // Handle Super Agent button click
+  const handleSuperAgentClick = useCallback(async () => {
+    // If super agent exists
+    if (superAgent) {
+      // If idle, restart it with the orchestrator prompt
+      if (superAgent.status === 'idle' || superAgent.status === 'completed' || superAgent.status === 'error') {
+        await startAgent(superAgent.id, orchestratorPrompt);
+      }
+      setTerminalAgentId(superAgent.id);
+      return;
+    }
+
+    // Check if orchestrator is configured
+    if (!window.electronAPI?.orchestrator?.getStatus) {
+      console.error('Orchestrator API not available');
+      return;
+    }
+
+    const status = await window.electronAPI.orchestrator.getStatus();
+
+    // If not configured, set it up first
+    if (!status.configured && window.electronAPI?.orchestrator?.setup) {
+      const setupResult = await window.electronAPI.orchestrator.setup();
+      if (!setupResult.success) {
+        console.error('Failed to setup orchestrator:', setupResult.error);
+        return;
+      }
+    }
+
+    // Create a new super agent
+    setIsCreatingSuperAgent(true);
+    try {
+      // Use the first project path or a default
+      const projectPath = projects[0]?.path || process.cwd?.() || '/tmp';
+
+      const agent = await createAgent({
+        projectPath,
+        skills: [],
+        character: 'wizard',
+        name: 'Super Agent (Orchestrator)',
+        skipPermissions: true,
+      });
+
+      // Start with orchestrator instructions
+      await startAgent(agent.id, orchestratorPrompt);
+      setTerminalAgentId(agent.id);
+    } catch (error) {
+      console.error('Failed to create super agent:', error);
+    } finally {
+      setIsCreatingSuperAgent(false);
+    }
+  }, [superAgent, projects, createAgent, startAgent]);
 
   // Reset view (reset zoom and pan, keep node positions)
   const resetView = useCallback(() => {
@@ -1541,6 +1712,10 @@ export default function CanvasView() {
         onResetView={resetView}
         zoom={zoom}
         setZoom={setZoom}
+        superAgent={superAgent}
+        isCreatingSuperAgent={isCreatingSuperAgent}
+        onSuperAgentClick={handleSuperAgentClick}
+        showSuperAgentButton={isElectron()}
       />
 
       {/* Canvas Content */}
@@ -1640,6 +1815,7 @@ export default function CanvasView() {
         onStart={handleStartAgent}
         onStop={handleStopAgent}
         projects={projects.map(p => ({ path: p.path, name: p.name }))}
+        agents={electronAgents}
         onBrowseFolder={isElectron() ? openFolderDialog : undefined}
         onAgentUpdated={refreshAgents}
         initialPanel={terminalInitialPanel}

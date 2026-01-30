@@ -737,6 +737,7 @@ export default function AgentWorld() {
         onStart={handleStart}
         onStop={handleStop}
         projects={projects}
+        agents={agents}
         onBrowseFolder={isElectron() ? openFolderDialog : undefined}
         onAgentUpdated={refresh}
       />

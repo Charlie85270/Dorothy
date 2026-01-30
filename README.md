@@ -32,6 +32,48 @@ Watch your agents work in a beautiful 3D office environment with animated charac
 
 ![3D View](screenshots/3d.png)
 
+### 👑 Super Agent (Orchestrator)
+The Super Agent is a powerful orchestrator that can manage and coordinate all your other agents. Give it high-level tasks and it will delegate work to the appropriate agents, monitor their progress, and report back to you.
+
+- Automatically coordinates multiple agents
+- Delegates tasks based on agent capabilities
+- Monitors progress and handles errors
+- Uses MCP tools to control other agents
+
+### 🔌 MCP Server Integration
+Claude Manager includes a built-in MCP (Model Context Protocol) server that allows the Super Agent to control other agents programmatically.
+
+Available MCP tools:
+- `list_agents` - List all agents with their status
+- `get_agent_output` - Read an agent's terminal output
+- `start_agent` - Start an agent with a task
+- `send_message` - Send a message to an agent
+- `stop_agent` - Stop a running agent
+- `create_agent` - Create a new agent
+- `remove_agent` - Delete an agent
+- `send_telegram` - Send messages to Telegram
+
+### 📱 Telegram Bot Integration
+Control your agents remotely via Telegram! Connect your Telegram bot and manage your agents from anywhere.
+
+**Available Commands:**
+- `/status` - Quick overview of all agents
+- `/agents` - Detailed list of all agents
+- `/projects` - List all projects with their agents
+- `/start_agent <name> <task>` - Start an agent with a task
+- `/stop_agent <name>` - Stop a running agent
+- `/ask <message>` - Send a message to Super Agent
+- `/help` - Show all available commands
+
+Or just send a message to talk directly to the Super Agent!
+
+**Setup:**
+1. Create a Telegram bot via [@BotFather](https://t.me/botfather)
+2. Copy the bot token
+3. Go to Settings in Claude Manager
+4. Paste your bot token and save
+5. Send `/start` to your bot to connect
+
 ## Installation
 
 ### Prerequisites
@@ -117,7 +159,8 @@ claude-manager/
 │   │   ├── chats/         # Chat history
 │   │   ├── projects/      # Projects overview
 │   │   ├── settings/      # Settings page
-│   │   └── skills/        # Skills management
+│   │   ├── skills/        # Skills management
+│   │   └── usage/         # Usage statistics
 │   ├── components/        # React components
 │   ├── hooks/             # Custom hooks
 │   ├── lib/               # Utilities
@@ -126,6 +169,8 @@ claude-manager/
 ├── electron/              # Electron main process
 │   ├── main.ts            # Main process entry
 │   └── preload.ts         # Preload script
+├── mcp-orchestrator/      # MCP server for Super Agent
+│   └── src/index.ts       # MCP tools implementation
 ├── landing/               # Marketing landing page
 ├── public/                # Static assets
 └── screenshots/           # App screenshots
@@ -170,6 +215,19 @@ claude-manager/
 - Set up hooks
 - Toggle Git co-authored-by messages
 - View system information
+
+### Super Agent & MCP
+- Orchestrate multiple agents from a single command
+- Built-in MCP server for programmatic control
+- Automatic task delegation and monitoring
+- Real-time status updates across all agents
+
+### Telegram Integration
+- Remote agent control via Telegram bot
+- Status monitoring on the go
+- Start/stop agents from anywhere
+- Direct communication with Super Agent
+- Autonomous task execution for remote requests
 
 ## Development
 

@@ -203,7 +203,7 @@ function HeroSection() {
           className="flex flex-col sm:flex-row items-center justify-center gap-4"
         >
           <a
-            href="https://github.com/Charlie85270/claude-mgr/releases/download/0.2.0/claude.mgr-0.2.0-arm64.dmg"
+            href="https://github.com/Charlie85270/claude-mgr/releases/download/0.0.5/claude.mgr-0.2.0-arm64.dmg"
             className="group flex items-center gap-3 px-8 py-4 rounded-xl bg-gradient-to-r from-[#22d3ee] to-[#60a5fa] text-[#0a0a0f] font-semibold text-lg hover:opacity-90 transition-all shine-effect"
           >
             <Download className="w-5 h-5" />
@@ -444,21 +444,12 @@ const screenshots = [
   },
   {
     id: 'super-agent',
-    src: '/0.png',
+    src: '/super-agent.png',
     title: 'Super Agent Orchestrator',
     description: 'The Super Agent coordinates all your agents using MCP tools. Give it a high-level task and watch it delegate work, monitor progress, and report back.',
     gradient: 'from-[#fbbf24] to-[#f59e0b]',
     icon: Crown,
     tags: ['Orchestrator', 'MCP', 'Autonomous'],
-  },
-  {
-    id: 'telegram',
-    src: '/0.png',
-    title: 'Telegram Bot Control',
-    description: 'Control your agents from anywhere via Telegram. Check status, start tasks, and communicate with Super Agent — all from your phone.',
-    gradient: 'from-[#0088cc] to-[#22d3ee]',
-    icon: Send,
-    tags: ['Remote Control', 'Mobile', 'Real-time'],
   },
   {
     id: 'agents',
@@ -762,7 +753,7 @@ function DownloadSection() {
             {/* Download buttons */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
               <a
-                href="https://github.com/Charlie85270/claude-mgr/releases/download/0.2.0/claude.mgr-0.2.0-arm64.dmg"
+                href="https://github.com/Charlie85270/claude-mgr/releases/download/0.0.5/claude.mgr-0.2.0-arm64.dmg"
                 className="group flex items-center gap-3 px-8 py-4 rounded-xl bg-gradient-to-r from-[#22d3ee] to-[#60a5fa] text-[#0a0a0f] font-semibold text-lg hover:opacity-90 transition-all"
               >
                 <Download className="w-5 h-5" />

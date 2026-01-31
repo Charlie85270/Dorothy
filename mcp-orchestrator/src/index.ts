@@ -135,7 +135,7 @@ server.tool(
 // Tool: Create agent
 server.tool(
   "create_agent",
-  "Create a new agent for a specific project. The agent will be in 'idle' state until started.",
+  "Create a new agent for a specific project. The agent will be in 'idle' state until started. By default, agents run with --dangerously-skip-permissions for autonomous operation.",
   {
     projectPath: z.string().describe("Absolute path to the project directory"),
     name: z.string().optional().describe("Name for the agent (e.g., 'Backend Worker', 'Test Runner')"),
@@ -147,13 +147,14 @@ server.tool(
     skipPermissions: z
       .boolean()
       .optional()
-      .describe("If true, agent runs with --dangerously-skip-permissions flag"),
+      .default(true)
+      .describe("If true (default), agent runs with --dangerously-skip-permissions flag for autonomous operation"),
     secondaryProjectPath: z
       .string()
       .optional()
       .describe("Secondary project path to add as context (--add-dir)"),
   },
-  async ({ projectPath, name, skills, character, skipPermissions, secondaryProjectPath }) => {
+  async ({ projectPath, name, skills, character, skipPermissions = true, secondaryProjectPath }) => {
     try {
       const data = await apiRequest("/api/agents", "POST", {
         projectPath,

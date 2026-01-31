@@ -1879,6 +1879,9 @@ app.whenReady().then(async () => {
   // Load persisted agents before creating window
   loadAgents();
 
+  // Auto-setup MCP orchestrator if not already configured
+  await setupMcpOrchestrator();
+
   // Initialize Telegram bot if enabled
   initTelegramBot();
 
@@ -3010,6 +3013,58 @@ function getMcpOrchestratorPath(): string {
     appPath = appPath.replace('app.asar', 'app.asar.unpacked');
   }
   return path.join(appPath, 'mcp-orchestrator', 'dist', 'index.js');
+}
+
+// Auto-setup MCP orchestrator on app start
+async function setupMcpOrchestrator(): Promise<void> {
+  try {
+    const claudeDir = path.join(os.homedir(), '.claude');
+    const mcpConfigPath = path.join(claudeDir, 'mcp.json');
+    const orchestratorPath = getMcpOrchestratorPath();
+
+    // Check if orchestrator exists
+    if (!fs.existsSync(orchestratorPath)) {
+      console.log('MCP orchestrator not found at', orchestratorPath);
+      return;
+    }
+
+    // Ensure .claude directory exists
+    if (!fs.existsSync(claudeDir)) {
+      fs.mkdirSync(claudeDir, { recursive: true });
+    }
+
+    // Read existing config or create new one
+    let mcpConfig: { mcpServers?: Record<string, unknown> } = { mcpServers: {} };
+    if (fs.existsSync(mcpConfigPath)) {
+      try {
+        mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
+        if (!mcpConfig.mcpServers) {
+          mcpConfig.mcpServers = {};
+        }
+      } catch {
+        // If parse fails, start fresh
+        mcpConfig = { mcpServers: {} };
+      }
+    }
+
+    // Check if already configured
+    if (mcpConfig.mcpServers!['claude-mgr-orchestrator']) {
+      console.log('MCP orchestrator already configured');
+      return;
+    }
+
+    // Add orchestrator config
+    mcpConfig.mcpServers!['claude-mgr-orchestrator'] = {
+      command: 'node',
+      args: [orchestratorPath]
+    };
+
+    // Write config
+    fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
+    console.log('MCP orchestrator configured successfully at', mcpConfigPath);
+  } catch (err) {
+    console.error('Failed to auto-setup MCP orchestrator:', err);
+  }
 }
 
 // Check if orchestrator is configured in Claude's mcp.json

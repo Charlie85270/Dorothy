@@ -2794,6 +2794,33 @@ async function getClaudeSkills() {
     }
   }
 
+  // User skills from ~/.agents/skills (alternative location)
+  const agentsSkillsDir = path.join(os.homedir(), '.agents', 'skills');
+  if (fs.existsSync(agentsSkillsDir)) {
+    const entries = fs.readdirSync(agentsSkillsDir);
+    for (const entry of entries) {
+      const entryPath = path.join(agentsSkillsDir, entry);
+      try {
+        const realPath = fs.realpathSync(entryPath);
+        const metadata = readSkillMetadata(realPath);
+        if (metadata) {
+          // Check if skill with same name already exists (avoid duplicates)
+          const existingSkill = skills.find(s => s.name === metadata.name);
+          if (!existingSkill) {
+            skills.push({
+              name: metadata.name,
+              source: 'user',
+              path: realPath,
+              description: metadata.description,
+            });
+          }
+        }
+      } catch {
+        // Skip broken symlinks
+      }
+    }
+  }
+
   // Plugin skills from installed_plugins.json
   const pluginsPath = path.join(os.homedir(), '.claude', 'plugins', 'installed_plugins.json');
   if (fs.existsSync(pluginsPath)) {

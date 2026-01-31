@@ -329,7 +329,7 @@ async function readSkillMetadata(skillPath: string): Promise<{ name: string; des
   }
 }
 
-// Get installed skills from ~/.claude/skills, project .claude/skills, and plugins
+// Get installed skills from ~/.claude/skills, ~/.agents/skills, project .claude/skills, and plugins
 export async function getSkills(): Promise<ClaudeSkill[]> {
   const skills: ClaudeSkill[] = [];
 
@@ -380,6 +380,33 @@ export async function getSkills(): Promise<ClaudeSkill[]> {
     }
   } catch {
     // No user skills directory
+  }
+
+  // Read user skills from ~/.agents/skills (alternative location)
+  try {
+    const agentsSkillsDir = path.join(os.homedir(), '.agents', 'skills');
+    const entries = await fs.readdir(agentsSkillsDir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      // Skills can be directories or symlinks
+      if (entry.isDirectory() || entry.isSymbolicLink()) {
+        const skillPath = path.join(agentsSkillsDir, entry.name);
+        const metadata = await readSkillMetadata(skillPath);
+
+        // Check if skill with same name already exists (avoid duplicates)
+        const existingSkill = skills.find(s => s.name === (metadata?.name || entry.name));
+        if (!existingSkill) {
+          skills.push({
+            name: metadata?.name || entry.name,
+            source: 'user',
+            path: skillPath,
+            description: metadata?.description,
+          });
+        }
+      }
+    }
+  } catch {
+    // No ~/.agents/skills directory
   }
 
   // Check for plugin skills from installed_plugins.json

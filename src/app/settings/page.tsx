@@ -21,6 +21,8 @@ import {
   MessageCircle,
   Eye,
   EyeOff,
+  ChevronRight,
+  Monitor,
 } from 'lucide-react';
 import { isElectron } from '@/hooks/useElectron';
 
@@ -60,7 +62,20 @@ interface AppSettings {
   telegramChatId: string;
 }
 
+type SettingsSection = 'general' | 'git' | 'notifications' | 'telegram' | 'permissions' | 'skills' | 'system';
+
+const SECTIONS: { id: SettingsSection; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { id: 'general', label: 'General', icon: Settings },
+  { id: 'git', label: 'Git', icon: GitCommit },
+  { id: 'notifications', label: 'Notifications', icon: Bell },
+  { id: 'telegram', label: 'Telegram', icon: Send },
+  { id: 'permissions', label: 'Permissions', icon: Shield },
+  { id: 'skills', label: 'Skills & Plugins', icon: Sparkles },
+  { id: 'system', label: 'System', icon: Monitor },
+];
+
 export default function SettingsPage() {
+  const [activeSection, setActiveSection] = useState<SettingsSection>('general');
   const [settings, setSettings] = useState<ClaudeSettings | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings>({
     notificationsEnabled: true,
@@ -165,12 +180,28 @@ export default function SettingsPage() {
     setHasChanges(true);
   };
 
+  // Toggle component
+  const Toggle = ({ enabled, onChange }: { enabled: boolean; onChange: () => void }) => (
+    <button
+      onClick={onChange}
+      className={`w-11 h-6 rounded-full transition-colors relative ${
+        enabled ? 'bg-white' : 'bg-secondary'
+      }`}
+    >
+      <div
+        className={`w-4 h-4 rounded-full shadow transition-all absolute top-1 ${
+          enabled ? 'bg-black left-6' : 'bg-muted-foreground left-1'
+        }`}
+      />
+    </button>
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-accent-blue mx-auto mb-4" />
-          <p className="text-text-secondary">Loading settings...</p>
+          <Loader2 className="w-8 h-8 animate-spin text-white mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading settings...</p>
         </div>
       </div>
     );
@@ -179,670 +210,655 @@ export default function SettingsPage() {
   if (error && !settings) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
-        <div className="text-center text-accent-red">
+        <div className="text-center text-red-400">
           <AlertCircle className="w-8 h-8 mx-auto mb-4" />
           <p className="mb-2">Failed to load settings</p>
-          <p className="text-sm text-text-muted">{error}</p>
+          <p className="text-sm text-muted-foreground">{error}</p>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="space-y-4 lg:space-y-6 pt-4 lg:pt-6">
-      {/* Header */}
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <h1 className="text-xl lg:text-2xl font-bold tracking-tight flex items-center gap-2 lg:gap-3">
-              <Settings className="w-6 h-6 lg:w-7 lg:h-7 text-accent-blue" />
-              Settings
-            </h1>
-            <p className="text-text-secondary text-xs lg:text-sm mt-1 hidden sm:block">
-              Configure Claude Code preferences
-            </p>
-          </div>
-          <div className="flex gap-2 sm:gap-3">
-            <button
-              onClick={fetchSettings}
-              className="px-3 lg:px-4 py-2 rounded-none border border-border-primary text-text-secondary hover:text-text-primary hover:border-border-accent transition-colors flex items-center gap-2 text-sm"
-            >
-              <RefreshCw className="w-4 h-4" />
-              <span className="hidden sm:inline">Refresh</span>
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving || !hasChanges}
-              className={`px-3 lg:px-4 py-2 rounded-none flex items-center gap-2 transition-all text-sm ${
-                hasChanges
-                  ? 'bg-accent-blue text-bg-primary hover:bg-accent-blue/90'
-                  : 'bg-bg-tertiary text-text-muted cursor-not-allowed'
-              }`}
-            >
-              {saving ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : saved ? (
-                <Check className="w-4 h-4" />
-              ) : (
-                <Save className="w-4 h-4" />
-              )}
-              <span className="hidden sm:inline">{saving ? 'Saving...' : saved ? 'Saved!' : 'Save Changes'}</span>
-              <span className="sm:hidden">{saving ? '...' : saved ? 'Saved' : 'Save'}</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Error message */}
-      {error && settings && (
-        <div className="p-4 rounded-none bg-accent-red/10 border border-accent-red/30 text-accent-red text-sm">
-          {error}
-        </div>
-      )}
-
-      {/* Settings Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Git Settings */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="rounded-none border border-border-primary bg-bg-secondary p-6"
-        >
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-none bg-accent-purple/20 flex items-center justify-center">
-              <GitCommit className="w-5 h-5 text-accent-purple" />
-            </div>
+  const renderContent = () => {
+    switch (activeSection) {
+      case 'general':
+        return (
+          <div className="space-y-6">
             <div>
-              <h2 className="font-semibold">Git Settings</h2>
-              <p className="text-xs text-text-muted">Configure git commit behavior</p>
+              <h2 className="text-lg font-semibold mb-1">General Settings</h2>
+              <p className="text-sm text-muted-foreground">Configure general application preferences</p>
             </div>
-          </div>
 
-          <div className="space-y-4">
-            <div className="flex items-center justify-between py-3 border-b border-border-primary">
-              <div>
-                <p className="text-sm font-medium">Include Co-Authored-By</p>
-                <p className="text-xs text-text-muted">Add Claude as co-author in commits</p>
+            <div className="border border-border bg-card p-6">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-12 h-12 bg-secondary flex items-center justify-center">
+                  <Settings className="w-6 h-6 text-muted-foreground" />
+                </div>
+                <div>
+                  <h3 className="font-medium">Claude Manager</h3>
+                  <p className="text-sm text-muted-foreground">Version 0.0.5</p>
+                </div>
               </div>
-              <button
-                onClick={() => updateSettings({ includeCoAuthoredBy: !settings?.includeCoAuthoredBy })}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  settings?.includeCoAuthoredBy ? 'bg-accent-blue' : 'bg-bg-tertiary'
-                }`}
-              >
-                <div
-                  className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                    settings?.includeCoAuthoredBy ? 'translate-x-6' : 'translate-x-0.5'
-                  }`}
-                />
-              </button>
-            </div>
-          </div>
-        </motion.div>
 
-        {/* Notification Settings */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="rounded-none border border-border-primary bg-bg-secondary p-6"
-        >
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-none bg-accent-amber/20 flex items-center justify-center">
-              {appSettings.notificationsEnabled ? (
-                <Bell className="w-5 h-5 text-accent-amber" />
-              ) : (
-                <BellOff className="w-5 h-5 text-accent-amber" />
-              )}
+              <div className="space-y-4 pt-4 border-t border-border">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">Auto-refresh Dashboard</p>
+                    <p className="text-xs text-muted-foreground">Automatically refresh agent status every 5 seconds</p>
+                  </div>
+                  <Toggle enabled={true} onChange={() => {}} />
+                </div>
+              </div>
             </div>
+
+            {info && (
+              <div className="border border-border bg-card p-6">
+                <h3 className="font-medium mb-4">Quick Info</h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Claude Version</p>
+                    <p className="font-mono">{info.claudeVersion || 'Not found'}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Platform</p>
+                    <p className="font-mono">{info.platform} ({info.arch})</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+
+      case 'git':
+        return (
+          <div className="space-y-6">
             <div>
-              <h2 className="font-semibold">Notifications</h2>
-              <p className="text-xs text-text-muted">Configure desktop notifications for agents</p>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex items-center justify-between py-3 border-b border-border-primary">
-              <div>
-                <p className="text-sm font-medium">Enable Notifications</p>
-                <p className="text-xs text-text-muted">Receive desktop notifications for agent events</p>
-              </div>
-              <button
-                onClick={() => handleSaveAppSettings({ notificationsEnabled: !appSettings.notificationsEnabled })}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  appSettings.notificationsEnabled ? 'bg-accent-blue' : 'bg-bg-tertiary'
-                }`}
-              >
-                <div
-                  className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                    appSettings.notificationsEnabled ? 'translate-x-6' : 'translate-x-0.5'
-                  }`}
-                />
-              </button>
+              <h2 className="text-lg font-semibold mb-1">Git Settings</h2>
+              <p className="text-sm text-muted-foreground">Configure git commit behavior and preferences</p>
             </div>
 
-            <div className={`space-y-4 ${!appSettings.notificationsEnabled ? 'opacity-50 pointer-events-none' : ''}`}>
-              <div className="flex items-center justify-between py-3 border-b border-border-primary">
-                <div>
-                  <p className="text-sm font-medium">Waiting for Input</p>
-                  <p className="text-xs text-text-muted">Notify when an agent needs user input</p>
-                </div>
-                <button
-                  onClick={() => handleSaveAppSettings({ notifyOnWaiting: !appSettings.notifyOnWaiting })}
-                  className={`w-12 h-6 rounded-full transition-colors ${
-                    appSettings.notifyOnWaiting ? 'bg-accent-blue' : 'bg-bg-tertiary'
-                  }`}
-                >
-                  <div
-                    className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                      appSettings.notifyOnWaiting ? 'translate-x-6' : 'translate-x-0.5'
-                    }`}
+            <div className="border border-border bg-card p-6">
+              <div className="space-y-6">
+                <div className="flex items-center justify-between pb-4 border-b border-border">
+                  <div>
+                    <p className="font-medium">Include Co-Authored-By</p>
+                    <p className="text-sm text-muted-foreground">Add Claude as co-author in git commits</p>
+                  </div>
+                  <Toggle
+                    enabled={settings?.includeCoAuthoredBy ?? false}
+                    onChange={() => updateSettings({ includeCoAuthoredBy: !settings?.includeCoAuthoredBy })}
                   />
-                </button>
-              </div>
+                </div>
 
-              <div className="flex items-center justify-between py-3 border-b border-border-primary">
-                <div>
-                  <p className="text-sm font-medium">Task Complete</p>
-                  <p className="text-xs text-text-muted">Notify when an agent completes a task</p>
+                <div className="pt-2">
+                  <p className="text-xs text-muted-foreground">
+                    When enabled, commits made with Claude&apos;s assistance will include a co-authored-by trailer.
+                  </p>
                 </div>
-                <button
-                  onClick={() => handleSaveAppSettings({ notifyOnComplete: !appSettings.notifyOnComplete })}
-                  className={`w-12 h-6 rounded-full transition-colors ${
-                    appSettings.notifyOnComplete ? 'bg-accent-blue' : 'bg-bg-tertiary'
-                  }`}
-                >
-                  <div
-                    className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                      appSettings.notifyOnComplete ? 'translate-x-6' : 'translate-x-0.5'
-                    }`}
-                  />
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between py-3">
-                <div>
-                  <p className="text-sm font-medium">Error Alerts</p>
-                  <p className="text-xs text-text-muted">Notify when an agent encounters an error</p>
-                </div>
-                <button
-                  onClick={() => handleSaveAppSettings({ notifyOnError: !appSettings.notifyOnError })}
-                  className={`w-12 h-6 rounded-full transition-colors ${
-                    appSettings.notifyOnError ? 'bg-accent-blue' : 'bg-bg-tertiary'
-                  }`}
-                >
-                  <div
-                    className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                      appSettings.notifyOnError ? 'translate-x-6' : 'translate-x-0.5'
-                    }`}
-                  />
-                </button>
               </div>
             </div>
           </div>
-        </motion.div>
+        );
 
-        {/* Telegram Integration */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-          className="rounded-none border border-border-primary bg-bg-secondary p-6"
-        >
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-none bg-blue-500/20 flex items-center justify-center">
-              <Send className="w-5 h-5 text-blue-400" />
-            </div>
+      case 'notifications':
+        return (
+          <div className="space-y-6">
             <div>
-              <h2 className="font-semibold">Telegram Integration</h2>
-              <p className="text-xs text-text-muted">Control agents remotely via Telegram</p>
+              <h2 className="text-lg font-semibold mb-1">Notifications</h2>
+              <p className="text-sm text-muted-foreground">Configure desktop notifications for agent events</p>
+            </div>
+
+            <div className="border border-border bg-card p-6">
+              <div className="flex items-center justify-between pb-4 border-b border-border">
+                <div className="flex items-center gap-3">
+                  {appSettings.notificationsEnabled ? (
+                    <Bell className="w-5 h-5 text-muted-foreground" />
+                  ) : (
+                    <BellOff className="w-5 h-5 text-muted-foreground" />
+                  )}
+                  <div>
+                    <p className="font-medium">Enable Notifications</p>
+                    <p className="text-sm text-muted-foreground">Receive desktop notifications for agent events</p>
+                  </div>
+                </div>
+                <Toggle
+                  enabled={appSettings.notificationsEnabled}
+                  onChange={() => handleSaveAppSettings({ notificationsEnabled: !appSettings.notificationsEnabled })}
+                />
+              </div>
+
+              <div className={`space-y-4 pt-4 ${!appSettings.notificationsEnabled ? 'opacity-50 pointer-events-none' : ''}`}>
+                <div className="flex items-center justify-between py-3 border-b border-border">
+                  <div>
+                    <p className="text-sm font-medium">Waiting for Input</p>
+                    <p className="text-xs text-muted-foreground">Notify when an agent needs user input</p>
+                  </div>
+                  <Toggle
+                    enabled={appSettings.notifyOnWaiting}
+                    onChange={() => handleSaveAppSettings({ notifyOnWaiting: !appSettings.notifyOnWaiting })}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between py-3 border-b border-border">
+                  <div>
+                    <p className="text-sm font-medium">Task Complete</p>
+                    <p className="text-xs text-muted-foreground">Notify when an agent completes a task</p>
+                  </div>
+                  <Toggle
+                    enabled={appSettings.notifyOnComplete}
+                    onChange={() => handleSaveAppSettings({ notifyOnComplete: !appSettings.notifyOnComplete })}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between py-3">
+                  <div>
+                    <p className="text-sm font-medium">Error Alerts</p>
+                    <p className="text-xs text-muted-foreground">Notify when an agent encounters an error</p>
+                  </div>
+                  <Toggle
+                    enabled={appSettings.notifyOnError}
+                    onChange={() => handleSaveAppSettings({ notifyOnError: !appSettings.notifyOnError })}
+                  />
+                </div>
+              </div>
             </div>
           </div>
+        );
 
-          <div className="space-y-4">
-            {/* Enable Toggle */}
-            <div className="flex items-center justify-between py-3 border-b border-border-primary">
-              <div>
-                <p className="text-sm font-medium">Enable Telegram Bot</p>
-                <p className="text-xs text-text-muted">Receive notifications and send commands via Telegram</p>
-              </div>
-              <button
-                onClick={() => handleSaveAppSettings({ telegramEnabled: !appSettings.telegramEnabled })}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  appSettings.telegramEnabled ? 'bg-blue-500' : 'bg-bg-tertiary'
-                }`}
-              >
-                <div
-                  className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                    appSettings.telegramEnabled ? 'translate-x-6' : 'translate-x-0.5'
-                  }`}
-                />
-              </button>
+      case 'telegram':
+        return (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-lg font-semibold mb-1">Telegram Integration</h2>
+              <p className="text-sm text-muted-foreground">Control agents remotely via Telegram bot</p>
             </div>
 
-            {/* Bot Token */}
-            <div className="py-3 border-b border-border-primary">
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium">Bot Token</label>
-                <a
-                  href="https://t.me/BotFather"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
-                >
-                  Get from @BotFather
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
-              <div className="relative">
-                <input
-                  type={showBotToken ? 'text' : 'password'}
-                  value={appSettings.telegramBotToken}
-                  onChange={(e) => setAppSettings({ ...appSettings, telegramBotToken: e.target.value })}
-                  onBlur={() => {
-                    if (appSettings.telegramBotToken) {
-                      handleSaveAppSettings({ telegramBotToken: appSettings.telegramBotToken });
-                    }
-                  }}
-                  placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz..."
-                  className="w-full px-3 py-2 pr-10 rounded-none bg-bg-tertiary border border-border-primary text-sm font-mono focus:border-blue-500 focus:outline-none"
+            <div className="border border-border bg-card p-6">
+              <div className="flex items-center justify-between pb-4 border-b border-border">
+                <div className="flex items-center gap-3">
+                  <Send className="w-5 h-5 text-muted-foreground" />
+                  <div>
+                    <p className="font-medium">Enable Telegram Bot</p>
+                    <p className="text-sm text-muted-foreground">Receive notifications and send commands via Telegram</p>
+                  </div>
+                </div>
+                <Toggle
+                  enabled={appSettings.telegramEnabled}
+                  onChange={() => handleSaveAppSettings({ telegramEnabled: !appSettings.telegramEnabled })}
                 />
-                <button
-                  onClick={() => setShowBotToken(!showBotToken)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary"
-                >
-                  {showBotToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
               </div>
-              <p className="text-[10px] text-text-muted mt-1.5">
-                1. Message @BotFather on Telegram → 2. Send /newbot → 3. Copy the token here
-              </p>
-            </div>
 
-            {/* Chat ID (auto-detected) */}
-            <div className="py-3 border-b border-border-primary">
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium">Chat ID</label>
-                {appSettings.telegramChatId && (
-                  <span className="text-xs text-accent-green flex items-center gap-1">
-                    <Check className="w-3 h-3" />
-                    Connected
-                  </span>
+              <div className="space-y-6 pt-6">
+                {/* Bot Token */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium">Bot Token</label>
+                    <a
+                      href="https://t.me/BotFather"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                    >
+                      Get from @BotFather
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showBotToken ? 'text' : 'password'}
+                      value={appSettings.telegramBotToken}
+                      onChange={(e) => setAppSettings({ ...appSettings, telegramBotToken: e.target.value })}
+                      onBlur={() => {
+                        if (appSettings.telegramBotToken) {
+                          handleSaveAppSettings({ telegramBotToken: appSettings.telegramBotToken });
+                        }
+                      }}
+                      placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz..."
+                      className="w-full px-3 py-2 pr-10 bg-secondary border border-border text-sm font-mono focus:border-foreground focus:outline-none"
+                    />
+                    <button
+                      onClick={() => setShowBotToken(!showBotToken)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
+                    >
+                      {showBotToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Chat ID */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium">Chat ID</label>
+                    {appSettings.telegramChatId && (
+                      <span className="text-xs text-green-400 flex items-center gap-1">
+                        <Check className="w-3 h-3" />
+                        Connected
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={appSettings.telegramChatId || 'Not connected yet'}
+                    readOnly
+                    className="w-full px-3 py-2 bg-secondary border border-border text-sm font-mono text-muted-foreground"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Auto-detected when you send /start to your bot
+                  </p>
+                </div>
+
+                {/* Test Buttons */}
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    onClick={async () => {
+                      if (!window.electronAPI?.telegram?.test) return;
+                      setTestingTelegram(true);
+                      setTelegramTestResult(null);
+                      try {
+                        const result = await window.electronAPI.telegram.test();
+                        if (result.success) {
+                          setTelegramTestResult({ success: true, message: `Bot @${result.botName} is valid!` });
+                        } else {
+                          setTelegramTestResult({ success: false, message: result.error || 'Invalid token' });
+                        }
+                      } catch {
+                        setTelegramTestResult({ success: false, message: 'Failed to test connection' });
+                      } finally {
+                        setTestingTelegram(false);
+                      }
+                    }}
+                    disabled={!appSettings.telegramBotToken || testingTelegram}
+                    className="px-4 py-2 bg-secondary text-foreground hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm flex items-center gap-2"
+                  >
+                    {testingTelegram ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <MessageCircle className="w-4 h-4" />
+                    )}
+                    Test Token
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!window.electronAPI?.telegram?.sendTest) return;
+                      setTestingTelegram(true);
+                      setTelegramTestResult(null);
+                      try {
+                        const result = await window.electronAPI.telegram.sendTest();
+                        if (result.success) {
+                          setTelegramTestResult({ success: true, message: 'Test message sent!' });
+                        } else {
+                          setTelegramTestResult({ success: false, message: result.error || 'Failed to send' });
+                        }
+                      } catch {
+                        setTelegramTestResult({ success: false, message: 'Failed to send test message' });
+                      } finally {
+                        setTestingTelegram(false);
+                      }
+                    }}
+                    disabled={!appSettings.telegramChatId || testingTelegram}
+                    className="px-4 py-2 bg-white text-black hover:bg-white/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm flex items-center gap-2"
+                  >
+                    <Send className="w-4 h-4" />
+                    Send Test
+                  </button>
+                </div>
+
+                {telegramTestResult && (
+                  <div className={`p-3 text-sm ${
+                    telegramTestResult.success
+                      ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                      : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                  }`}>
+                    {telegramTestResult.message}
+                  </div>
                 )}
               </div>
-              <input
-                type="text"
-                value={appSettings.telegramChatId || 'Not connected yet'}
-                readOnly
-                className="w-full px-3 py-2 rounded-none bg-bg-tertiary border border-border-primary text-sm font-mono text-text-muted"
-              />
-              <p className="text-[10px] text-text-muted mt-1.5">
-                Auto-detected when you send /start to your bot
-              </p>
             </div>
 
-            {/* Test Connection */}
-            <div className="py-3">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={async () => {
-                    if (!window.electronAPI?.telegram?.test) return;
-                    setTestingTelegram(true);
-                    setTelegramTestResult(null);
-                    try {
-                      const result = await window.electronAPI.telegram.test();
-                      if (result.success) {
-                        setTelegramTestResult({ success: true, message: `Bot @${result.botName} is valid!` });
-                      } else {
-                        setTelegramTestResult({ success: false, message: result.error || 'Invalid token' });
-                      }
-                    } catch (err) {
-                      setTelegramTestResult({ success: false, message: 'Failed to test connection' });
-                    } finally {
-                      setTestingTelegram(false);
-                    }
-                  }}
-                  disabled={!appSettings.telegramBotToken || testingTelegram}
-                  className="px-4 py-2 rounded-none bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm flex items-center gap-2"
-                >
-                  {testingTelegram ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <MessageCircle className="w-4 h-4" />
-                  )}
-                  Test Token
-                </button>
-                <button
-                  onClick={async () => {
-                    if (!window.electronAPI?.telegram?.sendTest) return;
-                    setTestingTelegram(true);
-                    setTelegramTestResult(null);
-                    try {
-                      const result = await window.electronAPI.telegram.sendTest();
-                      if (result.success) {
-                        setTelegramTestResult({ success: true, message: 'Test message sent!' });
-                      } else {
-                        setTelegramTestResult({ success: false, message: result.error || 'Failed to send' });
-                      }
-                    } catch (err) {
-                      setTelegramTestResult({ success: false, message: 'Failed to send test message' });
-                    } finally {
-                      setTestingTelegram(false);
-                    }
-                  }}
-                  disabled={!appSettings.telegramChatId || testingTelegram}
-                  className="px-4 py-2 rounded-none bg-bg-tertiary text-text-secondary hover:bg-bg-tertiary/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm flex items-center gap-2"
-                >
-                  <Send className="w-4 h-4" />
-                  Send Test
-                </button>
-              </div>
-              {telegramTestResult && (
-                <div className={`mt-3 p-2 rounded-none text-xs ${
-                  telegramTestResult.success
-                    ? 'bg-accent-green/10 text-accent-green'
-                    : 'bg-accent-red/10 text-accent-red'
-                }`}>
-                  {telegramTestResult.message}
-                </div>
-              )}
-            </div>
-
-            {/* Help */}
-            <div className="p-3 rounded-none bg-blue-500/5 border border-blue-500/20">
-              <p className="text-xs text-blue-300 font-medium mb-1">Quick Setup:</p>
-              <ol className="text-[10px] text-text-muted space-y-0.5 list-decimal list-inside">
+            {/* Setup Guide */}
+            <div className="border border-border bg-card p-6">
+              <h3 className="font-medium mb-4">Setup Guide</h3>
+              <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
                 <li>Open Telegram and search for @BotFather</li>
                 <li>Send /newbot and follow the instructions</li>
                 <li>Copy the bot token and paste it above</li>
                 <li>Open your new bot and send /start</li>
-                <li>You are ready to control agents remotely!</li>
+                <li>You&apos;re ready to control agents remotely!</li>
               </ol>
             </div>
           </div>
-        </motion.div>
+        );
 
-        {/* Permissions */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="rounded-none border border-border-primary bg-bg-secondary p-6"
-        >
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-none bg-accent-green/20 flex items-center justify-center">
-              <Shield className="w-5 h-5 text-accent-green" />
-            </div>
-            <div>
-              <h2 className="font-semibold">Permissions</h2>
-              <p className="text-xs text-text-muted">Manage allowed and denied actions</p>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm text-text-secondary mb-2">Allowed Permissions</label>
-              <div className="p-3 rounded-none bg-bg-tertiary border border-border-primary min-h-[60px]">
-                {settings?.permissions?.allow && settings.permissions.allow.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {settings.permissions.allow.map((perm, i) => (
-                      <span
-                        key={i}
-                        className="px-2 py-1 rounded-none bg-accent-green/20 text-accent-green text-xs font-mono"
-                      >
-                        {perm}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-text-muted text-sm">No custom permissions set</p>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm text-text-secondary mb-2">Denied Permissions</label>
-              <div className="p-3 rounded-none bg-bg-tertiary border border-border-primary min-h-[60px]">
-                {settings?.permissions?.deny && settings.permissions.deny.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {settings.permissions.deny.map((perm, i) => (
-                      <span
-                        key={i}
-                        className="px-2 py-1 rounded-none bg-accent-red/20 text-accent-red text-xs font-mono"
-                      >
-                        {perm}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-text-muted text-sm">No denied permissions</p>
-                )}
-              </div>
-            </div>
-
-            <p className="text-xs text-text-muted">
-              Permissions are managed through Claude Code CLI. Use <code className="text-accent-blue">claude config</code> to modify.
-            </p>
-          </div>
-        </motion.div>
-
-        {/* Skills & Plugins */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="rounded-none border border-border-primary bg-bg-secondary p-6 lg:col-span-2"
-        >
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-none bg-accent-amber/20 flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-accent-amber" />
-              </div>
-              <div>
-                <h2 className="font-semibold">Skills & Plugins</h2>
-                <p className="text-xs text-text-muted">Installed skills and plugins for Claude Code</p>
-              </div>
-            </div>
-            <a
-              href="https://skills.sh"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 px-3 py-1.5 rounded-none bg-accent-amber/10 text-accent-amber text-sm hover:bg-accent-amber/20 transition-colors"
-            >
-              <span>skills.sh</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
-          </div>
-
-          {/* Skills by source */}
+      case 'permissions':
+        return (
           <div className="space-y-6">
-            {/* User Skills */}
             <div>
-              <h3 className="text-sm font-medium text-text-secondary mb-3 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-accent-blue" />
+              <h2 className="text-lg font-semibold mb-1">Permissions</h2>
+              <p className="text-sm text-muted-foreground">Manage allowed and denied actions for Claude</p>
+            </div>
+
+            <div className="border border-border bg-card p-6">
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium mb-3">Allowed Permissions</label>
+                  <div className="p-4 bg-secondary border border-border min-h-[80px]">
+                    {settings?.permissions?.allow && settings.permissions.allow.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {settings.permissions.allow.map((perm, i) => (
+                          <span
+                            key={i}
+                            className="px-2 py-1 bg-green-500/20 text-green-400 text-xs font-mono"
+                          >
+                            {perm}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground text-sm">No custom permissions set</p>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-3">Denied Permissions</label>
+                  <div className="p-4 bg-secondary border border-border min-h-[80px]">
+                    {settings?.permissions?.deny && settings.permissions.deny.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {settings.permissions.deny.map((perm, i) => (
+                          <span
+                            key={i}
+                            className="px-2 py-1 bg-red-500/20 text-red-400 text-xs font-mono"
+                          >
+                            {perm}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground text-sm">No denied permissions</p>
+                    )}
+                  </div>
+                </div>
+
+                <p className="text-xs text-muted-foreground pt-2">
+                  Permissions are managed through Claude Code CLI. Use <code className="text-foreground bg-secondary px-1 py-0.5">claude config</code> to modify.
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'skills':
+        return (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold mb-1">Skills & Plugins</h2>
+                <p className="text-sm text-muted-foreground">Installed skills and plugins for Claude Code</p>
+              </div>
+              <a
+                href="https://skills.sh"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-3 py-1.5 bg-secondary text-foreground text-sm hover:bg-secondary/80 transition-colors"
+              >
+                <span>skills.sh</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+
+            {/* User Skills */}
+            <div className="border border-border bg-card p-6">
+              <h3 className="text-sm font-medium mb-4 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-white" />
                 User Skills
-                <span className="text-text-muted">({skills.filter(s => s.source === 'user').length})</span>
+                <span className="text-muted-foreground">({skills.filter(s => s.source === 'user').length})</span>
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="space-y-2">
                 {skills.filter(s => s.source === 'user').length > 0 ? (
                   skills.filter(s => s.source === 'user').map((skill) => (
                     <div
                       key={skill.path}
-                      className="flex items-center justify-between py-2 px-3 rounded-none bg-bg-tertiary border border-border-primary"
+                      className="flex items-center justify-between py-3 px-4 bg-secondary border border-border"
                     >
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{skill.name}</p>
                         {skill.description && (
-                          <p className="text-xs text-text-muted truncate">{skill.description}</p>
+                          <p className="text-xs text-muted-foreground truncate">{skill.description}</p>
                         )}
                       </div>
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-accent-blue/20 text-accent-blue ml-2">
-                        User
-                      </span>
                     </div>
                   ))
                 ) : (
-                  <p className="text-text-muted text-sm col-span-2">No user skills installed</p>
+                  <p className="text-muted-foreground text-sm py-4">No user skills installed</p>
                 )}
               </div>
             </div>
 
             {/* Plugin Skills */}
-            <div>
-              <h3 className="text-sm font-medium text-text-secondary mb-3 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-accent-purple" />
+            <div className="border border-border bg-card p-6">
+              <h3 className="text-sm font-medium mb-4 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-muted-foreground" />
                 Plugin Skills
-                <span className="text-text-muted">({skills.filter(s => s.source === 'plugin').length})</span>
+                <span className="text-muted-foreground">({skills.filter(s => s.source === 'plugin').length})</span>
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="space-y-2">
                 {skills.filter(s => s.source === 'plugin').length > 0 ? (
                   skills.filter(s => s.source === 'plugin').map((skill) => (
                     <div
                       key={skill.path}
-                      className="flex items-center justify-between py-2 px-3 rounded-none bg-bg-tertiary border border-border-primary"
+                      className="flex items-center justify-between py-3 px-4 bg-secondary border border-border"
                     >
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{skill.name}</p>
                         {skill.description && (
-                          <p className="text-xs text-text-muted truncate">{skill.description}</p>
+                          <p className="text-xs text-muted-foreground truncate">{skill.description}</p>
                         )}
                       </div>
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-accent-purple/20 text-accent-purple ml-2">
-                        Plugin
-                      </span>
                     </div>
                   ))
                 ) : (
-                  <p className="text-text-muted text-sm col-span-2">No plugin skills installed</p>
+                  <p className="text-muted-foreground text-sm py-4">No plugin skills installed</p>
                 )}
               </div>
             </div>
 
             {/* Project Skills */}
             {skills.filter(s => s.source === 'project').length > 0 && (
-              <div>
-                <h3 className="text-sm font-medium text-text-secondary mb-3 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-accent-green" />
+              <div className="border border-border bg-card p-6">
+                <h3 className="text-sm font-medium mb-4 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-green-400" />
                   Project Skills
-                  <span className="text-text-muted">({skills.filter(s => s.source === 'project').length})</span>
+                  <span className="text-muted-foreground">({skills.filter(s => s.source === 'project').length})</span>
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div className="space-y-2">
                   {skills.filter(s => s.source === 'project').map((skill) => (
                     <div
                       key={skill.path}
-                      className="flex items-center justify-between py-2 px-3 rounded-none bg-bg-tertiary border border-border-primary"
+                      className="flex items-center justify-between py-3 px-4 bg-secondary border border-border"
                     >
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{skill.name}</p>
                         {skill.projectName && (
-                          <p className="text-xs text-text-muted truncate">{skill.projectName}</p>
+                          <p className="text-xs text-muted-foreground truncate">{skill.projectName}</p>
                         )}
                       </div>
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-accent-green/20 text-accent-green ml-2">
-                        Project
-                      </span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Enabled in Settings */}
-            {settings?.enabledPlugins && Object.keys(settings.enabledPlugins).length > 0 && (
-              <div>
-                <h3 className="text-sm font-medium text-text-secondary mb-3 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-accent-amber" />
-                  Enabled in Settings
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {Object.entries(settings.enabledPlugins).map(([plugin, enabled]) => (
-                    <div
-                      key={plugin}
-                      className="flex items-center justify-between py-2 px-3 rounded-none bg-bg-tertiary border border-border-primary"
-                    >
-                      <span className="text-sm font-mono truncate">{plugin.split('@')[0]}</span>
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full ml-2 ${
-                          enabled
-                            ? 'bg-accent-green/20 text-accent-green'
-                            : 'bg-accent-red/20 text-accent-red'
-                        }`}
-                      >
-                        {enabled ? 'Enabled' : 'Disabled'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {skills.length === 0 && (!settings?.enabledPlugins || Object.keys(settings.enabledPlugins).length === 0) && (
-            <div className="text-center py-8">
-              <p className="text-text-muted mb-3">No skills or plugins installed</p>
-              <a
-                href="https://skills.sh"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-accent-amber hover:underline"
-              >
-                Browse skills on skills.sh
-                <ExternalLink className="w-4 h-4" />
-              </a>
-            </div>
-          )}
-        </motion.div>
-
-        {/* System Info */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="rounded-none border border-border-primary bg-bg-secondary p-6"
-        >
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-none bg-accent-blue/20 flex items-center justify-center">
-              <Info className="w-5 h-5 text-accent-blue" />
-            </div>
-            <div>
-              <h2 className="font-semibold">System Information</h2>
-              <p className="text-xs text-text-muted">Claude Code installation details</p>
-            </div>
-          </div>
-
-          {info && (
-            <div className="space-y-3">
-              <div className="flex justify-between py-2 border-b border-border-primary">
-                <span className="text-sm text-text-secondary">Claude Version</span>
-                <span className="text-sm font-mono">{info.claudeVersion || 'Not found'}</span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-border-primary">
-                <span className="text-sm text-text-secondary">Platform</span>
-                <span className="text-sm font-mono">{info.platform} ({info.arch})</span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-border-primary">
-                <span className="text-sm text-text-secondary">Electron</span>
-                <span className="text-sm font-mono">{info.electronVersion}</span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-border-primary">
-                <span className="text-sm text-text-secondary">Node.js</span>
-                <span className="text-sm font-mono">{info.nodeVersion}</span>
-              </div>
-              <div className="pt-2">
-                <button
-                  onClick={() => {
-                    if (window.electronAPI?.shell) {
-                      window.electronAPI.shell.exec({ command: `open "${info.configPath}"` });
-                    }
-                  }}
-                  className="flex items-center gap-2 text-sm text-accent-blue hover:underline"
+            {skills.length === 0 && (
+              <div className="border border-border bg-card p-8 text-center">
+                <Sparkles className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+                <p className="text-muted-foreground mb-3">No skills or plugins installed</p>
+                <a
+                  href="https://skills.sh"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-foreground hover:underline"
                 >
-                  <FolderOpen className="w-4 h-4" />
-                  Open Config Folder
-                </button>
+                  Browse skills on skills.sh
+                  <ExternalLink className="w-4 h-4" />
+                </a>
               </div>
+            )}
+          </div>
+        );
+
+      case 'system':
+        return (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-lg font-semibold mb-1">System Information</h2>
+              <p className="text-sm text-muted-foreground">Claude Code installation details</p>
             </div>
-          )}
+
+            {info && (
+              <div className="border border-border bg-card p-6">
+                <div className="space-y-4">
+                  <div className="flex justify-between py-3 border-b border-border">
+                    <span className="text-sm text-muted-foreground">Claude Version</span>
+                    <span className="text-sm font-mono">{info.claudeVersion || 'Not found'}</span>
+                  </div>
+                  <div className="flex justify-between py-3 border-b border-border">
+                    <span className="text-sm text-muted-foreground">Platform</span>
+                    <span className="text-sm font-mono">{info.platform} ({info.arch})</span>
+                  </div>
+                  <div className="flex justify-between py-3 border-b border-border">
+                    <span className="text-sm text-muted-foreground">Electron</span>
+                    <span className="text-sm font-mono">{info.electronVersion}</span>
+                  </div>
+                  <div className="flex justify-between py-3 border-b border-border">
+                    <span className="text-sm text-muted-foreground">Node.js</span>
+                    <span className="text-sm font-mono">{info.nodeVersion}</span>
+                  </div>
+                  <div className="flex justify-between py-3 border-b border-border">
+                    <span className="text-sm text-muted-foreground">Config Path</span>
+                    <span className="text-sm font-mono text-muted-foreground truncate max-w-[200px]">{info.configPath}</span>
+                  </div>
+                  <div className="pt-4">
+                    <button
+                      onClick={() => {
+                        if (window.electronAPI?.shell) {
+                          window.electronAPI.shell.exec({ command: `open "${info.configPath}"` });
+                        }
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 bg-secondary text-foreground hover:bg-secondary/80 transition-colors text-sm"
+                    >
+                      <FolderOpen className="w-4 h-4" />
+                      Open Config Folder
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-[calc(100vh-7rem)] lg:h-[calc(100vh-3rem)] pt-4 lg:pt-6 overflow-hidden">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6 shrink-0">
+        <div>
+          <h1 className="text-xl lg:text-2xl font-bold tracking-tight">Settings</h1>
+          <p className="text-muted-foreground text-xs lg:text-sm mt-1 hidden sm:block">
+            Configure Claude Manager preferences
+          </p>
+        </div>
+        <div className="flex gap-2 sm:gap-3">
+          <button
+            onClick={fetchSettings}
+            className="px-3 lg:px-4 py-2 border border-border text-muted-foreground hover:text-foreground hover:border-foreground transition-colors flex items-center gap-2 text-sm"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving || !hasChanges}
+            className={`px-3 lg:px-4 py-2 flex items-center gap-2 transition-all text-sm ${
+              hasChanges
+                ? 'bg-white text-black hover:bg-white/90'
+                : 'bg-secondary text-muted-foreground cursor-not-allowed'
+            }`}
+          >
+            {saving ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : saved ? (
+              <Check className="w-4 h-4" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            <span className="hidden sm:inline">{saving ? 'Saving...' : saved ? 'Saved!' : 'Save Changes'}</span>
+            <span className="sm:hidden">{saving ? '...' : saved ? 'Saved' : 'Save'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Error message */}
+      {error && settings && (
+        <div className="p-4 bg-red-500/10 border border-red-500/30 text-red-400 text-sm mb-4 shrink-0">
+          {error}
+        </div>
+      )}
+
+      {/* Main Content */}
+      <div className="flex-1 flex gap-6 overflow-hidden min-h-0">
+        {/* Sidebar */}
+        <nav className="w-48 shrink-0 hidden lg:block">
+          <div className="space-y-1">
+            {SECTIONS.map((section) => {
+              const Icon = section.icon;
+              const isActive = activeSection === section.id;
+              return (
+                <button
+                  key={section.id}
+                  onClick={() => setActiveSection(section.id)}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 text-left text-sm transition-colors ${
+                    isActive
+                      ? 'bg-secondary text-foreground border-l-2 border-foreground'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  <span>{section.label}</span>
+                  {isActive && <ChevronRight className="w-4 h-4 ml-auto" />}
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+
+        {/* Mobile Section Selector */}
+        <div className="lg:hidden mb-4 shrink-0">
+          <select
+            value={activeSection}
+            onChange={(e) => setActiveSection(e.target.value as SettingsSection)}
+            className="w-full px-3 py-2 bg-secondary border border-border text-sm"
+          >
+            {SECTIONS.map((section) => (
+              <option key={section.id} value={section.id}>
+                {section.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Content Area */}
+        <motion.div
+          key={activeSection}
+          initial={{ opacity: 0, x: 10 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.15 }}
+          className="flex-1 overflow-y-auto pr-2"
+        >
+          {renderContent()}
         </motion.div>
       </div>
     </div>

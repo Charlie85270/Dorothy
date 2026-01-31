@@ -25,6 +25,7 @@
       "out/**/*",
       "mcp-orchestrator/dist/**/*",
       "mcp-orchestrator/package.json",
+      "mcp-orchestrator/node_modules/**/*",
       "node_modules/**/*"
     ],
     "asarUnpack": [

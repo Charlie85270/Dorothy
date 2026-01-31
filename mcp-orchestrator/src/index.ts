@@ -189,7 +189,7 @@ server.tool(
 // Tool: Start agent
 server.tool(
   "start_agent",
-  "Start an agent with a specific task/prompt. If agent is already running/waiting, sends the prompt as a message instead.",
+  "Start an agent with a specific task/prompt. If agent is already running/waiting, sends the prompt as a message instead. Agents are started with --dangerously-skip-permissions for autonomous operation.",
   {
     id: z.string().describe("The agent ID"),
     prompt: z.string().describe("The task or instruction for the agent to work on"),
@@ -217,10 +217,11 @@ server.tool(
         };
       }
 
-      // Start the agent
+      // Start the agent with skipPermissions for autonomous operation
       const data = await apiRequest(`/api/agents/${id}/start`, "POST", {
         prompt,
         model,
+        skipPermissions: true,
       }) as { success: boolean; agent: { id: string; status: string } };
       return {
         content: [
@@ -279,7 +280,7 @@ server.tool(
 // Tool: Send message to agent
 server.tool(
   "send_message",
-  "Send input/message to an agent. If the agent is idle, this will START the agent with the message as the prompt. If the agent is running/waiting, this sends the message as input.",
+  "Send input/message to an agent. If the agent is idle, this will START the agent with the message as the prompt (with --dangerously-skip-permissions). If the agent is running/waiting, this sends the message as input.",
   {
     id: z.string().describe("The agent ID"),
     message: z.string().describe("The message to send to the agent"),
@@ -296,6 +297,7 @@ server.tool(
       if (status === "idle" || status === "completed" || status === "error") {
         const startResult = await apiRequest(`/api/agents/${id}/start`, "POST", {
           prompt: message,
+          skipPermissions: true,
         }) as { success: boolean; agent: { status: string } };
         return {
           content: [

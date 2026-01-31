@@ -208,7 +208,7 @@ function startApiServer() {
           return;
         }
 
-        const { prompt, model } = body as { prompt: string; model?: string };
+        const { prompt, model, skipPermissions } = body as { prompt: string; model?: string; skipPermissions?: boolean };
         if (!prompt) {
           sendJson({ error: 'prompt is required' }, 400);
           return;
@@ -233,7 +233,8 @@ function startApiServer() {
         if (agent.secondaryProjectPath) {
           command += ` --add-dir '${agent.secondaryProjectPath}'`;
         }
-        if (agent.skipPermissions) {
+        // Use skipPermissions from request body if provided, otherwise fall back to agent's setting
+        if (skipPermissions !== undefined ? skipPermissions : agent.skipPermissions) {
           command += ' --dangerously-skip-permissions';
         }
         if (model) {

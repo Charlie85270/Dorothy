@@ -35,6 +35,8 @@ Watch your agents work in a beautiful 3D office environment with animated charac
 ### 👑 Super Agent (Orchestrator)
 The Super Agent is a powerful orchestrator that can manage and coordinate all your other agents. Give it high-level tasks and it will delegate work to the appropriate agents, monitor their progress, and report back to you.
 
+![Super Agent](screenshots/super-agent.png)
+
 - Automatically coordinates multiple agents
 - Delegates tasks based on agent capabilities
 - Monitors progress and handles errors

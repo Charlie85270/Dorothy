@@ -302,8 +302,8 @@ export default function NewChatModal({ open, onClose, onSubmit, projects, onBrow
   const [selectedSecondaryProject, setSelectedSecondaryProject] = useState<string>('');
   const [customSecondaryPath, setCustomSecondaryPath] = useState('');
 
-  // Skip permissions state (--dangerously-skip-permissions)
-  const [skipPermissions, setSkipPermissions] = useState(false);
+  // Skip permissions state (--dangerously-skip-permissions) - enabled by default
+  const [skipPermissions, setSkipPermissions] = useState(true);
 
   // Orchestrator mode state
   const [isOrchestrator, setIsOrchestrator] = useState(false);

@@ -3015,11 +3015,9 @@ function getMcpOrchestratorPath(): string {
   return path.join(appPath, 'mcp-orchestrator', 'dist', 'index.js');
 }
 
-// Auto-setup MCP orchestrator on app start
+// Auto-setup MCP orchestrator on app start using claude mcp add command
 async function setupMcpOrchestrator(): Promise<void> {
   try {
-    const claudeDir = path.join(os.homedir(), '.claude');
-    const mcpConfigPath = path.join(claudeDir, 'mcp.json');
     const orchestratorPath = getMcpOrchestratorPath();
 
     // Check if orchestrator exists
@@ -3028,69 +3026,97 @@ async function setupMcpOrchestrator(): Promise<void> {
       return;
     }
 
-    // Ensure .claude directory exists
-    if (!fs.existsSync(claudeDir)) {
-      fs.mkdirSync(claudeDir, { recursive: true });
-    }
-
-    // Read existing config or create new one
-    let mcpConfig: { mcpServers?: Record<string, unknown> } = { mcpServers: {} };
-    if (fs.existsSync(mcpConfigPath)) {
-      try {
-        mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
-        if (!mcpConfig.mcpServers) {
-          mcpConfig.mcpServers = {};
-        }
-      } catch {
-        // If parse fails, start fresh
-        mcpConfig = { mcpServers: {} };
+    // Check if already configured by running claude mcp list
+    const { execSync } = require('child_process');
+    try {
+      const listOutput = execSync('claude mcp list 2>&1', { encoding: 'utf-8' });
+      if (listOutput.includes('claude-mgr-orchestrator')) {
+        console.log('MCP orchestrator already configured');
+        return;
       }
+    } catch {
+      // claude mcp list might fail if no servers configured, that's ok
     }
 
-    // Check if already configured
-    if (mcpConfig.mcpServers!['claude-mgr-orchestrator']) {
-      console.log('MCP orchestrator already configured');
-      return;
+    // Add the MCP server using claude mcp add
+    // Format: claude mcp add <name> <command> [args...]
+    const addCommand = `claude mcp add claude-mgr-orchestrator node "${orchestratorPath}"`;
+    console.log('Running:', addCommand);
+
+    try {
+      execSync(addCommand, { encoding: 'utf-8', stdio: 'pipe' });
+      console.log('MCP orchestrator configured successfully via claude mcp add');
+    } catch (addErr) {
+      console.error('Failed to add MCP server via claude mcp add:', addErr);
+      // Fallback: also write to mcp.json for compatibility
+      const claudeDir = path.join(os.homedir(), '.claude');
+      const mcpConfigPath = path.join(claudeDir, 'mcp.json');
+
+      if (!fs.existsSync(claudeDir)) {
+        fs.mkdirSync(claudeDir, { recursive: true });
+      }
+
+      let mcpConfig: { mcpServers?: Record<string, unknown> } = { mcpServers: {} };
+      if (fs.existsSync(mcpConfigPath)) {
+        try {
+          mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
+          if (!mcpConfig.mcpServers) {
+            mcpConfig.mcpServers = {};
+          }
+        } catch {
+          mcpConfig = { mcpServers: {} };
+        }
+      }
+
+      mcpConfig.mcpServers!['claude-mgr-orchestrator'] = {
+        command: 'node',
+        args: [orchestratorPath]
+      };
+
+      fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
+      console.log('MCP orchestrator configured via mcp.json fallback');
     }
-
-    // Add orchestrator config
-    mcpConfig.mcpServers!['claude-mgr-orchestrator'] = {
-      command: 'node',
-      args: [orchestratorPath]
-    };
-
-    // Write config
-    fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
-    console.log('MCP orchestrator configured successfully at', mcpConfigPath);
   } catch (err) {
     console.error('Failed to auto-setup MCP orchestrator:', err);
   }
 }
 
-// Check if orchestrator is configured in Claude's mcp.json
+// Check if orchestrator is configured (uses claude mcp list command)
 ipcMain.handle('orchestrator:getStatus', async () => {
   try {
-    const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
     const orchestratorPath = getMcpOrchestratorPath();
     const orchestratorExists = fs.existsSync(orchestratorPath);
 
-    if (!fs.existsSync(mcpConfigPath)) {
-      return {
-        configured: false,
-        orchestratorPath,
-        orchestratorExists,
-        reason: 'mcp.json does not exist'
-      };
+    const { execSync } = require('child_process');
+
+    // Check using claude mcp list
+    let isConfigured = false;
+    try {
+      const listOutput = execSync('claude mcp list 2>&1', { encoding: 'utf-8' });
+      isConfigured = listOutput.includes('claude-mgr-orchestrator');
+    } catch {
+      // claude mcp list might fail if no servers configured
+      isConfigured = false;
     }
 
-    const mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
-    const isConfigured = mcpConfig?.mcpServers?.['claude-mgr-orchestrator'] !== undefined;
+    // Also check mcp.json as fallback
+    const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
+    let mcpJsonConfigured = false;
+    if (fs.existsSync(mcpConfigPath)) {
+      try {
+        const mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
+        mcpJsonConfigured = mcpConfig?.mcpServers?.['claude-mgr-orchestrator'] !== undefined;
+      } catch {
+        // Ignore parse errors
+      }
+    }
 
     return {
-      configured: isConfigured,
+      configured: isConfigured || mcpJsonConfigured,
       orchestratorPath,
       orchestratorExists,
-      currentConfig: mcpConfig?.mcpServers?.['claude-mgr-orchestrator']
+      mcpListConfigured: isConfigured,
+      mcpJsonConfigured
     };
   } catch (err) {
     console.error('Failed to get orchestrator status:', err);
@@ -3098,11 +3124,9 @@ ipcMain.handle('orchestrator:getStatus', async () => {
   }
 });
 
-// Setup orchestrator in Claude's mcp.json
+// Setup orchestrator using claude mcp add command
 ipcMain.handle('orchestrator:setup', async () => {
   try {
-    const claudeDir = path.join(os.homedir(), '.claude');
-    const mcpConfigPath = path.join(claudeDir, 'mcp.json');
     const orchestratorPath = getMcpOrchestratorPath();
 
     // Check if orchestrator exists
@@ -3113,37 +3137,55 @@ ipcMain.handle('orchestrator:setup', async () => {
       };
     }
 
-    // Ensure .claude directory exists
-    if (!fs.existsSync(claudeDir)) {
-      fs.mkdirSync(claudeDir, { recursive: true });
+    const { execSync } = require('child_process');
+
+    // First try to remove any existing config to avoid duplicates
+    try {
+      execSync('claude mcp remove claude-mgr-orchestrator 2>&1', { encoding: 'utf-8', stdio: 'pipe' });
+    } catch {
+      // Ignore errors if it doesn't exist
     }
 
-    // Read existing config or create new one
-    let mcpConfig: { mcpServers?: Record<string, unknown> } = { mcpServers: {} };
-    if (fs.existsSync(mcpConfigPath)) {
-      try {
-        mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
-        if (!mcpConfig.mcpServers) {
-          mcpConfig.mcpServers = {};
-        }
-      } catch {
-        // If parse fails, start fresh but backup old file
-        const backupPath = mcpConfigPath + '.backup.' + Date.now();
-        fs.copyFileSync(mcpConfigPath, backupPath);
-        mcpConfig = { mcpServers: {} };
+    // Add the MCP server using claude mcp add
+    const addCommand = `claude mcp add claude-mgr-orchestrator node "${orchestratorPath}"`;
+    console.log('Running:', addCommand);
+
+    try {
+      execSync(addCommand, { encoding: 'utf-8', stdio: 'pipe' });
+      console.log('MCP orchestrator configured successfully via claude mcp add');
+      return { success: true, method: 'claude-mcp-add' };
+    } catch (addErr) {
+      console.error('Failed to add MCP server via claude mcp add:', addErr);
+
+      // Fallback: write to mcp.json
+      const claudeDir = path.join(os.homedir(), '.claude');
+      const mcpConfigPath = path.join(claudeDir, 'mcp.json');
+
+      if (!fs.existsSync(claudeDir)) {
+        fs.mkdirSync(claudeDir, { recursive: true });
       }
+
+      let mcpConfig: { mcpServers?: Record<string, unknown> } = { mcpServers: {} };
+      if (fs.existsSync(mcpConfigPath)) {
+        try {
+          mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
+          if (!mcpConfig.mcpServers) {
+            mcpConfig.mcpServers = {};
+          }
+        } catch {
+          mcpConfig = { mcpServers: {} };
+        }
+      }
+
+      mcpConfig.mcpServers!['claude-mgr-orchestrator'] = {
+        command: 'node',
+        args: [orchestratorPath]
+      };
+
+      fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
+      console.log('MCP orchestrator configured via mcp.json fallback');
+      return { success: true, path: mcpConfigPath, method: 'mcp-json-fallback' };
     }
-
-    // Add/update orchestrator config
-    mcpConfig.mcpServers!['claude-mgr-orchestrator'] = {
-      command: 'node',
-      args: [orchestratorPath]
-    };
-
-    // Write config
-    fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
-
-    return { success: true, path: mcpConfigPath };
   } catch (err) {
     console.error('Failed to setup orchestrator:', err);
     return { success: false, error: String(err) };

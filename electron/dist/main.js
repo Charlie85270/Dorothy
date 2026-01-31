@@ -2667,16 +2667,16 @@ async function setupMcpOrchestrator() {
         catch {
             // claude mcp list might fail if no servers configured, that's ok
         }
-        // Add the MCP server using claude mcp add
-        // Format: claude mcp add <name> <command> [args...]
-        const addCommand = `claude mcp add claude-mgr-orchestrator node "${orchestratorPath}"`;
+        // Add the MCP server using claude mcp add with -s user for global scope
+        // Format: claude mcp add -s user <name> <command> [args...]
+        const addCommand = `claude mcp add -s user claude-mgr-orchestrator node "${orchestratorPath}"`;
         console.log('Running:', addCommand);
         try {
             execSync(addCommand, { encoding: 'utf-8', stdio: 'pipe' });
-            console.log('MCP orchestrator configured successfully via claude mcp add');
+            console.log('MCP orchestrator configured globally via claude mcp add -s user');
         }
         catch (addErr) {
-            console.error('Failed to add MCP server via claude mcp add:', addErr);
+            console.error('Failed to add MCP server via claude mcp add -s user:', addErr);
             // Fallback: also write to mcp.json for compatibility
             const claudeDir = path.join(os.homedir(), '.claude');
             const mcpConfigPath = path.join(claudeDir, 'mcp.json');
@@ -2760,23 +2760,29 @@ electron_1.ipcMain.handle('orchestrator:setup', async () => {
             };
         }
         const { execSync } = require('child_process');
-        // First try to remove any existing config to avoid duplicates
+        // First try to remove any existing config to avoid duplicates (from both user and project scope)
         try {
-            execSync('claude mcp remove claude-mgr-orchestrator 2>&1', { encoding: 'utf-8', stdio: 'pipe' });
+            execSync('claude mcp remove -s user claude-mgr-orchestrator 2>&1', { encoding: 'utf-8', stdio: 'pipe' });
         }
         catch {
             // Ignore errors if it doesn't exist
         }
-        // Add the MCP server using claude mcp add
-        const addCommand = `claude mcp add claude-mgr-orchestrator node "${orchestratorPath}"`;
+        try {
+            execSync('claude mcp remove claude-mgr-orchestrator 2>&1', { encoding: 'utf-8', stdio: 'pipe' });
+        }
+        catch {
+            // Ignore errors if it doesn't exist in project scope
+        }
+        // Add the MCP server using claude mcp add with -s user for global scope
+        const addCommand = `claude mcp add -s user claude-mgr-orchestrator node "${orchestratorPath}"`;
         console.log('Running:', addCommand);
         try {
             execSync(addCommand, { encoding: 'utf-8', stdio: 'pipe' });
-            console.log('MCP orchestrator configured successfully via claude mcp add');
-            return { success: true, method: 'claude-mcp-add' };
+            console.log('MCP orchestrator configured globally via claude mcp add -s user');
+            return { success: true, method: 'claude-mcp-add-global' };
         }
         catch (addErr) {
-            console.error('Failed to add MCP server via claude mcp add:', addErr);
+            console.error('Failed to add MCP server via claude mcp add -s user:', addErr);
             // Fallback: write to mcp.json
             const claudeDir = path.join(os.homedir(), '.claude');
             const mcpConfigPath = path.join(claudeDir, 'mcp.json');
@@ -2809,17 +2815,30 @@ electron_1.ipcMain.handle('orchestrator:setup', async () => {
         return { success: false, error: String(err) };
     }
 });
-// Remove orchestrator from Claude's mcp.json
+// Remove orchestrator from Claude's global config
 electron_1.ipcMain.handle('orchestrator:remove', async () => {
     try {
-        const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
-        if (!fs.existsSync(mcpConfigPath)) {
-            return { success: true }; // Nothing to remove
+        const { execSync } = require('child_process');
+        // Remove from global user scope
+        try {
+            execSync('claude mcp remove -s user claude-mgr-orchestrator 2>&1', { encoding: 'utf-8', stdio: 'pipe' });
         }
-        const mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
-        if (mcpConfig?.mcpServers?.['claude-mgr-orchestrator']) {
-            delete mcpConfig.mcpServers['claude-mgr-orchestrator'];
-            fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
+        catch {
+            // Ignore errors if it doesn't exist
+        }
+        // Also clean up mcp.json fallback if it exists
+        const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
+        if (fs.existsSync(mcpConfigPath)) {
+            try {
+                const mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
+                if (mcpConfig?.mcpServers?.['claude-mgr-orchestrator']) {
+                    delete mcpConfig.mcpServers['claude-mgr-orchestrator'];
+                    fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
+                }
+            }
+            catch {
+                // Ignore parse errors
+            }
         }
         return { success: true };
     }

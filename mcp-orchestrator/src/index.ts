@@ -510,6 +510,342 @@ server.tool(
   }
 );
 
+// ============== Memory Tools ==============
+
+// Tool: Search agent memories
+server.tool(
+  "search_memory",
+  "Search past observations and learnings from agent sessions. Returns matching memories with IDs for further exploration.",
+  {
+    query: z.string().describe("The search query to find in memory content"),
+    agent_id: z.string().optional().describe("Filter by specific agent ID"),
+    project_path: z.string().optional().describe("Filter by project path"),
+    type: z
+      .enum(["tool_use", "message", "file_edit", "command", "decision"])
+      .optional()
+      .describe("Filter by observation type"),
+    limit: z.number().optional().default(20).describe("Maximum results to return (default: 20)"),
+  },
+  async ({ query, agent_id, project_path, type, limit = 20 }) => {
+    try {
+      const params = new URLSearchParams({ q: query, limit: String(limit) });
+      if (agent_id) params.set("agent_id", agent_id);
+      if (project_path) params.set("project", project_path);
+      if (type) params.set("type", type);
+
+      const data = (await apiRequest(`/api/memory/search?${params.toString()}`)) as {
+        results: Array<{
+          id: string;
+          type: string;
+          content: string;
+          agent_id: string;
+          project_path: string;
+          created_at: number;
+        }>;
+      };
+
+      if (data.results.length === 0) {
+        return {
+          content: [{ type: "text", text: "No memories found matching the query." }],
+        };
+      }
+
+      // Format results compactly (ID + brief content)
+      const formatted = data.results.map((r) => {
+        const date = new Date(r.created_at).toLocaleDateString();
+        const shortContent = r.content.slice(0, 80) + (r.content.length > 80 ? "..." : "");
+        return `[${r.id}] (${r.type}, ${date}): ${shortContent}`;
+      });
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Found ${data.results.length} memories:\n\n${formatted.join("\n")}`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error searching memory: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+);
+
+// Tool: Get memory timeline
+server.tool(
+  "get_memory_timeline",
+  "Get chronological context around a specific observation. Shows what happened before and after.",
+  {
+    observation_id: z.string().describe("The observation ID to center the timeline on"),
+    before: z.number().optional().default(5).describe("Number of observations to show before (default: 5)"),
+    after: z.number().optional().default(5).describe("Number of observations to show after (default: 5)"),
+  },
+  async ({ observation_id, before = 5, after = 5 }) => {
+    try {
+      const params = new URLSearchParams({
+        before: String(before),
+        after: String(after),
+      });
+
+      const data = (await apiRequest(
+        `/api/memory/timeline/${observation_id}?${params.toString()}`
+      )) as {
+        timeline: Array<{
+          id: string;
+          type: string;
+          content: string;
+          created_at: number;
+          position: "before" | "target" | "after";
+        }>;
+      };
+
+      if (data.timeline.length === 0) {
+        return {
+          content: [{ type: "text", text: "Observation not found or has no timeline context." }],
+        };
+      }
+
+      const formatted = data.timeline.map((entry) => {
+        const time = new Date(entry.created_at).toLocaleTimeString();
+        const marker = entry.position === "target" ? ">>> " : "    ";
+        return `${marker}[${time}] (${entry.type}): ${entry.content.slice(0, 100)}`;
+      });
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Timeline (${data.timeline.length} entries):\n\n${formatted.join("\n")}`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error getting timeline: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+);
+
+// Tool: Get full observation details
+server.tool(
+  "get_observations",
+  "Fetch full details for specific observation IDs. Use after search_memory to get complete content.",
+  {
+    ids: z.array(z.string()).describe("Array of observation IDs to retrieve"),
+  },
+  async ({ ids }) => {
+    try {
+      const data = (await apiRequest(`/api/memory/observations?ids=${ids.join(",")}`)) as {
+        observations: Array<{
+          id: string;
+          session_id: string;
+          agent_id: string;
+          project_path: string;
+          type: string;
+          content: string;
+          metadata: Record<string, unknown> | null;
+          created_at: number;
+        }>;
+      };
+
+      if (data.observations.length === 0) {
+        return {
+          content: [{ type: "text", text: "No observations found for the provided IDs." }],
+        };
+      }
+
+      const formatted = data.observations.map((obs) => {
+        const date = new Date(obs.created_at).toLocaleString();
+        return `=== ${obs.id} ===
+Type: ${obs.type}
+Agent: ${obs.agent_id}
+Project: ${obs.project_path}
+Time: ${date}
+Content: ${obs.content}
+${obs.metadata ? `Metadata: ${JSON.stringify(obs.metadata)}` : ""}`;
+      });
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: formatted.join("\n\n"),
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error getting observations: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+);
+
+// Tool: Store explicit memory
+server.tool(
+  "remember",
+  "Store an explicit memory or learning for future reference. Use this to remember important decisions, preferences, or context.",
+  {
+    agent_id: z.string().describe("The agent ID to associate this memory with"),
+    content: z.string().describe("The content to remember"),
+    type: z
+      .enum(["learning", "decision", "preference", "context"])
+      .describe("Type of memory: learning (something learned), decision (a choice made), preference (user preference), context (background info)"),
+  },
+  async ({ agent_id, content, type }) => {
+    try {
+      const data = (await apiRequest("/api/memory/remember", "POST", {
+        agent_id,
+        content,
+        type,
+      })) as { success: boolean; observation: { id: string } };
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Stored ${type}: "${content.slice(0, 50)}${content.length > 50 ? "..." : ""}" (ID: ${data.observation.id})`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error storing memory: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+);
+
+// Tool: Get agent sessions
+server.tool(
+  "get_memory_sessions",
+  "Get recent sessions for an agent. Sessions represent distinct work periods.",
+  {
+    agent_id: z.string().describe("The agent ID to get sessions for"),
+    limit: z.number().optional().default(10).describe("Maximum sessions to return (default: 10)"),
+  },
+  async ({ agent_id, limit = 10 }) => {
+    try {
+      const data = (await apiRequest(`/api/memory/sessions/${agent_id}?limit=${limit}`)) as {
+        sessions: Array<{
+          id: string;
+          agent_id: string;
+          project_path: string;
+          started_at: number;
+          ended_at: number | null;
+          summary: string | null;
+          task: string | null;
+        }>;
+      };
+
+      if (data.sessions.length === 0) {
+        return {
+          content: [{ type: "text", text: "No sessions found for this agent." }],
+        };
+      }
+
+      const formatted = data.sessions.map((s) => {
+        const start = new Date(s.started_at).toLocaleString();
+        const end = s.ended_at ? new Date(s.ended_at).toLocaleString() : "ongoing";
+        const task = s.task ? s.task.slice(0, 60) + (s.task.length > 60 ? "..." : "") : "No task recorded";
+        return `[${s.id}]
+  Started: ${start}
+  Ended: ${end}
+  Task: ${task}`;
+      });
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `${data.sessions.length} sessions:\n\n${formatted.join("\n\n")}`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error getting sessions: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+);
+
+// Tool: Get memory stats
+server.tool(
+  "get_memory_stats",
+  "Get statistics about the memory system (total sessions, observations, database size).",
+  {},
+  async () => {
+    try {
+      const data = (await apiRequest("/api/memory/stats")) as {
+        totalSessions: number;
+        totalObservations: number;
+        totalSummaries: number;
+        dbSizeBytes: number;
+      };
+
+      const sizeKB = (data.dbSizeBytes / 1024).toFixed(1);
+      const sizeMB = (data.dbSizeBytes / (1024 * 1024)).toFixed(2);
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Memory Statistics:
+- Total Sessions: ${data.totalSessions}
+- Total Observations: ${data.totalObservations}
+- Total Summaries: ${data.totalSummaries}
+- Database Size: ${data.dbSizeBytes > 1024 * 1024 ? sizeMB + " MB" : sizeKB + " KB"}`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error getting memory stats: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+);
+
 // Start the server
 async function main() {
   const transport = new StdioServerTransport();

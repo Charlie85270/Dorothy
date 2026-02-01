@@ -23,6 +23,7 @@ import {
   Crown,
   Send,
   Workflow,
+  Brain,
 } from 'lucide-react';
 import { useRef, useState, useEffect } from 'react';
 import Image from 'next/image';
@@ -315,6 +316,12 @@ function FeaturesSection() {
       title: "Full Terminal Access",
       description: "Interactive terminal for each agent. Send commands, review outputs, and debug in real-time.",
       gradient: "from-[#22d3ee] to-[#4ade80]",
+    },
+    {
+      icon: Brain,
+      title: "Persistent Memory",
+      description: "Powered by claude-mem. Agents remember past decisions and learnings across sessions with AI-compressed memory.",
+      gradient: "from-[#ec4899] to-[#f472b6]",
     },
   ];
 

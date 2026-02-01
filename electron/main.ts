@@ -6,6 +6,219 @@ import * as http from 'http';
 import { v4 as uuidv4 } from 'uuid';
 import * as pty from 'node-pty';
 import TelegramBot from 'node-telegram-bot-api';
+import * as memory from './memory';
+import { parseOutputChunk, filterSignificantObservations, renderTerminalOutput } from './memory-parser';
+import { spawn, ChildProcess } from 'child_process';
+
+// ============== Claude-Mem Worker ==============
+let claudeMemWorker: ChildProcess | null = null;
+const CLAUDE_MEM_PORT = 37777;
+
+// ============== Memory Parsing Debounce ==============
+// Accumulate output and parse after a pause (debounce)
+const memoryParseBuffers: Map<string, { chunks: string[]; timer: NodeJS.Timeout | null }> = new Map();
+const MEMORY_PARSE_DELAY = 1000; // Wait 1 second after last output before parsing
+
+function scheduleMemoryParse(agentId: string, sessionId: string, projectPath: string) {
+  let buffer = memoryParseBuffers.get(agentId);
+  if (!buffer) {
+    buffer = { chunks: [], timer: null };
+    memoryParseBuffers.set(agentId, buffer);
+  }
+
+  // Clear existing timer
+  if (buffer.timer) {
+    clearTimeout(buffer.timer);
+  }
+
+  // Schedule parse after delay
+  buffer.timer = setTimeout(() => {
+    if (buffer && buffer.chunks.length > 0) {
+      try {
+        // Render accumulated output through terminal buffer
+        const renderedOutput = renderTerminalOutput(buffer.chunks);
+
+        // Parse the clean rendered output
+        const parsedObs = parseOutputChunk(renderedOutput);
+        const significantObs = filterSignificantObservations(parsedObs);
+
+        for (const obs of significantObs) {
+          memory.storeObservation(
+            sessionId,
+            agentId,
+            projectPath,
+            obs.type,
+            obs.content,
+            obs.metadata
+          );
+        }
+
+        // Clear buffer after parsing
+        buffer.chunks = [];
+      } catch (err) {
+        console.error('Memory parse error:', err);
+      }
+    }
+  }, MEMORY_PARSE_DELAY);
+}
+
+function addToMemoryBuffer(agentId: string, data: string) {
+  let buffer = memoryParseBuffers.get(agentId);
+  if (!buffer) {
+    buffer = { chunks: [], timer: null };
+    memoryParseBuffers.set(agentId, buffer);
+  }
+  buffer.chunks.push(data);
+
+  // Limit buffer size
+  if (buffer.chunks.length > 500) {
+    buffer.chunks = buffer.chunks.slice(-250);
+  }
+}
+
+// ============== Claude-Mem Worker Functions ==============
+
+/**
+ * Start the claude-mem worker service
+ */
+async function startClaudeMemWorker(): Promise<boolean> {
+  // Check if already running
+  try {
+    const response = await fetch(`http://localhost:${CLAUDE_MEM_PORT}/api/stats`);
+    if (response.ok) {
+      console.log('Claude-mem worker already running on port', CLAUDE_MEM_PORT);
+      return true;
+    }
+  } catch {
+    // Not running, will start it
+  }
+
+  // Find the worker script
+  const workerPaths = [
+    // Development: in node_modules
+    path.join(__dirname, '..', 'node_modules', 'claude-mem', 'plugin', 'scripts', 'worker-service.cjs'),
+    // Production: bundled
+    path.join(app.getAppPath(), 'node_modules', 'claude-mem', 'plugin', 'scripts', 'worker-service.cjs'),
+    // Unpacked asar
+    path.join(app.getAppPath().replace('app.asar', 'app.asar.unpacked'), 'node_modules', 'claude-mem', 'plugin', 'scripts', 'worker-service.cjs'),
+  ];
+
+  let workerScript: string | null = null;
+  for (const p of workerPaths) {
+    if (fs.existsSync(p)) {
+      workerScript = p;
+      break;
+    }
+  }
+
+  if (!workerScript) {
+    console.error('Claude-mem worker script not found. Install claude-mem package.');
+    return false;
+  }
+
+  console.log('Starting claude-mem worker from:', workerScript);
+
+  // Try to use bun first, fall back to node
+  const runtime = await findRuntime();
+
+  return new Promise((resolve) => {
+    try {
+      claudeMemWorker = spawn(runtime, [workerScript, 'start'], {
+        cwd: path.dirname(workerScript),
+        env: {
+          ...process.env,
+          CLAUDE_MEM_PORT: CLAUDE_MEM_PORT.toString(),
+          CLAUDE_MEM_DATA_DIR: path.join(os.homedir(), '.claude-mem'),
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+        detached: false,
+      });
+
+      claudeMemWorker.stdout?.on('data', (data) => {
+        console.log('[claude-mem]', data.toString().trim());
+      });
+
+      claudeMemWorker.stderr?.on('data', (data) => {
+        console.error('[claude-mem error]', data.toString().trim());
+      });
+
+      claudeMemWorker.on('error', (err) => {
+        console.error('Failed to start claude-mem worker:', err);
+        resolve(false);
+      });
+
+      claudeMemWorker.on('exit', (code) => {
+        console.log('Claude-mem worker exited with code:', code);
+        claudeMemWorker = null;
+      });
+
+      // Wait a bit and check if it started
+      setTimeout(async () => {
+        try {
+          const response = await fetch(`http://localhost:${CLAUDE_MEM_PORT}/api/stats`);
+          if (response.ok) {
+            console.log('Claude-mem worker started successfully');
+            resolve(true);
+          } else {
+            resolve(false);
+          }
+        } catch {
+          // Give it more time
+          setTimeout(async () => {
+            try {
+              const response = await fetch(`http://localhost:${CLAUDE_MEM_PORT}/api/stats`);
+              resolve(response.ok);
+            } catch {
+              resolve(false);
+            }
+          }, 3000);
+        }
+      }, 2000);
+    } catch (err) {
+      console.error('Error starting claude-mem worker:', err);
+      resolve(false);
+    }
+  });
+}
+
+/**
+ * Find bun or node runtime
+ */
+async function findRuntime(): Promise<string> {
+  const { execSync } = require('child_process');
+
+  // Try bun first (preferred by claude-mem)
+  try {
+    execSync('which bun', { stdio: 'ignore' });
+    return 'bun';
+  } catch {
+    // Fall back to node
+    return 'node';
+  }
+}
+
+/**
+ * Stop the claude-mem worker
+ */
+function stopClaudeMemWorker(): void {
+  if (claudeMemWorker) {
+    console.log('Stopping claude-mem worker...');
+    claudeMemWorker.kill();
+    claudeMemWorker = null;
+  }
+}
+
+/**
+ * Check if claude-mem is available
+ */
+async function isClaudeMemAvailable(): Promise<boolean> {
+  try {
+    const response = await fetch(`http://localhost:${CLAUDE_MEM_PORT}/api/stats`);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
 
 // Get the base path for static assets
 function getAppBasePath(): string {
@@ -69,6 +282,7 @@ interface AgentStatus {
   name?: string;
   pathMissing?: boolean; // True if project path no longer exists
   skipPermissions?: boolean; // If true, use --dangerously-skip-permissions flag
+  currentSessionId?: string; // Current memory session ID
 }
 
 const agents: Map<string, AgentStatus> = new Map();
@@ -214,6 +428,24 @@ function startApiServer() {
           return;
         }
 
+        // Start a memory session for this task
+        const session = memory.startSession(agent.id, agent.projectPath, prompt);
+        agent.currentSessionId = session.id;
+
+        // Get memory context and skill to inject
+        const memoryContext = memory.getMemoryContext(agent.id, agent.projectPath, prompt);
+        const rememberSkill = getRememberSkill(agent.id);
+
+        // Build effective prompt with skill and memory
+        let effectivePrompt = prompt;
+        if (memoryContext || rememberSkill) {
+          const parts: string[] = [];
+          if (rememberSkill) parts.push(rememberSkill);
+          if (memoryContext) parts.push(memoryContext);
+          parts.push(prompt);
+          effectivePrompt = parts.join('\n\n');
+        }
+
         // Start the agent (similar to agent:start IPC handler)
         const workingDir = agent.worktreePath || agent.projectPath;
         let command = `cd '${workingDir}' && claude`;
@@ -240,7 +472,7 @@ function startApiServer() {
         if (model) {
           command += ` --model ${model}`;
         }
-        command += ` '${prompt.replace(/'/g, "'\\''")}'`;
+        command += ` '${effectivePrompt.replace(/'/g, "'\\''")}'`;
 
         const shell = process.env.SHELL || '/bin/zsh';
         const ptyProcess = pty.spawn(shell, ['-l', '-c', command], {
@@ -267,6 +499,13 @@ function startApiServer() {
             agent.output = agent.output.slice(-5000);
           }
           agent.lastActivity = new Date().toISOString();
+
+          // Capture observations for memory system (debounced)
+          if (agent.currentSessionId) {
+            addToMemoryBuffer(agent.id, data);
+            scheduleMemoryParse(agent.id, agent.currentSessionId, agent.projectPath);
+          }
+
           // Check for waiting state
           const recentOutput = agent.output.slice(-20).join('');
           const isWaiting = CLAUDE_PATTERNS.waitingForInput.some(p => p.test(recentOutput));
@@ -283,6 +522,11 @@ function startApiServer() {
           agent.status = exitCode === 0 ? 'completed' : 'error';
           if (exitCode !== 0) {
             agent.error = `Process exited with code ${exitCode}`;
+          }
+          // End the memory session
+          if (agent.currentSessionId) {
+            memory.endSession(agent.currentSessionId);
+            agent.currentSessionId = undefined;
           }
           agent.lastActivity = new Date().toISOString();
           ptyProcesses.delete(ptyId);
@@ -401,6 +645,286 @@ function startApiServer() {
             sendJson({ error: `Failed to send: ${err2}` }, 500);
           }
         }
+        return;
+      }
+
+      // ============== Memory API Endpoints ==============
+      // These endpoints proxy to claude-mem when available, fallback to local memory
+
+      // Helper to proxy to claude-mem
+      const proxyToClaudeMem = async (apiPath: string): Promise<any | null> => {
+        try {
+          const response = await fetch(`http://localhost:${CLAUDE_MEM_PORT}${apiPath}`);
+          if (response.ok) {
+            return await response.json();
+          }
+        } catch {
+          // claude-mem not available
+        }
+        return null;
+      };
+
+      // GET /api/memory/search - Search memories
+      if (pathname === '/api/memory/search' && req.method === 'GET') {
+        const query = url.searchParams.get('q') || '';
+        const agentId = url.searchParams.get('agent_id') || undefined;
+        const projectPath = url.searchParams.get('project') || undefined;
+        const type = url.searchParams.get('type') as 'tool_use' | 'message' | 'file_edit' | 'command' | 'decision' | undefined;
+        const limit = parseInt(url.searchParams.get('limit') || '20', 10);
+
+        // Try claude-mem first
+        const claudeMemData = await proxyToClaudeMem(`/api/observations?limit=${limit}`);
+        if (claudeMemData && Array.isArray(claudeMemData)) {
+          // Transform claude-mem format to our format and filter
+          const results = claudeMemData
+            .filter((obs: any) => {
+              if (query && !obs.title?.toLowerCase().includes(query.toLowerCase()) && !obs.content?.toLowerCase().includes(query.toLowerCase())) {
+                return false;
+              }
+              return true;
+            })
+            .slice(0, limit)
+            .map((obs: any) => ({
+              id: obs.id?.toString() || obs.observationId?.toString(),
+              type: obs.type || 'observation',
+              content: obs.title || obs.content || '',
+              agent_id: agentId || 'claude-mem',
+              project_path: obs.projectPath || projectPath || '',
+              created_at: obs.createdAt || Date.now(),
+              session_id: obs.sessionId,
+              metadata: { source: 'claude-mem', raw: obs },
+            }));
+          sendJson({ results, source: 'claude-mem' });
+          return;
+        }
+
+        // Fallback to local memory
+        const results = memory.searchMemory(query, { agentId, projectPath, type, limit });
+        sendJson({ results, source: 'local' });
+        return;
+      }
+
+      // GET /api/memory/timeline/:observation_id - Get timeline around observation
+      const timelineMatch = pathname.match(/^\/api\/memory\/timeline\/([^/]+)$/);
+      if (timelineMatch && req.method === 'GET') {
+        const observationId = timelineMatch[1];
+        const before = parseInt(url.searchParams.get('before') || '5', 10);
+        const after = parseInt(url.searchParams.get('after') || '5', 10);
+
+        const timeline = memory.getTimeline(observationId, before, after);
+        sendJson({ timeline });
+        return;
+      }
+
+      // GET /api/memory/observations - Get observations by IDs
+      if (pathname === '/api/memory/observations' && req.method === 'GET') {
+        const idsParam = url.searchParams.get('ids') || '';
+        const ids = idsParam.split(',').filter(id => id.trim());
+
+        const observations = memory.getObservations(ids);
+        sendJson({ observations });
+        return;
+      }
+
+      // POST /api/memory/remember - Store explicit memory
+      if (pathname === '/api/memory/remember' && req.method === 'POST') {
+        const { agent_id, content, type, project_path } = body as {
+          agent_id: string;
+          content: string;
+          type: 'learning' | 'decision' | 'preference' | 'context' | 'file_edit' | 'command' | 'tool_use';
+          project_path?: string;
+        };
+
+        if (!agent_id || !content || !type) {
+          sendJson({ error: 'agent_id, content, and type are required' }, 400);
+          return;
+        }
+
+        // Get agent's project path from request or fallback to stored agent
+        const agent = agents.get(agent_id);
+        const projectPath = project_path || agent?.projectPath || 'unknown';
+
+        const observation = memory.remember(agent_id, projectPath, content, type, agent?.currentSessionId);
+        sendJson({ success: true, observation });
+        return;
+      }
+
+      // GET /api/memory/context - Get memory context for session injection
+      if (pathname === '/api/memory/context' && req.method === 'GET') {
+        const agentId = url.searchParams.get('agent_id') || '';
+        const projectPath = url.searchParams.get('project_path') || '';
+        const task = url.searchParams.get('task') || undefined;
+
+        if (!agentId) {
+          sendJson({ error: 'agent_id is required' }, 400);
+          return;
+        }
+
+        const context = memory.getMemoryContext(agentId, projectPath, task);
+        sendJson({ context });
+        return;
+      }
+
+      // GET /api/memory/sessions/:agent_id - Get agent sessions
+      const sessionsMatch = pathname.match(/^\/api\/memory\/sessions\/([^/]+)$/);
+      if (sessionsMatch && req.method === 'GET') {
+        const agentId = sessionsMatch[1];
+        const limit = parseInt(url.searchParams.get('limit') || '10', 10);
+
+        const sessions = memory.getAgentSessions(agentId, limit);
+        sendJson({ sessions });
+        return;
+      }
+
+      // GET /api/memory/stats - Get memory stats
+      if (pathname === '/api/memory/stats' && req.method === 'GET') {
+        // Try claude-mem first
+        const claudeMemStats = await proxyToClaudeMem('/api/stats');
+        if (claudeMemStats) {
+          sendJson({ ...claudeMemStats, source: 'claude-mem' });
+          return;
+        }
+
+        // Fallback to local memory
+        const stats = memory.getMemoryStats();
+        sendJson({ ...stats, source: 'local' });
+        return;
+      }
+
+      // ============== Hook API Endpoints ==============
+
+      // POST /api/hooks/status - Update agent status from hooks
+      if (pathname === '/api/hooks/status' && req.method === 'POST') {
+        const { agent_id, session_id, status, source, reason, waiting_reason } = body as {
+          agent_id: string;
+          session_id: string;
+          status: 'running' | 'waiting' | 'idle' | 'completed';
+          source?: string;
+          reason?: string;
+          waiting_reason?: string;
+        };
+
+        if (!agent_id || !status) {
+          sendJson({ error: 'agent_id and status are required' }, 400);
+          return;
+        }
+
+        // Find agent by session_id or agent_id
+        let agent: AgentStatus | undefined;
+
+        // First try to find by CLAUDE_AGENT_ID (environment variable set by us)
+        agent = agents.get(agent_id);
+
+        // If not found, try to find by session_id match
+        if (!agent) {
+          for (const [, a] of agents) {
+            if (a.currentSessionId === session_id) {
+              agent = a;
+              break;
+            }
+          }
+        }
+
+        if (!agent) {
+          // Agent not found - might be a standalone Claude Code session
+          sendJson({ success: false, message: 'Agent not found' });
+          return;
+        }
+
+        const oldStatus = agent.status;
+
+        // Update status
+        if (status === 'running' && (agent.status === 'idle' || agent.status === 'waiting' || agent.status === 'completed')) {
+          agent.status = 'running';
+          agent.currentSessionId = session_id;
+        } else if (status === 'waiting' && agent.status === 'running') {
+          agent.status = 'waiting';
+        } else if (status === 'idle') {
+          agent.status = 'idle';
+          agent.currentSessionId = undefined;
+        } else if (status === 'completed') {
+          agent.status = 'completed';
+        }
+
+        agent.lastActivity = new Date().toISOString();
+
+        // Send notification if status changed
+        if (oldStatus !== agent.status) {
+          handleStatusChangeNotification(agent, agent.status);
+
+          // Emit to renderer
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('agent:status', {
+              agentId: agent.id,
+              status: agent.status,
+              waitingReason: waiting_reason
+            });
+          }
+        }
+
+        sendJson({ success: true, agent: { id: agent.id, status: agent.status } });
+        return;
+      }
+
+      // POST /api/hooks/notification - Forward notifications from hooks
+      if (pathname === '/api/hooks/notification' && req.method === 'POST') {
+        const { agent_id, session_id, type, title, message } = body as {
+          agent_id: string;
+          session_id: string;
+          type: string;
+          title: string;
+          message: string;
+        };
+
+        if (!agent_id || !type) {
+          sendJson({ error: 'agent_id and type are required' }, 400);
+          return;
+        }
+
+        // Find agent
+        let agent: AgentStatus | undefined = agents.get(agent_id);
+        if (!agent) {
+          for (const [, a] of agents) {
+            if (a.currentSessionId === session_id) {
+              agent = a;
+              break;
+            }
+          }
+        }
+
+        const agentName = agent?.name || 'Claude';
+
+        // Handle different notification types
+        if (type === 'permission_prompt') {
+          if (appSettings.notifyOnWaiting) {
+            sendNotification(
+              `${agentName} needs permission`,
+              message || 'Claude needs your permission to proceed',
+              agent?.id
+            );
+          }
+        } else if (type === 'idle_prompt') {
+          // Agent is idle, might want to notify
+          if (appSettings.notifyOnWaiting) {
+            sendNotification(
+              `${agentName} is waiting`,
+              message || 'Claude is waiting for your input',
+              agent?.id
+            );
+          }
+        }
+
+        // Emit to renderer
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('agent:notification', {
+            agentId: agent?.id,
+            type,
+            title,
+            message
+          });
+        }
+
+        sendJson({ success: true });
         return;
       }
 
@@ -947,6 +1471,63 @@ function saveAppSettings(settings: AppSettings) {
 
 let appSettings = loadAppSettings();
 
+// ============== Skills System ==============
+
+// Cache for loaded skills
+let rememberSkillContent: string | null = null;
+
+/**
+ * Get the remember skill content for injection into agent prompts
+ */
+function getRememberSkill(agentId: string): string {
+  if (!rememberSkillContent) {
+    // Try to load from bundled skills folder
+    const skillPaths = [
+      path.join(app.getAppPath(), 'skills', 'remember.md'),
+      path.join(app.getAppPath(), '..', 'skills', 'remember.md'),
+      path.join(__dirname, '..', 'skills', 'remember.md'),
+      path.join(__dirname, '..', '..', 'skills', 'remember.md'),
+    ];
+
+    for (const skillPath of skillPaths) {
+      if (fs.existsSync(skillPath)) {
+        try {
+          rememberSkillContent = fs.readFileSync(skillPath, 'utf-8');
+          console.log('Loaded remember skill from:', skillPath);
+          break;
+        } catch (err) {
+          console.error('Failed to load skill from', skillPath, err);
+        }
+      }
+    }
+
+    // Fallback inline skill if file not found
+    if (!rememberSkillContent) {
+      console.log('Using inline remember skill (file not found)');
+      rememberSkillContent = `# Memory System
+
+You have access to a persistent memory system. Use it to remember important information.
+
+## Save a memory:
+\`\`\`bash
+curl -s -X POST http://127.0.0.1:31415/api/memory/remember -H "Content-Type: application/json" -d '{"agent_id": "{{AGENT_ID}}", "content": "YOUR_MEMORY", "type": "TYPE"}'
+\`\`\`
+
+Types: preference, learning, decision, context
+
+## Search memories:
+\`\`\`bash
+curl -s "http://127.0.0.1:31415/api/memory/search?q=TERM"
+\`\`\`
+
+ALWAYS save memories when user shares preferences, names, or important decisions.`;
+    }
+  }
+
+  // Replace placeholder with actual agent ID
+  return rememberSkillContent.replace(/\{\{AGENT_ID\}\}/g, agentId);
+}
+
 // ============== Telegram Bot Service ==============
 let telegramBot: TelegramBot | null = null;
 
@@ -1136,6 +1717,7 @@ function initTelegramBot() {
         `/start\\_agent <name> <task> - Start an agent\n` +
         `/stop\\_agent <name> - Stop an agent\n` +
         `/ask <message> - Send to Super Agent\n` +
+        `/usage - Show usage & cost stats\n` +
         `/help - Show this help message\n\n` +
         `Or just type a message to talk to the Super Agent!`,
         { parse_mode: 'Markdown' }
@@ -1152,6 +1734,7 @@ function initTelegramBot() {
         `/start\\_agent <name> <task> - Start an agent with a task\n` +
         `/stop\\_agent <name> - Stop a running agent\n` +
         `/ask <message> - Send a message to Super Agent\n` +
+        `/usage - Show usage & cost stats\n` +
         `/help - Show this help message\n\n` +
         `💡 *Tips:*\n` +
         `• Just type a message to talk directly to Super Agent\n` +
@@ -1385,6 +1968,136 @@ function initTelegramBot() {
       saveAgents();
 
       telegramBot?.sendMessage(msg.chat.id, `🛑 Stopped *${agent.name}*`, { parse_mode: 'Markdown' });
+    });
+
+    // Handle /usage command (show usage and cost stats)
+    telegramBot.onText(/\/usage/, async (msg) => {
+      try {
+        const stats = await getClaudeStats();
+
+        if (!stats) {
+          telegramBot?.sendMessage(msg.chat.id, '📊 No usage data available yet.');
+          return;
+        }
+
+        // Token pricing per million tokens (MTok) - same as frontend
+        const MODEL_PRICING: Record<string, { inputPerMTok: number; outputPerMTok: number; cacheHitsPerMTok: number; cache5mWritePerMTok: number }> = {
+          'claude-opus-4-5-20251101': { inputPerMTok: 5, outputPerMTok: 25, cacheHitsPerMTok: 0.50, cache5mWritePerMTok: 6.25 },
+          'claude-opus-4-5': { inputPerMTok: 5, outputPerMTok: 25, cacheHitsPerMTok: 0.50, cache5mWritePerMTok: 6.25 },
+          'claude-opus-4-1-20250501': { inputPerMTok: 15, outputPerMTok: 75, cacheHitsPerMTok: 1.50, cache5mWritePerMTok: 18.75 },
+          'claude-opus-4-1': { inputPerMTok: 15, outputPerMTok: 75, cacheHitsPerMTok: 1.50, cache5mWritePerMTok: 18.75 },
+          'claude-opus-4-20250514': { inputPerMTok: 15, outputPerMTok: 75, cacheHitsPerMTok: 1.50, cache5mWritePerMTok: 18.75 },
+          'claude-opus-4': { inputPerMTok: 15, outputPerMTok: 75, cacheHitsPerMTok: 1.50, cache5mWritePerMTok: 18.75 },
+          'claude-sonnet-4-5-20251022': { inputPerMTok: 3, outputPerMTok: 15, cacheHitsPerMTok: 0.30, cache5mWritePerMTok: 3.75 },
+          'claude-sonnet-4-5': { inputPerMTok: 3, outputPerMTok: 15, cacheHitsPerMTok: 0.30, cache5mWritePerMTok: 3.75 },
+          'claude-sonnet-4-20250514': { inputPerMTok: 3, outputPerMTok: 15, cacheHitsPerMTok: 0.30, cache5mWritePerMTok: 3.75 },
+          'claude-sonnet-4': { inputPerMTok: 3, outputPerMTok: 15, cacheHitsPerMTok: 0.30, cache5mWritePerMTok: 3.75 },
+          'claude-3-7-sonnet-20250219': { inputPerMTok: 3, outputPerMTok: 15, cacheHitsPerMTok: 0.30, cache5mWritePerMTok: 3.75 },
+          'claude-haiku-4-5-20251022': { inputPerMTok: 1, outputPerMTok: 5, cacheHitsPerMTok: 0.10, cache5mWritePerMTok: 1.25 },
+          'claude-haiku-4-5': { inputPerMTok: 1, outputPerMTok: 5, cacheHitsPerMTok: 0.10, cache5mWritePerMTok: 1.25 },
+          'claude-3-5-haiku-20241022': { inputPerMTok: 0.80, outputPerMTok: 4, cacheHitsPerMTok: 0.08, cache5mWritePerMTok: 1 },
+        };
+
+        const getModelPricing = (modelId: string) => {
+          if (MODEL_PRICING[modelId]) return MODEL_PRICING[modelId];
+          const lower = modelId.toLowerCase();
+          if (lower.includes('opus-4-5') || lower.includes('opus-4.5')) return MODEL_PRICING['claude-opus-4-5'];
+          if (lower.includes('opus-4-1') || lower.includes('opus-4.1')) return MODEL_PRICING['claude-opus-4-1'];
+          if (lower.includes('opus-4') || lower.includes('opus4')) return MODEL_PRICING['claude-opus-4'];
+          if (lower.includes('sonnet-4-5') || lower.includes('sonnet-4.5')) return MODEL_PRICING['claude-sonnet-4-5'];
+          if (lower.includes('sonnet-4') || lower.includes('sonnet4')) return MODEL_PRICING['claude-sonnet-4'];
+          if (lower.includes('sonnet-3') || lower.includes('sonnet3')) return MODEL_PRICING['claude-3-7-sonnet-20250219'];
+          if (lower.includes('haiku-4-5') || lower.includes('haiku-4.5')) return MODEL_PRICING['claude-haiku-4-5'];
+          if (lower.includes('haiku-3-5') || lower.includes('haiku-3.5')) return MODEL_PRICING['claude-3-5-haiku-20241022'];
+          return MODEL_PRICING['claude-sonnet-4'];
+        };
+
+        const getModelDisplayName = (modelId: string): string => {
+          const lower = modelId.toLowerCase();
+          if (lower.includes('opus-4-5') || lower.includes('opus-4.5')) return 'Opus 4.5';
+          if (lower.includes('opus-4-1') || lower.includes('opus-4.1')) return 'Opus 4.1';
+          if (lower.includes('opus-4') || lower.includes('opus4')) return 'Opus 4';
+          if (lower.includes('sonnet-4-5') || lower.includes('sonnet-4.5')) return 'Sonnet 4.5';
+          if (lower.includes('sonnet-4') || lower.includes('sonnet4')) return 'Sonnet 4';
+          if (lower.includes('sonnet-3') || lower.includes('sonnet3')) return 'Sonnet 3.7';
+          if (lower.includes('haiku-4-5') || lower.includes('haiku-4.5')) return 'Haiku 4.5';
+          if (lower.includes('haiku-3-5') || lower.includes('haiku-3.5')) return 'Haiku 3.5';
+          return modelId.split('-').slice(0, 3).join(' ');
+        };
+
+        const calculateModelCost = (modelId: string, input: number, output: number, cacheRead: number, cacheWrite: number) => {
+          const pricing = getModelPricing(modelId);
+          return (input / 1_000_000) * pricing.inputPerMTok +
+                 (output / 1_000_000) * pricing.outputPerMTok +
+                 (cacheRead / 1_000_000) * pricing.cacheHitsPerMTok +
+                 (cacheWrite / 1_000_000) * pricing.cache5mWritePerMTok;
+        };
+
+        // Calculate totals
+        let totalCost = 0;
+        let totalInput = 0;
+        let totalOutput = 0;
+        let totalCacheRead = 0;
+        let totalCacheWrite = 0;
+        const modelBreakdown: Array<{ name: string; cost: number; tokens: number }> = [];
+
+        if (stats.modelUsage) {
+          Object.entries(stats.modelUsage).forEach(([modelId, usage]: [string, any]) => {
+            const input = usage.inputTokens || 0;
+            const output = usage.outputTokens || 0;
+            const cacheRead = usage.cacheReadInputTokens || 0;
+            const cacheWrite = usage.cacheCreationInputTokens || 0;
+
+            totalInput += input;
+            totalOutput += output;
+            totalCacheRead += cacheRead;
+            totalCacheWrite += cacheWrite;
+
+            const cost = calculateModelCost(modelId, input, output, cacheRead, cacheWrite);
+            totalCost += cost;
+
+            modelBreakdown.push({
+              name: getModelDisplayName(modelId),
+              cost,
+              tokens: input + output,
+            });
+          });
+        }
+
+        // Sort by cost
+        modelBreakdown.sort((a, b) => b.cost - a.cost);
+
+        // Format message
+        let text = `📊 *Usage & Cost Summary*\n\n`;
+        text += `💰 *Total Cost:* $${totalCost.toFixed(2)}\n`;
+        text += `🔢 *Total Tokens:* ${((totalInput + totalOutput) / 1_000_000).toFixed(2)}M\n`;
+        text += `📥 Input: ${(totalInput / 1_000_000).toFixed(2)}M\n`;
+        text += `📤 Output: ${(totalOutput / 1_000_000).toFixed(2)}M\n`;
+        text += `💾 Cache: ${(totalCacheRead / 1_000_000).toFixed(2)}M read\n\n`;
+
+        if (modelBreakdown.length > 0) {
+          text += `*By Model:*\n`;
+          modelBreakdown.slice(0, 5).forEach(m => {
+            const emoji = m.name.includes('Opus') ? '🟣' : m.name.includes('Sonnet') ? '🔵' : '🟢';
+            text += `${emoji} ${m.name}: $${m.cost.toFixed(2)}\n`;
+          });
+        }
+
+        if (stats.totalSessions || stats.totalMessages) {
+          text += `\n*Activity:*\n`;
+          if (stats.totalSessions) text += `📝 ${stats.totalSessions} sessions\n`;
+          if (stats.totalMessages) text += `💬 ${stats.totalMessages} messages\n`;
+        }
+
+        if (stats.firstSessionDate) {
+          text += `\n_Since ${new Date(stats.firstSessionDate).toLocaleDateString()}_`;
+        }
+
+        telegramBot?.sendMessage(msg.chat.id, text, { parse_mode: 'Markdown' });
+      } catch (err) {
+        console.error('Error getting usage stats:', err);
+        telegramBot?.sendMessage(msg.chat.id, `❌ Error fetching usage data: ${err}`);
+      }
     });
 
     // Handle /ask command (send to Super Agent)
@@ -1740,6 +2453,8 @@ async function initAgentPty(agent: AgentStatus): Promise<string> {
     env: {
       ...process.env as { [key: string]: string },
       CLAUDE_SKILLS: agent.skills.join(','),
+      CLAUDE_AGENT_ID: agent.id,
+      CLAUDE_PROJECT_PATH: agent.projectPath,
     },
   });
 
@@ -1752,6 +2467,12 @@ async function initAgentPty(agent: AgentStatus): Promise<string> {
     if (agentData) {
       agentData.output.push(data);
       agentData.lastActivity = new Date().toISOString();
+
+      // Capture observations for memory system (debounced)
+      if (agentData.currentSessionId) {
+        addToMemoryBuffer(agentData.id, data);
+        scheduleMemoryParse(agentData.id, agentData.currentSessionId, agentData.projectPath);
+      }
 
       // Capture Super Agent output for Telegram
       if (superAgentTelegramTask && isSuperAgent(agentData)) {
@@ -1801,6 +2522,11 @@ async function initAgentPty(agent: AgentStatus): Promise<string> {
       const newStatus = exitCode === 0 ? 'completed' : 'error';
       agentData.status = newStatus;
       agentData.lastActivity = new Date().toISOString();
+      // End the memory session
+      if (agentData.currentSessionId) {
+        memory.endSession(agentData.currentSessionId);
+        agentData.currentSessionId = undefined;
+      }
       // Send notification
       handleStatusChangeNotification(agentData, newStatus);
       saveAgents();
@@ -1876,11 +2602,25 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 app.whenReady().then(async () => {
+  // Initialize memory database (fallback if claude-mem not available)
+  memory.initMemoryDb();
+
+  // Start claude-mem worker service
+  const claudeMemStarted = await startClaudeMemWorker();
+  if (claudeMemStarted) {
+    console.log('Claude-mem memory system active');
+  } else {
+    console.log('Using fallback memory system (claude-mem not available)');
+  }
+
   // Load persisted agents before creating window
   loadAgents();
 
   // Auto-setup MCP orchestrator if not already configured
   await setupMcpOrchestrator();
+
+  // Configure memory hooks for Claude Code
+  await configureMemoryHooks();
 
   // Initialize Telegram bot if enabled
   initTelegramBot();
@@ -1954,6 +2694,9 @@ app.on('window-all-closed', () => {
   // Save agents before quitting
   saveAgents();
 
+  // Close memory database
+  memory.closeMemoryDb();
+
   // Stop the API server
   stopApiServer();
 
@@ -1972,6 +2715,7 @@ app.on('window-all-closed', () => {
 // Save agents when app is about to quit
 app.on('before-quit', () => {
   saveAgents();
+  stopClaudeMemWorker();
 });
 
 app.on('activate', () => {
@@ -2124,6 +2868,8 @@ ipcMain.handle('agent:create', async (_event, config: {
       env: {
         ...process.env as { [key: string]: string },
         CLAUDE_SKILLS: config.skills.join(','),
+        CLAUDE_AGENT_ID: id,
+        CLAUDE_PROJECT_PATH: config.projectPath,
       },
     });
     console.log(`PTY created successfully for agent ${id}, PID: ${ptyProcess.pid}`);
@@ -2290,8 +3036,26 @@ ipcMain.handle('agent:start', async (_event, { id, prompt, options }: {
     command += ` --add-dir '${escapedSecondaryPath}'`;
   }
 
+  // Start a memory session for this task
+  const session = memory.startSession(agent.id, agent.projectPath, prompt);
+  agent.currentSessionId = session.id;
+
+  // Get memory context and skill to inject
+  const memoryContext = memory.getMemoryContext(agent.id, agent.projectPath, prompt);
+  const rememberSkill = getRememberSkill(agent.id);
+
+  // Build effective prompt with skill and memory
+  let effectivePrompt = prompt;
+  if (memoryContext || rememberSkill) {
+    const parts: string[] = [];
+    if (rememberSkill) parts.push(rememberSkill);
+    if (memoryContext) parts.push(memoryContext);
+    parts.push(prompt);
+    effectivePrompt = parts.join('\n\n');
+  }
+
   // Add the prompt (escape single quotes)
-  const escapedPrompt = prompt.replace(/'/g, "'\\''");
+  const escapedPrompt = effectivePrompt.replace(/'/g, "'\\''");
   command += ` '${escapedPrompt}'`;
 
   // Update status
@@ -2302,7 +3066,7 @@ ipcMain.handle('agent:start', async (_event, { id, prompt, options }: {
   // First cd to the appropriate directory (worktree if exists, otherwise project), then run claude
   const workingPath = (agent.worktreePath || agent.projectPath).replace(/'/g, "'\\''");
   ptyProcess.write(`cd '${workingPath}' && ${command}`);
-        ptyProcess.write('\r');
+  ptyProcess.write('\r');
 
   // Save updated status
   saveAgents();
@@ -3029,6 +3793,174 @@ ipcMain.handle('telegram:sendTest', async () => {
     return { success: false, error: String(err) };
   }
 });
+
+// ============== Memory Hooks Setup ==============
+
+// Get the path to the bundled hooks directory
+function getHooksPath(): string {
+  let appPath = app.getAppPath();
+  // If running from asar, use unpacked path
+  if (appPath.includes('app.asar')) {
+    appPath = appPath.replace('app.asar', 'app.asar.unpacked');
+  }
+  return path.join(appPath, 'hooks');
+}
+
+// Configure Claude Code hooks for memory system
+async function configureMemoryHooks(): Promise<void> {
+  try {
+    const hooksDir = getHooksPath();
+
+    // Check if hooks directory exists
+    if (!fs.existsSync(hooksDir)) {
+      console.log('Hooks directory not found at', hooksDir);
+      return;
+    }
+
+    const claudeDir = path.join(os.homedir(), '.claude');
+    const settingsPath = path.join(claudeDir, 'settings.json');
+
+    // Ensure .claude directory exists
+    if (!fs.existsSync(claudeDir)) {
+      fs.mkdirSync(claudeDir, { recursive: true });
+    }
+
+    // Read existing settings
+    let settings: {
+      hooks?: Record<string, Array<{ matcher?: string; hooks: Array<{ type: string; command: string; timeout?: number }> }>>;
+      [key: string]: unknown;
+    } = {};
+
+    if (fs.existsSync(settingsPath)) {
+      try {
+        settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+      } catch {
+        settings = {};
+      }
+    }
+
+    // Initialize hooks if not present
+    if (!settings.hooks) {
+      settings.hooks = {};
+    }
+
+    // Define our hooks
+    const postToolUseHook = path.join(hooksDir, 'post-tool-use.sh');
+    const stopHook = path.join(hooksDir, 'on-stop.sh');
+    const sessionStartHook = path.join(hooksDir, 'session-start.sh');
+    const sessionEndHook = path.join(hooksDir, 'session-end.sh');
+    const notificationHook = path.join(hooksDir, 'notification.sh');
+
+    // Check which hooks exist
+    const hasPostToolUse = fs.existsSync(postToolUseHook);
+    const hasStop = fs.existsSync(stopHook);
+    const hasSessionStart = fs.existsSync(sessionStartHook);
+    const hasSessionEnd = fs.existsSync(sessionEndHook);
+    const hasNotification = fs.existsSync(notificationHook);
+
+    let updated = false;
+
+    // Configure PostToolUse hook
+    if (hasPostToolUse) {
+      const hookConfig = {
+        matcher: '*',
+        hooks: [{ type: 'command', command: postToolUseHook, timeout: 30 }]
+      };
+
+      // Check if already configured
+      const existing = settings.hooks.PostToolUse || [];
+      const alreadyConfigured = existing.some((h) =>
+        h.hooks?.some((hh) => hh.command?.includes('post-tool-use.sh'))
+      );
+
+      if (!alreadyConfigured) {
+        settings.hooks.PostToolUse = [...existing, hookConfig];
+        updated = true;
+      }
+    }
+
+    // Configure Stop hook
+    if (hasStop) {
+      const hookConfig = {
+        hooks: [{ type: 'command', command: stopHook, timeout: 30 }]
+      };
+
+      const existing = settings.hooks.Stop || [];
+      const alreadyConfigured = existing.some((h) =>
+        h.hooks?.some((hh) => hh.command?.includes('on-stop.sh'))
+      );
+
+      if (!alreadyConfigured) {
+        settings.hooks.Stop = [...existing, hookConfig];
+        updated = true;
+      }
+    }
+
+    // Configure SessionStart hook
+    if (hasSessionStart) {
+      const hookConfig = {
+        matcher: '*',
+        hooks: [{ type: 'command', command: sessionStartHook, timeout: 30 }]
+      };
+
+      const existing = settings.hooks.SessionStart || [];
+      const alreadyConfigured = existing.some((h) =>
+        h.hooks?.some((hh) => hh.command?.includes('session-start.sh'))
+      );
+
+      if (!alreadyConfigured) {
+        settings.hooks.SessionStart = [...existing, hookConfig];
+        updated = true;
+      }
+    }
+
+    // Configure SessionEnd hook
+    if (hasSessionEnd) {
+      const hookConfig = {
+        matcher: '*',
+        hooks: [{ type: 'command', command: sessionEndHook, timeout: 30 }]
+      };
+
+      const existing = settings.hooks.SessionEnd || [];
+      const alreadyConfigured = existing.some((h) =>
+        h.hooks?.some((hh) => hh.command?.includes('session-end.sh'))
+      );
+
+      if (!alreadyConfigured) {
+        settings.hooks.SessionEnd = [...existing, hookConfig];
+        updated = true;
+      }
+    }
+
+    // Configure Notification hook
+    if (hasNotification) {
+      const hookConfig = {
+        matcher: '*',
+        hooks: [{ type: 'command', command: notificationHook, timeout: 30 }]
+      };
+
+      const existing = settings.hooks.Notification || [];
+      const alreadyConfigured = existing.some((h) =>
+        h.hooks?.some((hh) => hh.command?.includes('notification.sh'))
+      );
+
+      if (!alreadyConfigured) {
+        settings.hooks.Notification = [...existing, hookConfig];
+        updated = true;
+      }
+    }
+
+    // Write updated settings
+    if (updated) {
+      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+      console.log('Memory hooks configured in', settingsPath);
+    } else {
+      console.log('Memory hooks already configured');
+    }
+  } catch (err) {
+    console.error('Failed to configure memory hooks:', err);
+  }
+}
 
 // ============== Orchestrator MCP Setup ==============
 

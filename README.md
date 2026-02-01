@@ -55,6 +55,14 @@ Available MCP tools:
 - `remove_agent` - Delete an agent
 - `send_telegram` - Send messages to Telegram
 
+### 🧠 Persistent Memory with claude-mem
+Agents now have persistent memory across sessions! Powered by [claude-mem](https://github.com/thedotmack/claude-mem), agents can recall past decisions, learnings, and context.
+
+- **Automatic memory capture** - Tool uses, decisions, and learnings are stored automatically
+- **Memory panel** - View agent memories in the UI with full search
+- **Cross-session context** - Agents remember what they learned in previous sessions
+- **Smart compression** - AI-powered summarization keeps memories efficient
+
 ### 📱 Telegram Bot Integration
 Control your agents remotely via Telegram! Connect your Telegram bot and manage your agents from anywhere.
 
@@ -65,6 +73,7 @@ Control your agents remotely via Telegram! Connect your Telegram bot and manage 
 - `/start_agent <name> <task>` - Start an agent with a task
 - `/stop_agent <name>` - Stop a running agent
 - `/ask <message>` - Send a message to Super Agent
+- `/usage` - Show API usage and cost statistics
 - `/help` - Show all available commands
 
 Or just send a message to talk directly to the Super Agent!

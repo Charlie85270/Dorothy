@@ -11,8 +11,8 @@
     "lint": "eslint",
     "electron:dev": "concurrently \"npm run dev\" \"npm run electron:start\"",
     "electron:start": "wait-on http://localhost:3000 && tsc -p electron/tsconfig.json && NODE_ENV=development electron .",
-    "electron:build": "mv src/app/api src/app/_api_backup && mv src/app/icon.tsx src/app/_icon_backup.tsx 2>/dev/null; ELECTRON_BUILD=1 next build; mv src/app/_api_backup src/app/api && mv src/app/_icon_backup.tsx src/app/icon.tsx 2>/dev/null; tsc -p electron/tsconfig.json && electron-builder --mac",
-    "electron:pack": "tsc -p electron/tsconfig.json && electron-builder --dir --mac"
+    "electron:build": "mv src/app/api src/app/_api_backup && mv src/app/icon.tsx src/app/_icon_backup.tsx 2>/dev/null; ELECTRON_BUILD=1 next build; mv src/app/_api_backup src/app/api && mv src/app/_icon_backup.tsx src/app/icon.tsx 2>/dev/null; tsc -p electron/tsconfig.json && cd mcp-orchestrator && npm install && npm run build && cd .. && electron-builder --mac",
+    "electron:pack": "tsc -p electron/tsconfig.json && cd mcp-orchestrator && npm install && npm run build && cd .. && electron-builder --dir --mac"
   },
   "build": {
     "appId": "com.octav.claudemgr",

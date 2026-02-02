@@ -419,31 +419,26 @@ export default function PluginsPage() {
                 key={`${plugin.marketplace}-${plugin.name}`}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className={`border bg-card p-4 hover:border-foreground/30 transition-colors ${
-                  isCustom ? 'border-purple-500/50' : 'border-border'
-                }`}
+                className="border border-border bg-card p-4 hover:border-foreground/30 transition-colors"
               >
-                {/* Custom Plugin Banner */}
-                {isCustom && (
-                  <div className="flex items-center gap-2 mb-3 pb-3 border-b border-purple-500/30">
-                    <div className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
-                    <span className="text-xs font-medium text-purple-400">Custom Plugin</span>
-                  </div>
-                )}
-
                 <div className="flex items-start gap-3 mb-3">
                   <div className={`w-10 h-10 flex items-center justify-center shrink-0 ${
-                    installed ? 'bg-green-500/20' : isCustom ? 'bg-purple-500/20' : colorClass.split(' ')[1]
+                    installed ? 'bg-green-500/20' : colorClass.split(' ')[1]
                   }`}>
                     {installed ? (
                       <CheckCircle className="w-5 h-5 text-green-400" />
                     ) : (
-                      <Icon className={`w-5 h-5 ${isCustom ? 'text-purple-400' : colorClass.split(' ')[0]}`} />
+                      <Icon className={`w-5 h-5 ${colorClass.split(' ')[0]}`} />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-medium text-sm truncate">{plugin.name}</h3>
+                      {isCustom && (
+                        <span className="text-[10px] px-1.5 py-0.5 bg-purple-500/20 text-purple-400 font-medium">
+                          Custom
+                        </span>
+                      )}
                       {installed && (
                         <span className="text-[10px] px-1.5 py-0.5 bg-green-500/20 text-green-400">
                           Installed

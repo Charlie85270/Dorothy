@@ -274,6 +274,8 @@ export default function SettingsPage() {
 
       case 'memory':
         const isClaudeMemInstalled = settings?.enabledPlugins?.['claude-mem@thedotmack'] === true;
+        const isClaudeMemDisabled = settings?.enabledPlugins?.['claude-mem@thedotmack'] === false;
+        const isClaudeMemKnown = 'claude-mem@thedotmack' in (settings?.enabledPlugins || {});
 
         const handleInstallClaudeMem = async () => {
           if (!window.electronAPI?.shell) return;
@@ -289,6 +291,18 @@ export default function SettingsPage() {
           }
         };
 
+        const handleToggleClaudeMem = async () => {
+          if (!settings) return;
+
+          const newEnabled = !isClaudeMemInstalled;
+          const updatedPlugins = {
+            ...settings.enabledPlugins,
+            'claude-mem@thedotmack': newEnabled,
+          };
+
+          updateSettings({ enabledPlugins: updatedPlugins });
+        };
+
         return (
           <div className="space-y-6">
             <div>
@@ -296,23 +310,50 @@ export default function SettingsPage() {
               <p className="text-sm text-muted-foreground">Persistent memory for Claude Code agents</p>
             </div>
 
+            {/* Restart Notice */}
+            {hasChanges && isClaudeMemKnown && (
+              <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 text-yellow-400">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-medium mb-1">Restart Required</p>
+                    <p className="text-yellow-400/80">
+                      Save changes and restart Claude Manager and all running Claude Code instances for this change to take effect.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="border border-border bg-card p-6">
               <div className="flex items-start gap-4">
-                <div className={`w-12 h-12 flex items-center justify-center shrink-0 ${isClaudeMemInstalled ? 'bg-green-500/20' : 'bg-secondary'}`}>
-                  <Brain className={`w-6 h-6 ${isClaudeMemInstalled ? 'text-green-400' : 'text-muted-foreground'}`} />
+                <div className={`w-12 h-12 flex items-center justify-center shrink-0 ${isClaudeMemInstalled ? 'bg-green-500/20' : isClaudeMemDisabled ? 'bg-red-500/20' : 'bg-secondary'}`}>
+                  <Brain className={`w-6 h-6 ${isClaudeMemInstalled ? 'text-green-400' : isClaudeMemDisabled ? 'text-red-400' : 'text-muted-foreground'}`} />
                 </div>
                 <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="font-medium">Claude-Mem</h3>
-                    {isClaudeMemInstalled ? (
-                      <span className="flex items-center gap-1.5 px-2 py-0.5 bg-green-500/20 text-green-400 text-xs font-medium">
-                        <CheckCircle className="w-3.5 h-3.5" />
-                        Installed
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 bg-secondary text-muted-foreground text-xs font-medium">
-                        Not Installed
-                      </span>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-3">
+                      <h3 className="font-medium">Claude-Mem</h3>
+                      {isClaudeMemInstalled ? (
+                        <span className="flex items-center gap-1.5 px-2 py-0.5 bg-green-500/20 text-green-400 text-xs font-medium">
+                          <CheckCircle className="w-3.5 h-3.5" />
+                          Enabled
+                        </span>
+                      ) : isClaudeMemDisabled ? (
+                        <span className="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs font-medium">
+                          Disabled
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 bg-secondary text-muted-foreground text-xs font-medium">
+                          Not Installed
+                        </span>
+                      )}
+                    </div>
+                    {isClaudeMemKnown && (
+                      <Toggle
+                        enabled={isClaudeMemInstalled}
+                        onChange={handleToggleClaudeMem}
+                      />
                     )}
                   </div>
                   <p className="text-sm text-muted-foreground leading-relaxed">
@@ -323,7 +364,7 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              {!isClaudeMemInstalled && (
+              {!isClaudeMemKnown && (
                 <div className="mt-6 pt-6 border-t border-border">
                   <div className="bg-secondary/50 border border-border p-4 mb-4">
                     <div className="flex items-start gap-3">
@@ -362,27 +403,36 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              {isClaudeMemInstalled && (
+              {isClaudeMemKnown && (
                 <div className="mt-6 pt-6 border-t border-border">
                   <h4 className="text-sm font-medium mb-3">How It Works</h4>
                   <ul className="text-sm text-muted-foreground space-y-2">
                     <li className="flex items-start gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-400 mt-1.5 shrink-0" />
+                      <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${isClaudeMemInstalled ? 'bg-green-400' : 'bg-muted-foreground'}`} />
                       <span>Automatically captures observations when Claude uses tools</span>
                     </li>
                     <li className="flex items-start gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-400 mt-1.5 shrink-0" />
+                      <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${isClaudeMemInstalled ? 'bg-green-400' : 'bg-muted-foreground'}`} />
                       <span>Generates semantic summaries at the end of each session</span>
                     </li>
                     <li className="flex items-start gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-400 mt-1.5 shrink-0" />
+                      <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${isClaudeMemInstalled ? 'bg-green-400' : 'bg-muted-foreground'}`} />
                       <span>Injects relevant context at the start of new sessions</span>
                     </li>
                     <li className="flex items-start gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-400 mt-1.5 shrink-0" />
+                      <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${isClaudeMemInstalled ? 'bg-green-400' : 'bg-muted-foreground'}`} />
                       <span>Stores memories locally in ~/.claude-mem</span>
                     </li>
                   </ul>
+                  <a
+                    href="https://github.com/thedotmack/claude-mem"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 mt-4 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Learn More
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
                 </div>
               )}
             </div>

@@ -3,7 +3,6 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as http from 'http';
-import * as https from 'https';
 import { v4 as uuidv4 } from 'uuid';
 import * as pty from 'node-pty';
 import TelegramBot from 'node-telegram-bot-api';
@@ -46,87 +45,6 @@ const mimeTypes: { [key: string]: string } = {
 
 // PTY instances for terminals
 const ptyProcesses: Map<string, pty.IPty> = new Map();
-
-// ============== File Download Utilities ==============
-
-// Get or create the temp directory for downloaded files
-function getMessagingTempDir(): string {
-  const tempDir = path.join(app.getPath('temp'), 'claude-manager-files');
-  if (!fs.existsSync(tempDir)) {
-    fs.mkdirSync(tempDir, { recursive: true });
-  }
-  return tempDir;
-}
-
-// Download a file from a URL and save it to a temp location
-async function downloadFile(url: string, filename: string, headers?: Record<string, string>): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const tempDir = getMessagingTempDir();
-    const filePath = path.join(tempDir, `${Date.now()}-${filename}`);
-    const file = fs.createWriteStream(filePath);
-
-    const urlObj = new URL(url);
-    const httpModule = urlObj.protocol === 'https:' ? https : http;
-
-    const options: http.RequestOptions = {
-      hostname: urlObj.hostname,
-      path: urlObj.pathname + urlObj.search,
-      headers: headers || {},
-    };
-
-    const request = httpModule.get(options, (response) => {
-      // Handle redirects
-      if (response.statusCode === 301 || response.statusCode === 302) {
-        const redirectUrl = response.headers.location;
-        if (redirectUrl) {
-          file.close();
-          fs.unlinkSync(filePath);
-          downloadFile(redirectUrl, filename, headers).then(resolve).catch(reject);
-          return;
-        }
-      }
-
-      if (response.statusCode !== 200) {
-        file.close();
-        fs.unlinkSync(filePath);
-        reject(new Error(`Failed to download file: HTTP ${response.statusCode}`));
-        return;
-      }
-
-      response.pipe(file);
-      file.on('finish', () => {
-        file.close();
-        resolve(filePath);
-      });
-    });
-
-    request.on('error', (err) => {
-      file.close();
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
-      reject(err);
-    });
-  });
-}
-
-// Get file extension from MIME type
-function getExtensionFromMimeType(mimeType: string): string {
-  const mimeToExt: Record<string, string> = {
-    'image/jpeg': '.jpg',
-    'image/png': '.png',
-    'image/gif': '.gif',
-    'image/webp': '.webp',
-    'application/pdf': '.pdf',
-    'text/plain': '.txt',
-    'text/markdown': '.md',
-    'application/json': '.json',
-    'video/mp4': '.mp4',
-    'audio/mpeg': '.mp3',
-    'audio/ogg': '.ogg',
-  };
-  return mimeToExt[mimeType] || '';
-}
 
 // Agent state
 interface WorktreeConfig {
@@ -1797,6 +1715,7 @@ function initTelegramBot() {
     telegramBot.on('message', async (msg) => {
       // Ignore commands
       if (msg.text?.startsWith('/')) return;
+      if (!msg.text) return;
 
       // Save chat ID if not saved
       const chatId = msg.chat.id.toString();
@@ -1805,78 +1724,7 @@ function initTelegramBot() {
         saveAppSettings(appSettings);
       }
 
-      // Handle files (photos, documents, etc.)
-      const filePaths: string[] = [];
-      let caption = msg.caption || msg.text || '';
-
-      try {
-        // Handle photos
-        if (msg.photo && msg.photo.length > 0) {
-          // Get the largest photo (last in array)
-          const photo = msg.photo[msg.photo.length - 1];
-          telegramBot?.sendMessage(chatId, '📷 Downloading image...');
-          const fileLink = await telegramBot!.getFileLink(photo.file_id);
-          const filename = `photo_${photo.file_id}.jpg`;
-          const filePath = await downloadFile(fileLink, filename);
-          filePaths.push(filePath);
-          console.log('Downloaded Telegram photo:', filePath);
-        }
-
-        // Handle documents (PDF, text files, etc.)
-        if (msg.document) {
-          telegramBot?.sendMessage(chatId, `📄 Downloading ${msg.document.file_name || 'file'}...`);
-          const fileLink = await telegramBot!.getFileLink(msg.document.file_id);
-          const filename = msg.document.file_name || `document_${msg.document.file_id}`;
-          const filePath = await downloadFile(fileLink, filename);
-          filePaths.push(filePath);
-          console.log('Downloaded Telegram document:', filePath);
-        }
-
-        // Handle audio
-        if (msg.audio) {
-          telegramBot?.sendMessage(chatId, `🎵 Downloading audio...`);
-          const fileLink = await telegramBot!.getFileLink(msg.audio.file_id);
-          const audioName = msg.audio.title || msg.audio.performer || '';
-          const filename = audioName ? `${audioName}.mp3` : `audio_${msg.audio.file_id}.mp3`;
-          const filePath = await downloadFile(fileLink, filename);
-          filePaths.push(filePath);
-          console.log('Downloaded Telegram audio:', filePath);
-        }
-
-        // Handle video
-        if (msg.video) {
-          telegramBot?.sendMessage(chatId, `🎬 Downloading video...`);
-          const fileLink = await telegramBot!.getFileLink(msg.video.file_id);
-          const filename = `video_${msg.video.file_id}.mp4`;
-          const filePath = await downloadFile(fileLink, filename);
-          filePaths.push(filePath);
-          console.log('Downloaded Telegram video:', filePath);
-        }
-
-        // Handle voice messages
-        if (msg.voice) {
-          telegramBot?.sendMessage(chatId, `🎤 Downloading voice message...`);
-          const fileLink = await telegramBot!.getFileLink(msg.voice.file_id);
-          const filename = `voice_${msg.voice.file_id}.ogg`;
-          const filePath = await downloadFile(fileLink, filename);
-          filePaths.push(filePath);
-          console.log('Downloaded Telegram voice:', filePath);
-        }
-      } catch (err) {
-        console.error('Error downloading Telegram file:', err);
-        telegramBot?.sendMessage(chatId, `❌ Error downloading file: ${err}`);
-      }
-
-      // If we have files, include them in the message
-      if (filePaths.length > 0) {
-        const fileListText = filePaths.map(p => `File: ${p}`).join('\n');
-        const messageWithFiles = `${caption}\n\n[ATTACHED FILES - Read these files to see the content]\n${fileListText}`;
-        await sendToSuperAgent(chatId, messageWithFiles);
-      } else if (msg.text) {
-        // Regular text message
-        await sendToSuperAgent(chatId, msg.text);
-      }
-      // If no text and no files, ignore the message
+      await sendToSuperAgent(chatId, msg.text);
     });
 
     // Handle polling errors
@@ -2100,17 +1948,6 @@ function initSlackBot() {
     // Handle app mentions
     slackApp.event('app_mention', async ({ event, say }) => {
       console.log('Slack app_mention event received:', JSON.stringify(event, null, 2));
-
-      // Type for Slack files in mentions
-      interface SlackMentionFile {
-        id: string;
-        name?: string;
-        url_private_download?: string;
-        url_private?: string;
-        mimetype?: string;
-      }
-      const eventWithFiles = event as typeof event & { files?: SlackMentionFile[] };
-
       // Remove the bot mention from the text
       const text = event.text.replace(/<@[A-Z0-9]+>/gi, '').trim();
       slackResponseChannel = event.channel;
@@ -2124,67 +1961,19 @@ function initSlackBot() {
         mainWindow?.webContents.send('settings:updated', appSettings);
       }
 
-      // Handle files in mentions
-      const filePaths: string[] = [];
-      if (eventWithFiles.files && eventWithFiles.files.length > 0) {
-        await say(':inbox_tray: Downloading attached files...');
-
-        for (const file of eventWithFiles.files) {
-          try {
-            const downloadUrl = file.url_private_download || file.url_private;
-            if (!downloadUrl) {
-              console.log('No download URL for Slack file:', file.id);
-              continue;
-            }
-
-            const filename = file.name || `file_${file.id}${getExtensionFromMimeType(file.mimetype || '')}`;
-            const filePath = await downloadFile(downloadUrl, filename, {
-              'Authorization': `Bearer ${appSettings.slackBotToken}`,
-            });
-            filePaths.push(filePath);
-            console.log('Downloaded Slack mention file:', filePath);
-          } catch (err) {
-            console.error('Error downloading Slack file:', err);
-            await say(`:warning: Error downloading file ${file.name || file.id}: ${err}`);
-          }
-        }
-      }
-
-      // If files were attached, forward to Super Agent directly
-      if (filePaths.length > 0) {
-        const fileListText = filePaths.map(p => `File: ${p}`).join('\n');
-        const messageWithFiles = `${text}\n\n[ATTACHED FILES - Read these files to see the content]\n${fileListText}`;
-        await sendToSuperAgentFromSlack(event.channel, messageWithFiles, say);
-      } else {
-        // No files, use regular command handling
-        await handleSlackCommand(text, event.channel, say);
-      }
+      await handleSlackCommand(text, event.channel, say);
     });
 
     // Handle direct messages - use 'message' event with subtype filter
     slackApp.message(async ({ message, say }) => {
-      // Cast for flexibility with Slack's complex message types
-      interface SlackFile {
-        id: string;
-        name?: string;
-        url_private_download?: string;
-        url_private?: string;
-        mimetype?: string;
-      }
-      const msg = message as {
-        bot_id?: string;
-        subtype?: string;
-        text?: string;
-        channel: string;
-        ts?: string;
-        thread_ts?: string;
-        files?: SlackFile[];
-      };
+      // Cast to any for flexibility with Slack's complex message types
+      const msg = message as { bot_id?: string; subtype?: string; text?: string; channel: string; ts?: string; thread_ts?: string };
       console.log('Slack message event received:', JSON.stringify(msg, null, 2));
 
       // Skip bot messages and message changes/deletions
       if (msg.bot_id) return;
-      if (msg.subtype && msg.subtype !== 'file_share') return; // Allow file_share subtype
+      if (msg.subtype) return; // Skip edited, deleted, etc.
+      if (!msg.text) return;
 
       const channel = msg.channel;
       slackResponseChannel = channel;
@@ -2198,45 +1987,7 @@ function initSlackBot() {
         mainWindow?.webContents.send('settings:updated', appSettings);
       }
 
-      // Handle files
-      const filePaths: string[] = [];
-      const textContent = msg.text || '';
-
-      if (msg.files && msg.files.length > 0) {
-        await say(':inbox_tray: Downloading attached files...');
-
-        for (const file of msg.files) {
-          try {
-            const downloadUrl = file.url_private_download || file.url_private;
-            if (!downloadUrl) {
-              console.log('No download URL for Slack file:', file.id);
-              continue;
-            }
-
-            const filename = file.name || `file_${file.id}${getExtensionFromMimeType(file.mimetype || '')}`;
-
-            // Download with Slack auth token
-            const filePath = await downloadFile(downloadUrl, filename, {
-              'Authorization': `Bearer ${appSettings.slackBotToken}`,
-            });
-            filePaths.push(filePath);
-            console.log('Downloaded Slack file:', filePath);
-          } catch (err) {
-            console.error('Error downloading Slack file:', err);
-            await say(`:warning: Error downloading file ${file.name || file.id}: ${err}`);
-          }
-        }
-      }
-
-      // Build message with files
-      if (filePaths.length > 0) {
-        const fileListText = filePaths.map(p => `File: ${p}`).join('\n');
-        const messageWithFiles = `${textContent}\n\n[ATTACHED FILES - Read these files to see the content]\n${fileListText}`;
-        await sendToSuperAgentFromSlack(channel, messageWithFiles, say);
-      } else if (textContent) {
-        await sendToSuperAgentFromSlack(channel, textContent, say);
-      }
-      // If no text and no files, ignore
+      await sendToSuperAgentFromSlack(channel, msg.text, say);
     });
 
     // Log all events for debugging

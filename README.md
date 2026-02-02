@@ -90,8 +90,6 @@ Control your agents remotely via Telegram! Connect your Telegram bot and manage 
 
 Or just send a message to talk directly to the Super Agent!
 
-**File Support:** Send images, PDFs, documents, audio, video, or voice messages - the Super Agent can read and analyze them!
-
 **Setup:**
 1. Create a Telegram bot via [@BotFather](https://t.me/botfather)
 2. Copy the bot token
@@ -113,14 +111,12 @@ Control your agents remotely via Slack! Connect your Slack app and manage your a
 
 Or just send a message to talk directly to the Super Agent!
 
-**File Support:** Send images, PDFs, documents, or any files with your message - the Super Agent can read and analyze them!
-
 **Setup:**
 1. Go to [api.slack.com/apps](https://api.slack.com/apps) and click "Create New App"
 2. Choose "From scratch", name it "Claude Manager", select workspace
 3. Go to "Socket Mode" → Enable → Generate App Token with scope `connections:write` (xapp-...)
 4. Go to "OAuth & Permissions" → Add Bot Token Scopes:
-   - `app_mentions:read`, `chat:write`, `im:history`, `im:read`, `im:write`, `files:read`
+   - `app_mentions:read`, `chat:write`, `im:history`, `im:read`, `im:write`
 5. Install to Workspace → Copy Bot Token (xoxb-...)
 6. Go to "Event Subscriptions" → Enable → Subscribe to: `app_mention`, `message.im`
 7. Go to "App Home" → Enable "Messages Tab" → Check "Allow users to send Slash commands and messages from the messages tab"

@@ -260,6 +260,182 @@ function HeroSection() {
   );
 }
 
+// Telegram Icon (colored)
+function TelegramIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="12" fill="url(#telegram-gradient)" />
+      <path
+        d="M9.417 15.181l-.397 5.584c.568 0 .814-.244 1.109-.537l2.663-2.545 5.518 4.041c1.012.564 1.725.267 1.998-.931l3.622-16.972c.321-1.496-.54-2.081-1.527-1.714l-21.29 8.151c-1.453.564-1.431 1.374-.247 1.741l5.443 1.693 12.643-7.911c.595-.394 1.136-.176.691.218l-10.226 9.182z"
+        fill="white"
+        transform="translate(1.5, 1) scale(0.85)"
+      />
+      <defs>
+        <linearGradient id="telegram-gradient" x1="12" y1="0" x2="12" y2="24" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#2AABEE" />
+          <stop offset="1" stopColor="#229ED9" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
+
+// Slack Icon (colored)
+function SlackIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 512 512" fill="none">
+      <path d="M126.12,315.1A47.06,47.06,0,1,1,79.06,268h47.06Z" fill="#E01E5A"/>
+      <path d="M149.84,315.1a47.06,47.06,0,0,1,94.12,0V432.94a47.06,47.06,0,1,1-94.12,0Z" fill="#E01E5A"/>
+      <path d="M196.9,126.12A47.06,47.06,0,1,1,244,79.06v47.06Z" fill="#36C5F0"/>
+      <path d="M196.9,149.84a47.06,47.06,0,0,1,0,94.12H79.06a47.06,47.06,0,0,1,0-94.12Z" fill="#36C5F0"/>
+      <path d="M385.88,196.9A47.06,47.06,0,1,1,432.94,244H385.88Z" fill="#2EB67D"/>
+      <path d="M362.16,196.9a47.06,47.06,0,0,1-94.12,0V79.06a47.06,47.06,0,1,1,94.12,0Z" fill="#2EB67D"/>
+      <path d="M315.1,385.88A47.06,47.06,0,1,1,268,432.94V385.88Z" fill="#ECB22E"/>
+      <path d="M315.1,362.16a47.06,47.06,0,0,1,0-94.12H432.94a47.06,47.06,0,1,1,0,94.12Z" fill="#ECB22E"/>
+    </svg>
+  );
+}
+
+// Remote Control Section (Telegram + Slack)
+function RemoteControlSection() {
+  return (
+    <section className="relative py-24 px-6 overflow-hidden">
+      {/* Background gradient */}
+      <div className="absolute inset-0 bg-gradient-to-b from-[#0a0a0f] via-[#0d0d14] to-[#0a0a0f]" />
+
+      {/* Floating orbs */}
+      <div className="absolute top-1/2 left-1/4 w-[400px] h-[400px] bg-[#229ED9]/10 rounded-full blur-3xl -translate-y-1/2" />
+      <div className="absolute top-1/2 right-1/4 w-[400px] h-[400px] bg-[#ECB22E]/10 rounded-full blur-3xl -translate-y-1/2" />
+
+      <div className="relative z-10 max-w-6xl mx-auto">
+        {/* Section header */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="text-center mb-16"
+        >
+          <span className="text-[#4ade80] text-sm font-medium uppercase tracking-wider">Remote Control</span>
+          <h2 className="text-4xl md:text-5xl font-bold mt-4 mb-6">
+            <span className="text-[#f5f5f7]">Control Your Agents</span>
+            <br />
+            <span className="gradient-text">From Anywhere</span>
+          </h2>
+          <p className="text-[#a1a1aa] text-lg max-w-2xl mx-auto">
+            Connect your favorite messaging apps and manage your AI agents on the go.
+            Start tasks, check status, and get real-time updates wherever you are.
+          </p>
+        </motion.div>
+
+        {/* Integration cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+          {/* Telegram Card */}
+          <motion.div
+            initial={{ opacity: 0, x: -30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.1 }}
+            whileHover={{ y: -5 }}
+            className="group relative p-8 rounded-2xl bg-gradient-to-br from-[#12121a] to-[#1a1a24] border border-[#27272a] hover:border-[#229ED9]/50 transition-all duration-300"
+          >
+            {/* Glow effect */}
+            <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#229ED9]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+            <div className="relative z-10">
+              <TelegramIcon className="w-16 h-16 mb-6" />
+              <h3 className="text-2xl font-bold text-[#f5f5f7] mb-3">Telegram Bot</h3>
+              <p className="text-[#a1a1aa] mb-6">
+                Control your agents via Telegram. Send commands, check status,
+                and communicate with Super Agent from your phone.
+              </p>
+
+              {/* Commands preview */}
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-2 text-[#71717a]">
+                  <code className="px-2 py-1 rounded bg-[#0a0a0f] text-[#229ED9]">/status</code>
+                  <span>Quick overview</span>
+                </div>
+                <div className="flex items-center gap-2 text-[#71717a]">
+                  <code className="px-2 py-1 rounded bg-[#0a0a0f] text-[#229ED9]">/start_agent</code>
+                  <span>Launch a task</span>
+                </div>
+                <div className="flex items-center gap-2 text-[#71717a]">
+                  <code className="px-2 py-1 rounded bg-[#0a0a0f] text-[#229ED9]">/ask</code>
+                  <span>Talk to Super Agent</span>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Slack Card */}
+          <motion.div
+            initial={{ opacity: 0, x: 30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.2 }}
+            whileHover={{ y: -5 }}
+            className="group relative p-8 rounded-2xl bg-gradient-to-br from-[#12121a] to-[#1a1a24] border border-[#27272a] hover:border-[#ECB22E]/50 transition-all duration-300"
+          >
+            {/* Glow effect */}
+            <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#ECB22E]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+            <div className="relative z-10">
+              <SlackIcon className="w-16 h-16 mb-6" />
+              <h3 className="text-2xl font-bold text-[#f5f5f7] mb-3">Slack App</h3>
+              <p className="text-[#a1a1aa] mb-6">
+                Integrate with your Slack workspace. Use @mentions or DMs to
+                control agents without leaving your team chat.
+              </p>
+
+              {/* Commands preview */}
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-2 text-[#71717a]">
+                  <code className="px-2 py-1 rounded bg-[#0a0a0f] text-[#ECB22E]">@claude-mgr status</code>
+                  <span>Check agents</span>
+                </div>
+                <div className="flex items-center gap-2 text-[#71717a]">
+                  <code className="px-2 py-1 rounded bg-[#0a0a0f] text-[#ECB22E]">@claude-mgr start</code>
+                  <span>Start a task</span>
+                </div>
+                <div className="flex items-center gap-2 text-[#71717a]">
+                  <code className="px-2 py-1 rounded bg-[#0a0a0f] text-[#ECB22E]">DM the bot</code>
+                  <span>Chat directly</span>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Features list */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.3 }}
+          className="flex flex-wrap items-center justify-center gap-6 mt-12 text-sm text-[#a1a1aa]"
+        >
+          <div className="flex items-center gap-2">
+            <Check className="w-4 h-4 text-[#4ade80]" />
+            <span>Real-time notifications</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Check className="w-4 h-4 text-[#4ade80]" />
+            <span>Thread-aware replies</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Check className="w-4 h-4 text-[#4ade80]" />
+            <span>Easy setup</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Check className="w-4 h-4 text-[#4ade80]" />
+            <span>Works together</span>
+          </div>
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
 // Features Section
 function FeaturesSection() {
   const features = [
@@ -277,8 +453,8 @@ function FeaturesSection() {
     },
     {
       icon: Send,
-      title: "Telegram Integration",
-      description: "Control your agents remotely via Telegram. Start tasks, check status, and communicate with Super Agent from anywhere.",
+      title: "Telegram & Slack",
+      description: "Control your agents remotely via Telegram or Slack. Start tasks, check status, and communicate with Super Agent from anywhere.",
       gradient: "from-[#0088cc] to-[#22d3ee]",
     },
     {
@@ -871,6 +1047,7 @@ export default function Home() {
     <main className="min-h-screen bg-[#0a0a0f] text-[#f5f5f7] overflow-x-hidden">
       <Navigation />
       <HeroSection />
+      <RemoteControlSection />
       <FeaturesSection />
       <HowItWorksSection />
       <DemoSection />

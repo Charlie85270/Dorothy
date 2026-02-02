@@ -64,6 +64,7 @@ Available MCP tools:
 - `create_agent` - Create a new agent
 - `remove_agent` - Delete an agent
 - `send_telegram` - Send messages to Telegram
+- `send_slack` - Send messages to Slack
 
 ### 🧠 Persistent Memory with claude-mem
 Enable persistent memory for all your Claude Code sessions! Powered by [claude-mem](https://github.com/thedotmack/claude-mem), agents can recall past decisions, learnings, and context across sessions.
@@ -95,6 +96,32 @@ Or just send a message to talk directly to the Super Agent!
 3. Go to Settings in Claude Manager
 4. Paste your bot token and save
 5. Send `/start` to your bot to connect
+
+### 💬 Slack Bot Integration
+Control your agents remotely via Slack! Connect your Slack app and manage your agents from any channel or DM.
+
+**Available Commands (via @mention or DM):**
+- `status` - Quick overview of all agents
+- `agents` - Detailed list of all agents
+- `projects` - List all projects with their agents
+- `start <name> <task>` - Start an agent with a task
+- `stop <name>` - Stop a running agent
+- `usage` - Show API usage and cost statistics
+- `help` - Show all available commands
+
+Or just send a message to talk directly to the Super Agent!
+
+**Setup:**
+1. Go to [api.slack.com/apps](https://api.slack.com/apps) and click "Create New App"
+2. Choose "From scratch", name it "Claude Manager", select workspace
+3. Go to "Socket Mode" → Enable → Generate App Token with scope `connections:write` (xapp-...)
+4. Go to "OAuth & Permissions" → Add Bot Token Scopes:
+   - `app_mentions:read`, `chat:write`, `im:history`, `im:read`, `im:write`
+5. Install to Workspace → Copy Bot Token (xoxb-...)
+6. Go to "Event Subscriptions" → Enable → Subscribe to: `app_mention`, `message.im`
+7. Go to "App Home" → Enable "Messages Tab" → Check "Allow users to send Slash commands and messages from the messages tab"
+8. Paste both tokens in Settings → Slack and enable the integration
+9. Mention @Claude Manager in any channel or DM the bot to start!
 
 ## Installation
 
@@ -250,6 +277,13 @@ claude-manager/
 - Start/stop agents from anywhere
 - Direct communication with Super Agent
 - Autonomous task execution for remote requests
+
+### Slack Integration
+- Remote agent control via Slack app
+- Works with @mentions and direct messages
+- Same commands as Telegram
+- Thread-aware responses (replies in the same conversation)
+- Socket Mode for easy setup (no public URL required)
 
 ## Development
 

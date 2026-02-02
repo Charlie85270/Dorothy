@@ -510,6 +510,38 @@ server.tool(
   }
 );
 
+// Tool: Send message to Slack
+server.tool(
+  "send_slack",
+  "Send a message to Slack. Use this to respond to the user when the request came from Slack.",
+  {
+    message: z.string().describe("The message to send to Slack"),
+  },
+  async ({ message }) => {
+    try {
+      await apiRequest("/api/slack/send", "POST", { message });
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Message sent to Slack: "${message.slice(0, 100)}${message.length > 100 ? '...' : ''}"`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error sending to Slack: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+);
+
 // ============== Memory Tools ==============
 
 // Tool: Search agent memories

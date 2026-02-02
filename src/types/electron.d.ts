@@ -161,6 +161,11 @@ export interface ElectronAPI {
       telegramEnabled: boolean;
       telegramBotToken: string;
       telegramChatId: string;
+      slackEnabled: boolean;
+      slackBotToken: string;
+      slackAppToken: string;
+      slackSigningSecret: string;
+      slackChannelId: string;
     }>;
     save: (settings: {
       notificationsEnabled?: boolean;
@@ -170,12 +175,23 @@ export interface ElectronAPI {
       telegramEnabled?: boolean;
       telegramBotToken?: string;
       telegramChatId?: string;
+      slackEnabled?: boolean;
+      slackBotToken?: string;
+      slackAppToken?: string;
+      slackSigningSecret?: string;
+      slackChannelId?: string;
     }) => Promise<{ success: boolean; error?: string }>;
     onUpdated?: (callback: (settings: unknown) => void) => () => void;
   };
 
   // Telegram bot
   telegram?: {
+    test: () => Promise<{ success: boolean; botName?: string; error?: string }>;
+    sendTest: () => Promise<{ success: boolean; error?: string }>;
+  };
+
+  // Slack bot
+  slack?: {
     test: () => Promise<{ success: boolean; botName?: string; error?: string }>;
     sendTest: () => Promise<{ success: boolean; error?: string }>;
   };

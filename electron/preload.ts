@@ -175,6 +175,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       telegramEnabled?: boolean;
       telegramBotToken?: string;
       telegramChatId?: string;
+      slackEnabled?: boolean;
+      slackBotToken?: string;
+      slackAppToken?: string;
+      slackSigningSecret?: string;
+      slackChannelId?: string;
     }) =>
       ipcRenderer.invoke('app:saveSettings', settings),
     onUpdated: (callback: (settings: unknown) => void) => {
@@ -190,6 +195,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('telegram:test'),
     sendTest: () =>
       ipcRenderer.invoke('telegram:sendTest'),
+  },
+
+  // Slack bot
+  slack: {
+    test: () =>
+      ipcRenderer.invoke('slack:test'),
+    sendTest: () =>
+      ipcRenderer.invoke('slack:sendTest'),
   },
 
   // Dialogs

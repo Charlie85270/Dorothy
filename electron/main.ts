@@ -6,6 +6,7 @@ import * as http from 'http';
 import { v4 as uuidv4 } from 'uuid';
 import * as pty from 'node-pty';
 import TelegramBot from 'node-telegram-bot-api';
+import { App as SlackApp, LogLevel } from '@slack/bolt';
 import { spawn } from 'child_process';
 
 // Get the base path for static assets
@@ -409,6 +410,37 @@ function startApiServer() {
         return;
       }
 
+      // POST /api/slack/send - Send message to Slack
+      if (pathname === '/api/slack/send' && req.method === 'POST') {
+        const { message } = body as { message: string };
+        if (!message) {
+          sendJson({ error: 'message is required' }, 400);
+          return;
+        }
+
+        if (!slackApp || !appSettings.slackChannelId) {
+          sendJson({ error: 'Slack not configured or no channel ID' }, 400);
+          return;
+        }
+
+        try {
+          const postParams: { channel: string; text: string; mrkdwn: boolean; thread_ts?: string } = {
+            channel: slackResponseChannel || appSettings.slackChannelId,
+            text: `:crown: ${message}`,
+            mrkdwn: true,
+          };
+          // Reply in the same thread if we have a thread_ts
+          if (slackResponseThreadTs) {
+            postParams.thread_ts = slackResponseThreadTs;
+          }
+          await slackApp.client.chat.postMessage(postParams);
+          sendJson({ success: true });
+        } catch (err) {
+          sendJson({ error: `Failed to send: ${err}` }, 500);
+        }
+        return;
+      }
+
       // ============== Hook API Endpoints ==============
 
       // POST /api/hooks/status - Update agent status from hooks
@@ -744,6 +776,12 @@ interface AppSettings {
   telegramEnabled: boolean;
   telegramBotToken: string;
   telegramChatId: string; // Will be auto-detected on first message
+  // Slack integration
+  slackEnabled: boolean;
+  slackBotToken: string;      // xoxb-... (Bot User OAuth Token)
+  slackAppToken: string;       // xapp-... (App-Level Token for Socket Mode)
+  slackSigningSecret: string;  // For request verification
+  slackChannelId: string;      // Default channel for responses
 }
 
 // Note: APP_SETTINGS_FILE is defined after DATA_DIR below
@@ -1066,6 +1104,11 @@ function loadAppSettings(): AppSettings {
     telegramEnabled: false,
     telegramBotToken: '',
     telegramChatId: '',
+    slackEnabled: false,
+    slackBotToken: '',
+    slackAppToken: '',
+    slackSigningSecret: '',
+    slackChannelId: '',
   };
   try {
     if (fs.existsSync(APP_SETTINGS_FILE)) {
@@ -1818,6 +1861,531 @@ function stopTelegramBot() {
   }
 }
 
+// ============== Slack Bot Service ==============
+let slackApp: SlackApp | null = null;
+let superAgentSlackTask = false;
+let superAgentSlackBuffer: string[] = [];
+let slackResponseChannel: string | null = null;
+let slackResponseThreadTs: string | null = null; // Track thread timestamp for replies
+
+// Character faces for Slack (same as Telegram)
+const SLACK_CHARACTER_FACES: Record<string, string> = {
+  'robot': ':robot_face:',
+  'ninja': ':ninja:',
+  'wizard': ':mage:',
+  'astronaut': ':astronaut:',
+  'knight': ':crossed_swords:',
+  'pirate': ':pirate_flag:',
+  'alien': ':alien:',
+  'viking': ':axe:',
+};
+
+// Format agent status for Slack
+function formatSlackAgentStatus(a: AgentStatus): string {
+  const isSuper = isSuperAgent(a);
+  const emoji = isSuper ? ':crown:' : (SLACK_CHARACTER_FACES[a.character || ''] || ':robot_face:');
+  const statusEmoji = a.status === 'running' ? ':large_green_circle:' :
+                      a.status === 'waiting' ? ':large_yellow_circle:' :
+                      a.status === 'error' ? ':red_circle:' : ':white_circle:';
+
+  let text = `${emoji} *${a.name}* ${statusEmoji}\n`;
+  if (!isSuper) {
+    const project = a.projectPath.split('/').pop() || 'Unknown';
+    text += `    :file_folder: \`${project}\`\n`;
+  }
+  if (a.skills.length > 0) {
+    text += `    :wrench: ${a.skills.slice(0, 3).join(', ')}${a.skills.length > 3 ? '...' : ''}\n`;
+  }
+  if (a.currentTask && a.status === 'running') {
+    text += `    :speech_balloon: _${a.currentTask.slice(0, 40)}${a.currentTask.length > 40 ? '...' : ''}_\n`;
+  }
+  return text;
+}
+
+// Send message to Slack
+async function sendSlackMessage(text: string, channel?: string) {
+  if (!slackApp || (!channel && !appSettings.slackChannelId)) return;
+
+  const targetChannel = channel || appSettings.slackChannelId;
+  try {
+    // Slack has a 4000 char limit for text, truncate if needed
+    const maxLen = 3900;
+    const truncated = text.length > maxLen ? text.slice(0, maxLen) + '\n\n_(truncated)_' : text;
+    await slackApp.client.chat.postMessage({
+      channel: targetChannel,
+      text: `:crown: ${truncated}`,
+      mrkdwn: true,
+    });
+  } catch (err) {
+    console.error('Failed to send Slack message:', err);
+  }
+}
+
+// Initialize Slack bot
+function initSlackBot() {
+  // Stop existing bot if any
+  if (slackApp) {
+    slackApp.stop().catch(err => console.error('Error stopping Slack app:', err));
+    slackApp = null;
+  }
+
+  if (!appSettings.slackEnabled || !appSettings.slackBotToken || !appSettings.slackAppToken) {
+    console.log('Slack bot disabled or missing tokens');
+    return;
+  }
+
+  try {
+    slackApp = new SlackApp({
+      token: appSettings.slackBotToken,
+      appToken: appSettings.slackAppToken,
+      socketMode: true,
+      logLevel: LogLevel.DEBUG,
+    });
+
+    // Handle app mentions
+    slackApp.event('app_mention', async ({ event, say }) => {
+      console.log('Slack app_mention event received:', JSON.stringify(event, null, 2));
+      // Remove the bot mention from the text
+      const text = event.text.replace(/<@[A-Z0-9]+>/gi, '').trim();
+      slackResponseChannel = event.channel;
+      // Use thread_ts if replying in a thread, otherwise use the message ts to start a thread
+      slackResponseThreadTs = (event as { thread_ts?: string; ts?: string }).thread_ts || (event as { ts?: string }).ts || null;
+
+      // Save channel ID
+      if (appSettings.slackChannelId !== event.channel) {
+        appSettings.slackChannelId = event.channel;
+        saveAppSettings(appSettings);
+        mainWindow?.webContents.send('settings:updated', appSettings);
+      }
+
+      await handleSlackCommand(text, event.channel, say);
+    });
+
+    // Handle direct messages - use 'message' event with subtype filter
+    slackApp.message(async ({ message, say }) => {
+      // Cast to any for flexibility with Slack's complex message types
+      const msg = message as { bot_id?: string; subtype?: string; text?: string; channel: string; ts?: string; thread_ts?: string };
+      console.log('Slack message event received:', JSON.stringify(msg, null, 2));
+
+      // Skip bot messages and message changes/deletions
+      if (msg.bot_id) return;
+      if (msg.subtype) return; // Skip edited, deleted, etc.
+      if (!msg.text) return;
+
+      const channel = msg.channel;
+      slackResponseChannel = channel;
+      // Use thread_ts if replying in a thread, otherwise use the message ts to start a thread
+      slackResponseThreadTs = msg.thread_ts || msg.ts || null;
+
+      // Save channel for responses
+      if (appSettings.slackChannelId !== channel) {
+        appSettings.slackChannelId = channel;
+        saveAppSettings(appSettings);
+        mainWindow?.webContents.send('settings:updated', appSettings);
+      }
+
+      await sendToSuperAgentFromSlack(channel, msg.text, say);
+    });
+
+    // Log all events for debugging
+    slackApp.use(async ({ next, payload }) => {
+      console.log('Slack event payload type:', payload?.type || 'unknown');
+      await next();
+    });
+
+    // Start the app
+    slackApp.start().then(() => {
+      console.log('Slack bot started (Socket Mode)');
+    }).catch(err => {
+      console.error('Failed to start Slack bot:', err);
+      slackApp = null;
+    });
+
+  } catch (err) {
+    console.error('Failed to initialize Slack bot:', err);
+    slackApp = null;
+  }
+}
+
+// Handle Slack commands
+async function handleSlackCommand(text: string, channel: string, say: (msg: string) => Promise<unknown>) {
+  const lowerText = text.toLowerCase().trim();
+
+  if (lowerText === 'help' || lowerText === '') {
+    await say(
+      `:crown: *Claude Manager Bot*\n\n` +
+      `*Commands:*\n` +
+      `• \`status\` - Show all agents status\n` +
+      `• \`agents\` - List agents with details\n` +
+      `• \`projects\` - List all projects\n` +
+      `• \`start <agent> <task>\` - Start an agent\n` +
+      `• \`stop <agent>\` - Stop an agent\n` +
+      `• \`usage\` - Show usage & cost stats\n` +
+      `• \`help\` - Show this help message\n\n` +
+      `Or just send a message to talk to the Super Agent!`
+    );
+    return;
+  }
+
+  if (lowerText === 'status') {
+    const agentList = Array.from(agents.values());
+    if (agentList.length === 0) {
+      await say(':package: No agents created yet.');
+      return;
+    }
+
+    const running = agentList.filter(a => a.status === 'running');
+    const waiting = agentList.filter(a => a.status === 'waiting');
+    const idle = agentList.filter(a => a.status === 'idle' || a.status === 'completed');
+    const error = agentList.filter(a => a.status === 'error');
+
+    let response = `:bar_chart: *Agents Status*\n\n`;
+    if (running.length > 0) {
+      response += `:large_green_circle: *Running (${running.length}):*\n`;
+      running.forEach(a => { response += formatSlackAgentStatus(a); });
+      response += '\n';
+    }
+    if (waiting.length > 0) {
+      response += `:large_yellow_circle: *Waiting (${waiting.length}):*\n`;
+      waiting.forEach(a => { response += formatSlackAgentStatus(a); });
+      response += '\n';
+    }
+    if (error.length > 0) {
+      response += `:red_circle: *Error (${error.length}):*\n`;
+      error.forEach(a => { response += formatSlackAgentStatus(a); });
+      response += '\n';
+    }
+    if (idle.length > 0) {
+      response += `:white_circle: *Idle (${idle.length}):*\n`;
+      idle.forEach(a => { response += formatSlackAgentStatus(a); });
+    }
+
+    await say(response);
+    return;
+  }
+
+  if (lowerText === 'agents') {
+    const agentList = Array.from(agents.values());
+    if (agentList.length === 0) {
+      await say(':package: No agents created yet.');
+      return;
+    }
+
+    let response = `:robot_face: *All Agents*\n\n`;
+    agentList.forEach(a => {
+      response += formatSlackAgentStatus(a) + '\n';
+    });
+
+    await say(response);
+    return;
+  }
+
+  if (lowerText === 'projects') {
+    const agentList = Array.from(agents.values()).filter(a => !isSuperAgent(a));
+
+    if (agentList.length === 0) {
+      await say(':package: No projects with agents yet.');
+      return;
+    }
+
+    const projectsMap = new Map<string, AgentStatus[]>();
+    agentList.forEach(agent => {
+      const path = agent.projectPath;
+      if (!projectsMap.has(path)) {
+        projectsMap.set(path, []);
+      }
+      projectsMap.get(path)!.push(agent);
+    });
+
+    let response = `:file_folder: *Projects*\n\n`;
+    projectsMap.forEach((projectAgents, projectPath) => {
+      const projectName = projectPath.split('/').pop() || 'Unknown';
+      response += `:open_file_folder: *${projectName}*\n`;
+      response += `    \`${projectPath}\`\n`;
+      response += `    :busts_in_silhouette: Agents: ${projectAgents.map(a => {
+        const emoji = SLACK_CHARACTER_FACES[a.character || ''] || ':robot_face:';
+        const status = a.status === 'running' ? ':large_green_circle:' : a.status === 'waiting' ? ':large_yellow_circle:' : a.status === 'error' ? ':red_circle:' : ':white_circle:';
+        return `${emoji}${a.name}${status}`;
+      }).join(', ')}\n\n`;
+    });
+
+    await say(response);
+    return;
+  }
+
+  if (lowerText === 'usage') {
+    try {
+      const stats = await getClaudeStats();
+
+      if (!stats) {
+        await say(':bar_chart: No usage data available yet.');
+        return;
+      }
+
+      // Use same pricing as Telegram
+      const MODEL_PRICING: Record<string, { inputPerMTok: number; outputPerMTok: number; cacheHitsPerMTok: number; cache5mWritePerMTok: number }> = {
+        'claude-opus-4-5-20251101': { inputPerMTok: 5, outputPerMTok: 25, cacheHitsPerMTok: 0.50, cache5mWritePerMTok: 6.25 },
+        'claude-opus-4-5': { inputPerMTok: 5, outputPerMTok: 25, cacheHitsPerMTok: 0.50, cache5mWritePerMTok: 6.25 },
+        'claude-sonnet-4': { inputPerMTok: 3, outputPerMTok: 15, cacheHitsPerMTok: 0.30, cache5mWritePerMTok: 3.75 },
+      };
+
+      const getModelPricing = (modelId: string) => {
+        if (MODEL_PRICING[modelId]) return MODEL_PRICING[modelId];
+        const lower = modelId.toLowerCase();
+        if (lower.includes('opus-4-5') || lower.includes('opus-4.5')) return MODEL_PRICING['claude-opus-4-5'];
+        if (lower.includes('sonnet')) return MODEL_PRICING['claude-sonnet-4'];
+        return MODEL_PRICING['claude-sonnet-4'];
+      };
+
+      let totalCost = 0;
+      let totalInput = 0;
+      let totalOutput = 0;
+
+      if (stats.modelUsage) {
+        Object.entries(stats.modelUsage).forEach(([modelId, usageUnknown]) => {
+          const usage = usageUnknown as Record<string, unknown>;
+          const input = (usage.inputTokens as number) || 0;
+          const output = (usage.outputTokens as number) || 0;
+          const cacheRead = (usage.cacheReadInputTokens as number) || 0;
+          const cacheWrite = (usage.cacheCreationInputTokens as number) || 0;
+
+          totalInput += input;
+          totalOutput += output;
+
+          const pricing = getModelPricing(modelId);
+          totalCost += (input / 1_000_000) * pricing.inputPerMTok +
+                       (output / 1_000_000) * pricing.outputPerMTok +
+                       (cacheRead / 1_000_000) * pricing.cacheHitsPerMTok +
+                       (cacheWrite / 1_000_000) * pricing.cache5mWritePerMTok;
+        });
+      }
+
+      let response = `:bar_chart: *Usage & Cost Summary*\n\n`;
+      response += `:moneybag: *Total Cost:* $${totalCost.toFixed(2)}\n`;
+      response += `:1234: *Total Tokens:* ${((totalInput + totalOutput) / 1_000_000).toFixed(2)}M\n`;
+      response += `:inbox_tray: Input: ${(totalInput / 1_000_000).toFixed(2)}M\n`;
+      response += `:outbox_tray: Output: ${(totalOutput / 1_000_000).toFixed(2)}M\n`;
+
+      await say(response);
+    } catch (err) {
+      console.error('Error getting usage stats:', err);
+      await say(`:x: Error fetching usage data: ${err}`);
+    }
+    return;
+  }
+
+  if (lowerText.startsWith('start ')) {
+    const input = text.slice(6).trim();
+    const firstSpaceIndex = input.indexOf(' ');
+
+    if (firstSpaceIndex === -1) {
+      await say(':warning: Usage: `start <agent name> <task>`');
+      return;
+    }
+
+    const agentName = input.substring(0, firstSpaceIndex).toLowerCase();
+    const task = input.substring(firstSpaceIndex + 1).trim();
+
+    const agent = Array.from(agents.values()).find(a =>
+      a.name?.toLowerCase().includes(agentName) || a.id === agentName
+    );
+
+    if (!agent) {
+      await say(`:x: Agent "${agentName}" not found.`);
+      return;
+    }
+
+    if (agent.status === 'running') {
+      await say(`:warning: ${agent.name} is already running.`);
+      return;
+    }
+
+    try {
+      const workingPath = (agent.worktreePath || agent.projectPath).replace(/'/g, "'\\''");
+
+      if (!agent.ptyId || !ptyProcesses.has(agent.ptyId)) {
+        const ptyId = await initAgentPty(agent);
+        agent.ptyId = ptyId;
+      }
+
+      const ptyProcess = ptyProcesses.get(agent.ptyId);
+      if (!ptyProcess) {
+        await say(':x: Failed to initialize agent terminal.');
+        return;
+      }
+
+      let command = 'claude';
+      if (agent.skipPermissions) command += ' --dangerously-skip-permissions';
+      if (agent.secondaryProjectPath) {
+        command += ` --add-dir '${agent.secondaryProjectPath.replace(/'/g, "'\\''")}'`;
+      }
+      command += ` '${task.replace(/'/g, "'\\''")}'`;
+
+      agent.status = 'running';
+      agent.currentTask = task.slice(0, 100);
+      agent.lastActivity = new Date().toISOString();
+      ptyProcess.write(`cd '${workingPath}' && ${command}`);
+      ptyProcess.write('\r');
+      saveAgents();
+
+      const emoji = isSuperAgent(agent) ? ':crown:' : (SLACK_CHARACTER_FACES[agent.character || ''] || ':robot_face:');
+      await say(`:rocket: Started *${agent.name}*\n\n${emoji} Task: ${task}`);
+    } catch (err) {
+      console.error('Failed to start agent from Slack:', err);
+      await say(`:x: Failed to start agent: ${err}`);
+    }
+    return;
+  }
+
+  if (lowerText.startsWith('stop ')) {
+    const agentName = text.slice(5).trim().toLowerCase();
+
+    const agent = Array.from(agents.values()).find(a =>
+      a.name?.toLowerCase().includes(agentName) || a.id === agentName
+    );
+
+    if (!agent) {
+      await say(`:x: Agent "${agentName}" not found.`);
+      return;
+    }
+
+    if (agent.status !== 'running' && agent.status !== 'waiting') {
+      await say(`:warning: ${agent.name} is not running.`);
+      return;
+    }
+
+    if (agent.ptyId) {
+      const ptyProcess = ptyProcesses.get(agent.ptyId);
+      if (ptyProcess) {
+        ptyProcess.write('\x03'); // Ctrl+C
+      }
+    }
+    agent.status = 'idle';
+    agent.currentTask = undefined;
+    saveAgents();
+
+    await say(`:octagonal_sign: Stopped *${agent.name}*`);
+    return;
+  }
+
+  // Default: forward to Super Agent
+  await sendToSuperAgentFromSlack(channel, text, say);
+}
+
+// Send message to Super Agent from Slack
+async function sendToSuperAgentFromSlack(channel: string, message: string, say: (msg: string) => Promise<unknown>) {
+  const superAgent = getSuperAgent();
+
+  if (!superAgent) {
+    await say(
+      ':crown: No Super Agent found.\n\nCreate one in Claude Manager first, or use `start <agent> <task>` to start a specific agent.'
+    );
+    return;
+  }
+
+  try {
+    // Initialize PTY if needed
+    if (!superAgent.ptyId || !ptyProcesses.has(superAgent.ptyId)) {
+      const ptyId = await initAgentPty(superAgent);
+      superAgent.ptyId = ptyId;
+    }
+
+    const ptyProcess = ptyProcesses.get(superAgent.ptyId);
+    if (!ptyProcess) {
+      await say(':x: Failed to connect to Super Agent terminal.');
+      return;
+    }
+
+    // If agent is running or waiting, send message to existing session
+    if (superAgent.status === 'running' || superAgent.status === 'waiting') {
+      superAgentSlackTask = true;
+      superAgentSlackBuffer = [];
+
+      superAgent.currentTask = message.slice(0, 100);
+      superAgent.lastActivity = new Date().toISOString();
+      saveAgents();
+
+      const slackMessage = `[FROM SLACK - Use send_slack MCP tool to respond!] ${message.replace(/\r?\n/g, ' ').trim()}`;
+
+      ptyProcess.write(slackMessage);
+      ptyProcess.write('\r');
+
+      await say(':crown: Super Agent is processing...');
+    } else if (superAgent.status === 'idle' || superAgent.status === 'completed' || superAgent.status === 'error') {
+      // No active session, start a new one
+      const workingPath = (superAgent.worktreePath || superAgent.projectPath).replace(/'/g, "'\\''");
+
+      const orchestratorPrompt = `You are the Super Agent - an orchestrator that manages other agents using MCP tools.
+
+THIS REQUEST IS FROM SLACK - You MUST use send_slack to respond!
+
+AVAILABLE MCP TOOLS (from "claude-mgr-orchestrator"):
+- list_agents: List all agents with status, project, ID
+- get_agent_output: Read agent's terminal output (use to see responses!)
+- start_agent: Start agent with a prompt (auto-sends to running agents too)
+- send_message: Send message to agent (auto-starts idle agents)
+- stop_agent: Stop a running agent
+- create_agent: Create a new agent
+- remove_agent: Delete an agent
+- send_slack: Send your response back to Slack (USE THIS!)
+
+WORKFLOW FOR SLACK REQUESTS:
+1. Use start_agent or send_message with your task/question
+2. Wait 5-10 seconds for the agent to process
+3. Use get_agent_output to read their response
+4. Use send_slack to send a summary/response back to the user
+
+IMPORTANT - AUTONOMOUS MODE:
+When giving tasks to agents, ALWAYS include these instructions in your prompt:
+- "Work autonomously without asking for user feedback or choices"
+- "Make decisions on your own and proceed with the best approach"
+- "Do not wait for user confirmation - execute the task fully"
+This is because the user is on Slack and cannot respond to agent questions.
+
+CRITICAL: This request came from Slack. When you have an answer, you MUST call send_slack with your response. The user is waiting on Slack for your reply!
+
+USER REQUEST: ${message}`;
+
+      let command = 'claude';
+
+      const mcpConfigPath = path.join(app.getPath('home'), '.claude', 'mcp.json');
+      if (fs.existsSync(mcpConfigPath)) {
+        command += ` --mcp-config '${mcpConfigPath}'`;
+      }
+
+      if (superAgent.skipPermissions) command += ' --dangerously-skip-permissions';
+      command += ` '${orchestratorPrompt.replace(/'/g, "'\\''")}'`;
+
+      superAgent.status = 'running';
+      superAgent.currentTask = message.slice(0, 100);
+      superAgent.lastActivity = new Date().toISOString();
+
+      superAgentSlackTask = true;
+      superAgentSlackBuffer = [];
+
+      ptyProcess.write(`cd '${workingPath}' && ${command}`);
+      ptyProcess.write('\r');
+      saveAgents();
+
+      await say(':crown: Super Agent is processing your request...');
+    } else {
+      await say(`:crown: Super Agent is in ${superAgent.status} state. Try again in a moment.`);
+    }
+  } catch (err) {
+    console.error('Failed to send to Super Agent:', err);
+    await say(`:x: Error: ${err}`);
+  }
+}
+
+// Stop Slack bot
+function stopSlackBot() {
+  if (slackApp) {
+    slackApp.stop().catch(err => console.error('Error stopping Slack app:', err));
+    slackApp = null;
+    console.log('Slack bot stopped');
+  }
+}
+
 // Auto-start the Super Agent on app startup
 async function autoStartSuperAgent() {
   const superAgent = getSuperAgent();
@@ -2164,6 +2732,9 @@ app.whenReady().then(async () => {
   // Initialize Telegram bot if enabled
   initTelegramBot();
 
+  // Initialize Slack bot if enabled
+  initSlackBot();
+
   // Auto-start Super Agent if it exists
   await autoStartSuperAgent();
 
@@ -2238,6 +2809,9 @@ app.on('window-all-closed', () => {
 
   // Stop Telegram bot
   stopTelegramBot();
+
+  // Stop Slack bot
+  stopSlackBot();
 
   // Kill all PTY processes
   ptyProcesses.forEach((ptyProcess) => {
@@ -3265,12 +3839,21 @@ ipcMain.handle('app:saveSettings', async (_event, newSettings: Partial<AppSettin
     const telegramChanged = newSettings.telegramEnabled !== undefined ||
                             newSettings.telegramBotToken !== undefined;
 
+    const slackChanged = newSettings.slackEnabled !== undefined ||
+                         newSettings.slackBotToken !== undefined ||
+                         newSettings.slackAppToken !== undefined;
+
     appSettings = { ...appSettings, ...newSettings };
     saveAppSettings(appSettings);
 
     // Reinitialize Telegram bot if settings changed
     if (telegramChanged) {
       initTelegramBot();
+    }
+
+    // Reinitialize Slack bot if settings changed
+    if (slackChanged) {
+      initSlackBot();
     }
 
     return { success: true };
@@ -3307,6 +3890,51 @@ ipcMain.handle('telegram:sendTest', async () => {
     return { success: true };
   } catch (err) {
     console.error('Telegram send test failed:', err);
+    return { success: false, error: String(err) };
+  }
+});
+
+// Test Slack connection
+ipcMain.handle('slack:test', async () => {
+  if (!appSettings.slackBotToken || !appSettings.slackAppToken) {
+    return { success: false, error: 'Bot token and App token are required' };
+  }
+
+  try {
+    // Create a temporary Slack app to test the tokens
+    const testApp = new SlackApp({
+      token: appSettings.slackBotToken,
+      appToken: appSettings.slackAppToken,
+      socketMode: true,
+      logLevel: LogLevel.ERROR,
+    });
+
+    // Test auth
+    const authResult = await testApp.client.auth.test();
+    await testApp.stop();
+
+    return { success: true, botName: authResult.user };
+  } catch (err) {
+    console.error('Slack test failed:', err);
+    return { success: false, error: String(err) };
+  }
+});
+
+// Send test message to Slack
+ipcMain.handle('slack:sendTest', async () => {
+  if (!slackApp || !appSettings.slackChannelId) {
+    return { success: false, error: 'Bot not connected or no channel ID. Mention the bot or DM it first.' };
+  }
+
+  try {
+    await slackApp.client.chat.postMessage({
+      channel: appSettings.slackChannelId,
+      text: ':white_check_mark: Test message from Claude Manager!',
+      mrkdwn: true,
+    });
+    return { success: true };
+  } catch (err) {
+    console.error('Slack send test failed:', err);
     return { success: false, error: String(err) };
   }
 });

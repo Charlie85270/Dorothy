@@ -113,6 +113,11 @@ electron_1.contextBridge.exposeInMainWorld('electronAPI', {
         test: () => electron_1.ipcRenderer.invoke('telegram:test'),
         sendTest: () => electron_1.ipcRenderer.invoke('telegram:sendTest'),
     },
+    // Slack bot
+    slack: {
+        test: () => electron_1.ipcRenderer.invoke('slack:test'),
+        sendTest: () => electron_1.ipcRenderer.invoke('slack:sendTest'),
+    },
     // Dialogs
     dialog: {
         openFolder: () => electron_1.ipcRenderer.invoke('dialog:open-folder'),

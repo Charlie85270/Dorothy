@@ -1901,6 +1901,9 @@ async function sendToSuperAgent(chatId: string, message: string) {
     return;
   }
 
+  // Sanitize message - replace newlines with spaces for terminal compatibility
+  const sanitizedMessage = message.replace(/\r?\n/g, ' ').trim();
+
   try {
     // Initialize PTY if needed
     if (!superAgent.ptyId || !ptyProcesses.has(superAgent.ptyId)) {
@@ -1920,12 +1923,12 @@ async function sendToSuperAgent(chatId: string, message: string) {
       superAgentTelegramTask = true;
       superAgentOutputBuffer = [];
 
-      superAgent.currentTask = message.slice(0, 100);
+      superAgent.currentTask = sanitizedMessage.slice(0, 100);
       superAgent.lastActivity = new Date().toISOString();
       saveAgents();
 
-      // Include Telegram context in the message - strip any newlines from Telegram input
-      const telegramMessage = `[FROM TELEGRAM - Use send_telegram MCP tool to respond!] ${message.replace(/\r?\n/g, ' ').trim()}`;
+      // Include Telegram context in the message
+      const telegramMessage = `[FROM TELEGRAM - Use send_telegram MCP tool to respond!] ${sanitizedMessage}`;
 
       // Write the message first, then send Enter separately
       ptyProcess.write(telegramMessage);
@@ -1966,7 +1969,7 @@ This is because the user is on Telegram and cannot respond to agent questions.
 
 CRITICAL: This request came from Telegram. When you have an answer, you MUST call send_telegram with your response. The user is waiting on Telegram for your reply!
 
-USER REQUEST: ${message}`;
+USER REQUEST: ${sanitizedMessage}`;
 
       let command = 'claude';
 
@@ -1980,7 +1983,7 @@ USER REQUEST: ${message}`;
       command += ` '${orchestratorPrompt.replace(/'/g, "'\\''")}'`;
 
       superAgent.status = 'running';
-      superAgent.currentTask = message.slice(0, 100);
+      superAgent.currentTask = sanitizedMessage.slice(0, 100);
       superAgent.lastActivity = new Date().toISOString();
 
       // Track that this task came from Telegram
@@ -1989,7 +1992,7 @@ USER REQUEST: ${message}`;
 
       // Start new Claude session
       ptyProcess.write(`cd '${workingPath}' && ${command}`);
-        ptyProcess.write('\r');
+      ptyProcess.write('\r');
       saveAgents();
 
       telegramBot?.sendMessage(chatId, `👑 Super Agent is processing your request...`);
@@ -2532,6 +2535,9 @@ async function sendToSuperAgentFromSlack(channel: string, message: string, say: 
     return;
   }
 
+  // Sanitize message - replace newlines with spaces for terminal compatibility
+  const sanitizedMessage = message.replace(/\r?\n/g, ' ').trim();
+
   try {
     // Initialize PTY if needed
     if (!superAgent.ptyId || !ptyProcesses.has(superAgent.ptyId)) {
@@ -2550,11 +2556,11 @@ async function sendToSuperAgentFromSlack(channel: string, message: string, say: 
       superAgentSlackTask = true;
       superAgentSlackBuffer = [];
 
-      superAgent.currentTask = message.slice(0, 100);
+      superAgent.currentTask = sanitizedMessage.slice(0, 100);
       superAgent.lastActivity = new Date().toISOString();
       saveAgents();
 
-      const slackMessage = `[FROM SLACK - Use send_slack MCP tool to respond!] ${message.replace(/\r?\n/g, ' ').trim()}`;
+      const slackMessage = `[FROM SLACK - Use send_slack MCP tool to respond!] ${sanitizedMessage}`;
 
       ptyProcess.write(slackMessage);
       ptyProcess.write('\r');
@@ -2593,7 +2599,7 @@ This is because the user is on Slack and cannot respond to agent questions.
 
 CRITICAL: This request came from Slack. When you have an answer, you MUST call send_slack with your response. The user is waiting on Slack for your reply!
 
-USER REQUEST: ${message}`;
+USER REQUEST: ${sanitizedMessage}`;
 
       let command = 'claude';
 
@@ -2606,7 +2612,7 @@ USER REQUEST: ${message}`;
       command += ` '${orchestratorPrompt.replace(/'/g, "'\\''")}'`;
 
       superAgent.status = 'running';
-      superAgent.currentTask = message.slice(0, 100);
+      superAgent.currentTask = sanitizedMessage.slice(0, 100);
       superAgent.lastActivity = new Date().toISOString();
 
       superAgentSlackTask = true;

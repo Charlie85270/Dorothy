@@ -2429,8 +2429,11 @@ app.whenReady().then(async () => {
   // Auto-setup MCP orchestrator if not already configured
   await setupMcpOrchestrator();
 
-  // Configure memory hooks for Claude Code
+  // Configure memory hooks for Claude Code (status notifications)
   await configureMemoryHooks();
+
+  // Configure claude-mem hooks for persistent memory
+  await configureClaudeMemHooks();
 
   // Initialize Telegram bot if enabled
   initTelegramBot();
@@ -3751,6 +3754,155 @@ async function configureMemoryHooks(): Promise<void> {
     }
   } catch (err) {
     console.error('Failed to configure memory hooks:', err);
+  }
+}
+
+// Get the path to the bundled claude-mem plugin
+function getClaudeMemPluginPath(): string {
+  // In production, claude-mem is in app.asar.unpacked/node_modules
+  if (app.isPackaged) {
+    const unpackedPath = app.getAppPath().replace('app.asar', 'app.asar.unpacked');
+    return path.join(unpackedPath, 'node_modules', 'claude-mem', 'plugin');
+  }
+  // In development, it's in node_modules
+  return path.join(__dirname, '..', 'node_modules', 'claude-mem', 'plugin');
+}
+
+// Configure claude-mem hooks for memory system
+async function configureClaudeMemHooks(): Promise<void> {
+  try {
+    const pluginPath = getClaudeMemPluginPath();
+    const workerScript = path.join(pluginPath, 'scripts', 'worker-service.cjs');
+
+    // Check if claude-mem plugin exists
+    if (!fs.existsSync(workerScript)) {
+      console.log('Claude-mem plugin not found at', pluginPath);
+      return;
+    }
+
+    console.log('Configuring claude-mem hooks with plugin path:', pluginPath);
+
+    const claudeDir = path.join(os.homedir(), '.claude');
+    const settingsPath = path.join(claudeDir, 'settings.json');
+
+    // Ensure .claude directory exists
+    if (!fs.existsSync(claudeDir)) {
+      fs.mkdirSync(claudeDir, { recursive: true });
+    }
+
+    // Read existing settings
+    let settings: {
+      hooks?: Record<string, Array<{ matcher?: string; hooks: Array<{ type: string; command: string; timeout?: number }> }>>;
+      [key: string]: unknown;
+    } = {};
+
+    if (fs.existsSync(settingsPath)) {
+      try {
+        settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+      } catch {
+        settings = {};
+      }
+    }
+
+    // Initialize hooks if not present
+    if (!settings.hooks) {
+      settings.hooks = {};
+    }
+
+    // Find runtime (prefer bun, fallback to node)
+    const runtime = await findRuntime();
+
+    let updated = false;
+    const workerCmd = `${runtime} "${workerScript}"`;
+
+    // Configure PostToolUse hook for observations
+    const postToolUseHook = {
+      matcher: '*',
+      hooks: [
+        { type: 'command', command: `${workerCmd} start`, timeout: 60 },
+        { type: 'command', command: `${workerCmd} hook claude-code observation`, timeout: 120 }
+      ]
+    };
+
+    const existingPostToolUse = settings.hooks.PostToolUse || [];
+    const hasClaudeMemPostToolUse = existingPostToolUse.some((h) =>
+      h.hooks?.some((hh) => hh.command?.includes('worker-service.cjs') && hh.command?.includes('observation'))
+    );
+
+    if (!hasClaudeMemPostToolUse) {
+      settings.hooks.PostToolUse = [...existingPostToolUse, postToolUseHook];
+      updated = true;
+      console.log('Added claude-mem PostToolUse hook');
+    }
+
+    // Configure Stop hook for summarization
+    const stopHook = {
+      hooks: [
+        { type: 'command', command: `${workerCmd} start`, timeout: 60 },
+        { type: 'command', command: `${workerCmd} hook claude-code summarize`, timeout: 120 }
+      ]
+    };
+
+    const existingStop = settings.hooks.Stop || [];
+    const hasClaudeMemStop = existingStop.some((h) =>
+      h.hooks?.some((hh) => hh.command?.includes('worker-service.cjs') && hh.command?.includes('summarize'))
+    );
+
+    if (!hasClaudeMemStop) {
+      settings.hooks.Stop = [...existingStop, stopHook];
+      updated = true;
+      console.log('Added claude-mem Stop hook');
+    }
+
+    // Configure SessionStart hook for context loading
+    const sessionStartHook = {
+      matcher: 'startup|clear|compact',
+      hooks: [
+        { type: 'command', command: `${workerCmd} start`, timeout: 60 },
+        { type: 'command', command: `${workerCmd} hook claude-code context`, timeout: 60 },
+        { type: 'command', command: `${workerCmd} hook claude-code user-message`, timeout: 60 }
+      ]
+    };
+
+    const existingSessionStart = settings.hooks.SessionStart || [];
+    const hasClaudeMemSessionStart = existingSessionStart.some((h) =>
+      h.hooks?.some((hh) => hh.command?.includes('worker-service.cjs') && hh.command?.includes('context'))
+    );
+
+    if (!hasClaudeMemSessionStart) {
+      settings.hooks.SessionStart = [...existingSessionStart, sessionStartHook];
+      updated = true;
+      console.log('Added claude-mem SessionStart hook');
+    }
+
+    // Configure UserPromptSubmit hook for session init
+    const userPromptHook = {
+      hooks: [
+        { type: 'command', command: `${workerCmd} start`, timeout: 60 },
+        { type: 'command', command: `${workerCmd} hook claude-code session-init`, timeout: 60 }
+      ]
+    };
+
+    const existingUserPrompt = settings.hooks.UserPromptSubmit || [];
+    const hasClaudeMemUserPrompt = existingUserPrompt.some((h) =>
+      h.hooks?.some((hh) => hh.command?.includes('worker-service.cjs') && hh.command?.includes('session-init'))
+    );
+
+    if (!hasClaudeMemUserPrompt) {
+      settings.hooks.UserPromptSubmit = [...existingUserPrompt, userPromptHook];
+      updated = true;
+      console.log('Added claude-mem UserPromptSubmit hook');
+    }
+
+    // Write updated settings
+    if (updated) {
+      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+      console.log('Claude-mem hooks configured in', settingsPath);
+    } else {
+      console.log('Claude-mem hooks already configured');
+    }
+  } catch (err) {
+    console.error('Failed to configure claude-mem hooks:', err);
   }
 }
 

@@ -410,6 +410,7 @@ export default function PluginsPage() {
             const installed = isPluginInstalled(plugin.name, plugin.marketplace);
             const justCopied = copiedPlugin === plugin.name;
             const isInstalling = installingPlugin === plugin.name;
+            const isCustom = customInstalledPlugins.some(p => p.name === plugin.name && p.marketplace === plugin.marketplace);
             const Icon = CATEGORY_ICONS[plugin.category] || Puzzle;
             const colorClass = CATEGORY_COLORS[plugin.category] || 'text-zinc-400 bg-zinc-500/20';
 
@@ -418,16 +419,26 @@ export default function PluginsPage() {
                 key={`${plugin.marketplace}-${plugin.name}`}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="border border-border bg-card p-4 hover:border-foreground/30 transition-colors"
+                className={`border bg-card p-4 hover:border-foreground/30 transition-colors ${
+                  isCustom ? 'border-purple-500/50' : 'border-border'
+                }`}
               >
+                {/* Custom Plugin Banner */}
+                {isCustom && (
+                  <div className="flex items-center gap-2 mb-3 pb-3 border-b border-purple-500/30">
+                    <div className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
+                    <span className="text-xs font-medium text-purple-400">Custom Plugin</span>
+                  </div>
+                )}
+
                 <div className="flex items-start gap-3 mb-3">
                   <div className={`w-10 h-10 flex items-center justify-center shrink-0 ${
-                    installed ? 'bg-green-500/20' : colorClass.split(' ')[1]
+                    installed ? 'bg-green-500/20' : isCustom ? 'bg-purple-500/20' : colorClass.split(' ')[1]
                   }`}>
                     {installed ? (
                       <CheckCircle className="w-5 h-5 text-green-400" />
                     ) : (
-                      <Icon className={`w-5 h-5 ${colorClass.split(' ')[0]}`} />
+                      <Icon className={`w-5 h-5 ${isCustom ? 'text-purple-400' : colorClass.split(' ')[0]}`} />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -440,7 +451,7 @@ export default function PluginsPage() {
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {MARKETPLACES.find(m => m.id === plugin.marketplace)?.name}
+                      {isCustom ? plugin.marketplace : MARKETPLACES.find(m => m.id === plugin.marketplace)?.name || plugin.marketplace}
                     </p>
                   </div>
                 </div>
@@ -456,9 +467,9 @@ export default function PluginsPage() {
                   </div>
                 )}
 
-                {plugin.tags && plugin.tags.length > 0 && (
+                {plugin.tags && plugin.tags.filter(t => t !== 'custom' && t !== 'installed').length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mb-3">
-                    {plugin.tags.slice(0, 3).map((tag) => (
+                    {plugin.tags.filter(t => t !== 'custom' && t !== 'installed').slice(0, 3).map((tag) => (
                       <span
                         key={tag}
                         className="text-[10px] px-1.5 py-0.5 bg-secondary text-muted-foreground flex items-center gap-1"

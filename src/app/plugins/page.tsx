@@ -102,8 +102,25 @@ export default function PluginsPage() {
       plugins = plugins.filter((p) => p.marketplace === selectedMarketplace);
     }
 
+    // Sort installed plugins first
+    plugins = [...plugins].sort((a, b) => {
+      const aInstalled = installedPlugins.some(p =>
+        p === `${a.name}@${a.marketplace}` ||
+        p.toLowerCase() === `${a.name}@${a.marketplace}`.toLowerCase() ||
+        p.startsWith(`${a.name}@`)
+      );
+      const bInstalled = installedPlugins.some(p =>
+        p === `${b.name}@${b.marketplace}` ||
+        p.toLowerCase() === `${b.name}@${b.marketplace}`.toLowerCase() ||
+        p.startsWith(`${b.name}@`)
+      );
+      if (aInstalled && !bInstalled) return -1;
+      if (!aInstalled && bInstalled) return 1;
+      return 0;
+    });
+
     return plugins;
-  }, [search, selectedCategory, selectedMarketplace]);
+  }, [search, selectedCategory, selectedMarketplace, installedPlugins]);
 
   const getInstallCommand = (plugin: Plugin) => {
     return `/plugin install ${plugin.name}@${plugin.marketplace}`;

@@ -2732,6 +2732,9 @@ app.whenReady().then(async () => {
   // Auto-setup MCP orchestrator if not already configured
   await setupMcpOrchestrator();
 
+  // Fix MCP server paths to use absolute node path (required for scheduled tasks)
+  await fixMcpServerPaths();
+
   // Configure status hooks for Claude Code
   await configureStatusHooks();
 
@@ -3464,6 +3467,88 @@ ipcMain.handle('skill:list-installed', async () => {
   } catch {
     return [];
   }
+});
+
+// ============== Plugin IPC Handlers ==============
+
+// Store for plugin installation PTYs
+const pluginPtyProcesses: Map<string, pty.IPty> = new Map();
+
+// Start plugin installation (creates interactive PTY)
+ipcMain.handle('plugin:install-start', async (_event, { command, cols, rows }: { command: string; cols?: number; rows?: number }) => {
+  const id = uuidv4();
+  const shell = process.env.SHELL || '/bin/zsh';
+
+  const ptyProcess = pty.spawn(shell, ['-l'], {
+    name: 'xterm-256color',
+    cols: cols || 80,
+    rows: rows || 24,
+    cwd: os.homedir(),
+    env: process.env as { [key: string]: string },
+  });
+
+  pluginPtyProcesses.set(id, ptyProcess);
+
+  // Forward PTY output to renderer
+  ptyProcess.onData((data) => {
+    mainWindow?.webContents.send('plugin:pty-data', { id, data });
+  });
+
+  // Handle PTY exit
+  ptyProcess.onExit(({ exitCode }) => {
+    mainWindow?.webContents.send('plugin:pty-exit', { id, exitCode });
+    pluginPtyProcesses.delete(id);
+  });
+
+  // Split commands by && and run each as a separate claude invocation
+  // Each command is a Claude slash command
+  const commands = command.split('&&').map(c => c.trim());
+
+  // Build shell command: claude "cmd1" ; claude "cmd2" ; ...
+  // Using ; instead of && so that subsequent commands run even if earlier ones fail
+  // (e.g., marketplace add fails because it's already added)
+  const shellCommand = commands
+    .map(cmd => `claude --dangerously-skip-permissions "${cmd}"`)
+    .join(' ; ');
+
+  // Send the install commands after a short delay to let shell initialize
+  setTimeout(() => {
+    ptyProcess.write(shellCommand);
+    ptyProcess.write('\r');
+  }, 500);
+
+  return { id, command };
+});
+
+// Write to plugin installation PTY
+ipcMain.handle('plugin:install-write', async (_event, { id, data }: { id: string; data: string }) => {
+  const ptyProcess = pluginPtyProcesses.get(id);
+  if (ptyProcess) {
+    ptyProcess.write(data);
+    return { success: true };
+  }
+  return { success: false, error: 'PTY not found' };
+});
+
+// Resize plugin installation PTY
+ipcMain.handle('plugin:install-resize', async (_event, { id, cols, rows }: { id: string; cols: number; rows: number }) => {
+  const ptyProcess = pluginPtyProcesses.get(id);
+  if (ptyProcess) {
+    ptyProcess.resize(cols, rows);
+    return { success: true };
+  }
+  return { success: false, error: 'PTY not found' };
+});
+
+// Kill plugin installation PTY
+ipcMain.handle('plugin:install-kill', async (_event, { id }: { id: string }) => {
+  const ptyProcess = pluginPtyProcesses.get(id);
+  if (ptyProcess) {
+    ptyProcess.kill();
+    pluginPtyProcesses.delete(id);
+    return { success: true };
+  }
+  return { success: false, error: 'PTY not found' };
 });
 
 // ============== Claude Data IPC Handlers ==============
@@ -4552,4 +4637,1125 @@ ipcMain.handle('shell:killPty', async (_event, { ptyId }: { ptyId: string }) => 
     return { success: true };
   }
   return { success: false, error: 'PTY not found' };
+});
+
+// ============================================
+// Scheduler (claude-code-scheduler plugin) IPC handlers
+// ============================================
+
+// Scheduler metadata storage (extends the plugin's schedules.json with our own metadata)
+const SCHEDULER_METADATA_PATH = path.join(os.homedir(), '.claude-manager', 'scheduler-metadata.json');
+
+interface SchedulerTaskMetadata {
+  agentId?: string;
+  agentName?: string;
+  notifications: {
+    telegram: boolean;
+    slack: boolean;
+  };
+  createdAt: string;
+}
+
+function loadSchedulerMetadata(): Record<string, SchedulerTaskMetadata> {
+  try {
+    if (fs.existsSync(SCHEDULER_METADATA_PATH)) {
+      return JSON.parse(fs.readFileSync(SCHEDULER_METADATA_PATH, 'utf-8'));
+    }
+  } catch {
+    // Ignore errors
+  }
+  return {};
+}
+
+function saveSchedulerMetadata(metadata: Record<string, SchedulerTaskMetadata>): void {
+  try {
+    const dir = path.dirname(SCHEDULER_METADATA_PATH);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(SCHEDULER_METADATA_PATH, JSON.stringify(metadata, null, 2));
+  } catch (err) {
+    console.error('Error saving scheduler metadata:', err);
+  }
+}
+
+// Convert cron expression to human-readable format
+function cronToHuman(cron: string): string {
+  const parts = cron.split(' ');
+  if (parts.length !== 5) return cron;
+
+  const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
+
+  // Every minute
+  if (minute === '*' && hour === '*') return 'Every minute';
+
+  // Hourly
+  if (hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
+    return minute === '0' ? 'Every hour' : `Every hour at :${minute.padStart(2, '0')}`;
+  }
+
+  // Daily
+  if (dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
+    const h = parseInt(hour, 10);
+    const m = minute.padStart(2, '0');
+    const period = h >= 12 ? 'PM' : 'AM';
+    const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h;
+    return `Daily at ${displayHour}:${m} ${period}`;
+  }
+
+  // Weekdays
+  if (dayOfWeek === '1-5' && dayOfMonth === '*' && month === '*') {
+    const h = parseInt(hour, 10);
+    const m = minute.padStart(2, '0');
+    const period = h >= 12 ? 'PM' : 'AM';
+    const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h;
+    return `Weekdays at ${displayHour}:${m} ${period}`;
+  }
+
+  // Weekly (specific day)
+  if (dayOfMonth === '*' && month === '*' && dayOfWeek !== '*') {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayNum = parseInt(dayOfWeek, 10);
+    const dayName = days[dayNum] || dayOfWeek;
+    const h = parseInt(hour, 10);
+    const m = minute.padStart(2, '0');
+    const period = h >= 12 ? 'PM' : 'AM';
+    const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h;
+    return `${dayName}s at ${displayHour}:${m} ${period}`;
+  }
+
+  // Monthly
+  if (dayOfMonth !== '*' && month === '*' && dayOfWeek === '*') {
+    const h = parseInt(hour, 10);
+    const m = minute.padStart(2, '0');
+    const period = h >= 12 ? 'PM' : 'AM';
+    const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h;
+    const daySuffix = dayOfMonth === '1' ? 'st' : dayOfMonth === '2' ? 'nd' : dayOfMonth === '3' ? 'rd' : 'th';
+    return `Monthly on the ${dayOfMonth}${daySuffix} at ${displayHour}:${m} ${period}`;
+  }
+
+  return cron;
+}
+
+// Calculate next run time from cron expression
+function getNextRunTime(cron: string): string | undefined {
+  try {
+    const parts = cron.split(' ');
+    if (parts.length !== 5) return undefined;
+
+    const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
+    const now = new Date();
+    const next = new Date(now);
+
+    // Set the time
+    if (hour !== '*') next.setHours(parseInt(hour, 10));
+    if (minute !== '*') next.setMinutes(parseInt(minute, 10));
+    next.setSeconds(0);
+    next.setMilliseconds(0);
+
+    // If the time has passed today, move to tomorrow
+    if (next <= now) {
+      next.setDate(next.getDate() + 1);
+    }
+
+    // Handle day of week
+    if (dayOfWeek !== '*') {
+      const targetDays = dayOfWeek.split(',').map(d => parseInt(d, 10));
+      while (!targetDays.includes(next.getDay())) {
+        next.setDate(next.getDate() + 1);
+      }
+    }
+
+    // Handle day of month
+    if (dayOfMonth !== '*') {
+      const targetDay = parseInt(dayOfMonth, 10);
+      while (next.getDate() !== targetDay) {
+        next.setDate(next.getDate() + 1);
+      }
+    }
+
+    return next.toISOString();
+  } catch {
+    return undefined;
+  }
+}
+
+// Fix MCP server paths (can be called manually)
+ipcMain.handle('scheduler:fixMcpPaths', async () => {
+  try {
+    await fixMcpServerPaths();
+    return { success: true };
+  } catch (err) {
+    console.error('Error fixing MCP paths:', err);
+    return { success: false, error: err instanceof Error ? err.message : 'Failed to fix MCP paths' };
+  }
+});
+
+// Check if scheduler plugin is installed
+ipcMain.handle('scheduler:checkInstalled', async () => {
+  try {
+    // Check settings.json for enabledPlugins (primary method for /plugin install)
+    const settingsPath = path.join(os.homedir(), '.claude', 'settings.json');
+    if (fs.existsSync(settingsPath)) {
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+      const enabledPlugins = settings.enabledPlugins || {};
+
+      // Look for scheduler plugin in enabled plugins
+      const hasScheduler = Object.keys(enabledPlugins).some(key =>
+        key.toLowerCase().includes('scheduler') && enabledPlugins[key] === true
+      );
+
+      if (hasScheduler) {
+        return { installed: true };
+      }
+    }
+
+    // Fallback: check installed_plugins.json
+    const pluginsPath = path.join(os.homedir(), '.claude', 'plugins', 'installed_plugins.json');
+    if (fs.existsSync(pluginsPath)) {
+      const plugins = JSON.parse(fs.readFileSync(pluginsPath, 'utf-8'));
+      if (Array.isArray(plugins)) {
+        const isInstalled = plugins.some((p: { name?: string; path?: string }) =>
+          p.name?.toLowerCase().includes('scheduler') ||
+          p.path?.toLowerCase().includes('claude-code-scheduler')
+        );
+        if (isInstalled) {
+          return { installed: true };
+        }
+      }
+    }
+
+    return { installed: false };
+  } catch (err) {
+    console.error('Error checking scheduler plugin:', err);
+    return { installed: false };
+  }
+});
+
+// Install scheduler plugin
+ipcMain.handle('scheduler:install', async () => {
+  return new Promise<{ success: boolean; error?: string }>((resolve) => {
+    const shell = os.platform() === 'win32' ? 'powershell.exe' : process.env.SHELL || '/bin/zsh';
+    const shellArgs = os.platform() === 'win32' ? [] : ['-l'];
+
+    const installPty = pty.spawn(shell, shellArgs, {
+      name: 'xterm-256color',
+      cols: 120,
+      rows: 30,
+      cwd: os.homedir(),
+      env: { ...process.env, TERM: 'xterm-256color' },
+    });
+
+    let output = '';
+    let resolved = false;
+
+    const timeout = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        installPty.kill();
+        resolve({ success: false, error: 'Installation timed out' });
+      }
+    }, 120000); // 2 minute timeout
+
+    installPty.onData((data) => {
+      output += data;
+      // Check for success indicators
+      if (output.includes('successfully installed') || output.includes('Plugin installed')) {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeout);
+          setTimeout(() => {
+            installPty.kill();
+            resolve({ success: true });
+          }, 1000);
+        }
+      }
+    });
+
+    installPty.onExit(({ exitCode }) => {
+      clearTimeout(timeout);
+      if (!resolved) {
+        resolved = true;
+        resolve({
+          success: exitCode === 0,
+          error: exitCode !== 0 ? `Installation failed with exit code ${exitCode}` : undefined,
+        });
+      }
+    });
+
+    // Run the installation commands
+    installPty.write('claude /plugin marketplace add jshchnz/claude-code-scheduler\r');
+    setTimeout(() => {
+      installPty.write('claude /plugin install scheduler@claude-code-scheduler\r');
+    }, 5000);
+    setTimeout(() => {
+      installPty.write('exit\r');
+    }, 15000);
+  });
+});
+
+// List scheduled tasks
+ipcMain.handle('scheduler:listTasks', async () => {
+  try {
+    const tasks: Array<{
+      id: string;
+      prompt: string;
+      schedule: string;
+      scheduleHuman: string;
+      projectPath: string;
+      agentId?: string;
+      agentName?: string;
+      autonomous: boolean;
+      worktree?: { enabled: boolean; branchPrefix?: string };
+      notifications: { telegram: boolean; slack: boolean };
+      createdAt: string;
+      lastRun?: string;
+      lastRunStatus?: 'success' | 'error';
+      nextRun?: string;
+    }> = [];
+
+    // Load our metadata
+    const metadata = loadSchedulerMetadata();
+
+    // Read global schedules
+    const globalSchedulesPath = path.join(os.homedir(), '.claude', 'schedules.json');
+    if (fs.existsSync(globalSchedulesPath)) {
+      try {
+        const schedules = JSON.parse(fs.readFileSync(globalSchedulesPath, 'utf-8'));
+        if (Array.isArray(schedules)) {
+          for (const schedule of schedules) {
+            const taskMeta = metadata[schedule.id] || {
+              notifications: { telegram: false, slack: false },
+              createdAt: new Date().toISOString(),
+            };
+
+            // Check for log file to get last run info
+            let lastRun: string | undefined;
+            let lastRunStatus: 'success' | 'error' | undefined;
+            const logPath = path.join(os.homedir(), '.claude', 'logs', `${schedule.id}.log`);
+            if (fs.existsSync(logPath)) {
+              const stat = fs.statSync(logPath);
+              lastRun = stat.mtime.toISOString();
+              // Try to determine status from log content
+              try {
+                const logContent = fs.readFileSync(logPath, 'utf-8');
+                lastRunStatus = logContent.includes('error') || logContent.includes('Error') ? 'error' : 'success';
+              } catch {
+                lastRunStatus = 'success';
+              }
+            }
+
+            tasks.push({
+              id: schedule.id || uuidv4(),
+              prompt: schedule.prompt || schedule.task || '',
+              schedule: schedule.schedule || schedule.cron || '',
+              scheduleHuman: cronToHuman(schedule.schedule || schedule.cron || ''),
+              projectPath: schedule.projectPath || schedule.project || os.homedir(),
+              agentId: taskMeta.agentId,
+              agentName: taskMeta.agentName,
+              autonomous: schedule.autonomous ?? true,
+              worktree: schedule.worktree,
+              notifications: taskMeta.notifications,
+              createdAt: taskMeta.createdAt,
+              lastRun,
+              lastRunStatus,
+              nextRun: getNextRunTime(schedule.schedule || schedule.cron || ''),
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Error reading global schedules:', err);
+      }
+    }
+
+    // Also check project-level schedules in known project paths
+    const projectsDir = path.join(os.homedir(), '.claude', 'projects');
+    if (fs.existsSync(projectsDir)) {
+      try {
+        const projectDirs = fs.readdirSync(projectsDir);
+        for (const projectDir of projectDirs) {
+          const projectSchedulesPath = path.join(projectsDir, projectDir, 'schedules.json');
+          if (fs.existsSync(projectSchedulesPath)) {
+            try {
+              const schedules = JSON.parse(fs.readFileSync(projectSchedulesPath, 'utf-8'));
+              if (Array.isArray(schedules)) {
+                for (const schedule of schedules) {
+                  const taskMeta = metadata[schedule.id] || {
+                    notifications: { telegram: false, slack: false },
+                    createdAt: new Date().toISOString(),
+                  };
+
+                  let lastRun: string | undefined;
+                  let lastRunStatus: 'success' | 'error' | undefined;
+                  const logPath = path.join(os.homedir(), '.claude', 'logs', `${schedule.id}.log`);
+                  if (fs.existsSync(logPath)) {
+                    const stat = fs.statSync(logPath);
+                    lastRun = stat.mtime.toISOString();
+                    try {
+                      const logContent = fs.readFileSync(logPath, 'utf-8');
+                      lastRunStatus = logContent.includes('error') || logContent.includes('Error') ? 'error' : 'success';
+                    } catch {
+                      lastRunStatus = 'success';
+                    }
+                  }
+
+                  // Decode project path from directory name
+                  const decodedProjectPath = projectDir.replace(/-/g, '/');
+
+                  tasks.push({
+                    id: schedule.id || uuidv4(),
+                    prompt: schedule.prompt || schedule.task || '',
+                    schedule: schedule.schedule || schedule.cron || '',
+                    scheduleHuman: cronToHuman(schedule.schedule || schedule.cron || ''),
+                    projectPath: schedule.projectPath || decodedProjectPath,
+                    agentId: taskMeta.agentId,
+                    agentName: taskMeta.agentName,
+                    autonomous: schedule.autonomous ?? true,
+                    worktree: schedule.worktree,
+                    notifications: taskMeta.notifications,
+                    createdAt: taskMeta.createdAt,
+                    lastRun,
+                    lastRunStatus,
+                    nextRun: getNextRunTime(schedule.schedule || schedule.cron || ''),
+                  });
+                }
+              }
+            } catch {
+              // Ignore parse errors for individual project schedules
+            }
+          }
+        }
+      } catch {
+        // Ignore errors reading project directories
+      }
+    }
+
+    // Also scan LaunchAgents for tasks created by the scheduler plugin
+    const launchAgentsPath = path.join(os.homedir(), 'Library', 'LaunchAgents');
+    if (fs.existsSync(launchAgentsPath)) {
+      try {
+        const files = fs.readdirSync(launchAgentsPath);
+        for (const file of files) {
+          if (file.startsWith('com.claude.schedule.') && file.endsWith('.plist')) {
+            // Extract task ID from filename: com.claude.schedule.<id>.plist
+            const taskId = file.replace('com.claude.schedule.', '').replace('.plist', '');
+
+            // Skip if we already have this task from schedules.json
+            if (tasks.some(t => t.id === taskId)) continue;
+
+            const plistPath = path.join(launchAgentsPath, file);
+            try {
+              // Read plist file content
+              const plistContent = fs.readFileSync(plistPath, 'utf-8');
+
+              // Extract info from plist (basic parsing)
+              let prompt = '';
+              let projectPath = os.homedir();
+              let schedule = '';
+
+              // Try to extract the prompt from the -p argument in bash command
+              const promptMatch = plistContent.match(/-p\s*"([^"]+)"/);
+              if (promptMatch) {
+                prompt = promptMatch[1];
+              } else {
+                // Try single quote format
+                const promptMatch2 = plistContent.match(/-p\s*'([^']+)'/);
+                if (promptMatch2) {
+                  prompt = promptMatch2[1];
+                }
+              }
+
+              // Try to extract working directory from cd command
+              const cdMatch = plistContent.match(/cd\s*"([^"]+)"/);
+              if (cdMatch) {
+                projectPath = cdMatch[1];
+              }
+
+              // Try to extract schedule from StartCalendarInterval
+              const hourMatch = plistContent.match(/<key>Hour<\/key>\s*<integer>(\d+)<\/integer>/);
+              const minuteMatch = plistContent.match(/<key>Minute<\/key>\s*<integer>(\d+)<\/integer>/);
+              const weekdayMatch = plistContent.match(/<key>Weekday<\/key>\s*<integer>(\d+)<\/integer>/);
+              const dayMatch = plistContent.match(/<key>Day<\/key>\s*<integer>(\d+)<\/integer>/);
+
+              if (minuteMatch || hourMatch) {
+                const minute = minuteMatch ? minuteMatch[1] : '0';
+                const hour = hourMatch ? hourMatch[1] : '*';
+                const day = dayMatch ? dayMatch[1] : '*';
+                const weekday = weekdayMatch ? weekdayMatch[1] : '*';
+                schedule = `${minute} ${hour} ${day} * ${weekday}`;
+              }
+
+              // Extract log paths from plist
+              const stdOutMatch = plistContent.match(/<key>StandardOutPath<\/key>\s*<string>([^<]+)<\/string>/);
+              const stdErrMatch = plistContent.match(/<key>StandardErrorPath<\/key>\s*<string>([^<]+)<\/string>/);
+              const logPath = stdOutMatch ? stdOutMatch[1] : path.join(os.homedir(), '.claude', 'logs', `${taskId}.log`);
+              const errorLogPath = stdErrMatch ? stdErrMatch[1] : path.join(os.homedir(), '.claude', 'logs', `${taskId}.error.log`);
+
+              const taskMeta = metadata[taskId] || {
+                notifications: { telegram: false, slack: false },
+                createdAt: new Date().toISOString(),
+              };
+
+              // Check log files and launchctl for status
+              let lastRun: string | undefined;
+              let lastRunStatus: 'success' | 'error' | undefined;
+
+              // Check error log first - if it has recent content, likely an error
+              if (fs.existsSync(errorLogPath)) {
+                const errorStat = fs.statSync(errorLogPath);
+                const errorContent = fs.readFileSync(errorLogPath, 'utf-8').trim();
+                if (errorContent) {
+                  lastRun = errorStat.mtime.toISOString();
+                  lastRunStatus = 'error';
+                }
+              }
+
+              // Check stdout log
+              if (fs.existsSync(logPath)) {
+                const stat = fs.statSync(logPath);
+                const logContent = fs.readFileSync(logPath, 'utf-8');
+
+                // Use the more recent of error log or stdout log
+                if (!lastRun || new Date(stat.mtime) > new Date(lastRun)) {
+                  lastRun = stat.mtime.toISOString();
+                }
+
+                // Check for error indicators in stdout if we don't already have an error status
+                if (lastRunStatus !== 'error') {
+                  // Check for common error patterns
+                  const hasError =
+                    logContent.includes('Error:') ||
+                    logContent.includes('error:') ||
+                    logContent.includes('command not found') ||
+                    logContent.includes('No such file') ||
+                    logContent.includes('Permission denied') ||
+                    logContent.includes('failed') ||
+                    logContent.includes('FAILED');
+
+                  // Check for success indicators
+                  const hasSuccess =
+                    logContent.includes('✓') ||
+                    logContent.includes('completed') ||
+                    logContent.includes('Completed') ||
+                    logContent.includes('successfully') ||
+                    logContent.includes('Success');
+
+                  if (hasError && !hasSuccess) {
+                    lastRunStatus = 'error';
+                  } else if (logContent.trim()) {
+                    lastRunStatus = 'success';
+                  }
+                }
+              }
+
+              tasks.push({
+                id: taskId,
+                prompt: prompt || `Scheduled task: ${taskId}`,
+                schedule: schedule || '0 9 * * *',
+                scheduleHuman: schedule ? cronToHuman(schedule) : 'Daily at 9:00 AM',
+                projectPath,
+                agentId: taskMeta.agentId,
+                agentName: taskMeta.agentName,
+                autonomous: true,
+                worktree: undefined,
+                notifications: taskMeta.notifications,
+                createdAt: taskMeta.createdAt,
+                lastRun,
+                lastRunStatus,
+                nextRun: schedule ? getNextRunTime(schedule) : undefined,
+              });
+            } catch {
+              // Ignore errors reading individual plist files
+            }
+          }
+        }
+      } catch {
+        // Ignore errors reading LaunchAgents directory
+      }
+    }
+
+    return { tasks };
+  } catch (err) {
+    console.error('Error listing tasks:', err);
+    return { tasks: [] };
+  }
+});
+
+// Create a scheduled task
+ipcMain.handle('scheduler:createTask', async (_event, params: {
+  agentId: string;
+  prompt: string;
+  schedule: string;
+  autonomous: boolean;
+  useWorktree: boolean;
+  notifications: { telegram: boolean; slack: boolean };
+}) => {
+  try {
+    const { agentId, prompt, schedule, autonomous, useWorktree, notifications } = params;
+
+    // Get agent info
+    const agent = agents.get(agentId);
+    if (!agent) {
+      return { success: false, error: 'Agent not found' };
+    }
+
+    const taskId = uuidv4();
+
+    // Create the schedule entry
+    const scheduleEntry = {
+      id: taskId,
+      prompt,
+      schedule,
+      projectPath: agent.projectPath,
+      autonomous,
+      worktree: useWorktree ? { enabled: true, branchPrefix: 'scheduled-' } : undefined,
+      createdAt: new Date().toISOString(),
+    };
+
+    // Save to global schedules.json
+    const globalSchedulesPath = path.join(os.homedir(), '.claude', 'schedules.json');
+    let schedules: unknown[] = [];
+    if (fs.existsSync(globalSchedulesPath)) {
+      try {
+        schedules = JSON.parse(fs.readFileSync(globalSchedulesPath, 'utf-8'));
+        if (!Array.isArray(schedules)) schedules = [];
+      } catch {
+        schedules = [];
+      }
+    }
+    schedules.push(scheduleEntry);
+
+    // Ensure .claude directory exists
+    const claudeDir = path.join(os.homedir(), '.claude');
+    if (!fs.existsSync(claudeDir)) {
+      fs.mkdirSync(claudeDir, { recursive: true });
+    }
+    fs.writeFileSync(globalSchedulesPath, JSON.stringify(schedules, null, 2));
+
+    // Save our metadata (agent info, notifications)
+    const metadata = loadSchedulerMetadata();
+    metadata[taskId] = {
+      agentId,
+      agentName: agent.name,
+      notifications,
+      createdAt: new Date().toISOString(),
+    };
+    saveSchedulerMetadata(metadata);
+
+    // Fix MCP server paths to use absolute node path (required for launchd/cron)
+    await fixMcpServerPaths();
+
+    // Create the launchd plist (macOS) or cron job (Linux)
+    if (os.platform() === 'darwin') {
+      await createLaunchdJob(taskId, schedule, agent.projectPath, prompt, autonomous);
+    } else {
+      await createCronJob(taskId, schedule, agent.projectPath, prompt, autonomous);
+    }
+
+    return { success: true, taskId };
+  } catch (err) {
+    console.error('Error creating task:', err);
+    return { success: false, error: err instanceof Error ? err.message : 'Failed to create task' };
+  }
+});
+
+// Helper: Get the full path to claude CLI
+async function getClaudePath(): Promise<string> {
+  return new Promise((resolve) => {
+    // Try to find claude in common locations
+    const proc = spawn('which', ['claude']);
+    let claudePath = '';
+    proc.stdout.on('data', (data) => {
+      claudePath += data.toString().trim();
+    });
+    proc.on('close', () => {
+      if (claudePath) {
+        resolve(claudePath);
+      } else {
+        // Fallback to common locations
+        const commonPaths = [
+          path.join(os.homedir(), '.local', 'bin', 'claude'),
+          '/usr/local/bin/claude',
+          '/opt/homebrew/bin/claude',
+        ];
+        for (const p of commonPaths) {
+          if (fs.existsSync(p)) {
+            resolve(p);
+            return;
+          }
+        }
+        // Last resort: just use 'claude' and hope it's in PATH
+        resolve('claude');
+      }
+    });
+    proc.on('error', () => resolve('claude'));
+  });
+}
+
+// Helper: Get the full path to node
+async function getNodePath(): Promise<string> {
+  return new Promise((resolve) => {
+    // Try to find node using which
+    const proc = spawn('which', ['node']);
+    let nodePath = '';
+    proc.stdout.on('data', (data) => {
+      nodePath += data.toString().trim();
+    });
+    proc.on('close', () => {
+      if (nodePath) {
+        resolve(nodePath);
+      } else {
+        // Fallback to common locations
+        const commonPaths = [
+          '/usr/local/bin/node',
+          '/opt/homebrew/bin/node',
+          path.join(os.homedir(), '.local', 'bin', 'node'),
+        ];
+
+        // Also check nvm installations
+        const nvmDir = path.join(os.homedir(), '.nvm', 'versions', 'node');
+        if (fs.existsSync(nvmDir)) {
+          try {
+            const versions = fs.readdirSync(nvmDir).sort().reverse();
+            for (const version of versions) {
+              const nvmNodePath = path.join(nvmDir, version, 'bin', 'node');
+              if (fs.existsSync(nvmNodePath)) {
+                commonPaths.unshift(nvmNodePath);
+                break;
+              }
+            }
+          } catch {
+            // Ignore errors reading nvm directory
+          }
+        }
+
+        for (const p of commonPaths) {
+          if (fs.existsSync(p)) {
+            resolve(p);
+            return;
+          }
+        }
+        // Last resort: just use 'node' and hope it's in PATH
+        resolve('node');
+      }
+    });
+    proc.on('error', () => resolve('node'));
+  });
+}
+
+// Helper: Fix MCP server paths to use absolute node path
+async function fixMcpServerPaths(): Promise<void> {
+  const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
+
+  // Skip if no mcp.json exists
+  if (!fs.existsSync(mcpConfigPath)) {
+    return;
+  }
+
+  try {
+    const mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
+
+    if (!mcpConfig.mcpServers || typeof mcpConfig.mcpServers !== 'object') {
+      return;
+    }
+
+    let hasChanges = false;
+    const nodePath = await getNodePath();
+
+    // If we only got 'node' (not found), don't make changes
+    if (nodePath === 'node') {
+      console.log('Could not find absolute node path, skipping MCP config fix');
+      return;
+    }
+
+    for (const serverName of Object.keys(mcpConfig.mcpServers)) {
+      const server = mcpConfig.mcpServers[serverName];
+
+      // Check if command is just 'node' (not an absolute path)
+      if (server.command === 'node') {
+        server.command = nodePath;
+        hasChanges = true;
+        console.log(`Fixed MCP server "${serverName}" to use absolute node path: ${nodePath}`);
+      }
+    }
+
+    if (hasChanges) {
+      // Backup original config
+      const backupPath = mcpConfigPath + '.backup';
+      if (!fs.existsSync(backupPath)) {
+        fs.copyFileSync(mcpConfigPath, backupPath);
+      }
+
+      // Write updated config
+      fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
+      console.log('Updated mcp.json with absolute node paths');
+    }
+  } catch (err) {
+    console.error('Error fixing MCP server paths:', err);
+  }
+}
+
+// Helper: Create launchd job for macOS
+async function createLaunchdJob(
+  taskId: string,
+  schedule: string,
+  projectPath: string,
+  prompt: string,
+  autonomous: boolean
+): Promise<void> {
+  const label = `com.claude-manager.scheduler.${taskId}`;
+  const plistPath = path.join(os.homedir(), 'Library', 'LaunchAgents', `${label}.plist`);
+
+  // Get the full path to claude CLI
+  const claudePath = await getClaudePath();
+  const claudeDir = path.dirname(claudePath);
+
+  // Parse cron expression
+  const [minute, hour, dayOfMonth, month, dayOfWeek] = schedule.split(' ');
+
+  // Build calendar interval
+  const calendarInterval: Record<string, number> = {};
+  if (minute !== '*') calendarInterval.Minute = parseInt(minute, 10);
+  if (hour !== '*') calendarInterval.Hour = parseInt(hour, 10);
+  if (dayOfMonth !== '*') calendarInterval.Day = parseInt(dayOfMonth, 10);
+  if (month !== '*') calendarInterval.Month = parseInt(month, 10);
+  if (dayOfWeek !== '*') calendarInterval.Weekday = parseInt(dayOfWeek, 10);
+
+  // Create script to run
+  const scriptPath = path.join(os.homedir(), '.claude-manager', 'scripts', `${taskId}.sh`);
+  const scriptsDir = path.dirname(scriptPath);
+  if (!fs.existsSync(scriptsDir)) {
+    fs.mkdirSync(scriptsDir, { recursive: true });
+  }
+
+  const logPath = path.join(os.homedir(), '.claude', 'logs', `${taskId}.log`);
+  const logsDir = path.dirname(logPath);
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+  }
+
+  // Escape the prompt for shell
+  const escapedPrompt = prompt.replace(/'/g, "'\\''");
+  const flags = autonomous ? '--dangerously-skip-permissions' : '';
+  const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
+
+  // Use full path to claude and ensure its directory is in PATH
+  // Include --mcp-config to ensure MCP servers are loaded in non-interactive mode
+  const scriptContent = `#!/bin/bash
+export PATH="${claudeDir}:$PATH"
+cd "${projectPath}"
+echo "=== Task started at $(date) ===" >> "${logPath}"
+"${claudePath}" ${flags} --mcp-config "${mcpConfigPath}" -p '${escapedPrompt}' >> "${logPath}" 2>&1
+echo "=== Task completed at $(date) ===" >> "${logPath}"
+`;
+
+  fs.writeFileSync(scriptPath, scriptContent);
+  fs.chmodSync(scriptPath, '755');
+
+  // Create plist
+  const plist = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>${label}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>${scriptPath}</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+${Object.entries(calendarInterval).map(([k, v]) => `        <key>${k}</key>\n        <integer>${v}</integer>`).join('\n')}
+    </dict>
+    <key>StandardOutPath</key>
+    <string>${logPath}</string>
+    <key>StandardErrorPath</key>
+    <string>${logPath}</string>
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>`;
+
+  const launchAgentsDir = path.join(os.homedir(), 'Library', 'LaunchAgents');
+  if (!fs.existsSync(launchAgentsDir)) {
+    fs.mkdirSync(launchAgentsDir, { recursive: true });
+  }
+  fs.writeFileSync(plistPath, plist);
+
+  // Load the job
+  await new Promise<void>((resolve, reject) => {
+    const proc = spawn('launchctl', ['load', plistPath]);
+    proc.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`launchctl load failed with code ${code}`));
+    });
+    proc.on('error', reject);
+  });
+}
+
+// Helper: Create cron job for Linux
+async function createCronJob(
+  taskId: string,
+  schedule: string,
+  projectPath: string,
+  prompt: string,
+  autonomous: boolean
+): Promise<void> {
+  // Get the full path to claude CLI
+  const claudePath = await getClaudePath();
+  const claudeDir = path.dirname(claudePath);
+
+  // Create script to run
+  const scriptPath = path.join(os.homedir(), '.claude-manager', 'scripts', `${taskId}.sh`);
+  const scriptsDir = path.dirname(scriptPath);
+  if (!fs.existsSync(scriptsDir)) {
+    fs.mkdirSync(scriptsDir, { recursive: true });
+  }
+
+  const logPath = path.join(os.homedir(), '.claude', 'logs', `${taskId}.log`);
+  const logsDir = path.dirname(logPath);
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+  }
+
+  // Escape the prompt for shell
+  const escapedPrompt = prompt.replace(/'/g, "'\\''");
+  const flags = autonomous ? '--dangerously-skip-permissions' : '';
+  const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
+
+  // Use full path to claude and ensure its directory is in PATH
+  // Include --mcp-config to ensure MCP servers are loaded in non-interactive mode
+  const scriptContent = `#!/bin/bash
+export PATH="${claudeDir}:$PATH"
+cd "${projectPath}"
+echo "=== Task started at $(date) ===" >> "${logPath}"
+"${claudePath}" ${flags} --mcp-config "${mcpConfigPath}" -p '${escapedPrompt}' >> "${logPath}" 2>&1
+echo "=== Task completed at $(date) ===" >> "${logPath}"
+`;
+
+  fs.writeFileSync(scriptPath, scriptContent);
+  fs.chmodSync(scriptPath, '755');
+
+  // Add to crontab
+  const cronLine = `${schedule} ${scriptPath} # claude-manager-${taskId}`;
+
+  await new Promise<void>((resolve, reject) => {
+    // Get existing crontab
+    const getCron = spawn('crontab', ['-l']);
+    let existingCron = '';
+    getCron.stdout.on('data', (data) => { existingCron += data; });
+    getCron.on('close', () => {
+      // Add new line
+      const newCron = existingCron + '\n' + cronLine + '\n';
+
+      // Write new crontab
+      const setCron = spawn('crontab', ['-']);
+      setCron.stdin.write(newCron);
+      setCron.stdin.end();
+      setCron.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`crontab failed with code ${code}`));
+      });
+      setCron.on('error', reject);
+    });
+    getCron.on('error', () => {
+      // No existing crontab, create new one
+      const setCron = spawn('crontab', ['-']);
+      setCron.stdin.write(cronLine + '\n');
+      setCron.stdin.end();
+      setCron.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`crontab failed with code ${code}`));
+      });
+      setCron.on('error', reject);
+    });
+  });
+}
+
+// Delete a scheduled task
+ipcMain.handle('scheduler:deleteTask', async (_event, taskId: string) => {
+  try {
+    // Remove from schedules.json
+    const globalSchedulesPath = path.join(os.homedir(), '.claude', 'schedules.json');
+    if (fs.existsSync(globalSchedulesPath)) {
+      let schedules = JSON.parse(fs.readFileSync(globalSchedulesPath, 'utf-8'));
+      if (Array.isArray(schedules)) {
+        schedules = schedules.filter((s: { id?: string }) => s.id !== taskId);
+        fs.writeFileSync(globalSchedulesPath, JSON.stringify(schedules, null, 2));
+      }
+    }
+
+    // Remove metadata
+    const metadata = loadSchedulerMetadata();
+    delete metadata[taskId];
+    saveSchedulerMetadata(metadata);
+
+    // Remove launchd job (macOS)
+    if (os.platform() === 'darwin') {
+      // Try both label formats: claude-manager and scheduler plugin format
+      const labels = [
+        `com.claude-manager.scheduler.${taskId}`,
+        `com.claude.schedule.${taskId}`,
+      ];
+
+      const uid = process.getuid?.() || 501;
+
+      for (const label of labels) {
+        const plistPath = path.join(os.homedir(), 'Library', 'LaunchAgents', `${label}.plist`);
+
+        // Unregister from launchd using bootout (modern way)
+        try {
+          await new Promise<void>((resolve) => {
+            const proc = spawn('launchctl', ['bootout', `gui/${uid}/${label}`]);
+            proc.on('close', () => resolve());
+            proc.on('error', () => resolve());
+          });
+        } catch {
+          // Ignore unload errors
+        }
+
+        // Delete plist file
+        if (fs.existsSync(plistPath)) {
+          fs.unlinkSync(plistPath);
+        }
+      }
+    } else {
+      // Remove from crontab (Linux)
+      await new Promise<void>((resolve) => {
+        const getCron = spawn('crontab', ['-l']);
+        let existingCron = '';
+        getCron.stdout.on('data', (data) => { existingCron += data; });
+        getCron.on('close', () => {
+          // Remove lines with our task ID
+          const newCron = existingCron
+            .split('\n')
+            .filter(line => !line.includes(`claude-manager-${taskId}`))
+            .join('\n');
+
+          const setCron = spawn('crontab', ['-']);
+          setCron.stdin.write(newCron);
+          setCron.stdin.end();
+          setCron.on('close', () => resolve());
+          setCron.on('error', () => resolve());
+        });
+        getCron.on('error', () => resolve());
+      });
+    }
+
+    // Remove script file
+    const scriptPath = path.join(os.homedir(), '.claude-manager', 'scripts', `${taskId}.sh`);
+    if (fs.existsSync(scriptPath)) {
+      fs.unlinkSync(scriptPath);
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error('Error deleting task:', err);
+    return { success: false, error: err instanceof Error ? err.message : 'Failed to delete task' };
+  }
+});
+
+// Run a task immediately
+ipcMain.handle('scheduler:runTask', async (_event, taskId: string) => {
+  try {
+    // Get task info from schedules
+    const globalSchedulesPath = path.join(os.homedir(), '.claude', 'schedules.json');
+    let task: { prompt?: string; projectPath?: string; autonomous?: boolean } | undefined;
+
+    if (fs.existsSync(globalSchedulesPath)) {
+      const schedules = JSON.parse(fs.readFileSync(globalSchedulesPath, 'utf-8'));
+      if (Array.isArray(schedules)) {
+        task = schedules.find((s: { id?: string }) => s.id === taskId);
+      }
+    }
+
+    if (!task) {
+      return { success: false, error: 'Task not found' };
+    }
+
+    // Run the script directly
+    const scriptPath = path.join(os.homedir(), '.claude-manager', 'scripts', `${taskId}.sh`);
+    if (fs.existsSync(scriptPath)) {
+      spawn('bash', [scriptPath], {
+        detached: true,
+        stdio: 'ignore',
+      }).unref();
+      return { success: true };
+    }
+
+    // If no script exists, run claude directly
+    const logPath = path.join(os.homedir(), '.claude', 'logs', `${taskId}.log`);
+    const logsDir = path.dirname(logPath);
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir, { recursive: true });
+    }
+
+    const flags = task.autonomous ? '--dangerously-skip-permissions' : '';
+    const proc = spawn('bash', ['-c', `cd "${task.projectPath}" && claude ${flags} -p '${task.prompt?.replace(/'/g, "'\\''")}' >> "${logPath}" 2>&1`], {
+      detached: true,
+      stdio: 'ignore',
+    });
+    proc.unref();
+
+    return { success: true };
+  } catch (err) {
+    console.error('Error running task:', err);
+    return { success: false, error: err instanceof Error ? err.message : 'Failed to run task' };
+  }
+});
+
+// Get task logs
+ipcMain.handle('scheduler:getLogs', async (_event, taskId: string) => {
+  try {
+    const logPath = path.join(os.homedir(), '.claude', 'logs', `${taskId}.log`);
+    const errorLogPath = path.join(os.homedir(), '.claude', 'logs', `${taskId}.error.log`);
+
+    // Also check if there's a plist with custom log paths
+    const plistPath = path.join(os.homedir(), 'Library', 'LaunchAgents', `com.claude.schedule.${taskId}.plist`);
+    let customLogPath = logPath;
+    let customErrorLogPath = errorLogPath;
+
+    if (fs.existsSync(plistPath)) {
+      const plistContent = fs.readFileSync(plistPath, 'utf-8');
+      const stdOutMatch = plistContent.match(/<key>StandardOutPath<\/key>\s*<string>([^<]+)<\/string>/);
+      const stdErrMatch = plistContent.match(/<key>StandardErrorPath<\/key>\s*<string>([^<]+)<\/string>/);
+      if (stdOutMatch) customLogPath = stdOutMatch[1];
+      if (stdErrMatch) customErrorLogPath = stdErrMatch[1];
+    }
+
+    let logs = '';
+    let hasLogs = false;
+
+    // Read stdout log
+    if (fs.existsSync(customLogPath)) {
+      const stat = fs.statSync(customLogPath);
+      const content = fs.readFileSync(customLogPath, 'utf-8');
+      if (content.trim()) {
+        hasLogs = true;
+        logs += `=== Output Log (${stat.mtime.toLocaleString()}) ===\n`;
+        logs += content;
+      }
+    }
+
+    // Read stderr log
+    if (fs.existsSync(customErrorLogPath)) {
+      const stat = fs.statSync(customErrorLogPath);
+      const errorContent = fs.readFileSync(customErrorLogPath, 'utf-8');
+      if (errorContent.trim()) {
+        hasLogs = true;
+        if (logs) logs += '\n\n';
+        logs += `=== Error Log (${stat.mtime.toLocaleString()}) ===\n`;
+        logs += errorContent;
+      }
+    }
+
+    if (!hasLogs) {
+      return { logs: 'No logs available yet. The task has not run.', error: undefined };
+    }
+
+    return { logs, error: undefined };
+  } catch (err) {
+    console.error('Error reading logs:', err);
+    return { logs: '', error: err instanceof Error ? err.message : 'Failed to read logs' };
+  }
 });

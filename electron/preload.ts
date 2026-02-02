@@ -135,6 +135,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
   },
 
+  // Plugin management (with in-app terminal)
+  plugin: {
+    installStart: (params: { command: string; cols?: number; rows?: number }) =>
+      ipcRenderer.invoke('plugin:install-start', params),
+    installWrite: (params: { id: string; data: string }) =>
+      ipcRenderer.invoke('plugin:install-write', params),
+    installResize: (params: { id: string; cols: number; rows: number }) =>
+      ipcRenderer.invoke('plugin:install-resize', params),
+    installKill: (params: { id: string }) =>
+      ipcRenderer.invoke('plugin:install-kill', params),
+    onPtyData: (callback: (event: { id: string; data: string }) => void) => {
+      const listener = (_: unknown, event: { id: string; data: string }) => callback(event);
+      ipcRenderer.on('plugin:pty-data', listener);
+      return () => ipcRenderer.removeListener('plugin:pty-data', listener);
+    },
+    onPtyExit: (callback: (event: { id: string; exitCode: number }) => void) => {
+      const listener = (_: unknown, event: { id: string; exitCode: number }) => callback(event);
+      ipcRenderer.on('plugin:pty-exit', listener);
+      return () => ipcRenderer.removeListener('plugin:pty-exit', listener);
+    },
+  },
+
   // File system
   fs: {
     listProjects: () =>
@@ -247,6 +269,33 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('orchestrator:setup'),
     remove: () =>
       ipcRenderer.invoke('orchestrator:remove'),
+  },
+
+  // Scheduler (claude-code-scheduler plugin)
+  scheduler: {
+    checkInstalled: () =>
+      ipcRenderer.invoke('scheduler:checkInstalled'),
+    install: () =>
+      ipcRenderer.invoke('scheduler:install'),
+    listTasks: () =>
+      ipcRenderer.invoke('scheduler:listTasks'),
+    createTask: (params: {
+      agentId: string;
+      prompt: string;
+      schedule: string;
+      autonomous: boolean;
+      useWorktree: boolean;
+      notifications: { telegram: boolean; slack: boolean };
+    }) =>
+      ipcRenderer.invoke('scheduler:createTask', params),
+    deleteTask: (taskId: string) =>
+      ipcRenderer.invoke('scheduler:deleteTask', taskId),
+    runTask: (taskId: string) =>
+      ipcRenderer.invoke('scheduler:runTask', taskId),
+    getLogs: (taskId: string) =>
+      ipcRenderer.invoke('scheduler:getLogs', taskId),
+    fixMcpPaths: () =>
+      ipcRenderer.invoke('scheduler:fixMcpPaths'),
   },
 
   // Platform info

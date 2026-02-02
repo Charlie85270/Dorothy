@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Puzzle,
@@ -27,6 +27,8 @@ import {
 import { useClaude } from '@/hooks/useClaude';
 import { isElectron } from '@/hooks/useElectron';
 import { PLUGINS_DATABASE, PLUGIN_CATEGORIES, MARKETPLACES, type Plugin } from '@/lib/plugins-database';
+// Import xterm CSS
+import 'xterm/css/xterm.css';
 
 const CATEGORY_ICONS: Record<string, typeof Code2> = {
   'Code Intelligence': Code2,
@@ -59,8 +61,156 @@ export default function PluginsPage() {
   const [hasElectron, setHasElectron] = useState(false);
   const [installingPlugin, setInstallingPlugin] = useState<string | null>(null);
 
+  // Terminal modal for installation
+  const [showInstallTerminal, setShowInstallTerminal] = useState(false);
+  const [currentInstallCommand, setCurrentInstallCommand] = useState('');
+  const [currentInstallPtyId, setCurrentInstallPtyId] = useState<string | null>(null);
+  const [installComplete, setInstallComplete] = useState(false);
+  const [installExitCode, setInstallExitCode] = useState<number | null>(null);
+  const [terminalReady, setTerminalReady] = useState(false);
+  const [pendingInstallCommand, setPendingInstallCommand] = useState<string | null>(null);
+  const terminalRef = useRef<HTMLDivElement>(null);
+  const xtermRef = useRef<import('xterm').Terminal | null>(null);
+  const ptyIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     setHasElectron(isElectron());
+  }, []);
+
+  // Initialize xterm when terminal modal opens
+  useEffect(() => {
+    if (!showInstallTerminal || !terminalRef.current || xtermRef.current) return;
+
+    const initTerminal = async () => {
+      const { Terminal } = await import('xterm');
+      const { FitAddon } = await import('xterm-addon-fit');
+
+      const term = new Terminal({
+        theme: {
+          background: '#0a0a0f',
+          foreground: '#e4e4e7',
+          cursor: '#22d3ee',
+          cursorAccent: '#0a0a0f',
+          selectionBackground: '#22d3ee33',
+          black: '#18181b',
+          red: '#ef4444',
+          green: '#22c55e',
+          yellow: '#eab308',
+          blue: '#3b82f6',
+          magenta: '#a855f7',
+          cyan: '#22d3ee',
+          white: '#e4e4e7',
+          brightBlack: '#52525b',
+          brightRed: '#f87171',
+          brightGreen: '#4ade80',
+          brightYellow: '#facc15',
+          brightBlue: '#60a5fa',
+          brightMagenta: '#c084fc',
+          brightCyan: '#67e8f9',
+          brightWhite: '#fafafa',
+        },
+        fontSize: 13,
+        fontFamily: 'JetBrains Mono, Menlo, Monaco, Courier New, monospace',
+        cursorBlink: true,
+        cursorStyle: 'bar',
+        scrollback: 10000,
+      });
+
+      const fitAddon = new FitAddon();
+      term.loadAddon(fitAddon);
+      term.open(terminalRef.current!);
+      fitAddon.fit();
+
+      xtermRef.current = term;
+
+      // Handle user input - send to PTY
+      term.onData((data) => {
+        if (ptyIdRef.current && window.electronAPI?.plugin?.installWrite) {
+          window.electronAPI.plugin.installWrite({ id: ptyIdRef.current, data });
+        }
+      });
+
+      // Handle resize
+      const resizeObserver = new ResizeObserver(() => {
+        fitAddon.fit();
+        if (ptyIdRef.current && window.electronAPI?.plugin?.installResize) {
+          window.electronAPI.plugin.installResize({
+            id: ptyIdRef.current,
+            cols: term.cols,
+            rows: term.rows,
+          });
+        }
+      });
+      resizeObserver.observe(terminalRef.current!);
+
+      // Terminal is ready - signal that we can start the PTY
+      setTerminalReady(true);
+    };
+
+    initTerminal();
+
+    return () => {
+      if (xtermRef.current) {
+        xtermRef.current.dispose();
+        xtermRef.current = null;
+      }
+      setTerminalReady(false);
+    };
+  }, [showInstallTerminal]);
+
+  // Start PTY only after terminal is ready
+  useEffect(() => {
+    if (!terminalReady || !pendingInstallCommand || !window.electronAPI?.plugin?.installStart) return;
+
+    const startPty = async () => {
+      try {
+        const result = await window.electronAPI?.plugin?.installStart({ command: pendingInstallCommand });
+        if (!result) {
+          throw new Error('Failed to start installation');
+        }
+        setCurrentInstallPtyId(result.id);
+        ptyIdRef.current = result.id;
+        setPendingInstallCommand(null);
+      } catch (err) {
+        setShowToast({
+          message: `Failed to start installation: ${err instanceof Error ? err.message : 'Unknown error'}`,
+          type: 'error',
+        });
+        setInstallingPlugin(null);
+        setShowInstallTerminal(false);
+        setTimeout(() => setShowToast(null), 4000);
+      }
+    };
+
+    startPty();
+  }, [terminalReady, pendingInstallCommand]);
+
+  // Listen for PTY data - always subscribe when in electron
+  useEffect(() => {
+    if (!isElectron() || !window.electronAPI?.plugin?.onPtyData) return;
+
+    const unsubscribe = window.electronAPI.plugin.onPtyData(({ id, data }) => {
+      if (id === ptyIdRef.current && xtermRef.current) {
+        xtermRef.current.write(data);
+      }
+    });
+
+    return unsubscribe;
+  }, []);
+
+  // Listen for PTY exit - always subscribe when in electron
+  useEffect(() => {
+    if (!isElectron() || !window.electronAPI?.plugin?.onPtyExit) return;
+
+    const unsubscribe = window.electronAPI.plugin.onPtyExit(({ id, exitCode }) => {
+      if (id === ptyIdRef.current) {
+        setInstallComplete(true);
+        setInstallExitCode(exitCode);
+        setInstallingPlugin(null);
+      }
+    });
+
+    return unsubscribe;
   }, []);
 
   // Get installed plugins from settings
@@ -154,32 +304,32 @@ export default function PluginsPage() {
   const handleInstall = async (plugin: Plugin) => {
     const installCommand = getInstallCommand(plugin);
 
-    if (hasElectron && window.electronAPI?.shell) {
-      // Open Terminal with Claude Code to run the install command
+    if (hasElectron && window.electronAPI?.plugin?.installStart) {
+      // Open in-app terminal with Claude Code to run the install command
       setInstallingPlugin(plugin.name);
-      try {
-        const escapedCommand = installCommand.replace(/"/g, '\\"');
-        await window.electronAPI.shell.exec({
-          command: `osascript -e 'tell application "Terminal" to do script "claude --dangerously-skip-permissions \\"${escapedCommand}\\""' -e 'tell application "Terminal" to activate'`
-        });
-        setShowToast({
-          message: `Installing "${plugin.name}" in Terminal...`,
-          type: 'info',
-        });
-        setTimeout(() => {
-          setShowToast(null);
-          setInstallingPlugin(null);
-        }, 3000);
-      } catch (err) {
-        console.error('Failed to open Terminal for plugin installation:', err);
-        // Fallback to copy
-        await copyInstallCommand(plugin);
-        setInstallingPlugin(null);
-      }
+      setCurrentInstallCommand(installCommand);
+      setInstallComplete(false);
+      setInstallExitCode(null);
+      setShowInstallTerminal(true);
+      setPendingInstallCommand(installCommand);
     } else {
       // Copy command to clipboard
       await copyInstallCommand(plugin);
     }
+  };
+
+  const closeInstallTerminal = () => {
+    // Kill the PTY if still running
+    if (ptyIdRef.current && window.electronAPI?.plugin?.installKill) {
+      window.electronAPI.plugin.installKill({ id: ptyIdRef.current });
+    }
+    setShowInstallTerminal(false);
+    setCurrentInstallCommand('');
+    setCurrentInstallPtyId(null);
+    setInstallComplete(false);
+    setInstallExitCode(null);
+    setInstallingPlugin(null);
+    ptyIdRef.current = null;
   };
 
   const copyInstallCommand = async (plugin: Plugin) => {
@@ -255,13 +405,12 @@ export default function PluginsPage() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className={`p-4 border flex items-center justify-between mt-4 ${
-              showToast.type === 'success'
+            className={`p-4 border flex items-center justify-between mt-4 ${showToast.type === 'success'
                 ? 'bg-green-500/10 border-green-500/30 text-green-400'
                 : showToast.type === 'error'
-                ? 'bg-red-500/10 border-red-500/30 text-red-400'
-                : 'bg-white/10 border-white/30 text-white'
-            }`}
+                  ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                  : 'bg-white/10 border-white/30 text-white'
+              }`}
           >
             <div className="flex items-center gap-3">
               {showToast.type === 'error' ? (
@@ -320,9 +469,8 @@ export default function PluginsPage() {
                     setSelectedCategory(null);
                     setShowCategoryDropdown(false);
                   }}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-secondary ${
-                    !selectedCategory ? 'text-white' : 'text-muted-foreground'
-                  }`}
+                  className={`w-full text-left px-4 py-2 text-sm hover:bg-secondary ${!selectedCategory ? 'text-white' : 'text-muted-foreground'
+                    }`}
                 >
                   All Categories
                 </button>
@@ -335,9 +483,8 @@ export default function PluginsPage() {
                         setSelectedCategory(cat);
                         setShowCategoryDropdown(false);
                       }}
-                      className={`w-full text-left px-4 py-2 text-sm hover:bg-secondary flex items-center gap-2 ${
-                        selectedCategory === cat ? 'text-white' : 'text-muted-foreground'
-                      }`}
+                      className={`w-full text-left px-4 py-2 text-sm hover:bg-secondary flex items-center gap-2 ${selectedCategory === cat ? 'text-white' : 'text-muted-foreground'
+                        }`}
                     >
                       <Icon className="w-4 h-4" />
                       {cat}
@@ -376,9 +523,8 @@ export default function PluginsPage() {
                     setSelectedMarketplace(null);
                     setShowMarketplaceDropdown(false);
                   }}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-secondary ${
-                    !selectedMarketplace ? 'text-white' : 'text-muted-foreground'
-                  }`}
+                  className={`w-full text-left px-4 py-2 text-sm hover:bg-secondary ${!selectedMarketplace ? 'text-white' : 'text-muted-foreground'
+                    }`}
                 >
                   All Sources
                 </button>
@@ -389,9 +535,8 @@ export default function PluginsPage() {
                       setSelectedMarketplace(marketplace.id);
                       setShowMarketplaceDropdown(false);
                     }}
-                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-secondary ${
-                      selectedMarketplace === marketplace.id ? 'text-white' : 'text-muted-foreground'
-                    }`}
+                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-secondary ${selectedMarketplace === marketplace.id ? 'text-white' : 'text-muted-foreground'
+                      }`}
                   >
                     <div className="font-medium">{marketplace.name}</div>
                     <div className="text-xs text-muted-foreground">{marketplace.description}</div>
@@ -422,9 +567,8 @@ export default function PluginsPage() {
                 className="border border-border bg-card p-4 hover:border-foreground/30 transition-colors"
               >
                 <div className="flex items-start gap-3 mb-3">
-                  <div className={`w-10 h-10 flex items-center justify-center shrink-0 ${
-                    installed ? 'bg-green-500/20' : colorClass.split(' ')[1]
-                  }`}>
+                  <div className={`w-10 h-10 flex items-center justify-center shrink-0 ${installed ? 'bg-green-500/20' : colorClass.split(' ')[1]
+                    }`}>
                     {installed ? (
                       <CheckCircle className="w-5 h-5 text-green-400" />
                     ) : (
@@ -486,11 +630,10 @@ export default function PluginsPage() {
                       <button
                         onClick={() => handleInstall(plugin)}
                         disabled={isInstalling}
-                        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
-                          isInstalling
+                        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${isInstalling
                             ? 'bg-secondary text-muted-foreground'
                             : 'bg-white text-black hover:bg-white/90'
-                        }`}
+                          }`}
                       >
                         {isInstalling ? (
                           <>
@@ -505,11 +648,10 @@ export default function PluginsPage() {
                       </button>
                       <button
                         onClick={() => copyInstallCommand(plugin)}
-                        className={`p-1.5 transition-colors ${
-                          justCopied
+                        className={`p-1.5 transition-colors ${justCopied
                             ? 'bg-green-500/20 text-green-400'
                             : 'bg-secondary text-muted-foreground hover:text-foreground'
-                        }`}
+                          }`}
                         title="Copy install command"
                       >
                         {justCopied ? (
@@ -580,6 +722,82 @@ export default function PluginsPage() {
               >
                 {hasElectron ? 'Install Plugin' : 'Copy Install Command'}
               </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Installation Terminal Modal */}
+      <AnimatePresence>
+        {showInstallTerminal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={closeInstallTerminal}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-4xl bg-[#0a0a0f] border border-border rounded-none overflow-hidden"
+            >
+              {/* Terminal Header */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">
+                <div className="flex items-center gap-3">
+                  <TerminalIcon className="w-5 h-5 text-cyan-400" />
+                  <div>
+                    <h3 className="font-medium text-sm">Installing Plugin</h3>
+                    <p className="text-xs text-muted-foreground font-mono">{currentInstallCommand}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {installComplete && (
+                    <span className={`text-xs px-2 py-1 ${installExitCode === 0
+                        ? 'bg-green-500/20 text-green-400'
+                        : 'bg-red-500/20 text-red-400'
+                      }`}>
+                      {installExitCode === 0 ? 'Completed' : `Failed (${installExitCode})`}
+                    </span>
+                  )}
+                  {!installComplete && (
+                    <span className="text-xs px-2 py-1 bg-cyan-500/20 text-cyan-400 flex items-center gap-1.5">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Running
+                    </span>
+                  )}
+                  <button
+                    onClick={closeInstallTerminal}
+                    className="p-1.5 hover:bg-secondary rounded-none transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Terminal Content */}
+              <div
+                ref={terminalRef}
+                className="h-[400px] p-2"
+                style={{ backgroundColor: '#0a0a0f' }}
+              />
+
+              {/* Terminal Footer */}
+              <div className="px-4 py-3 border-t border-border bg-card flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">
+                  {installComplete
+                    ? 'Installation finished. You can close this window.'
+                    : 'Installation in progress... You can interact with the terminal if needed.'}
+                </p>
+                <button
+                  onClick={closeInstallTerminal}
+                  className="px-4 py-1.5 text-sm bg-secondary hover:bg-secondary/80 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}

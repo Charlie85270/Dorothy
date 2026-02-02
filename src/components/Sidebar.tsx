@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   FolderKanban,
   Sparkles,
+  Puzzle,
   MessageSquare,
   Settings,
   ChevronLeft,
@@ -22,7 +23,8 @@ const navItems = [
   { href: '/projects', icon: FolderKanban, label: 'Projects', shortcut: '3' },
   { href: '/chats', icon: MessageSquare, label: 'Conversations', shortcut: '4' },
   { href: '/skills', icon: Sparkles, label: 'Skills', shortcut: '5' },
-  { href: '/usage', icon: BarChart2, label: 'Usage', shortcut: '6' },
+  { href: '/plugins', icon: Puzzle, label: 'Plugins', shortcut: '6' },
+  { href: '/usage', icon: BarChart2, label: 'Usage', shortcut: '7' },
 ];
 
 interface SidebarProps {

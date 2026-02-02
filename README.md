@@ -24,6 +24,16 @@ Browse and manage your Claude Code skills. Directly integrated with [skills.sh](
 
 ![Skills Management](screenshots/skills.png)
 
+### 🔌 Plugin Marketplace
+Discover and install official Claude Code plugins directly from the app. Browse plugins by category:
+
+- **Code Intelligence**: LSP plugins for TypeScript, Python, Rust, Go, and more
+- **External Integrations**: GitHub, GitLab, Jira, Figma, Slack, Vercel, and other services
+- **Development Workflows**: Commit commands, PR review tools, and more
+- **Output Styles**: Customize how Claude responds
+
+Filter by category or marketplace source, search by name or tags, and install with one click.
+
 ### ⚙️ Settings Management
 Configure your Claude Code settings directly from the app. Manage permissions, environment variables, hooks, and more.
 

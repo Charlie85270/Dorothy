@@ -921,7 +921,7 @@ export default function SettingsPage() {
                 <li>Go to &quot;Socket Mode&quot; → Enable → Generate App Token with scope &quot;connections:write&quot; (xapp-...)</li>
                 <li>Go to &quot;OAuth & Permissions&quot; → Add Bot Token Scopes:
                   <ul className="ml-4 mt-1 space-y-0.5">
-                    <li className="text-xs">• app_mentions:read, chat:write, im:history, im:read, im:write</li>
+                    <li className="text-xs">• app_mentions:read, chat:write, im:history, im:read, im:write, files:read</li>
                   </ul>
                 </li>
                 <li>Install to Workspace → Copy Bot Token (xoxb-...)</li>

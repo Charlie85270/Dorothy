@@ -15,23 +15,13 @@ var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (
 }) : function(o, v) {
     o["default"] = v;
 });
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -41,6 +31,7 @@ const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
 const os = __importStar(require("os"));
 const http = __importStar(require("http"));
+const https = __importStar(require("https"));
 const uuid_1 = require("uuid");
 const pty = __importStar(require("node-pty"));
 const node_telegram_bot_api_1 = __importDefault(require("node-telegram-bot-api"));
@@ -79,6 +70,77 @@ const mimeTypes = {
 };
 // PTY instances for terminals
 const ptyProcesses = new Map();
+// ============== File Download Utilities ==============
+// Get or create the temp directory for downloaded files
+function getMessagingTempDir() {
+    const tempDir = path.join(electron_1.app.getPath('temp'), 'claude-manager-files');
+    if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+    }
+    return tempDir;
+}
+// Download a file from a URL and save it to a temp location
+async function downloadFile(url, filename, headers) {
+    return new Promise((resolve, reject) => {
+        const tempDir = getMessagingTempDir();
+        const filePath = path.join(tempDir, `${Date.now()}-${filename}`);
+        const file = fs.createWriteStream(filePath);
+        const urlObj = new URL(url);
+        const httpModule = urlObj.protocol === 'https:' ? https : http;
+        const options = {
+            hostname: urlObj.hostname,
+            path: urlObj.pathname + urlObj.search,
+            headers: headers || {},
+        };
+        const request = httpModule.get(options, (response) => {
+            // Handle redirects
+            if (response.statusCode === 301 || response.statusCode === 302) {
+                const redirectUrl = response.headers.location;
+                if (redirectUrl) {
+                    file.close();
+                    fs.unlinkSync(filePath);
+                    downloadFile(redirectUrl, filename, headers).then(resolve).catch(reject);
+                    return;
+                }
+            }
+            if (response.statusCode !== 200) {
+                file.close();
+                fs.unlinkSync(filePath);
+                reject(new Error(`Failed to download file: HTTP ${response.statusCode}`));
+                return;
+            }
+            response.pipe(file);
+            file.on('finish', () => {
+                file.close();
+                resolve(filePath);
+            });
+        });
+        request.on('error', (err) => {
+            file.close();
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+            }
+            reject(err);
+        });
+    });
+}
+// Get file extension from MIME type
+function getExtensionFromMimeType(mimeType) {
+    const mimeToExt = {
+        'image/jpeg': '.jpg',
+        'image/png': '.png',
+        'image/gif': '.gif',
+        'image/webp': '.webp',
+        'application/pdf': '.pdf',
+        'text/plain': '.txt',
+        'text/markdown': '.md',
+        'application/json': '.json',
+        'video/mp4': '.mp4',
+        'audio/mpeg': '.mp3',
+        'audio/ogg': '.ogg',
+    };
+    return mimeToExt[mimeType] || '';
+}
 const agents = new Map();
 // HTTP API Server for MCP orchestrator integration
 const API_PORT = 31415;
@@ -534,100 +596,100 @@ const CLAUDE_PATTERNS = {
     // Comprehensive list of all Claude Code prompt patterns
     waitingForInput: [
         // === Claude Code prompt indicators (highest priority) ===
-        /❯\s*$/m, // Chevron at end of line (Claude prompt)
-        /❯$/m, // Chevron at very end
-        /^❯\s*$/m, // Chevron on its own line
-        /\n❯\s*$/, // Chevron after newline at end
-        /●.*\n\s*❯/, // Response bullet followed by prompt
-        /^\s*❯\s/m, // Chevron at start of line with space
+        /❯\s*$/m,
+        /❯$/m,
+        /^❯\s*$/m,
+        /\n❯\s*$/,
+        /●.*\n\s*❯/,
+        /^\s*❯\s/m,
         // === Claude Code UI indicators ===
-        /Esc to cancel/i, // Claude Code prompt footer
-        /Tab to add additional/i, // Claude Code prompt footer
-        /shift\+Tab/i, // Claude Code keyboard hint
-        /shift-Tab/i, // Alternative format
-        /Enter to confirm/i, // Confirmation hint
-        /Press Enter/i, // Press enter prompt
+        /Esc to cancel/i,
+        /Tab to add additional/i,
+        /shift\+Tab/i,
+        /shift-Tab/i,
+        /Enter to confirm/i,
+        /Press Enter/i,
         // === Selection/Menu prompts (inquirer.js style) ===
-        /❯\s*\d/, // Chevron with number (selected option)
-        />\s*\d+\.\s/, // "> 1." style selection
-        /\(Use arrow keys\)/i, // Arrow key hint
-        /Use arrow keys/i, // Arrow key hint variant
+        /❯\s*\d/,
+        />\s*\d+\.\s/,
+        /\(Use arrow keys\)/i,
+        /Use arrow keys/i,
         // === Yes/No/Confirmation prompts ===
-        /\[Y\/n\]/i, // [Y/n] prompt
-        /\[y\/N\]/i, // [y/N] prompt
-        /\(y\/n\)/i, // (y/n) prompt
-        /\[yes\/no\]/i, // [yes/no] prompt
-        /\d+\.\s*Yes\b/i, // "1. Yes" numbered option
-        /\d+\.\s*No\b/i, // "2. No" numbered option
-        /\d+\.\s*Cancel\b/i, // "3. Cancel" numbered option
-        /\d+\.\s*Skip\b/i, // "4. Skip" numbered option
+        /\[Y\/n\]/i,
+        /\[y\/N\]/i,
+        /\(y\/n\)/i,
+        /\[yes\/no\]/i,
+        /\d+\.\s*Yes\b/i,
+        /\d+\.\s*No\b/i,
+        /\d+\.\s*Cancel\b/i,
+        /\d+\.\s*Skip\b/i,
         // === File operation prompts ===
-        /Do you want to create/i, // Create file prompt
-        /Do you want to edit/i, // Edit file prompt
-        /Do you want to delete/i, // Delete file prompt
-        /Do you want to write/i, // Write file prompt
-        /Do you want to read/i, // Read file prompt
-        /Do you want to run/i, // Run command prompt
-        /Do you want to execute/i, // Execute prompt
-        /Do you want to allow/i, // Permission prompt
-        /Do you want to proceed/i, // Proceed prompt
-        /Do you want to continue/i, // Continue prompt
-        /Do you want to overwrite/i, // Overwrite prompt
-        /Do you want to replace/i, // Replace prompt
-        /Do you want to install/i, // Install prompt
-        /Do you want to update/i, // Update prompt
-        /Do you want to remove/i, // Remove prompt
-        /Do you want to/i, // Generic "Do you want to" catch-all
+        /Do you want to create/i,
+        /Do you want to edit/i,
+        /Do you want to delete/i,
+        /Do you want to write/i,
+        /Do you want to read/i,
+        /Do you want to run/i,
+        /Do you want to execute/i,
+        /Do you want to allow/i,
+        /Do you want to proceed/i,
+        /Do you want to continue/i,
+        /Do you want to overwrite/i,
+        /Do you want to replace/i,
+        /Do you want to install/i,
+        /Do you want to update/i,
+        /Do you want to remove/i,
+        /Do you want to/i,
         // === Permission/Approval prompts ===
-        /Allow this/i, // "Allow this edit?"
-        /Allow .+ to/i, // "Allow X to run?"
-        /Approve this/i, // Approval prompt
-        /Confirm this/i, // Confirmation prompt
-        /Accept this/i, // Accept prompt
+        /Allow this/i,
+        /Allow .+ to/i,
+        /Approve this/i,
+        /Confirm this/i,
+        /Accept this/i,
         // === Question prompts / Claude asking what to do ===
-        /Let me know what/i, // "Let me know what you want..."
-        /let me know if/i, // "Let me know if you need..."
-        /What would you like/i, // "What would you like..."
-        /What should I/i, // "What should I..."
-        /How would you like/i, // "How would you like..."
-        /How can I help/i, // "How can I help..."
-        /What do you think/i, // "What do you think..."
-        /Which .+ would you/i, // "Which option would you..."
-        /Which .+ should/i, // "Which file should..."
-        /Would you like to/i, // "Would you like to..."
-        /Would you like me to/i, // "Would you like me to..."
-        /Should I\s/i, // "Should I..."
-        /Can I\s/i, // "Can I..."
-        /May I\s/i, // "May I..."
-        /Shall I\s/i, // "Shall I..."
-        /What else/i, // "What else would you like..."
-        /Anything else/i, // "Anything else?"
-        /Is there anything/i, // "Is there anything else..."
+        /Let me know what/i,
+        /let me know if/i,
+        /What would you like/i,
+        /What should I/i,
+        /How would you like/i,
+        /How can I help/i,
+        /What do you think/i,
+        /Which .+ would you/i,
+        /Which .+ should/i,
+        /Would you like to/i,
+        /Would you like me to/i,
+        /Should I\s/i,
+        /Can I\s/i,
+        /May I\s/i,
+        /Shall I\s/i,
+        /What else/i,
+        /Anything else/i,
+        /Is there anything/i,
         // === Input prompts ===
-        /Enter your/i, // "Enter your message..."
-        /Enter a /i, // "Enter a value..."
-        /Type your/i, // "Type your response..."
-        /Input:/i, // "Input:" prompt
-        /Provide /i, // "Provide a value..."
-        /Specify /i, // "Specify the..."
-        /Choose /i, // "Choose an option..."
-        /Select /i, // "Select a file..."
-        /Pick /i, // "Pick one..."
+        /Enter your/i,
+        /Enter a /i,
+        /Type your/i,
+        /Input:/i,
+        /Provide /i,
+        /Specify /i,
+        /Choose /i,
+        /Select /i,
+        /Pick /i,
         // === Wait/Ready indicators ===
-        /waiting for/i, // "Waiting for input"
-        /ready for/i, // "Ready for your input"
-        /awaiting/i, // "Awaiting response"
+        /waiting for/i,
+        /ready for/i,
+        /awaiting/i,
         // === Bash/Terminal prompts ===
-        /\$\s*$/m, // Shell prompt "$"
+        /\$\s*$/m,
         />\s*$/m, // Simple prompt ">"
     ],
     // Claude is actively working (spinner or progress)
     // These patterns indicate Claude is processing, not waiting for input
     working: [
         // === Spinner characters (highest confidence) ===
-        /⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏/, // Braille spinner characters
-        /◐|◓|◑|◒/, // Circle spinner
-        /⣾|⣽|⣻|⢿|⡿|⣟|⣯|⣷/, // Dot spinner
+        /⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏/,
+        /◐|◓|◑|◒/,
+        /⣾|⣽|⣻|⢿|⡿|⣟|⣯|⣷/,
         // === Progress indicators with "..." ===
         /Thinking\.\.\./i,
         /Working\.\.\./i,
@@ -639,15 +701,15 @@ const CLAUDE_PATTERNS = {
         /Compiling\.\.\./i,
         /Building\.\.\./i,
         // === Active operation messages (must have context) ===
-        /Reading .+\.\.\./i, // "Reading file..."
-        /Writing .+\.\.\./i, // "Writing to file..."
-        /Searching .+\.\.\./i, // "Searching in..."
-        /Running .+\.\.\./i, // "Running command..."
-        /Executing .+\.\.\./i, // "Executing..."
-        /Installing .+\.\.\./i, // "Installing package..."
-        /Updating .+\.\.\./i, // "Updating..."
-        /Creating .+\.\.\./i, // "Creating file..."
-        /Downloading .+\.\.\./i, // "Downloading..."
+        /Reading .+\.\.\./i,
+        /Writing .+\.\.\./i,
+        /Searching .+\.\.\./i,
+        /Running .+\.\.\./i,
+        /Executing .+\.\.\./i,
+        /Installing .+\.\.\./i,
+        /Updating .+\.\.\./i,
+        /Creating .+\.\.\./i,
+        /Downloading .+\.\.\./i,
         /Uploading .+\.\.\./i, // "Uploading..."
     ],
     // Claude finished a task (look for these in recent output)
@@ -657,10 +719,10 @@ const CLAUDE_PATTERNS = {
         /Finished!/i,
         /Complete!/i,
         /Successfully/i,
-        /✓/, // Checkmark
-        /✔/, // Another checkmark
+        /✓/,
+        /✔/,
         /\[done\]/i,
-        /Worked for \d+/i, // "Worked for 38s" - Claude Code completion indicator
+        /Worked for \d+/i,
         /\* Worked for/i, // "* Worked for" variant
     ],
     // Claude encountered an error
@@ -669,8 +731,8 @@ const CLAUDE_PATTERNS = {
         /Failed:/i,
         /Exception:/i,
         /FATAL/i,
-        /✗/, // X mark
-        /✘/, // Another X mark
+        /✗/,
+        /✘/,
         /\[error\]/i,
         /Permission denied/i,
         /not found/i,
@@ -831,18 +893,18 @@ function detectAgentStatus(agent) {
         /\(y\/n\)/i,
         /\[yes\/no\]/i,
         // Claude Code specific prompts for accepting edits/commits
-        /accept edits/i, // "accept edits on (shift+Tab to cycle)"
-        /shift\+?Tab to cycle/i, // The cycling hint
-        />\s*Commit this/i, // "> Commit this" prompt
-        /❯\s*Commit/i, // "❯ Commit" prompt
-        /Press Enter to/i, // Press enter prompts
-        /\(enter to confirm\)/i, // Enter confirmation
-        /\(esc to cancel\)/i, // Esc to cancel hints
+        /accept edits/i,
+        /shift\+?Tab to cycle/i,
+        />\s*Commit this/i,
+        /❯\s*Commit/i,
+        /Press Enter to/i,
+        /\(enter to confirm\)/i,
+        /\(esc to cancel\)/i,
         // Selection/Menu prompts with numbered options
         /\d+\.\s*(Yes|No|Cancel|Skip|Allow|Deny|Accept|Reject)\b/i,
-        /❯\s*\d+\./, // Chevron with numbered selection
-        />\s*\d+\.\s/, // "> 1." style selection
-        /\(Use arrow keys\)/i, // Selection menu hint
+        /❯\s*\d+\./,
+        />\s*\d+\.\s/,
+        /\(Use arrow keys\)/i,
         // Permission/Approval prompts (Claude asking to do something)
         /Do you want to (create|edit|delete|write|read|run|execute|allow|proceed|continue|overwrite|replace|install|update|remove)/i,
         /Allow this/i,
@@ -879,8 +941,8 @@ function detectAgentStatus(agent) {
     // Patterns that indicate Claude finished and is back to idle prompt
     // These are prompts WITHOUT an accompanying question
     const idlePromptPatterns = [
-        /❯\s*$/m, // Just the chevron prompt at end
-        /^\s*❯\s*$/m, // Chevron on its own line
+        /❯\s*$/m,
+        /^\s*❯\s*$/m,
         /\$\s*$/m, // Shell prompt at end
     ];
     // Check for completion patterns
@@ -1410,10 +1472,10 @@ function initTelegramBot() {
                 };
                 const calculateModelCost = (modelId, input, output, cacheRead, cacheWrite) => {
                     const pricing = getModelPricing(modelId);
-                    return (input / 1_000_000) * pricing.inputPerMTok +
-                        (output / 1_000_000) * pricing.outputPerMTok +
-                        (cacheRead / 1_000_000) * pricing.cacheHitsPerMTok +
-                        (cacheWrite / 1_000_000) * pricing.cache5mWritePerMTok;
+                    return (input / 1000000) * pricing.inputPerMTok +
+                        (output / 1000000) * pricing.outputPerMTok +
+                        (cacheRead / 1000000) * pricing.cacheHitsPerMTok +
+                        (cacheWrite / 1000000) * pricing.cache5mWritePerMTok;
                 };
                 // Calculate totals
                 let totalCost = 0;
@@ -1446,10 +1508,10 @@ function initTelegramBot() {
                 // Format message
                 let text = `📊 *Usage & Cost Summary*\n\n`;
                 text += `💰 *Total Cost:* $${totalCost.toFixed(2)}\n`;
-                text += `🔢 *Total Tokens:* ${((totalInput + totalOutput) / 1_000_000).toFixed(2)}M\n`;
-                text += `📥 Input: ${(totalInput / 1_000_000).toFixed(2)}M\n`;
-                text += `📤 Output: ${(totalOutput / 1_000_000).toFixed(2)}M\n`;
-                text += `💾 Cache: ${(totalCacheRead / 1_000_000).toFixed(2)}M read\n\n`;
+                text += `🔢 *Total Tokens:* ${((totalInput + totalOutput) / 1000000).toFixed(2)}M\n`;
+                text += `📥 Input: ${(totalInput / 1000000).toFixed(2)}M\n`;
+                text += `📤 Output: ${(totalOutput / 1000000).toFixed(2)}M\n`;
+                text += `💾 Cache: ${(totalCacheRead / 1000000).toFixed(2)}M read\n\n`;
                 if (modelBreakdown.length > 0) {
                     text += `*By Model:*\n`;
                     modelBreakdown.slice(0, 5).forEach(m => {
@@ -1486,15 +1548,80 @@ function initTelegramBot() {
             // Ignore commands
             if (msg.text?.startsWith('/'))
                 return;
-            if (!msg.text)
-                return;
             // Save chat ID if not saved
             const chatId = msg.chat.id.toString();
             if (appSettings.telegramChatId !== chatId) {
                 appSettings.telegramChatId = chatId;
                 saveAppSettings(appSettings);
             }
-            await sendToSuperAgent(chatId, msg.text);
+            // Handle files (photos, documents, etc.)
+            const filePaths = [];
+            let caption = msg.caption || msg.text || '';
+            try {
+                // Handle photos
+                if (msg.photo && msg.photo.length > 0) {
+                    // Get the largest photo (last in array)
+                    const photo = msg.photo[msg.photo.length - 1];
+                    telegramBot?.sendMessage(chatId, '📷 Downloading image...');
+                    const fileLink = await telegramBot.getFileLink(photo.file_id);
+                    const filename = `photo_${photo.file_id}.jpg`;
+                    const filePath = await downloadFile(fileLink, filename);
+                    filePaths.push(filePath);
+                    console.log('Downloaded Telegram photo:', filePath);
+                }
+                // Handle documents (PDF, text files, etc.)
+                if (msg.document) {
+                    telegramBot?.sendMessage(chatId, `📄 Downloading ${msg.document.file_name || 'file'}...`);
+                    const fileLink = await telegramBot.getFileLink(msg.document.file_id);
+                    const filename = msg.document.file_name || `document_${msg.document.file_id}`;
+                    const filePath = await downloadFile(fileLink, filename);
+                    filePaths.push(filePath);
+                    console.log('Downloaded Telegram document:', filePath);
+                }
+                // Handle audio
+                if (msg.audio) {
+                    telegramBot?.sendMessage(chatId, `🎵 Downloading audio...`);
+                    const fileLink = await telegramBot.getFileLink(msg.audio.file_id);
+                    const audioName = msg.audio.title || msg.audio.performer || '';
+                    const filename = audioName ? `${audioName}.mp3` : `audio_${msg.audio.file_id}.mp3`;
+                    const filePath = await downloadFile(fileLink, filename);
+                    filePaths.push(filePath);
+                    console.log('Downloaded Telegram audio:', filePath);
+                }
+                // Handle video
+                if (msg.video) {
+                    telegramBot?.sendMessage(chatId, `🎬 Downloading video...`);
+                    const fileLink = await telegramBot.getFileLink(msg.video.file_id);
+                    const filename = `video_${msg.video.file_id}.mp4`;
+                    const filePath = await downloadFile(fileLink, filename);
+                    filePaths.push(filePath);
+                    console.log('Downloaded Telegram video:', filePath);
+                }
+                // Handle voice messages
+                if (msg.voice) {
+                    telegramBot?.sendMessage(chatId, `🎤 Downloading voice message...`);
+                    const fileLink = await telegramBot.getFileLink(msg.voice.file_id);
+                    const filename = `voice_${msg.voice.file_id}.ogg`;
+                    const filePath = await downloadFile(fileLink, filename);
+                    filePaths.push(filePath);
+                    console.log('Downloaded Telegram voice:', filePath);
+                }
+            }
+            catch (err) {
+                console.error('Error downloading Telegram file:', err);
+                telegramBot?.sendMessage(chatId, `❌ Error downloading file: ${err}`);
+            }
+            // If we have files, include them in the message
+            if (filePaths.length > 0) {
+                const fileListText = filePaths.map(p => `File: ${p}`).join('\n');
+                const messageWithFiles = `${caption}\n\n[ATTACHED FILES - Read these files to see the content]\n${fileListText}`;
+                await sendToSuperAgent(chatId, messageWithFiles);
+            }
+            else if (msg.text) {
+                // Regular text message
+                await sendToSuperAgent(chatId, msg.text);
+            }
+            // If no text and no files, ignore the message
         });
         // Handle polling errors
         telegramBot.on('polling_error', (error) => {
@@ -1687,6 +1814,7 @@ function initSlackBot() {
         // Handle app mentions
         slackApp.event('app_mention', async ({ event, say }) => {
             console.log('Slack app_mention event received:', JSON.stringify(event, null, 2));
+            const eventWithFiles = event;
             // Remove the bot mention from the text
             const text = event.text.replace(/<@[A-Z0-9]+>/gi, '').trim();
             slackResponseChannel = event.channel;
@@ -1698,20 +1826,50 @@ function initSlackBot() {
                 saveAppSettings(appSettings);
                 mainWindow?.webContents.send('settings:updated', appSettings);
             }
-            await handleSlackCommand(text, event.channel, say);
+            // Handle files in mentions
+            const filePaths = [];
+            if (eventWithFiles.files && eventWithFiles.files.length > 0) {
+                await say(':inbox_tray: Downloading attached files...');
+                for (const file of eventWithFiles.files) {
+                    try {
+                        const downloadUrl = file.url_private_download || file.url_private;
+                        if (!downloadUrl) {
+                            console.log('No download URL for Slack file:', file.id);
+                            continue;
+                        }
+                        const filename = file.name || `file_${file.id}${getExtensionFromMimeType(file.mimetype || '')}`;
+                        const filePath = await downloadFile(downloadUrl, filename, {
+                            'Authorization': `Bearer ${appSettings.slackBotToken}`,
+                        });
+                        filePaths.push(filePath);
+                        console.log('Downloaded Slack mention file:', filePath);
+                    }
+                    catch (err) {
+                        console.error('Error downloading Slack file:', err);
+                        await say(`:warning: Error downloading file ${file.name || file.id}: ${err}`);
+                    }
+                }
+            }
+            // If files were attached, forward to Super Agent directly
+            if (filePaths.length > 0) {
+                const fileListText = filePaths.map(p => `File: ${p}`).join('\n');
+                const messageWithFiles = `${text}\n\n[ATTACHED FILES - Read these files to see the content]\n${fileListText}`;
+                await sendToSuperAgentFromSlack(event.channel, messageWithFiles, say);
+            }
+            else {
+                // No files, use regular command handling
+                await handleSlackCommand(text, event.channel, say);
+            }
         });
         // Handle direct messages - use 'message' event with subtype filter
         slackApp.message(async ({ message, say }) => {
-            // Cast to any for flexibility with Slack's complex message types
             const msg = message;
             console.log('Slack message event received:', JSON.stringify(msg, null, 2));
             // Skip bot messages and message changes/deletions
             if (msg.bot_id)
                 return;
-            if (msg.subtype)
-                return; // Skip edited, deleted, etc.
-            if (!msg.text)
-                return;
+            if (msg.subtype && msg.subtype !== 'file_share')
+                return; // Allow file_share subtype
             const channel = msg.channel;
             slackResponseChannel = channel;
             // Use thread_ts if replying in a thread, otherwise use the message ts to start a thread
@@ -1722,7 +1880,42 @@ function initSlackBot() {
                 saveAppSettings(appSettings);
                 mainWindow?.webContents.send('settings:updated', appSettings);
             }
-            await sendToSuperAgentFromSlack(channel, msg.text, say);
+            // Handle files
+            const filePaths = [];
+            const textContent = msg.text || '';
+            if (msg.files && msg.files.length > 0) {
+                await say(':inbox_tray: Downloading attached files...');
+                for (const file of msg.files) {
+                    try {
+                        const downloadUrl = file.url_private_download || file.url_private;
+                        if (!downloadUrl) {
+                            console.log('No download URL for Slack file:', file.id);
+                            continue;
+                        }
+                        const filename = file.name || `file_${file.id}${getExtensionFromMimeType(file.mimetype || '')}`;
+                        // Download with Slack auth token
+                        const filePath = await downloadFile(downloadUrl, filename, {
+                            'Authorization': `Bearer ${appSettings.slackBotToken}`,
+                        });
+                        filePaths.push(filePath);
+                        console.log('Downloaded Slack file:', filePath);
+                    }
+                    catch (err) {
+                        console.error('Error downloading Slack file:', err);
+                        await say(`:warning: Error downloading file ${file.name || file.id}: ${err}`);
+                    }
+                }
+            }
+            // Build message with files
+            if (filePaths.length > 0) {
+                const fileListText = filePaths.map(p => `File: ${p}`).join('\n');
+                const messageWithFiles = `${textContent}\n\n[ATTACHED FILES - Read these files to see the content]\n${fileListText}`;
+                await sendToSuperAgentFromSlack(channel, messageWithFiles, say);
+            }
+            else if (textContent) {
+                await sendToSuperAgentFromSlack(channel, textContent, say);
+            }
+            // If no text and no files, ignore
         });
         // Log all events for debugging
         slackApp.use(async ({ next, payload }) => {
@@ -1868,17 +2061,17 @@ async function handleSlackCommand(text, channel, say) {
                     totalInput += input;
                     totalOutput += output;
                     const pricing = getModelPricing(modelId);
-                    totalCost += (input / 1_000_000) * pricing.inputPerMTok +
-                        (output / 1_000_000) * pricing.outputPerMTok +
-                        (cacheRead / 1_000_000) * pricing.cacheHitsPerMTok +
-                        (cacheWrite / 1_000_000) * pricing.cache5mWritePerMTok;
+                    totalCost += (input / 1000000) * pricing.inputPerMTok +
+                        (output / 1000000) * pricing.outputPerMTok +
+                        (cacheRead / 1000000) * pricing.cacheHitsPerMTok +
+                        (cacheWrite / 1000000) * pricing.cache5mWritePerMTok;
                 });
             }
             let response = `:bar_chart: *Usage & Cost Summary*\n\n`;
             response += `:moneybag: *Total Cost:* $${totalCost.toFixed(2)}\n`;
-            response += `:1234: *Total Tokens:* ${((totalInput + totalOutput) / 1_000_000).toFixed(2)}M\n`;
-            response += `:inbox_tray: Input: ${(totalInput / 1_000_000).toFixed(2)}M\n`;
-            response += `:outbox_tray: Output: ${(totalOutput / 1_000_000).toFixed(2)}M\n`;
+            response += `:1234: *Total Tokens:* ${((totalInput + totalOutput) / 1000000).toFixed(2)}M\n`;
+            response += `:inbox_tray: Input: ${(totalInput / 1000000).toFixed(2)}M\n`;
+            response += `:outbox_tray: Output: ${(totalOutput / 1000000).toFixed(2)}M\n`;
             await say(response);
         }
         catch (err) {
@@ -2149,7 +2342,7 @@ function saveAgents() {
             ...agent,
             // Don't persist runtime-only fields
             ptyId: undefined,
-            pathMissing: undefined, // Recalculated on load
+            pathMissing: undefined,
             // Limit output to last 100 entries to avoid huge files
             output: agent.output.slice(-100),
             // Reset running status to idle on save (will be restarted manually)

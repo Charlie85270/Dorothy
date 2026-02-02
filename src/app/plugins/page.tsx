@@ -79,9 +79,34 @@ export default function PluginsPage() {
     );
   };
 
+  // Create custom plugin entries for installed plugins not in the database
+  const customInstalledPlugins = useMemo((): Plugin[] => {
+    return installedPlugins
+      .filter(pluginKey => {
+        // Check if this plugin is already in the database
+        const [name] = pluginKey.split('@');
+        return !PLUGINS_DATABASE.some(p =>
+          p.name === name ||
+          `${p.name}@${p.marketplace}` === pluginKey ||
+          `${p.name}@${p.marketplace}`.toLowerCase() === pluginKey.toLowerCase()
+        );
+      })
+      .map(pluginKey => {
+        const [name, marketplace] = pluginKey.split('@');
+        return {
+          name: name || pluginKey,
+          description: 'Custom installed plugin',
+          category: 'Productivity' as const,
+          marketplace: marketplace || 'custom',
+          tags: ['custom', 'installed'],
+        };
+      });
+  }, [installedPlugins]);
+
   // Filter plugins
   const filteredPlugins = useMemo(() => {
-    let plugins = PLUGINS_DATABASE;
+    // Combine database plugins with custom installed plugins
+    let plugins: Plugin[] = [...PLUGINS_DATABASE, ...customInstalledPlugins];
 
     if (search) {
       const q = search.toLowerCase();
@@ -120,7 +145,7 @@ export default function PluginsPage() {
     });
 
     return plugins;
-  }, [search, selectedCategory, selectedMarketplace, installedPlugins]);
+  }, [search, selectedCategory, selectedMarketplace, installedPlugins, customInstalledPlugins]);
 
   const getInstallCommand = (plugin: Plugin) => {
     return `/plugin install ${plugin.name}@${plugin.marketplace}`;
@@ -215,7 +240,7 @@ export default function PluginsPage() {
         {/* Stats row */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="text-xs lg:text-sm text-muted-foreground">
-            <span className="text-white font-medium">{PLUGINS_DATABASE.length}</span> plugins
+            <span className="text-white font-medium">{PLUGINS_DATABASE.length + customInstalledPlugins.length}</span> plugins
           </div>
           <div className="text-xs lg:text-sm text-muted-foreground">
             <span className="text-white font-medium">{installedPlugins.length}</span> installed

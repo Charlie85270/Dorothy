@@ -21,7 +21,6 @@ import {
   Play,
   Check,
   Crown,
-  Send,
   Workflow,
   Brain,
 } from 'lucide-react';
@@ -232,8 +231,8 @@ function HeroSection() {
             <div className="text-sm text-[#71717a]">Open Source</div>
           </div>
           <div className="text-center">
-            <div className="text-3xl font-bold text-[#a78bfa]"><AnimatedNumber value={3} suffix="D" /></div>
-            <div className="text-sm text-[#71717a]">Interface</div>
+            <div className="text-2xl font-bold text-[#a78bfa]">Native</div>
+            <div className="text-sm text-[#71717a]">Claude Code</div>
           </div>
           <div className="text-center">
             <div className="text-3xl font-bold text-[#60a5fa]"><AnimatedNumber value={0} suffix="$" /></div>
@@ -450,12 +449,6 @@ function FeaturesSection() {
       title: "Multi-Agent Management",
       description: "Create, monitor, and control multiple Claude agents simultaneously. Each agent runs in its own isolated environment.",
       gradient: "from-[#22d3ee] to-[#60a5fa]",
-    },
-    {
-      icon: Send,
-      title: "Telegram & Slack",
-      description: "Control your agents remotely via Telegram or Slack. Start tasks, check status, and communicate with Super Agent from anywhere.",
-      gradient: "from-[#0088cc] to-[#22d3ee]",
     },
     {
       icon: Workflow,
@@ -1047,8 +1040,8 @@ export default function Home() {
     <main className="min-h-screen bg-[#0a0a0f] text-[#f5f5f7] overflow-x-hidden">
       <Navigation />
       <HeroSection />
-      <RemoteControlSection />
       <FeaturesSection />
+      <RemoteControlSection />
       <HowItWorksSection />
       <DemoSection />
       <DownloadSection />

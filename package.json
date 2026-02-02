@@ -32,9 +32,17 @@
     ],
     "asarUnpack": [
       "out/**/*",
-      "mcp-orchestrator/**/*",
       "hooks/**/*",
-      "node_modules/claude-mem/**/*"
+      "node_modules/claude-mem/**/*",
+      "node_modules/better-sqlite3/**/*",
+      "node_modules/node-pty/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "mcp-orchestrator",
+        "to": "mcp-orchestrator",
+        "filter": ["**/*"]
+      }
     ],
     "mac": {
       "category": "public.app-category.developer-tools",

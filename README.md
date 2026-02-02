@@ -56,12 +56,13 @@ Available MCP tools:
 - `send_telegram` - Send messages to Telegram
 
 ### 🧠 Persistent Memory with claude-mem
-Agents now have persistent memory across sessions! Powered by [claude-mem](https://github.com/thedotmack/claude-mem), agents can recall past decisions, learnings, and context.
+Enable persistent memory for all your Claude Code sessions! Powered by [claude-mem](https://github.com/thedotmack/claude-mem), agents can recall past decisions, learnings, and context across sessions.
 
+- **One-click activation** - Enable memory from the Settings page
 - **Automatic memory capture** - Tool uses, decisions, and learnings are stored automatically
-- **Memory panel** - View agent memories in the UI with full search
 - **Cross-session context** - Agents remember what they learned in previous sessions
 - **Smart compression** - AI-powered summarization keeps memories efficient
+- **Works everywhere** - Memory works across all Claude Code sessions, not just claude.mgr
 
 ### 📱 Telegram Bot Integration
 Control your agents remotely via Telegram! Connect your Telegram bot and manage your agents from anywhere.

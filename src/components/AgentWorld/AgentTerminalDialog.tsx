@@ -29,7 +29,6 @@ import {
   Users,
   Folder,
   Circle,
-  Brain,
 } from 'lucide-react';
 import type { AgentStatus } from '@/types/electron';
 import { isElectron } from '@/hooks/useElectron';
@@ -49,14 +48,6 @@ const CodePanel = dynamic(() => import('./CodePanel'), {
   loading: () => (
     <div className="flex items-center justify-center h-full">
       <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
-    </div>
-  ),
-});
-
-const MemoryPanel = dynamic(() => import('./MemoryPanel'), {
-  loading: () => (
-    <div className="flex items-center justify-center h-full">
-      <Loader2 className="w-6 h-6 animate-spin text-pink-400" />
     </div>
   ),
 });
@@ -91,7 +82,7 @@ interface AgentTerminalDialogProps {
 }
 
 // Panel types for the sidebar
-type PanelType = 'code' | 'git' | 'terminal' | 'context' | 'settings' | 'memory';
+type PanelType = 'code' | 'git' | 'terminal' | 'context' | 'settings';
 
 // Import Zap icon for skip permissions
 import { Zap } from 'lucide-react';
@@ -1421,31 +1412,6 @@ export default function AgentTerminalDialog({
                               </div>
                             )}
                           </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Memory Panel */}
-                  <div className="border-b border-border-primary">
-                    <PanelHeader
-                      icon={Brain}
-                      title="Memory"
-                      color="text-pink-400"
-                      isExpanded={expandedPanels.has('memory')}
-                      onToggle={() => togglePanel('memory')}
-                    />
-                    <div
-                      className="grid transition-[grid-template-rows] duration-200 ease-out"
-                      style={{ gridTemplateRows: expandedPanels.has('memory') ? '1fr' : '0fr' }}
-                    >
-                      <div className="overflow-hidden">
-                        <div className="h-[350px]">
-                          <MemoryPanel
-                            agentId={agent.id}
-                            projectPath={projectPath}
-                            className="h-full"
-                          />
                         </div>
                       </div>
                     </div>

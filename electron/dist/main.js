@@ -44,145 +44,6 @@ const http = __importStar(require("http"));
 const uuid_1 = require("uuid");
 const pty = __importStar(require("node-pty"));
 const node_telegram_bot_api_1 = __importDefault(require("node-telegram-bot-api"));
-const child_process_1 = require("child_process");
-// ============== Claude-Mem Worker ==============
-// Memory is now handled entirely by claude-mem plugin
-let claudeMemWorker = null;
-const CLAUDE_MEM_PORT = 37777;
-// ============== Claude-Mem Worker Functions ==============
-/**
- * Start the claude-mem worker service
- */
-async function startClaudeMemWorker() {
-    // Check if already running
-    try {
-        const response = await fetch(`http://localhost:${CLAUDE_MEM_PORT}/api/stats`);
-        if (response.ok) {
-            console.log('Claude-mem worker already running on port', CLAUDE_MEM_PORT);
-            return true;
-        }
-    }
-    catch {
-        // Not running, will start it
-    }
-    // Find the worker script
-    const workerPaths = [
-        // Development: in node_modules
-        path.join(__dirname, '..', 'node_modules', 'claude-mem', 'plugin', 'scripts', 'worker-service.cjs'),
-        // Production: bundled
-        path.join(electron_1.app.getAppPath(), 'node_modules', 'claude-mem', 'plugin', 'scripts', 'worker-service.cjs'),
-        // Unpacked asar
-        path.join(electron_1.app.getAppPath().replace('app.asar', 'app.asar.unpacked'), 'node_modules', 'claude-mem', 'plugin', 'scripts', 'worker-service.cjs'),
-    ];
-    let workerScript = null;
-    for (const p of workerPaths) {
-        if (fs.existsSync(p)) {
-            workerScript = p;
-            break;
-        }
-    }
-    if (!workerScript) {
-        console.error('Claude-mem worker script not found. Install claude-mem package.');
-        return false;
-    }
-    console.log('Starting claude-mem worker from:', workerScript);
-    // Try to use bun first, fall back to node
-    const runtime = await findRuntime();
-    return new Promise((resolve) => {
-        try {
-            claudeMemWorker = (0, child_process_1.spawn)(runtime, [workerScript, 'start'], {
-                cwd: path.dirname(workerScript),
-                env: {
-                    ...process.env,
-                    CLAUDE_MEM_PORT: CLAUDE_MEM_PORT.toString(),
-                    CLAUDE_MEM_DATA_DIR: path.join(os.homedir(), '.claude-mem'),
-                },
-                stdio: ['ignore', 'pipe', 'pipe'],
-                detached: false,
-            });
-            claudeMemWorker.stdout?.on('data', (data) => {
-                console.log('[claude-mem]', data.toString().trim());
-            });
-            claudeMemWorker.stderr?.on('data', (data) => {
-                console.error('[claude-mem error]', data.toString().trim());
-            });
-            claudeMemWorker.on('error', (err) => {
-                console.error('Failed to start claude-mem worker:', err);
-                resolve(false);
-            });
-            claudeMemWorker.on('exit', (code) => {
-                console.log('Claude-mem worker exited with code:', code);
-                claudeMemWorker = null;
-            });
-            // Wait a bit and check if it started
-            setTimeout(async () => {
-                try {
-                    const response = await fetch(`http://localhost:${CLAUDE_MEM_PORT}/api/stats`);
-                    if (response.ok) {
-                        console.log('Claude-mem worker started successfully');
-                        resolve(true);
-                    }
-                    else {
-                        resolve(false);
-                    }
-                }
-                catch {
-                    // Give it more time
-                    setTimeout(async () => {
-                        try {
-                            const response = await fetch(`http://localhost:${CLAUDE_MEM_PORT}/api/stats`);
-                            resolve(response.ok);
-                        }
-                        catch {
-                            resolve(false);
-                        }
-                    }, 3000);
-                }
-            }, 2000);
-        }
-        catch (err) {
-            console.error('Error starting claude-mem worker:', err);
-            resolve(false);
-        }
-    });
-}
-/**
- * Find bun or node runtime
- */
-async function findRuntime() {
-    const { execSync } = require('child_process');
-    // Try bun first (preferred by claude-mem)
-    try {
-        execSync('which bun', { stdio: 'ignore' });
-        return 'bun';
-    }
-    catch {
-        // Fall back to node
-        return 'node';
-    }
-}
-/**
- * Stop the claude-mem worker
- */
-function stopClaudeMemWorker() {
-    if (claudeMemWorker) {
-        console.log('Stopping claude-mem worker...');
-        claudeMemWorker.kill();
-        claudeMemWorker = null;
-    }
-}
-/**
- * Check if claude-mem is available
- */
-async function isClaudeMemAvailable() {
-    try {
-        const response = await fetch(`http://localhost:${CLAUDE_MEM_PORT}/api/stats`);
-        return response.ok;
-    }
-    catch {
-        return false;
-    }
-}
 // Get the base path for static assets
 function getAppBasePath() {
     let appPath = electron_1.app.getAppPath();
@@ -339,8 +200,6 @@ function startApiServer() {
                     sendJson({ error: 'prompt is required' }, 400);
                     return;
                 }
-                // Memory is now handled by claude-mem plugin via hooks
-                // No need to start sessions or inject context manually
                 const effectivePrompt = prompt;
                 // Start the agent (similar to agent:start IPC handler)
                 const workingDir = agent.worktreePath || agent.projectPath;
@@ -388,7 +247,6 @@ function startApiServer() {
                         agent.output = agent.output.slice(-5000);
                     }
                     agent.lastActivity = new Date().toISOString();
-                    // Memory is handled by claude-mem plugin via hooks
                     // Check for waiting state
                     const recentOutput = agent.output.slice(-20).join('');
                     const isWaiting = CLAUDE_PATTERNS.waitingForInput.some(p => p.test(recentOutput));
@@ -405,7 +263,6 @@ function startApiServer() {
                     if (exitCode !== 0) {
                         agent.error = `Process exited with code ${exitCode}`;
                     }
-                    // Memory sessions are handled by claude-mem via hooks
                     agent.lastActivity = new Date().toISOString();
                     ptyProcesses.delete(ptyId);
                     saveAgents();
@@ -512,105 +369,6 @@ function startApiServer() {
                     catch (err2) {
                         sendJson({ error: `Failed to send: ${err2}` }, 500);
                     }
-                }
-                return;
-            }
-            // ============== Memory API Endpoints ==============
-            // These endpoints proxy to claude-mem when available, fallback to local memory
-            // Helper to proxy to claude-mem
-            const proxyToClaudeMem = async (apiPath) => {
-                try {
-                    const response = await fetch(`http://localhost:${CLAUDE_MEM_PORT}${apiPath}`);
-                    if (response.ok) {
-                        return await response.json();
-                    }
-                }
-                catch {
-                    // claude-mem not available
-                }
-                return null;
-            };
-            // GET /api/memory/search - Search memories (claude-mem only)
-            if (pathname === '/api/memory/search' && req.method === 'GET') {
-                const query = url.searchParams.get('q') || '';
-                const agentId = url.searchParams.get('agent_id') || undefined;
-                const projectPath = url.searchParams.get('project') || undefined;
-                const limit = parseInt(url.searchParams.get('limit') || '20', 10);
-                const claudeMemData = await proxyToClaudeMem(`/api/observations?limit=${limit}`);
-                if (claudeMemData && Array.isArray(claudeMemData)) {
-                    const results = claudeMemData
-                        .filter((obs) => {
-                        if (query && !obs.title?.toLowerCase().includes(query.toLowerCase()) && !obs.content?.toLowerCase().includes(query.toLowerCase())) {
-                            return false;
-                        }
-                        return true;
-                    })
-                        .slice(0, limit)
-                        .map((obs) => ({
-                        id: obs.id?.toString() || obs.observationId?.toString(),
-                        type: obs.type || 'observation',
-                        content: obs.title || obs.content || '',
-                        agent_id: agentId || 'claude-mem',
-                        project_path: obs.projectPath || projectPath || '',
-                        created_at: obs.createdAt || Date.now(),
-                        session_id: obs.sessionId,
-                        metadata: { source: 'claude-mem', raw: obs },
-                    }));
-                    sendJson({ results, source: 'claude-mem' });
-                }
-                else {
-                    sendJson({ results: [], source: 'claude-mem', error: 'claude-mem not available' });
-                }
-                return;
-            }
-            // GET /api/memory/timeline/:observation_id - Get timeline (claude-mem only)
-            const timelineMatch = pathname.match(/^\/api\/memory\/timeline\/([^/]+)$/);
-            if (timelineMatch && req.method === 'GET') {
-                const observationId = timelineMatch[1];
-                // Claude-mem doesn't have a timeline endpoint, return empty
-                sendJson({ timeline: [], source: 'claude-mem' });
-                return;
-            }
-            // GET /api/memory/observations - Get observations by IDs (claude-mem only)
-            if (pathname === '/api/memory/observations' && req.method === 'GET') {
-                const idsParam = url.searchParams.get('ids') || '';
-                const ids = idsParam.split(',').filter(id => id.trim());
-                // Fetch individual observations from claude-mem
-                const observations = [];
-                for (const id of ids) {
-                    const obs = await proxyToClaudeMem(`/api/observation/${id}`);
-                    if (obs)
-                        observations.push(obs);
-                }
-                sendJson({ observations, source: 'claude-mem' });
-                return;
-            }
-            // POST /api/memory/remember - Store memory (not supported without local memory)
-            if (pathname === '/api/memory/remember' && req.method === 'POST') {
-                sendJson({ error: 'Memory storage is handled by claude-mem plugin', source: 'claude-mem' }, 400);
-                return;
-            }
-            // GET /api/memory/context - Get memory context (claude-mem handles this via hooks)
-            if (pathname === '/api/memory/context' && req.method === 'GET') {
-                const context = await proxyToClaudeMem('/api/context/preview');
-                sendJson({ context: context || 'No context available', source: 'claude-mem' });
-                return;
-            }
-            // GET /api/memory/sessions/:agent_id - Get agent sessions (claude-mem only)
-            const sessionsMatch = pathname.match(/^\/api\/memory\/sessions\/([^/]+)$/);
-            if (sessionsMatch && req.method === 'GET') {
-                const sessions = await proxyToClaudeMem('/api/sessions');
-                sendJson({ sessions: sessions || [], source: 'claude-mem' });
-                return;
-            }
-            // GET /api/memory/stats - Get memory stats (claude-mem only)
-            if (pathname === '/api/memory/stats' && req.method === 'GET') {
-                const claudeMemStats = await proxyToClaudeMem('/api/stats');
-                if (claudeMemStats) {
-                    sendJson({ ...claudeMemStats, source: 'claude-mem' });
-                }
-                else {
-                    sendJson({ totalObservations: 0, source: 'claude-mem', error: 'claude-mem not available' });
                 }
                 return;
             }
@@ -2002,7 +1760,6 @@ async function initAgentPty(agent) {
         if (agentData) {
             agentData.output.push(data);
             agentData.lastActivity = new Date().toISOString();
-            // Memory is handled by claude-mem plugin via hooks
             // Capture Super Agent output for Telegram
             if (superAgentTelegramTask && isSuperAgent(agentData)) {
                 superAgentOutputBuffer.push(data);
@@ -2048,7 +1805,6 @@ async function initAgentPty(agent) {
             const newStatus = exitCode === 0 ? 'completed' : 'error';
             agentData.status = newStatus;
             agentData.lastActivity = new Date().toISOString();
-            // Memory sessions are handled by claude-mem via hooks
             // Send notification
             handleStatusChangeNotification(agentData, newStatus);
             saveAgents();
@@ -2116,22 +1872,12 @@ electron_1.protocol.registerSchemesAsPrivileged([
     },
 ]);
 electron_1.app.whenReady().then(async () => {
-    // Start claude-mem worker service (memory is handled by claude-mem plugin)
-    const claudeMemStarted = await startClaudeMemWorker();
-    if (claudeMemStarted) {
-        console.log('Claude-mem memory system active');
-    }
-    else {
-        console.log('Claude-mem not available - install the plugin for memory features');
-    }
     // Load persisted agents before creating window
     loadAgents();
     // Auto-setup MCP orchestrator if not already configured
     await setupMcpOrchestrator();
-    // Configure memory hooks for Claude Code (status notifications)
-    await configureMemoryHooks();
-    // Configure claude-mem hooks for persistent memory
-    await configureClaudeMemHooks();
+    // Configure status hooks for Claude Code
+    await configureStatusHooks();
     // Initialize Telegram bot if enabled
     initTelegramBot();
     // Auto-start Super Agent if it exists
@@ -2204,7 +1950,6 @@ electron_1.app.on('window-all-closed', () => {
 // Save agents when app is about to quit
 electron_1.app.on('before-quit', () => {
     saveAgents();
-    stopClaudeMemWorker();
 });
 electron_1.app.on('activate', () => {
     if (mainWindow === null) {
@@ -2476,8 +2221,6 @@ electron_1.ipcMain.handle('agent:start', async (_event, { id, prompt, options })
         const escapedSecondaryPath = agent.secondaryProjectPath.replace(/'/g, "'\\''");
         command += ` --add-dir '${escapedSecondaryPath}'`;
     }
-    // Memory is now handled by claude-mem plugin via hooks
-    // No need to inject memory context - it's automatic
     // Add the prompt (escape single quotes)
     const escapedPrompt = prompt.replace(/'/g, "'\\''");
     command += ` '${escapedPrompt}'`;
@@ -3135,7 +2878,7 @@ electron_1.ipcMain.handle('telegram:sendTest', async () => {
         return { success: false, error: String(err) };
     }
 });
-// ============== Memory Hooks Setup ==============
+// ============== Status Hooks Setup ==============
 // Get the path to the bundled hooks directory
 function getHooksPath() {
     let appPath = electron_1.app.getAppPath();
@@ -3145,8 +2888,8 @@ function getHooksPath() {
     }
     return path.join(appPath, 'hooks');
 }
-// Configure Claude Code hooks for memory system
-async function configureMemoryHooks() {
+// Configure Claude Code hooks for status notifications
+async function configureStatusHooks() {
     try {
         const hooksDir = getHooksPath();
         // Check if hooks directory exists
@@ -3255,131 +2998,14 @@ async function configureMemoryHooks() {
         // Write updated settings
         if (updated) {
             fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
-            console.log('Memory hooks configured in', settingsPath);
+            console.log('Status hooks configured in', settingsPath);
         }
         else {
-            console.log('Memory hooks already configured');
+            console.log('Status hooks already configured');
         }
     }
     catch (err) {
-        console.error('Failed to configure memory hooks:', err);
-    }
-}
-// Get the path to the bundled claude-mem plugin
-function getClaudeMemPluginPath() {
-    // In production, claude-mem is in app.asar.unpacked/node_modules
-    if (electron_1.app.isPackaged) {
-        const unpackedPath = electron_1.app.getAppPath().replace('app.asar', 'app.asar.unpacked');
-        return path.join(unpackedPath, 'node_modules', 'claude-mem', 'plugin');
-    }
-    // In development, it's in node_modules
-    return path.join(__dirname, '..', 'node_modules', 'claude-mem', 'plugin');
-}
-// Configure claude-mem hooks for memory system
-async function configureClaudeMemHooks() {
-    try {
-        const pluginPath = getClaudeMemPluginPath();
-        const workerScript = path.join(pluginPath, 'scripts', 'worker-service.cjs');
-        // Check if claude-mem plugin exists
-        if (!fs.existsSync(workerScript)) {
-            console.log('Claude-mem plugin not found at', pluginPath);
-            return;
-        }
-        console.log('Configuring claude-mem hooks with plugin path:', pluginPath);
-        const claudeDir = path.join(os.homedir(), '.claude');
-        const settingsPath = path.join(claudeDir, 'settings.json');
-        // Ensure .claude directory exists
-        if (!fs.existsSync(claudeDir)) {
-            fs.mkdirSync(claudeDir, { recursive: true });
-        }
-        // Read existing settings
-        let settings = {};
-        if (fs.existsSync(settingsPath)) {
-            try {
-                settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-            }
-            catch {
-                settings = {};
-            }
-        }
-        // Initialize hooks if not present
-        if (!settings.hooks) {
-            settings.hooks = {};
-        }
-        // Find runtime (prefer bun, fallback to node)
-        const runtime = await findRuntime();
-        let updated = false;
-        const workerCmd = `${runtime} "${workerScript}"`;
-        // Configure PostToolUse hook for observations
-        const postToolUseHook = {
-            matcher: '*',
-            hooks: [
-                { type: 'command', command: `${workerCmd} start`, timeout: 60 },
-                { type: 'command', command: `${workerCmd} hook claude-code observation`, timeout: 120 }
-            ]
-        };
-        const existingPostToolUse = settings.hooks.PostToolUse || [];
-        const hasClaudeMemPostToolUse = existingPostToolUse.some((h) => h.hooks?.some((hh) => hh.command?.includes('worker-service.cjs') && hh.command?.includes('observation')));
-        if (!hasClaudeMemPostToolUse) {
-            settings.hooks.PostToolUse = [...existingPostToolUse, postToolUseHook];
-            updated = true;
-            console.log('Added claude-mem PostToolUse hook');
-        }
-        // Configure Stop hook for summarization
-        const stopHook = {
-            hooks: [
-                { type: 'command', command: `${workerCmd} start`, timeout: 60 },
-                { type: 'command', command: `${workerCmd} hook claude-code summarize`, timeout: 120 }
-            ]
-        };
-        const existingStop = settings.hooks.Stop || [];
-        const hasClaudeMemStop = existingStop.some((h) => h.hooks?.some((hh) => hh.command?.includes('worker-service.cjs') && hh.command?.includes('summarize')));
-        if (!hasClaudeMemStop) {
-            settings.hooks.Stop = [...existingStop, stopHook];
-            updated = true;
-            console.log('Added claude-mem Stop hook');
-        }
-        // Configure SessionStart hook for context loading
-        const sessionStartHook = {
-            matcher: 'startup|clear|compact',
-            hooks: [
-                { type: 'command', command: `${workerCmd} start`, timeout: 60 },
-                { type: 'command', command: `${workerCmd} hook claude-code context`, timeout: 60 },
-                { type: 'command', command: `${workerCmd} hook claude-code user-message`, timeout: 60 }
-            ]
-        };
-        const existingSessionStart = settings.hooks.SessionStart || [];
-        const hasClaudeMemSessionStart = existingSessionStart.some((h) => h.hooks?.some((hh) => hh.command?.includes('worker-service.cjs') && hh.command?.includes('context')));
-        if (!hasClaudeMemSessionStart) {
-            settings.hooks.SessionStart = [...existingSessionStart, sessionStartHook];
-            updated = true;
-            console.log('Added claude-mem SessionStart hook');
-        }
-        // Configure UserPromptSubmit hook for session init
-        const userPromptHook = {
-            hooks: [
-                { type: 'command', command: `${workerCmd} start`, timeout: 60 },
-                { type: 'command', command: `${workerCmd} hook claude-code session-init`, timeout: 60 }
-            ]
-        };
-        const existingUserPrompt = settings.hooks.UserPromptSubmit || [];
-        const hasClaudeMemUserPrompt = existingUserPrompt.some((h) => h.hooks?.some((hh) => hh.command?.includes('worker-service.cjs') && hh.command?.includes('session-init')));
-        if (!hasClaudeMemUserPrompt) {
-            settings.hooks.UserPromptSubmit = [...existingUserPrompt, userPromptHook];
-            updated = true;
-            console.log('Added claude-mem UserPromptSubmit hook');
-        }
-        // Write updated settings
-        if (updated) {
-            fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
-            console.log('Claude-mem hooks configured in', settingsPath);
-        }
-        else {
-            console.log('Claude-mem hooks already configured');
-        }
-    }
-    catch (err) {
-        console.error('Failed to configure claude-mem hooks:', err);
+        console.error('Failed to configure status hooks:', err);
     }
 }
 // ============== Orchestrator MCP Setup ==============

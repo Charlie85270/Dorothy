@@ -23,6 +23,8 @@ import {
   EyeOff,
   ChevronRight,
   Monitor,
+  Brain,
+  CheckCircle,
 } from 'lucide-react';
 import { isElectron } from '@/hooks/useElectron';
 
@@ -62,10 +64,11 @@ interface AppSettings {
   telegramChatId: string;
 }
 
-type SettingsSection = 'general' | 'git' | 'notifications' | 'telegram' | 'permissions' | 'skills' | 'system';
+type SettingsSection = 'general' | 'memory' | 'git' | 'notifications' | 'telegram' | 'permissions' | 'skills' | 'system';
 
 const SECTIONS: { id: SettingsSection; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'general', label: 'General', icon: Settings },
+  { id: 'memory', label: 'Memory', icon: Brain },
   { id: 'git', label: 'Git', icon: GitCommit },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'telegram', label: 'Telegram', icon: Send },
@@ -236,7 +239,7 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <h3 className="font-medium">Claude Manager</h3>
-                  <p className="text-sm text-muted-foreground">Version 0.0.5</p>
+                  <p className="text-sm text-muted-foreground">Version 0.0.8</p>
                 </div>
               </div>
 
@@ -266,6 +269,123 @@ export default function SettingsPage() {
                 </div>
               </div>
             )}
+          </div>
+        );
+
+      case 'memory':
+        const isClaudeMemInstalled = settings?.enabledPlugins?.['claude-mem@thedotmack'] === true;
+
+        const handleInstallClaudeMem = async () => {
+          if (!window.electronAPI?.shell) return;
+
+          // Open a new terminal and run the plugin installation commands
+          try {
+            // Use osascript to open Terminal and run claude with the commands
+            await window.electronAPI.shell.exec({
+              command: `osascript -e 'tell application "Terminal" to do script "claude --dangerously-skip-permissions \\"/plugin marketplace add thedotmack/claude-mem && /plugin install claude-mem\\""' -e 'tell application "Terminal" to activate'`
+            });
+          } catch (err) {
+            console.error('Failed to open Claude for plugin installation:', err);
+          }
+        };
+
+        return (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-lg font-semibold mb-1">Memory</h2>
+              <p className="text-sm text-muted-foreground">Persistent memory for Claude Code agents</p>
+            </div>
+
+            <div className="border border-border bg-card p-6">
+              <div className="flex items-start gap-4">
+                <div className={`w-12 h-12 flex items-center justify-center shrink-0 ${isClaudeMemInstalled ? 'bg-green-500/20' : 'bg-secondary'}`}>
+                  <Brain className={`w-6 h-6 ${isClaudeMemInstalled ? 'text-green-400' : 'text-muted-foreground'}`} />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <h3 className="font-medium">Claude-Mem</h3>
+                    {isClaudeMemInstalled ? (
+                      <span className="flex items-center gap-1.5 px-2 py-0.5 bg-green-500/20 text-green-400 text-xs font-medium">
+                        <CheckCircle className="w-3.5 h-3.5" />
+                        Installed
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 bg-secondary text-muted-foreground text-xs font-medium">
+                        Not Installed
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Claude-Mem seamlessly preserves context across sessions by automatically capturing tool usage observations,
+                    generating semantic summaries, and making them available to future sessions. This enables Claude to maintain
+                    continuity of knowledge about projects even after sessions end or reconnect.
+                  </p>
+                </div>
+              </div>
+
+              {!isClaudeMemInstalled && (
+                <div className="mt-6 pt-6 border-t border-border">
+                  <div className="bg-secondary/50 border border-border p-4 mb-4">
+                    <div className="flex items-start gap-3">
+                      <Info className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
+                      <div className="text-sm text-muted-foreground">
+                        <p className="mb-3">Click the button below to open Claude Code and install the memory plugin. This will run:</p>
+                        <div className="space-y-1.5">
+                          <code className="block bg-black/50 px-3 py-1.5 font-mono text-xs text-foreground">
+                            /plugin marketplace add thedotmack/claude-mem
+                          </code>
+                          <code className="block bg-black/50 px-3 py-1.5 font-mono text-xs text-foreground">
+                            /plugin install claude-mem
+                          </code>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleInstallClaudeMem}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-white text-black hover:bg-white/90 transition-colors text-sm font-medium"
+                    >
+                      <Brain className="w-4 h-4" />
+                      Activate Memory
+                    </button>
+                    <a
+                      href="https://github.com/thedotmack/claude-mem"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-secondary text-foreground hover:bg-secondary/80 transition-colors text-sm"
+                    >
+                      Learn More
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              {isClaudeMemInstalled && (
+                <div className="mt-6 pt-6 border-t border-border">
+                  <h4 className="text-sm font-medium mb-3">How It Works</h4>
+                  <ul className="text-sm text-muted-foreground space-y-2">
+                    <li className="flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-400 mt-1.5 shrink-0" />
+                      <span>Automatically captures observations when Claude uses tools</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-400 mt-1.5 shrink-0" />
+                      <span>Generates semantic summaries at the end of each session</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-400 mt-1.5 shrink-0" />
+                      <span>Injects relevant context at the start of new sessions</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-400 mt-1.5 shrink-0" />
+                      <span>Stores memories locally in ~/.claude-mem</span>
+                    </li>
+                  </ul>
+                </div>
+              )}
+            </div>
           </div>
         );
 

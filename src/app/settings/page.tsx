@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Settings,
   Shield,
@@ -23,8 +23,33 @@ import {
   EyeOff,
   ChevronRight,
   Monitor,
+  Brain,
+  CheckCircle,
+  Terminal as TerminalIcon,
+  X,
 } from 'lucide-react';
 import { isElectron } from '@/hooks/useElectron';
+// Import xterm CSS
+import 'xterm/css/xterm.css';
+
+// Custom Slack Icon component
+const SlackIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 512 512"
+    fill="currentColor"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path d="M126.12,315.1A47.06,47.06,0,1,1,79.06,268h47.06Z"/>
+    <path d="M149.84,315.1a47.06,47.06,0,0,1,94.12,0V432.94a47.06,47.06,0,1,1-94.12,0Z"/>
+    <path d="M196.9,126.12A47.06,47.06,0,1,1,244,79.06v47.06Z"/>
+    <path d="M196.9,149.84a47.06,47.06,0,0,1,0,94.12H79.06a47.06,47.06,0,0,1,0-94.12Z"/>
+    <path d="M385.88,196.9A47.06,47.06,0,1,1,432.94,244H385.88Z"/>
+    <path d="M362.16,196.9a47.06,47.06,0,0,1-94.12,0V79.06a47.06,47.06,0,1,1,94.12,0Z"/>
+    <path d="M315.1,385.88A47.06,47.06,0,1,1,268,432.94V385.88Z"/>
+    <path d="M315.1,362.16a47.06,47.06,0,0,1,0-94.12H432.94a47.06,47.06,0,1,1,0,94.12Z"/>
+  </svg>
+);
 
 interface ClaudeSettings {
   enabledPlugins: Record<string, boolean>;
@@ -60,15 +85,22 @@ interface AppSettings {
   telegramEnabled: boolean;
   telegramBotToken: string;
   telegramChatId: string;
+  slackEnabled: boolean;
+  slackBotToken: string;
+  slackAppToken: string;
+  slackSigningSecret: string;
+  slackChannelId: string;
 }
 
-type SettingsSection = 'general' | 'git' | 'notifications' | 'telegram' | 'permissions' | 'skills' | 'system';
+type SettingsSection = 'general' | 'memory' | 'git' | 'notifications' | 'telegram' | 'slack' | 'permissions' | 'skills' | 'system';
 
 const SECTIONS: { id: SettingsSection; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'general', label: 'General', icon: Settings },
+  { id: 'memory', label: 'Memory', icon: Brain },
   { id: 'git', label: 'Git', icon: GitCommit },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'telegram', label: 'Telegram', icon: Send },
+  { id: 'slack', label: 'Slack', icon: SlackIcon },
   { id: 'permissions', label: 'Permissions', icon: Shield },
   { id: 'skills', label: 'Skills & Plugins', icon: Sparkles },
   { id: 'system', label: 'System', icon: Monitor },
@@ -85,10 +117,19 @@ export default function SettingsPage() {
     telegramEnabled: false,
     telegramBotToken: '',
     telegramChatId: '',
+    slackEnabled: false,
+    slackBotToken: '',
+    slackAppToken: '',
+    slackSigningSecret: '',
+    slackChannelId: '',
   });
   const [showBotToken, setShowBotToken] = useState(false);
   const [testingTelegram, setTestingTelegram] = useState(false);
   const [telegramTestResult, setTelegramTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [showSlackBotToken, setShowSlackBotToken] = useState(false);
+  const [showSlackAppToken, setShowSlackAppToken] = useState(false);
+  const [testingSlack, setTestingSlack] = useState(false);
+  const [slackTestResult, setSlackTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [info, setInfo] = useState<ClaudeInfo | null>(null);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
@@ -96,6 +137,164 @@ export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+
+  // Terminal modal for plugin installation
+  const [showInstallTerminal, setShowInstallTerminal] = useState(false);
+  const [currentInstallCommand, setCurrentInstallCommand] = useState('');
+  const [installComplete, setInstallComplete] = useState(false);
+  const [installExitCode, setInstallExitCode] = useState<number | null>(null);
+  const [terminalReady, setTerminalReady] = useState(false);
+  const [pendingInstallCommand, setPendingInstallCommand] = useState<string | null>(null);
+  const terminalRef = useRef<HTMLDivElement>(null);
+  const xtermRef = useRef<import('xterm').Terminal | null>(null);
+  const ptyIdRef = useRef<string | null>(null);
+
+  // Initialize xterm when terminal modal opens
+  useEffect(() => {
+    if (!showInstallTerminal || !terminalRef.current || xtermRef.current) return;
+
+    const initTerminal = async () => {
+      const { Terminal } = await import('xterm');
+      const { FitAddon } = await import('xterm-addon-fit');
+
+      const term = new Terminal({
+        theme: {
+          background: '#0a0a0f',
+          foreground: '#e4e4e7',
+          cursor: '#22d3ee',
+          cursorAccent: '#0a0a0f',
+          selectionBackground: '#22d3ee33',
+          black: '#18181b',
+          red: '#ef4444',
+          green: '#22c55e',
+          yellow: '#eab308',
+          blue: '#3b82f6',
+          magenta: '#a855f7',
+          cyan: '#22d3ee',
+          white: '#e4e4e7',
+          brightBlack: '#52525b',
+          brightRed: '#f87171',
+          brightGreen: '#4ade80',
+          brightYellow: '#facc15',
+          brightBlue: '#60a5fa',
+          brightMagenta: '#c084fc',
+          brightCyan: '#67e8f9',
+          brightWhite: '#fafafa',
+        },
+        fontSize: 13,
+        fontFamily: 'JetBrains Mono, Menlo, Monaco, Courier New, monospace',
+        cursorBlink: true,
+        cursorStyle: 'bar',
+        scrollback: 10000,
+      });
+
+      const fitAddon = new FitAddon();
+      term.loadAddon(fitAddon);
+      term.open(terminalRef.current!);
+      fitAddon.fit();
+
+      xtermRef.current = term;
+
+      // Handle user input - send to PTY
+      term.onData((data) => {
+        if (ptyIdRef.current && window.electronAPI?.plugin?.installWrite) {
+          window.electronAPI.plugin.installWrite({ id: ptyIdRef.current, data });
+        }
+      });
+
+      // Handle resize
+      const resizeObserver = new ResizeObserver(() => {
+        fitAddon.fit();
+        if (ptyIdRef.current && window.electronAPI?.plugin?.installResize) {
+          window.electronAPI.plugin.installResize({
+            id: ptyIdRef.current,
+            cols: term.cols,
+            rows: term.rows,
+          });
+        }
+      });
+      resizeObserver.observe(terminalRef.current!);
+
+      // Terminal is ready
+      setTerminalReady(true);
+    };
+
+    initTerminal();
+
+    return () => {
+      if (xtermRef.current) {
+        xtermRef.current.dispose();
+        xtermRef.current = null;
+      }
+      setTerminalReady(false);
+    };
+  }, [showInstallTerminal]);
+
+  // Start PTY only after terminal is ready
+  useEffect(() => {
+    if (!terminalReady || !pendingInstallCommand || !window.electronAPI?.plugin?.installStart) return;
+
+    const startPty = async () => {
+      try {
+        const result = await window.electronAPI!.plugin.installStart({ command: pendingInstallCommand });
+        ptyIdRef.current = result.id;
+        setPendingInstallCommand(null);
+      } catch (err) {
+        console.error('Failed to start plugin installation:', err);
+        setShowInstallTerminal(false);
+      }
+    };
+
+    startPty();
+  }, [terminalReady, pendingInstallCommand]);
+
+  // Listen for PTY data
+  useEffect(() => {
+    if (!isElectron() || !window.electronAPI?.plugin?.onPtyData) return;
+
+    const unsubscribe = window.electronAPI.plugin.onPtyData(({ id, data }) => {
+      if (id === ptyIdRef.current && xtermRef.current) {
+        xtermRef.current.write(data);
+      }
+    });
+
+    return unsubscribe;
+  }, []);
+
+  // Listen for PTY exit
+  useEffect(() => {
+    if (!isElectron() || !window.electronAPI?.plugin?.onPtyExit) return;
+
+    const unsubscribe = window.electronAPI.plugin.onPtyExit(({ id, exitCode }) => {
+      if (id === ptyIdRef.current) {
+        setInstallComplete(true);
+        setInstallExitCode(exitCode);
+      }
+    });
+
+    return unsubscribe;
+  }, []);
+
+  const openPluginInstallTerminal = (command: string) => {
+    setCurrentInstallCommand(command);
+    setInstallComplete(false);
+    setInstallExitCode(null);
+    setShowInstallTerminal(true);
+    setPendingInstallCommand(command);
+  };
+
+  const closeInstallTerminal = () => {
+    if (ptyIdRef.current && window.electronAPI?.plugin?.installKill) {
+      window.electronAPI.plugin.installKill({ id: ptyIdRef.current });
+    }
+    setShowInstallTerminal(false);
+    setCurrentInstallCommand('');
+    setInstallComplete(false);
+    setInstallExitCode(null);
+    ptyIdRef.current = null;
+    // Refresh settings to pick up newly installed plugin
+    fetchSettings();
+  };
 
   const fetchSettings = useCallback(async () => {
     if (!isElectron() || !window.electronAPI?.settings) {
@@ -123,7 +322,8 @@ export default function SettingsPage() {
         setSkills(claudeData.skills);
       }
       if (appSettingsData) {
-        setAppSettings(appSettingsData);
+        // Merge with defaults to handle new fields that might not exist in saved settings
+        setAppSettings(prev => ({ ...prev, ...appSettingsData }));
       }
       setError(null);
     } catch (err) {
@@ -236,7 +436,7 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <h3 className="font-medium">Claude Manager</h3>
-                  <p className="text-sm text-muted-foreground">Version 0.0.5</p>
+                  <p className="text-sm text-muted-foreground">Version 0.0.8</p>
                 </div>
               </div>
 
@@ -266,6 +466,163 @@ export default function SettingsPage() {
                 </div>
               </div>
             )}
+          </div>
+        );
+
+      case 'memory':
+        const isClaudeMemInstalled = settings?.enabledPlugins?.['claude-mem@thedotmack'] === true;
+        const isClaudeMemDisabled = settings?.enabledPlugins?.['claude-mem@thedotmack'] === false;
+        const isClaudeMemKnown = 'claude-mem@thedotmack' in (settings?.enabledPlugins || {});
+
+        const handleInstallClaudeMem = () => {
+          openPluginInstallTerminal('/plugin marketplace add thedotmack/claude-mem && /plugin install claude-mem');
+        };
+
+        const handleToggleClaudeMem = async () => {
+          if (!settings) return;
+
+          const newEnabled = !isClaudeMemInstalled;
+          const updatedPlugins = {
+            ...settings.enabledPlugins,
+            'claude-mem@thedotmack': newEnabled,
+          };
+
+          updateSettings({ enabledPlugins: updatedPlugins });
+        };
+
+        return (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-lg font-semibold mb-1">Memory</h2>
+              <p className="text-sm text-muted-foreground">Persistent memory for Claude Code agents</p>
+            </div>
+
+            {/* Restart Notice */}
+            {hasChanges && isClaudeMemKnown && (
+              <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 text-yellow-400">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-medium mb-1">Restart Required</p>
+                    <p className="text-yellow-400/80">
+                      Save changes and restart Claude Manager and all running Claude Code instances for this change to take effect.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="border border-border bg-card p-6">
+              <div className="flex items-start gap-4">
+                <div className={`w-12 h-12 flex items-center justify-center shrink-0 ${isClaudeMemInstalled ? 'bg-green-500/20' : isClaudeMemDisabled ? 'bg-red-500/20' : 'bg-secondary'}`}>
+                  <Brain className={`w-6 h-6 ${isClaudeMemInstalled ? 'text-green-400' : isClaudeMemDisabled ? 'text-red-400' : 'text-muted-foreground'}`} />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-3">
+                      <h3 className="font-medium">Claude-Mem</h3>
+                      {isClaudeMemInstalled ? (
+                        <span className="flex items-center gap-1.5 px-2 py-0.5 bg-green-500/20 text-green-400 text-xs font-medium">
+                          <CheckCircle className="w-3.5 h-3.5" />
+                          Enabled
+                        </span>
+                      ) : isClaudeMemDisabled ? (
+                        <span className="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs font-medium">
+                          Disabled
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 bg-secondary text-muted-foreground text-xs font-medium">
+                          Not Installed
+                        </span>
+                      )}
+                    </div>
+                    {isClaudeMemKnown && (
+                      <Toggle
+                        enabled={isClaudeMemInstalled}
+                        onChange={handleToggleClaudeMem}
+                      />
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Claude-Mem seamlessly preserves context across sessions by automatically capturing tool usage observations,
+                    generating semantic summaries, and making them available to future sessions. This enables Claude to maintain
+                    continuity of knowledge about projects even after sessions end or reconnect.
+                  </p>
+                </div>
+              </div>
+
+              {!isClaudeMemKnown && (
+                <div className="mt-6 pt-6 border-t border-border">
+                  <div className="bg-secondary/50 border border-border p-4 mb-4">
+                    <div className="flex items-start gap-3">
+                      <Info className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
+                      <div className="text-sm text-muted-foreground">
+                        <p className="mb-3">Click the button below to open Claude Code and install the memory plugin. This will run:</p>
+                        <div className="space-y-1.5">
+                          <code className="block bg-black/50 px-3 py-1.5 font-mono text-xs text-foreground">
+                            /plugin marketplace add thedotmack/claude-mem
+                          </code>
+                          <code className="block bg-black/50 px-3 py-1.5 font-mono text-xs text-foreground">
+                            /plugin install claude-mem
+                          </code>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleInstallClaudeMem}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-white text-black hover:bg-white/90 transition-colors text-sm font-medium"
+                    >
+                      <Brain className="w-4 h-4" />
+                      Activate Memory
+                    </button>
+                    <a
+                      href="https://github.com/thedotmack/claude-mem"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-secondary text-foreground hover:bg-secondary/80 transition-colors text-sm"
+                    >
+                      Learn More
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              {isClaudeMemKnown && (
+                <div className="mt-6 pt-6 border-t border-border">
+                  <h4 className="text-sm font-medium mb-3">How It Works</h4>
+                  <ul className="text-sm text-muted-foreground space-y-2">
+                    <li className="flex items-start gap-2">
+                      <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${isClaudeMemInstalled ? 'bg-green-400' : 'bg-muted-foreground'}`} />
+                      <span>Automatically captures observations when Claude uses tools</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${isClaudeMemInstalled ? 'bg-green-400' : 'bg-muted-foreground'}`} />
+                      <span>Generates semantic summaries at the end of each session</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${isClaudeMemInstalled ? 'bg-green-400' : 'bg-muted-foreground'}`} />
+                      <span>Injects relevant context at the start of new sessions</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${isClaudeMemInstalled ? 'bg-green-400' : 'bg-muted-foreground'}`} />
+                      <span>Stores memories locally in ~/.claude-mem</span>
+                    </li>
+                  </ul>
+                  <a
+                    href="https://github.com/thedotmack/claude-mem"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 mt-4 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Learn More
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              )}
+            </div>
           </div>
         );
 
@@ -524,6 +881,211 @@ export default function SettingsPage() {
                 <li>Copy the bot token and paste it above</li>
                 <li>Open your new bot and send /start</li>
                 <li>You&apos;re ready to control agents remotely!</li>
+              </ol>
+            </div>
+          </div>
+        );
+
+      case 'slack':
+        return (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-lg font-semibold mb-1">Slack Integration</h2>
+              <p className="text-sm text-muted-foreground">Control agents remotely via Slack</p>
+            </div>
+
+            <div className="border border-border bg-card p-6">
+              <div className="flex items-center justify-between pb-4 border-b border-border">
+                <div className="flex items-center gap-3">
+                  <SlackIcon className="w-5 h-5 text-muted-foreground" />
+                  <div>
+                    <p className="font-medium">Enable Slack Bot</p>
+                    <p className="text-sm text-muted-foreground">Receive notifications and send commands via Slack</p>
+                  </div>
+                </div>
+                <Toggle
+                  enabled={appSettings.slackEnabled}
+                  onChange={() => handleSaveAppSettings({ slackEnabled: !appSettings.slackEnabled })}
+                />
+              </div>
+
+              <div className="space-y-6 pt-6">
+                {/* Bot Token */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium">Bot Token (xoxb-...)</label>
+                    <a
+                      href="https://api.slack.com/apps"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                    >
+                      Get from Slack App
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showSlackBotToken ? 'text' : 'password'}
+                      value={appSettings.slackBotToken}
+                      onChange={(e) => setAppSettings({ ...appSettings, slackBotToken: e.target.value })}
+                      onBlur={() => {
+                        if (appSettings.slackBotToken) {
+                          handleSaveAppSettings({ slackBotToken: appSettings.slackBotToken });
+                        }
+                      }}
+                      placeholder="xoxb-..."
+                      className="w-full px-3 py-2 pr-10 bg-secondary border border-border text-sm font-mono focus:border-foreground focus:outline-none"
+                    />
+                    <button
+                      onClick={() => setShowSlackBotToken(!showSlackBotToken)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
+                    >
+                      {showSlackBotToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* App Token */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium">App Token (xapp-...)</label>
+                    <span className="text-xs text-muted-foreground">Required for Socket Mode</span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showSlackAppToken ? 'text' : 'password'}
+                      value={appSettings.slackAppToken}
+                      onChange={(e) => setAppSettings({ ...appSettings, slackAppToken: e.target.value })}
+                      onBlur={() => {
+                        if (appSettings.slackAppToken) {
+                          handleSaveAppSettings({ slackAppToken: appSettings.slackAppToken });
+                        }
+                      }}
+                      placeholder="xapp-..."
+                      className="w-full px-3 py-2 pr-10 bg-secondary border border-border text-sm font-mono focus:border-foreground focus:outline-none"
+                    />
+                    <button
+                      onClick={() => setShowSlackAppToken(!showSlackAppToken)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
+                    >
+                      {showSlackAppToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Channel ID */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium">Channel ID</label>
+                    {appSettings.slackChannelId && (
+                      <span className="text-xs text-green-400 flex items-center gap-1">
+                        <Check className="w-3 h-3" />
+                        Connected
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={appSettings.slackChannelId || 'Not connected yet'}
+                    readOnly
+                    className="w-full px-3 py-2 bg-secondary border border-border text-sm font-mono text-muted-foreground"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Auto-detected when you mention the bot or DM it
+                  </p>
+                </div>
+
+                {/* Test Buttons */}
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    onClick={async () => {
+                      if (!window.electronAPI?.slack?.test) return;
+                      setTestingSlack(true);
+                      setSlackTestResult(null);
+                      try {
+                        const result = await window.electronAPI.slack.test();
+                        if (result.success) {
+                          setSlackTestResult({ success: true, message: `Bot @${result.botName} is valid!` });
+                        } else {
+                          setSlackTestResult({ success: false, message: result.error || 'Invalid tokens' });
+                        }
+                      } catch {
+                        setSlackTestResult({ success: false, message: 'Failed to test connection' });
+                      } finally {
+                        setTestingSlack(false);
+                      }
+                    }}
+                    disabled={!appSettings.slackBotToken || !appSettings.slackAppToken || testingSlack}
+                    className="px-4 py-2 bg-secondary text-foreground hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm flex items-center gap-2"
+                  >
+                    {testingSlack ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <SlackIcon className="w-4 h-4" />
+                    )}
+                    Test Tokens
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!window.electronAPI?.slack?.sendTest) return;
+                      setTestingSlack(true);
+                      setSlackTestResult(null);
+                      try {
+                        const result = await window.electronAPI.slack.sendTest();
+                        if (result.success) {
+                          setSlackTestResult({ success: true, message: 'Test message sent!' });
+                        } else {
+                          setSlackTestResult({ success: false, message: result.error || 'Failed to send' });
+                        }
+                      } catch {
+                        setSlackTestResult({ success: false, message: 'Failed to send test message' });
+                      } finally {
+                        setTestingSlack(false);
+                      }
+                    }}
+                    disabled={!appSettings.slackChannelId || testingSlack}
+                    className="px-4 py-2 bg-white text-black hover:bg-white/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm flex items-center gap-2"
+                  >
+                    <SlackIcon className="w-4 h-4" />
+                    Send Test
+                  </button>
+                </div>
+
+                {slackTestResult && (
+                  <div className={`p-3 text-sm ${
+                    slackTestResult.success
+                      ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                      : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                  }`}>
+                    {slackTestResult.message}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Setup Guide */}
+            <div className="border border-border bg-card p-6">
+              <h3 className="font-medium mb-4">Setup Guide</h3>
+              <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
+                <li>Go to <a href="https://api.slack.com/apps" target="_blank" rel="noopener noreferrer" className="text-foreground hover:underline">api.slack.com/apps</a> and click &quot;Create New App&quot;</li>
+                <li>Choose &quot;From scratch&quot;, name it &quot;Claude Manager&quot;, select workspace</li>
+                <li>Go to &quot;Socket Mode&quot; → Enable → Generate App Token with scope &quot;connections:write&quot; (xapp-...)</li>
+                <li>Go to &quot;OAuth & Permissions&quot; → Add Bot Token Scopes:
+                  <ul className="ml-4 mt-1 space-y-0.5">
+                    <li className="text-xs">• app_mentions:read, chat:write, im:history, im:read, im:write</li>
+                  </ul>
+                </li>
+                <li>Install to Workspace → Copy Bot Token (xoxb-...)</li>
+                <li>Go to &quot;Event Subscriptions&quot; → Enable → Subscribe to: app_mention, message.im</li>
+                <li>Go to &quot;App Home&quot; → Scroll to &quot;Show Tabs&quot;:
+                  <ul className="ml-4 mt-1 space-y-0.5">
+                    <li className="text-xs">• Enable &quot;Messages Tab&quot;</li>
+                    <li className="text-xs">• Check &quot;Allow users to send Slash commands and messages from the messages tab&quot;</li>
+                  </ul>
+                </li>
+                <li>Paste both tokens above and enable the integration</li>
+                <li>Mention @Claude Manager in any channel or DM the bot to start!</li>
               </ol>
             </div>
           </div>
@@ -861,6 +1423,83 @@ export default function SettingsPage() {
           {renderContent()}
         </motion.div>
       </div>
+
+      {/* Installation Terminal Modal */}
+      <AnimatePresence>
+        {showInstallTerminal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={closeInstallTerminal}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-4xl bg-[#0a0a0f] border border-border rounded-none overflow-hidden"
+            >
+              {/* Terminal Header */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">
+                <div className="flex items-center gap-3">
+                  <TerminalIcon className="w-5 h-5 text-cyan-400" />
+                  <div>
+                    <h3 className="font-medium text-sm">Installing Plugin</h3>
+                    <p className="text-xs text-muted-foreground font-mono">{currentInstallCommand}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {installComplete && (
+                    <span className={`text-xs px-2 py-1 ${
+                      installExitCode === 0
+                        ? 'bg-green-500/20 text-green-400'
+                        : 'bg-red-500/20 text-red-400'
+                    }`}>
+                      {installExitCode === 0 ? 'Completed' : `Failed (${installExitCode})`}
+                    </span>
+                  )}
+                  {!installComplete && (
+                    <span className="text-xs px-2 py-1 bg-cyan-500/20 text-cyan-400 flex items-center gap-1.5">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Running
+                    </span>
+                  )}
+                  <button
+                    onClick={closeInstallTerminal}
+                    className="p-1.5 hover:bg-secondary rounded-none transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Terminal Content */}
+              <div
+                ref={terminalRef}
+                className="h-[400px] p-2"
+                style={{ backgroundColor: '#0a0a0f' }}
+              />
+
+              {/* Terminal Footer */}
+              <div className="px-4 py-3 border-t border-border bg-card flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">
+                  {installComplete
+                    ? 'Installation finished. You can close this window.'
+                    : 'Installation in progress... You can interact with the terminal if needed.'}
+                </p>
+                <button
+                  onClick={closeInstallTerminal}
+                  className="px-4 py-1.5 text-sm bg-secondary hover:bg-secondary/80 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

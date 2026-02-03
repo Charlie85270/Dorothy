@@ -5,12 +5,14 @@ import {
   LayoutDashboard,
   FolderKanban,
   Sparkles,
+  Puzzle,
   MessageSquare,
   Settings,
   ChevronLeft,
   ChevronRight,
   Bot,
   BarChart2,
+  CalendarClock,
 } from 'lucide-react';
 import { useStore } from '@/store';
 import Link from 'next/link';
@@ -22,7 +24,9 @@ const navItems = [
   { href: '/projects', icon: FolderKanban, label: 'Projects', shortcut: '3' },
   { href: '/chats', icon: MessageSquare, label: 'Conversations', shortcut: '4' },
   { href: '/skills', icon: Sparkles, label: 'Skills', shortcut: '5' },
-  { href: '/usage', icon: BarChart2, label: 'Usage', shortcut: '6' },
+  { href: '/plugins', icon: Puzzle, label: 'Plugins', shortcut: '6' },
+  { href: '/recurring-tasks', icon: CalendarClock, label: 'Scheduled Tasks', shortcut: '7' },
+  { href: '/usage', icon: BarChart2, label: 'Usage', shortcut: '8' },
 ];
 
 interface SidebarProps {
@@ -53,8 +57,8 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
         transition={{ duration: 0.2, ease: 'easeInOut' }}
         className="fixed left-0 top-0 h-screen bg-card border-r border-border flex-col z-50 hidden lg:flex"
       >
-        {/* Logo */}
-        <div className="h-16 flex items-center px-4 border-b border-border">
+        {/* Logo - mt-7 accounts for macOS window controls */}
+        <div className="h-16 flex items-center px-4 border-b border-border mt-7">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white flex items-center justify-center">
               <Bot className="w-5 h-5 text-black" />

@@ -14,6 +14,6 @@
     "declarationMap": false,
     "sourceMap": true
   },
-  "include": ["main.ts", "preload.ts"],
+  "include": ["main.ts", "preload.ts", "memory.ts", "memory-parser.ts"],
   "exclude": ["node_modules"]
 }

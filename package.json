@@ -1,6 +1,6 @@
 {
   "name": "claude-mgr",
-  "version": "0.0.6",
+  "version": "0.0.8",
   "private": true,
   "main": "electron/dist/main.js",
   "scripts": {
@@ -11,8 +11,8 @@
     "lint": "eslint",
     "electron:dev": "concurrently \"npm run dev\" \"npm run electron:start\"",
     "electron:start": "wait-on http://localhost:3000 && tsc -p electron/tsconfig.json && NODE_ENV=development electron .",
-    "electron:build": "mv src/app/api src/app/_api_backup && mv src/app/icon.tsx src/app/_icon_backup.tsx 2>/dev/null; ELECTRON_BUILD=1 next build; mv src/app/_api_backup src/app/api && mv src/app/_icon_backup.tsx src/app/icon.tsx 2>/dev/null; tsc -p electron/tsconfig.json && electron-builder --mac",
-    "electron:pack": "tsc -p electron/tsconfig.json && electron-builder --dir --mac"
+    "electron:build": "mv src/app/api src/app/_api_backup && mv src/app/icon.tsx src/app/_icon_backup.tsx 2>/dev/null; ELECTRON_BUILD=1 next build; mv src/app/_api_backup src/app/api && mv src/app/_icon_backup.tsx src/app/icon.tsx 2>/dev/null; tsc -p electron/tsconfig.json && cd mcp-orchestrator && npm install && npm run build && cd .. && electron-builder --mac",
+    "electron:pack": "tsc -p electron/tsconfig.json && cd mcp-orchestrator && npm install && npm run build && cd .. && electron-builder --dir --mac"
   },
   "build": {
     "appId": "com.octav.claudemgr",
@@ -26,11 +26,24 @@
       "mcp-orchestrator/dist/**/*",
       "mcp-orchestrator/package.json",
       "mcp-orchestrator/node_modules/**/*",
-      "node_modules/**/*"
+      "node_modules/**/*",
+      "skills/**/*",
+      "hooks/**/*"
     ],
     "asarUnpack": [
       "out/**/*",
-      "mcp-orchestrator/**/*"
+      "hooks/**/*",
+      "node_modules/better-sqlite3/**/*",
+      "node_modules/node-pty/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "mcp-orchestrator",
+        "to": "mcp-orchestrator",
+        "filter": [
+          "**/*"
+        ]
+      }
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
@@ -62,6 +75,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
+    "better-sqlite3": "^11.0.0",
     "call-bind": "^1.0.8",
     "call-bind-apply-helpers": "^1.0.2",
     "dunder-proto": "^1.0.1",
@@ -72,6 +86,7 @@
     "next": "16.1.4",
     "node-pty": "^1.1.0",
     "node-telegram-bot-api": "^0.67.0",
+    "@slack/bolt": "^4.0.1",
     "prism-react-renderer": "^2.4.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -85,6 +100,7 @@
   "devDependencies": {
     "@electron/rebuild": "^4.0.2",
     "@tailwindcss/postcss": "^4",
+    "@types/better-sqlite3": "^7.6.8",
     "@types/node": "^20",
     "@types/node-telegram-bot-api": "^0.64.13",
     "@types/react": "^19",

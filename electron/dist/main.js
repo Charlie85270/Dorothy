@@ -44,6 +44,8 @@ const http = __importStar(require("http"));
 const uuid_1 = require("uuid");
 const pty = __importStar(require("node-pty"));
 const node_telegram_bot_api_1 = __importDefault(require("node-telegram-bot-api"));
+const bolt_1 = require("@slack/bolt");
+const child_process_1 = require("child_process");
 // Get the base path for static assets
 function getAppBasePath() {
     let appPath = electron_1.app.getAppPath();
@@ -200,6 +202,7 @@ function startApiServer() {
                     sendJson({ error: 'prompt is required' }, 400);
                     return;
                 }
+                const effectivePrompt = prompt;
                 // Start the agent (similar to agent:start IPC handler)
                 const workingDir = agent.worktreePath || agent.projectPath;
                 let command = `cd '${workingDir}' && claude`;
@@ -223,7 +226,7 @@ function startApiServer() {
                 if (model) {
                     command += ` --model ${model}`;
                 }
-                command += ` '${prompt.replace(/'/g, "'\\''")}'`;
+                command += ` '${effectivePrompt.replace(/'/g, "'\\''")}'`;
                 const shell = process.env.SHELL || '/bin/zsh';
                 const ptyProcess = pty.spawn(shell, ['-l', '-c', command], {
                     name: 'xterm-256color',
@@ -369,6 +372,135 @@ function startApiServer() {
                         sendJson({ error: `Failed to send: ${err2}` }, 500);
                     }
                 }
+                return;
+            }
+            // POST /api/slack/send - Send message to Slack
+            if (pathname === '/api/slack/send' && req.method === 'POST') {
+                const { message } = body;
+                if (!message) {
+                    sendJson({ error: 'message is required' }, 400);
+                    return;
+                }
+                if (!slackApp || !appSettings.slackChannelId) {
+                    sendJson({ error: 'Slack not configured or no channel ID' }, 400);
+                    return;
+                }
+                try {
+                    const postParams = {
+                        channel: slackResponseChannel || appSettings.slackChannelId,
+                        text: `:crown: ${message}`,
+                        mrkdwn: true,
+                    };
+                    // Reply in the same thread if we have a thread_ts
+                    if (slackResponseThreadTs) {
+                        postParams.thread_ts = slackResponseThreadTs;
+                    }
+                    await slackApp.client.chat.postMessage(postParams);
+                    sendJson({ success: true });
+                }
+                catch (err) {
+                    sendJson({ error: `Failed to send: ${err}` }, 500);
+                }
+                return;
+            }
+            // ============== Hook API Endpoints ==============
+            // POST /api/hooks/status - Update agent status from hooks
+            if (pathname === '/api/hooks/status' && req.method === 'POST') {
+                const { agent_id, session_id, status, source, reason, waiting_reason } = body;
+                if (!agent_id || !status) {
+                    sendJson({ error: 'agent_id and status are required' }, 400);
+                    return;
+                }
+                // Find agent by session_id or agent_id
+                let agent;
+                // First try to find by CLAUDE_AGENT_ID (environment variable set by us)
+                agent = agents.get(agent_id);
+                // If not found, try to find by session_id match
+                if (!agent) {
+                    for (const [, a] of agents) {
+                        if (a.currentSessionId === session_id) {
+                            agent = a;
+                            break;
+                        }
+                    }
+                }
+                if (!agent) {
+                    // Agent not found - might be a standalone Claude Code session
+                    sendJson({ success: false, message: 'Agent not found' });
+                    return;
+                }
+                const oldStatus = agent.status;
+                // Update status
+                if (status === 'running' && (agent.status === 'idle' || agent.status === 'waiting' || agent.status === 'completed')) {
+                    agent.status = 'running';
+                    agent.currentSessionId = session_id;
+                }
+                else if (status === 'waiting' && agent.status === 'running') {
+                    agent.status = 'waiting';
+                }
+                else if (status === 'idle') {
+                    agent.status = 'idle';
+                    agent.currentSessionId = undefined;
+                }
+                else if (status === 'completed') {
+                    agent.status = 'completed';
+                }
+                agent.lastActivity = new Date().toISOString();
+                // Send notification if status changed
+                if (oldStatus !== agent.status) {
+                    handleStatusChangeNotification(agent, agent.status);
+                    // Emit to renderer
+                    if (mainWindow && !mainWindow.isDestroyed()) {
+                        mainWindow.webContents.send('agent:status', {
+                            agentId: agent.id,
+                            status: agent.status,
+                            waitingReason: waiting_reason
+                        });
+                    }
+                }
+                sendJson({ success: true, agent: { id: agent.id, status: agent.status } });
+                return;
+            }
+            // POST /api/hooks/notification - Forward notifications from hooks
+            if (pathname === '/api/hooks/notification' && req.method === 'POST') {
+                const { agent_id, session_id, type, title, message } = body;
+                if (!agent_id || !type) {
+                    sendJson({ error: 'agent_id and type are required' }, 400);
+                    return;
+                }
+                // Find agent
+                let agent = agents.get(agent_id);
+                if (!agent) {
+                    for (const [, a] of agents) {
+                        if (a.currentSessionId === session_id) {
+                            agent = a;
+                            break;
+                        }
+                    }
+                }
+                const agentName = agent?.name || 'Claude';
+                // Handle different notification types
+                if (type === 'permission_prompt') {
+                    if (appSettings.notifyOnWaiting) {
+                        sendNotification(`${agentName} needs permission`, message || 'Claude needs your permission to proceed', agent?.id);
+                    }
+                }
+                else if (type === 'idle_prompt') {
+                    // Agent is idle, might want to notify
+                    if (appSettings.notifyOnWaiting) {
+                        sendNotification(`${agentName} is waiting`, message || 'Claude is waiting for your input', agent?.id);
+                    }
+                }
+                // Emit to renderer
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                    mainWindow.webContents.send('agent:notification', {
+                        agentId: agent?.id,
+                        type,
+                        title,
+                        message
+                    });
+                }
+                sendJson({ success: true });
                 return;
             }
             // 404 for unknown routes
@@ -808,6 +940,11 @@ function loadAppSettings() {
         telegramEnabled: false,
         telegramBotToken: '',
         telegramChatId: '',
+        slackEnabled: false,
+        slackBotToken: '',
+        slackAppToken: '',
+        slackSigningSecret: '',
+        slackChannelId: '',
     };
     try {
         if (fs.existsSync(APP_SETTINGS_FILE)) {
@@ -995,6 +1132,7 @@ function initTelegramBot() {
                 `/start\\_agent <name> <task> - Start an agent\n` +
                 `/stop\\_agent <name> - Stop an agent\n` +
                 `/ask <message> - Send to Super Agent\n` +
+                `/usage - Show usage & cost stats\n` +
                 `/help - Show this help message\n\n` +
                 `Or just type a message to talk to the Super Agent!`, { parse_mode: 'Markdown' });
         });
@@ -1007,6 +1145,7 @@ function initTelegramBot() {
                 `/start\\_agent <name> <task> - Start an agent with a task\n` +
                 `/stop\\_agent <name> - Stop a running agent\n` +
                 `/ask <message> - Send a message to Super Agent\n` +
+                `/usage - Show usage & cost stats\n` +
                 `/help - Show this help message\n\n` +
                 `💡 *Tips:*\n` +
                 `• Just type a message to talk directly to Super Agent\n` +
@@ -1203,6 +1342,139 @@ function initTelegramBot() {
             saveAgents();
             telegramBot?.sendMessage(msg.chat.id, `🛑 Stopped *${agent.name}*`, { parse_mode: 'Markdown' });
         });
+        // Handle /usage command (show usage and cost stats)
+        telegramBot.onText(/\/usage/, async (msg) => {
+            try {
+                const stats = await getClaudeStats();
+                if (!stats) {
+                    telegramBot?.sendMessage(msg.chat.id, '📊 No usage data available yet.');
+                    return;
+                }
+                // Token pricing per million tokens (MTok) - same as frontend
+                const MODEL_PRICING = {
+                    'claude-opus-4-5-20251101': { inputPerMTok: 5, outputPerMTok: 25, cacheHitsPerMTok: 0.50, cache5mWritePerMTok: 6.25 },
+                    'claude-opus-4-5': { inputPerMTok: 5, outputPerMTok: 25, cacheHitsPerMTok: 0.50, cache5mWritePerMTok: 6.25 },
+                    'claude-opus-4-1-20250501': { inputPerMTok: 15, outputPerMTok: 75, cacheHitsPerMTok: 1.50, cache5mWritePerMTok: 18.75 },
+                    'claude-opus-4-1': { inputPerMTok: 15, outputPerMTok: 75, cacheHitsPerMTok: 1.50, cache5mWritePerMTok: 18.75 },
+                    'claude-opus-4-20250514': { inputPerMTok: 15, outputPerMTok: 75, cacheHitsPerMTok: 1.50, cache5mWritePerMTok: 18.75 },
+                    'claude-opus-4': { inputPerMTok: 15, outputPerMTok: 75, cacheHitsPerMTok: 1.50, cache5mWritePerMTok: 18.75 },
+                    'claude-sonnet-4-5-20251022': { inputPerMTok: 3, outputPerMTok: 15, cacheHitsPerMTok: 0.30, cache5mWritePerMTok: 3.75 },
+                    'claude-sonnet-4-5': { inputPerMTok: 3, outputPerMTok: 15, cacheHitsPerMTok: 0.30, cache5mWritePerMTok: 3.75 },
+                    'claude-sonnet-4-20250514': { inputPerMTok: 3, outputPerMTok: 15, cacheHitsPerMTok: 0.30, cache5mWritePerMTok: 3.75 },
+                    'claude-sonnet-4': { inputPerMTok: 3, outputPerMTok: 15, cacheHitsPerMTok: 0.30, cache5mWritePerMTok: 3.75 },
+                    'claude-3-7-sonnet-20250219': { inputPerMTok: 3, outputPerMTok: 15, cacheHitsPerMTok: 0.30, cache5mWritePerMTok: 3.75 },
+                    'claude-haiku-4-5-20251022': { inputPerMTok: 1, outputPerMTok: 5, cacheHitsPerMTok: 0.10, cache5mWritePerMTok: 1.25 },
+                    'claude-haiku-4-5': { inputPerMTok: 1, outputPerMTok: 5, cacheHitsPerMTok: 0.10, cache5mWritePerMTok: 1.25 },
+                    'claude-3-5-haiku-20241022': { inputPerMTok: 0.80, outputPerMTok: 4, cacheHitsPerMTok: 0.08, cache5mWritePerMTok: 1 },
+                };
+                const getModelPricing = (modelId) => {
+                    if (MODEL_PRICING[modelId])
+                        return MODEL_PRICING[modelId];
+                    const lower = modelId.toLowerCase();
+                    if (lower.includes('opus-4-5') || lower.includes('opus-4.5'))
+                        return MODEL_PRICING['claude-opus-4-5'];
+                    if (lower.includes('opus-4-1') || lower.includes('opus-4.1'))
+                        return MODEL_PRICING['claude-opus-4-1'];
+                    if (lower.includes('opus-4') || lower.includes('opus4'))
+                        return MODEL_PRICING['claude-opus-4'];
+                    if (lower.includes('sonnet-4-5') || lower.includes('sonnet-4.5'))
+                        return MODEL_PRICING['claude-sonnet-4-5'];
+                    if (lower.includes('sonnet-4') || lower.includes('sonnet4'))
+                        return MODEL_PRICING['claude-sonnet-4'];
+                    if (lower.includes('sonnet-3') || lower.includes('sonnet3'))
+                        return MODEL_PRICING['claude-3-7-sonnet-20250219'];
+                    if (lower.includes('haiku-4-5') || lower.includes('haiku-4.5'))
+                        return MODEL_PRICING['claude-haiku-4-5'];
+                    if (lower.includes('haiku-3-5') || lower.includes('haiku-3.5'))
+                        return MODEL_PRICING['claude-3-5-haiku-20241022'];
+                    return MODEL_PRICING['claude-sonnet-4'];
+                };
+                const getModelDisplayName = (modelId) => {
+                    const lower = modelId.toLowerCase();
+                    if (lower.includes('opus-4-5') || lower.includes('opus-4.5'))
+                        return 'Opus 4.5';
+                    if (lower.includes('opus-4-1') || lower.includes('opus-4.1'))
+                        return 'Opus 4.1';
+                    if (lower.includes('opus-4') || lower.includes('opus4'))
+                        return 'Opus 4';
+                    if (lower.includes('sonnet-4-5') || lower.includes('sonnet-4.5'))
+                        return 'Sonnet 4.5';
+                    if (lower.includes('sonnet-4') || lower.includes('sonnet4'))
+                        return 'Sonnet 4';
+                    if (lower.includes('sonnet-3') || lower.includes('sonnet3'))
+                        return 'Sonnet 3.7';
+                    if (lower.includes('haiku-4-5') || lower.includes('haiku-4.5'))
+                        return 'Haiku 4.5';
+                    if (lower.includes('haiku-3-5') || lower.includes('haiku-3.5'))
+                        return 'Haiku 3.5';
+                    return modelId.split('-').slice(0, 3).join(' ');
+                };
+                const calculateModelCost = (modelId, input, output, cacheRead, cacheWrite) => {
+                    const pricing = getModelPricing(modelId);
+                    return (input / 1_000_000) * pricing.inputPerMTok +
+                        (output / 1_000_000) * pricing.outputPerMTok +
+                        (cacheRead / 1_000_000) * pricing.cacheHitsPerMTok +
+                        (cacheWrite / 1_000_000) * pricing.cache5mWritePerMTok;
+                };
+                // Calculate totals
+                let totalCost = 0;
+                let totalInput = 0;
+                let totalOutput = 0;
+                let totalCacheRead = 0;
+                let totalCacheWrite = 0;
+                const modelBreakdown = [];
+                if (stats.modelUsage) {
+                    Object.entries(stats.modelUsage).forEach(([modelId, usage]) => {
+                        const input = usage.inputTokens || 0;
+                        const output = usage.outputTokens || 0;
+                        const cacheRead = usage.cacheReadInputTokens || 0;
+                        const cacheWrite = usage.cacheCreationInputTokens || 0;
+                        totalInput += input;
+                        totalOutput += output;
+                        totalCacheRead += cacheRead;
+                        totalCacheWrite += cacheWrite;
+                        const cost = calculateModelCost(modelId, input, output, cacheRead, cacheWrite);
+                        totalCost += cost;
+                        modelBreakdown.push({
+                            name: getModelDisplayName(modelId),
+                            cost,
+                            tokens: input + output,
+                        });
+                    });
+                }
+                // Sort by cost
+                modelBreakdown.sort((a, b) => b.cost - a.cost);
+                // Format message
+                let text = `📊 *Usage & Cost Summary*\n\n`;
+                text += `💰 *Total Cost:* $${totalCost.toFixed(2)}\n`;
+                text += `🔢 *Total Tokens:* ${((totalInput + totalOutput) / 1_000_000).toFixed(2)}M\n`;
+                text += `📥 Input: ${(totalInput / 1_000_000).toFixed(2)}M\n`;
+                text += `📤 Output: ${(totalOutput / 1_000_000).toFixed(2)}M\n`;
+                text += `💾 Cache: ${(totalCacheRead / 1_000_000).toFixed(2)}M read\n\n`;
+                if (modelBreakdown.length > 0) {
+                    text += `*By Model:*\n`;
+                    modelBreakdown.slice(0, 5).forEach(m => {
+                        const emoji = m.name.includes('Opus') ? '🟣' : m.name.includes('Sonnet') ? '🔵' : '🟢';
+                        text += `${emoji} ${m.name}: $${m.cost.toFixed(2)}\n`;
+                    });
+                }
+                if (stats.totalSessions || stats.totalMessages) {
+                    text += `\n*Activity:*\n`;
+                    if (stats.totalSessions)
+                        text += `📝 ${stats.totalSessions} sessions\n`;
+                    if (stats.totalMessages)
+                        text += `💬 ${stats.totalMessages} messages\n`;
+                }
+                if (stats.firstSessionDate) {
+                    text += `\n_Since ${new Date(stats.firstSessionDate).toLocaleDateString()}_`;
+                }
+                telegramBot?.sendMessage(msg.chat.id, text, { parse_mode: 'Markdown' });
+            }
+            catch (err) {
+                console.error('Error getting usage stats:', err);
+                telegramBot?.sendMessage(msg.chat.id, `❌ Error fetching usage data: ${err}`);
+            }
+        });
         // Handle /ask command (send to Super Agent)
         telegramBot.onText(/\/ask\s+(.+)/, async (msg, match) => {
             if (!match)
@@ -1241,6 +1513,8 @@ async function sendToSuperAgent(chatId, message) {
         telegramBot?.sendMessage(chatId, '👑 No Super Agent found.\n\nCreate one in Claude Manager first, or use /start\\_agent to start a specific agent.', { parse_mode: 'Markdown' });
         return;
     }
+    // Sanitize message - replace newlines with spaces for terminal compatibility
+    const sanitizedMessage = message.replace(/\r?\n/g, ' ').trim();
     try {
         // Initialize PTY if needed
         if (!superAgent.ptyId || !ptyProcesses.has(superAgent.ptyId)) {
@@ -1257,11 +1531,11 @@ async function sendToSuperAgent(chatId, message) {
             // Track that this input came from Telegram
             superAgentTelegramTask = true;
             superAgentOutputBuffer = [];
-            superAgent.currentTask = message.slice(0, 100);
+            superAgent.currentTask = sanitizedMessage.slice(0, 100);
             superAgent.lastActivity = new Date().toISOString();
             saveAgents();
-            // Include Telegram context in the message - strip any newlines from Telegram input
-            const telegramMessage = `[FROM TELEGRAM - Use send_telegram MCP tool to respond!] ${message.replace(/\r?\n/g, ' ').trim()}`;
+            // Include Telegram context in the message
+            const telegramMessage = `[FROM TELEGRAM - Use send_telegram MCP tool to respond!] ${sanitizedMessage}`;
             // Write the message first, then send Enter separately
             ptyProcess.write(telegramMessage);
             ptyProcess.write('\r');
@@ -1300,7 +1574,7 @@ This is because the user is on Telegram and cannot respond to agent questions.
 
 CRITICAL: This request came from Telegram. When you have an answer, you MUST call send_telegram with your response. The user is waiting on Telegram for your reply!
 
-USER REQUEST: ${message}`;
+USER REQUEST: ${sanitizedMessage}`;
             let command = 'claude';
             // Add MCP config
             const mcpConfigPath = path.join(electron_1.app.getPath('home'), '.claude', 'mcp.json');
@@ -1311,7 +1585,7 @@ USER REQUEST: ${message}`;
                 command += ' --dangerously-skip-permissions';
             command += ` '${orchestratorPrompt.replace(/'/g, "'\\''")}'`;
             superAgent.status = 'running';
-            superAgent.currentTask = message.slice(0, 100);
+            superAgent.currentTask = sanitizedMessage.slice(0, 100);
             superAgent.lastActivity = new Date().toISOString();
             // Track that this task came from Telegram
             superAgentTelegramTask = true;
@@ -1337,6 +1611,460 @@ function stopTelegramBot() {
         telegramBot.stopPolling();
         telegramBot = null;
         console.log('Telegram bot stopped');
+    }
+}
+// ============== Slack Bot Service ==============
+let slackApp = null;
+let superAgentSlackTask = false;
+let superAgentSlackBuffer = [];
+let slackResponseChannel = null;
+let slackResponseThreadTs = null; // Track thread timestamp for replies
+// Character faces for Slack (same as Telegram)
+const SLACK_CHARACTER_FACES = {
+    'robot': ':robot_face:',
+    'ninja': ':ninja:',
+    'wizard': ':mage:',
+    'astronaut': ':astronaut:',
+    'knight': ':crossed_swords:',
+    'pirate': ':pirate_flag:',
+    'alien': ':alien:',
+    'viking': ':axe:',
+};
+// Format agent status for Slack
+function formatSlackAgentStatus(a) {
+    const isSuper = isSuperAgent(a);
+    const emoji = isSuper ? ':crown:' : (SLACK_CHARACTER_FACES[a.character || ''] || ':robot_face:');
+    const statusEmoji = a.status === 'running' ? ':large_green_circle:' :
+        a.status === 'waiting' ? ':large_yellow_circle:' :
+            a.status === 'error' ? ':red_circle:' : ':white_circle:';
+    let text = `${emoji} *${a.name}* ${statusEmoji}\n`;
+    if (!isSuper) {
+        const project = a.projectPath.split('/').pop() || 'Unknown';
+        text += `    :file_folder: \`${project}\`\n`;
+    }
+    if (a.skills.length > 0) {
+        text += `    :wrench: ${a.skills.slice(0, 3).join(', ')}${a.skills.length > 3 ? '...' : ''}\n`;
+    }
+    if (a.currentTask && a.status === 'running') {
+        text += `    :speech_balloon: _${a.currentTask.slice(0, 40)}${a.currentTask.length > 40 ? '...' : ''}_\n`;
+    }
+    return text;
+}
+// Send message to Slack
+async function sendSlackMessage(text, channel) {
+    if (!slackApp || (!channel && !appSettings.slackChannelId))
+        return;
+    const targetChannel = channel || appSettings.slackChannelId;
+    try {
+        // Slack has a 4000 char limit for text, truncate if needed
+        const maxLen = 3900;
+        const truncated = text.length > maxLen ? text.slice(0, maxLen) + '\n\n_(truncated)_' : text;
+        await slackApp.client.chat.postMessage({
+            channel: targetChannel,
+            text: `:crown: ${truncated}`,
+            mrkdwn: true,
+        });
+    }
+    catch (err) {
+        console.error('Failed to send Slack message:', err);
+    }
+}
+// Initialize Slack bot
+function initSlackBot() {
+    // Stop existing bot if any
+    if (slackApp) {
+        slackApp.stop().catch(err => console.error('Error stopping Slack app:', err));
+        slackApp = null;
+    }
+    if (!appSettings.slackEnabled || !appSettings.slackBotToken || !appSettings.slackAppToken) {
+        console.log('Slack bot disabled or missing tokens');
+        return;
+    }
+    try {
+        slackApp = new bolt_1.App({
+            token: appSettings.slackBotToken,
+            appToken: appSettings.slackAppToken,
+            socketMode: true,
+            logLevel: bolt_1.LogLevel.DEBUG,
+        });
+        // Handle app mentions
+        slackApp.event('app_mention', async ({ event, say }) => {
+            console.log('Slack app_mention event received:', JSON.stringify(event, null, 2));
+            // Remove the bot mention from the text
+            const text = event.text.replace(/<@[A-Z0-9]+>/gi, '').trim();
+            slackResponseChannel = event.channel;
+            // Use thread_ts if replying in a thread, otherwise use the message ts to start a thread
+            slackResponseThreadTs = event.thread_ts || event.ts || null;
+            // Save channel ID
+            if (appSettings.slackChannelId !== event.channel) {
+                appSettings.slackChannelId = event.channel;
+                saveAppSettings(appSettings);
+                mainWindow?.webContents.send('settings:updated', appSettings);
+            }
+            await handleSlackCommand(text, event.channel, say);
+        });
+        // Handle direct messages - use 'message' event with subtype filter
+        slackApp.message(async ({ message, say }) => {
+            // Cast to any for flexibility with Slack's complex message types
+            const msg = message;
+            console.log('Slack message event received:', JSON.stringify(msg, null, 2));
+            // Skip bot messages and message changes/deletions
+            if (msg.bot_id)
+                return;
+            if (msg.subtype)
+                return; // Skip edited, deleted, etc.
+            if (!msg.text)
+                return;
+            const channel = msg.channel;
+            slackResponseChannel = channel;
+            // Use thread_ts if replying in a thread, otherwise use the message ts to start a thread
+            slackResponseThreadTs = msg.thread_ts || msg.ts || null;
+            // Save channel for responses
+            if (appSettings.slackChannelId !== channel) {
+                appSettings.slackChannelId = channel;
+                saveAppSettings(appSettings);
+                mainWindow?.webContents.send('settings:updated', appSettings);
+            }
+            await sendToSuperAgentFromSlack(channel, msg.text, say);
+        });
+        // Log all events for debugging
+        slackApp.use(async ({ next, payload }) => {
+            console.log('Slack event payload type:', payload?.type || 'unknown');
+            await next();
+        });
+        // Start the app
+        slackApp.start().then(() => {
+            console.log('Slack bot started (Socket Mode)');
+        }).catch(err => {
+            console.error('Failed to start Slack bot:', err);
+            slackApp = null;
+        });
+    }
+    catch (err) {
+        console.error('Failed to initialize Slack bot:', err);
+        slackApp = null;
+    }
+}
+// Handle Slack commands
+async function handleSlackCommand(text, channel, say) {
+    const lowerText = text.toLowerCase().trim();
+    if (lowerText === 'help' || lowerText === '') {
+        await say(`:crown: *Claude Manager Bot*\n\n` +
+            `*Commands:*\n` +
+            `• \`status\` - Show all agents status\n` +
+            `• \`agents\` - List agents with details\n` +
+            `• \`projects\` - List all projects\n` +
+            `• \`start <agent> <task>\` - Start an agent\n` +
+            `• \`stop <agent>\` - Stop an agent\n` +
+            `• \`usage\` - Show usage & cost stats\n` +
+            `• \`help\` - Show this help message\n\n` +
+            `Or just send a message to talk to the Super Agent!`);
+        return;
+    }
+    if (lowerText === 'status') {
+        const agentList = Array.from(agents.values());
+        if (agentList.length === 0) {
+            await say(':package: No agents created yet.');
+            return;
+        }
+        const running = agentList.filter(a => a.status === 'running');
+        const waiting = agentList.filter(a => a.status === 'waiting');
+        const idle = agentList.filter(a => a.status === 'idle' || a.status === 'completed');
+        const error = agentList.filter(a => a.status === 'error');
+        let response = `:bar_chart: *Agents Status*\n\n`;
+        if (running.length > 0) {
+            response += `:large_green_circle: *Running (${running.length}):*\n`;
+            running.forEach(a => { response += formatSlackAgentStatus(a); });
+            response += '\n';
+        }
+        if (waiting.length > 0) {
+            response += `:large_yellow_circle: *Waiting (${waiting.length}):*\n`;
+            waiting.forEach(a => { response += formatSlackAgentStatus(a); });
+            response += '\n';
+        }
+        if (error.length > 0) {
+            response += `:red_circle: *Error (${error.length}):*\n`;
+            error.forEach(a => { response += formatSlackAgentStatus(a); });
+            response += '\n';
+        }
+        if (idle.length > 0) {
+            response += `:white_circle: *Idle (${idle.length}):*\n`;
+            idle.forEach(a => { response += formatSlackAgentStatus(a); });
+        }
+        await say(response);
+        return;
+    }
+    if (lowerText === 'agents') {
+        const agentList = Array.from(agents.values());
+        if (agentList.length === 0) {
+            await say(':package: No agents created yet.');
+            return;
+        }
+        let response = `:robot_face: *All Agents*\n\n`;
+        agentList.forEach(a => {
+            response += formatSlackAgentStatus(a) + '\n';
+        });
+        await say(response);
+        return;
+    }
+    if (lowerText === 'projects') {
+        const agentList = Array.from(agents.values()).filter(a => !isSuperAgent(a));
+        if (agentList.length === 0) {
+            await say(':package: No projects with agents yet.');
+            return;
+        }
+        const projectsMap = new Map();
+        agentList.forEach(agent => {
+            const path = agent.projectPath;
+            if (!projectsMap.has(path)) {
+                projectsMap.set(path, []);
+            }
+            projectsMap.get(path).push(agent);
+        });
+        let response = `:file_folder: *Projects*\n\n`;
+        projectsMap.forEach((projectAgents, projectPath) => {
+            const projectName = projectPath.split('/').pop() || 'Unknown';
+            response += `:open_file_folder: *${projectName}*\n`;
+            response += `    \`${projectPath}\`\n`;
+            response += `    :busts_in_silhouette: Agents: ${projectAgents.map(a => {
+                const emoji = SLACK_CHARACTER_FACES[a.character || ''] || ':robot_face:';
+                const status = a.status === 'running' ? ':large_green_circle:' : a.status === 'waiting' ? ':large_yellow_circle:' : a.status === 'error' ? ':red_circle:' : ':white_circle:';
+                return `${emoji}${a.name}${status}`;
+            }).join(', ')}\n\n`;
+        });
+        await say(response);
+        return;
+    }
+    if (lowerText === 'usage') {
+        try {
+            const stats = await getClaudeStats();
+            if (!stats) {
+                await say(':bar_chart: No usage data available yet.');
+                return;
+            }
+            // Use same pricing as Telegram
+            const MODEL_PRICING = {
+                'claude-opus-4-5-20251101': { inputPerMTok: 5, outputPerMTok: 25, cacheHitsPerMTok: 0.50, cache5mWritePerMTok: 6.25 },
+                'claude-opus-4-5': { inputPerMTok: 5, outputPerMTok: 25, cacheHitsPerMTok: 0.50, cache5mWritePerMTok: 6.25 },
+                'claude-sonnet-4': { inputPerMTok: 3, outputPerMTok: 15, cacheHitsPerMTok: 0.30, cache5mWritePerMTok: 3.75 },
+            };
+            const getModelPricing = (modelId) => {
+                if (MODEL_PRICING[modelId])
+                    return MODEL_PRICING[modelId];
+                const lower = modelId.toLowerCase();
+                if (lower.includes('opus-4-5') || lower.includes('opus-4.5'))
+                    return MODEL_PRICING['claude-opus-4-5'];
+                if (lower.includes('sonnet'))
+                    return MODEL_PRICING['claude-sonnet-4'];
+                return MODEL_PRICING['claude-sonnet-4'];
+            };
+            let totalCost = 0;
+            let totalInput = 0;
+            let totalOutput = 0;
+            if (stats.modelUsage) {
+                Object.entries(stats.modelUsage).forEach(([modelId, usageUnknown]) => {
+                    const usage = usageUnknown;
+                    const input = usage.inputTokens || 0;
+                    const output = usage.outputTokens || 0;
+                    const cacheRead = usage.cacheReadInputTokens || 0;
+                    const cacheWrite = usage.cacheCreationInputTokens || 0;
+                    totalInput += input;
+                    totalOutput += output;
+                    const pricing = getModelPricing(modelId);
+                    totalCost += (input / 1_000_000) * pricing.inputPerMTok +
+                        (output / 1_000_000) * pricing.outputPerMTok +
+                        (cacheRead / 1_000_000) * pricing.cacheHitsPerMTok +
+                        (cacheWrite / 1_000_000) * pricing.cache5mWritePerMTok;
+                });
+            }
+            let response = `:bar_chart: *Usage & Cost Summary*\n\n`;
+            response += `:moneybag: *Total Cost:* $${totalCost.toFixed(2)}\n`;
+            response += `:1234: *Total Tokens:* ${((totalInput + totalOutput) / 1_000_000).toFixed(2)}M\n`;
+            response += `:inbox_tray: Input: ${(totalInput / 1_000_000).toFixed(2)}M\n`;
+            response += `:outbox_tray: Output: ${(totalOutput / 1_000_000).toFixed(2)}M\n`;
+            await say(response);
+        }
+        catch (err) {
+            console.error('Error getting usage stats:', err);
+            await say(`:x: Error fetching usage data: ${err}`);
+        }
+        return;
+    }
+    if (lowerText.startsWith('start ')) {
+        const input = text.slice(6).trim();
+        const firstSpaceIndex = input.indexOf(' ');
+        if (firstSpaceIndex === -1) {
+            await say(':warning: Usage: `start <agent name> <task>`');
+            return;
+        }
+        const agentName = input.substring(0, firstSpaceIndex).toLowerCase();
+        const task = input.substring(firstSpaceIndex + 1).trim();
+        const agent = Array.from(agents.values()).find(a => a.name?.toLowerCase().includes(agentName) || a.id === agentName);
+        if (!agent) {
+            await say(`:x: Agent "${agentName}" not found.`);
+            return;
+        }
+        if (agent.status === 'running') {
+            await say(`:warning: ${agent.name} is already running.`);
+            return;
+        }
+        try {
+            const workingPath = (agent.worktreePath || agent.projectPath).replace(/'/g, "'\\''");
+            if (!agent.ptyId || !ptyProcesses.has(agent.ptyId)) {
+                const ptyId = await initAgentPty(agent);
+                agent.ptyId = ptyId;
+            }
+            const ptyProcess = ptyProcesses.get(agent.ptyId);
+            if (!ptyProcess) {
+                await say(':x: Failed to initialize agent terminal.');
+                return;
+            }
+            let command = 'claude';
+            if (agent.skipPermissions)
+                command += ' --dangerously-skip-permissions';
+            if (agent.secondaryProjectPath) {
+                command += ` --add-dir '${agent.secondaryProjectPath.replace(/'/g, "'\\''")}'`;
+            }
+            command += ` '${task.replace(/'/g, "'\\''")}'`;
+            agent.status = 'running';
+            agent.currentTask = task.slice(0, 100);
+            agent.lastActivity = new Date().toISOString();
+            ptyProcess.write(`cd '${workingPath}' && ${command}`);
+            ptyProcess.write('\r');
+            saveAgents();
+            const emoji = isSuperAgent(agent) ? ':crown:' : (SLACK_CHARACTER_FACES[agent.character || ''] || ':robot_face:');
+            await say(`:rocket: Started *${agent.name}*\n\n${emoji} Task: ${task}`);
+        }
+        catch (err) {
+            console.error('Failed to start agent from Slack:', err);
+            await say(`:x: Failed to start agent: ${err}`);
+        }
+        return;
+    }
+    if (lowerText.startsWith('stop ')) {
+        const agentName = text.slice(5).trim().toLowerCase();
+        const agent = Array.from(agents.values()).find(a => a.name?.toLowerCase().includes(agentName) || a.id === agentName);
+        if (!agent) {
+            await say(`:x: Agent "${agentName}" not found.`);
+            return;
+        }
+        if (agent.status !== 'running' && agent.status !== 'waiting') {
+            await say(`:warning: ${agent.name} is not running.`);
+            return;
+        }
+        if (agent.ptyId) {
+            const ptyProcess = ptyProcesses.get(agent.ptyId);
+            if (ptyProcess) {
+                ptyProcess.write('\x03'); // Ctrl+C
+            }
+        }
+        agent.status = 'idle';
+        agent.currentTask = undefined;
+        saveAgents();
+        await say(`:octagonal_sign: Stopped *${agent.name}*`);
+        return;
+    }
+    // Default: forward to Super Agent
+    await sendToSuperAgentFromSlack(channel, text, say);
+}
+// Send message to Super Agent from Slack
+async function sendToSuperAgentFromSlack(channel, message, say) {
+    const superAgent = getSuperAgent();
+    if (!superAgent) {
+        await say(':crown: No Super Agent found.\n\nCreate one in Claude Manager first, or use `start <agent> <task>` to start a specific agent.');
+        return;
+    }
+    // Sanitize message - replace newlines with spaces for terminal compatibility
+    const sanitizedMessage = message.replace(/\r?\n/g, ' ').trim();
+    try {
+        // Initialize PTY if needed
+        if (!superAgent.ptyId || !ptyProcesses.has(superAgent.ptyId)) {
+            const ptyId = await initAgentPty(superAgent);
+            superAgent.ptyId = ptyId;
+        }
+        const ptyProcess = ptyProcesses.get(superAgent.ptyId);
+        if (!ptyProcess) {
+            await say(':x: Failed to connect to Super Agent terminal.');
+            return;
+        }
+        // If agent is running or waiting, send message to existing session
+        if (superAgent.status === 'running' || superAgent.status === 'waiting') {
+            superAgentSlackTask = true;
+            superAgentSlackBuffer = [];
+            superAgent.currentTask = sanitizedMessage.slice(0, 100);
+            superAgent.lastActivity = new Date().toISOString();
+            saveAgents();
+            const slackMessage = `[FROM SLACK - Use send_slack MCP tool to respond!] ${sanitizedMessage}`;
+            ptyProcess.write(slackMessage);
+            ptyProcess.write('\r');
+            await say(':crown: Super Agent is processing...');
+        }
+        else if (superAgent.status === 'idle' || superAgent.status === 'completed' || superAgent.status === 'error') {
+            // No active session, start a new one
+            const workingPath = (superAgent.worktreePath || superAgent.projectPath).replace(/'/g, "'\\''");
+            const orchestratorPrompt = `You are the Super Agent - an orchestrator that manages other agents using MCP tools.
+
+THIS REQUEST IS FROM SLACK - You MUST use send_slack to respond!
+
+AVAILABLE MCP TOOLS (from "claude-mgr-orchestrator"):
+- list_agents: List all agents with status, project, ID
+- get_agent_output: Read agent's terminal output (use to see responses!)
+- start_agent: Start agent with a prompt (auto-sends to running agents too)
+- send_message: Send message to agent (auto-starts idle agents)
+- stop_agent: Stop a running agent
+- create_agent: Create a new agent
+- remove_agent: Delete an agent
+- send_slack: Send your response back to Slack (USE THIS!)
+
+WORKFLOW FOR SLACK REQUESTS:
+1. Use start_agent or send_message with your task/question
+2. Wait 5-10 seconds for the agent to process
+3. Use get_agent_output to read their response
+4. Use send_slack to send a summary/response back to the user
+
+IMPORTANT - AUTONOMOUS MODE:
+When giving tasks to agents, ALWAYS include these instructions in your prompt:
+- "Work autonomously without asking for user feedback or choices"
+- "Make decisions on your own and proceed with the best approach"
+- "Do not wait for user confirmation - execute the task fully"
+This is because the user is on Slack and cannot respond to agent questions.
+
+CRITICAL: This request came from Slack. When you have an answer, you MUST call send_slack with your response. The user is waiting on Slack for your reply!
+
+USER REQUEST: ${sanitizedMessage}`;
+            let command = 'claude';
+            const mcpConfigPath = path.join(electron_1.app.getPath('home'), '.claude', 'mcp.json');
+            if (fs.existsSync(mcpConfigPath)) {
+                command += ` --mcp-config '${mcpConfigPath}'`;
+            }
+            if (superAgent.skipPermissions)
+                command += ' --dangerously-skip-permissions';
+            command += ` '${orchestratorPrompt.replace(/'/g, "'\\''")}'`;
+            superAgent.status = 'running';
+            superAgent.currentTask = sanitizedMessage.slice(0, 100);
+            superAgent.lastActivity = new Date().toISOString();
+            superAgentSlackTask = true;
+            superAgentSlackBuffer = [];
+            ptyProcess.write(`cd '${workingPath}' && ${command}`);
+            ptyProcess.write('\r');
+            saveAgents();
+            await say(':crown: Super Agent is processing your request...');
+        }
+        else {
+            await say(`:crown: Super Agent is in ${superAgent.status} state. Try again in a moment.`);
+        }
+    }
+    catch (err) {
+        console.error('Failed to send to Super Agent:', err);
+        await say(`:x: Error: ${err}`);
+    }
+}
+// Stop Slack bot
+function stopSlackBot() {
+    if (slackApp) {
+        slackApp.stop().catch(err => console.error('Error stopping Slack app:', err));
+        slackApp = null;
+        console.log('Slack bot stopped');
     }
 }
 // Auto-start the Super Agent on app startup
@@ -1512,6 +2240,8 @@ async function initAgentPty(agent) {
         env: {
             ...process.env,
             CLAUDE_SKILLS: agent.skills.join(','),
+            CLAUDE_AGENT_ID: agent.id,
+            CLAUDE_PROJECT_PATH: agent.projectPath,
         },
     });
     const ptyId = (0, uuid_1.v4)();
@@ -1638,8 +2368,14 @@ electron_1.app.whenReady().then(async () => {
     loadAgents();
     // Auto-setup MCP orchestrator if not already configured
     await setupMcpOrchestrator();
+    // Fix MCP server paths to use absolute node path (required for scheduled tasks)
+    await fixMcpServerPaths();
+    // Configure status hooks for Claude Code
+    await configureStatusHooks();
     // Initialize Telegram bot if enabled
     initTelegramBot();
+    // Initialize Slack bot if enabled
+    initSlackBot();
     // Auto-start Super Agent if it exists
     await autoStartSuperAgent();
     // Register the app:// protocol handler
@@ -1699,6 +2435,8 @@ electron_1.app.on('window-all-closed', () => {
     stopApiServer();
     // Stop Telegram bot
     stopTelegramBot();
+    // Stop Slack bot
+    stopSlackBot();
     // Kill all PTY processes
     ptyProcesses.forEach((ptyProcess) => {
         ptyProcess.kill();
@@ -1834,6 +2572,8 @@ electron_1.ipcMain.handle('agent:create', async (_event, config) => {
             env: {
                 ...process.env,
                 CLAUDE_SKILLS: config.skills.join(','),
+                CLAUDE_AGENT_ID: id,
+                CLAUDE_PROJECT_PATH: config.projectPath,
             },
         });
         console.log(`PTY created successfully for agent ${id}, PID: ${ptyProcess.pid}`);
@@ -2256,6 +2996,74 @@ electron_1.ipcMain.handle('skill:list-installed', async () => {
         return [];
     }
 });
+// ============== Plugin IPC Handlers ==============
+// Store for plugin installation PTYs
+const pluginPtyProcesses = new Map();
+// Start plugin installation (creates interactive PTY)
+electron_1.ipcMain.handle('plugin:install-start', async (_event, { command, cols, rows }) => {
+    const id = (0, uuid_1.v4)();
+    const shell = process.env.SHELL || '/bin/zsh';
+    const ptyProcess = pty.spawn(shell, ['-l'], {
+        name: 'xterm-256color',
+        cols: cols || 80,
+        rows: rows || 24,
+        cwd: os.homedir(),
+        env: process.env,
+    });
+    pluginPtyProcesses.set(id, ptyProcess);
+    // Forward PTY output to renderer
+    ptyProcess.onData((data) => {
+        mainWindow?.webContents.send('plugin:pty-data', { id, data });
+    });
+    // Handle PTY exit
+    ptyProcess.onExit(({ exitCode }) => {
+        mainWindow?.webContents.send('plugin:pty-exit', { id, exitCode });
+        pluginPtyProcesses.delete(id);
+    });
+    // Split commands by && and run each as a separate claude invocation
+    // Each command is a Claude slash command
+    const commands = command.split('&&').map(c => c.trim());
+    // Build shell command: claude "cmd1" ; claude "cmd2" ; ...
+    // Using ; instead of && so that subsequent commands run even if earlier ones fail
+    // (e.g., marketplace add fails because it's already added)
+    const shellCommand = commands
+        .map(cmd => `claude --dangerously-skip-permissions "${cmd}"`)
+        .join(' ; ');
+    // Send the install commands after a short delay to let shell initialize
+    setTimeout(() => {
+        ptyProcess.write(shellCommand);
+        ptyProcess.write('\r');
+    }, 500);
+    return { id, command };
+});
+// Write to plugin installation PTY
+electron_1.ipcMain.handle('plugin:install-write', async (_event, { id, data }) => {
+    const ptyProcess = pluginPtyProcesses.get(id);
+    if (ptyProcess) {
+        ptyProcess.write(data);
+        return { success: true };
+    }
+    return { success: false, error: 'PTY not found' };
+});
+// Resize plugin installation PTY
+electron_1.ipcMain.handle('plugin:install-resize', async (_event, { id, cols, rows }) => {
+    const ptyProcess = pluginPtyProcesses.get(id);
+    if (ptyProcess) {
+        ptyProcess.resize(cols, rows);
+        return { success: true };
+    }
+    return { success: false, error: 'PTY not found' };
+});
+// Kill plugin installation PTY
+electron_1.ipcMain.handle('plugin:install-kill', async (_event, { id }) => {
+    const ptyProcess = pluginPtyProcesses.get(id);
+    if (ptyProcess) {
+        ptyProcess.kill();
+        pluginPtyProcesses.delete(id);
+        return { success: true };
+    }
+    return { success: false, error: 'PTY not found' };
+});
 // ============== Claude Data IPC Handlers ==============
 // Read Claude Code settings
 async function getClaudeSettings() {
@@ -2594,11 +3402,18 @@ electron_1.ipcMain.handle('app:saveSettings', async (_event, newSettings) => {
     try {
         const telegramChanged = newSettings.telegramEnabled !== undefined ||
             newSettings.telegramBotToken !== undefined;
+        const slackChanged = newSettings.slackEnabled !== undefined ||
+            newSettings.slackBotToken !== undefined ||
+            newSettings.slackAppToken !== undefined;
         appSettings = { ...appSettings, ...newSettings };
         saveAppSettings(appSettings);
         // Reinitialize Telegram bot if settings changed
         if (telegramChanged) {
             initTelegramBot();
+        }
+        // Reinitialize Slack bot if settings changed
+        if (slackChanged) {
+            initSlackBot();
         }
         return { success: true };
     }
@@ -2636,15 +3451,186 @@ electron_1.ipcMain.handle('telegram:sendTest', async () => {
         return { success: false, error: String(err) };
     }
 });
-// ============== Orchestrator MCP Setup ==============
-// Get the path to the bundled MCP orchestrator
-function getMcpOrchestratorPath() {
+// Test Slack connection
+electron_1.ipcMain.handle('slack:test', async () => {
+    if (!appSettings.slackBotToken || !appSettings.slackAppToken) {
+        return { success: false, error: 'Bot token and App token are required' };
+    }
+    try {
+        // Create a temporary Slack app to test the tokens
+        const testApp = new bolt_1.App({
+            token: appSettings.slackBotToken,
+            appToken: appSettings.slackAppToken,
+            socketMode: true,
+            logLevel: bolt_1.LogLevel.ERROR,
+        });
+        // Test auth
+        const authResult = await testApp.client.auth.test();
+        await testApp.stop();
+        return { success: true, botName: authResult.user };
+    }
+    catch (err) {
+        console.error('Slack test failed:', err);
+        return { success: false, error: String(err) };
+    }
+});
+// Send test message to Slack
+electron_1.ipcMain.handle('slack:sendTest', async () => {
+    if (!slackApp || !appSettings.slackChannelId) {
+        return { success: false, error: 'Bot not connected or no channel ID. Mention the bot or DM it first.' };
+    }
+    try {
+        await slackApp.client.chat.postMessage({
+            channel: appSettings.slackChannelId,
+            text: ':white_check_mark: Test message from Claude Manager!',
+            mrkdwn: true,
+        });
+        return { success: true };
+    }
+    catch (err) {
+        console.error('Slack send test failed:', err);
+        return { success: false, error: String(err) };
+    }
+});
+// ============== Status Hooks Setup ==============
+// Get the path to the bundled hooks directory
+function getHooksPath() {
     let appPath = electron_1.app.getAppPath();
     // If running from asar, use unpacked path
     if (appPath.includes('app.asar')) {
         appPath = appPath.replace('app.asar', 'app.asar.unpacked');
     }
-    return path.join(appPath, 'mcp-orchestrator', 'dist', 'index.js');
+    return path.join(appPath, 'hooks');
+}
+// Configure Claude Code hooks for status notifications
+async function configureStatusHooks() {
+    try {
+        const hooksDir = getHooksPath();
+        // Check if hooks directory exists
+        if (!fs.existsSync(hooksDir)) {
+            console.log('Hooks directory not found at', hooksDir);
+            return;
+        }
+        const claudeDir = path.join(os.homedir(), '.claude');
+        const settingsPath = path.join(claudeDir, 'settings.json');
+        // Ensure .claude directory exists
+        if (!fs.existsSync(claudeDir)) {
+            fs.mkdirSync(claudeDir, { recursive: true });
+        }
+        // Read existing settings
+        let settings = {};
+        if (fs.existsSync(settingsPath)) {
+            try {
+                settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+            }
+            catch {
+                settings = {};
+            }
+        }
+        // Initialize hooks if not present
+        if (!settings.hooks) {
+            settings.hooks = {};
+        }
+        // Define our hooks
+        const postToolUseHook = path.join(hooksDir, 'post-tool-use.sh');
+        const stopHook = path.join(hooksDir, 'on-stop.sh');
+        const sessionStartHook = path.join(hooksDir, 'session-start.sh');
+        const sessionEndHook = path.join(hooksDir, 'session-end.sh');
+        const notificationHook = path.join(hooksDir, 'notification.sh');
+        // Check which hooks exist
+        const hasPostToolUse = fs.existsSync(postToolUseHook);
+        const hasStop = fs.existsSync(stopHook);
+        const hasSessionStart = fs.existsSync(sessionStartHook);
+        const hasSessionEnd = fs.existsSync(sessionEndHook);
+        const hasNotification = fs.existsSync(notificationHook);
+        let updated = false;
+        // Configure PostToolUse hook
+        if (hasPostToolUse) {
+            const hookConfig = {
+                matcher: '*',
+                hooks: [{ type: 'command', command: postToolUseHook, timeout: 30 }]
+            };
+            // Check if already configured
+            const existing = settings.hooks.PostToolUse || [];
+            const alreadyConfigured = existing.some((h) => h.hooks?.some((hh) => hh.command?.includes('post-tool-use.sh')));
+            if (!alreadyConfigured) {
+                settings.hooks.PostToolUse = [...existing, hookConfig];
+                updated = true;
+            }
+        }
+        // Configure Stop hook
+        if (hasStop) {
+            const hookConfig = {
+                hooks: [{ type: 'command', command: stopHook, timeout: 30 }]
+            };
+            const existing = settings.hooks.Stop || [];
+            const alreadyConfigured = existing.some((h) => h.hooks?.some((hh) => hh.command?.includes('on-stop.sh')));
+            if (!alreadyConfigured) {
+                settings.hooks.Stop = [...existing, hookConfig];
+                updated = true;
+            }
+        }
+        // Configure SessionStart hook
+        if (hasSessionStart) {
+            const hookConfig = {
+                matcher: '*',
+                hooks: [{ type: 'command', command: sessionStartHook, timeout: 30 }]
+            };
+            const existing = settings.hooks.SessionStart || [];
+            const alreadyConfigured = existing.some((h) => h.hooks?.some((hh) => hh.command?.includes('session-start.sh')));
+            if (!alreadyConfigured) {
+                settings.hooks.SessionStart = [...existing, hookConfig];
+                updated = true;
+            }
+        }
+        // Configure SessionEnd hook
+        if (hasSessionEnd) {
+            const hookConfig = {
+                matcher: '*',
+                hooks: [{ type: 'command', command: sessionEndHook, timeout: 30 }]
+            };
+            const existing = settings.hooks.SessionEnd || [];
+            const alreadyConfigured = existing.some((h) => h.hooks?.some((hh) => hh.command?.includes('session-end.sh')));
+            if (!alreadyConfigured) {
+                settings.hooks.SessionEnd = [...existing, hookConfig];
+                updated = true;
+            }
+        }
+        // Configure Notification hook
+        if (hasNotification) {
+            const hookConfig = {
+                matcher: '*',
+                hooks: [{ type: 'command', command: notificationHook, timeout: 30 }]
+            };
+            const existing = settings.hooks.Notification || [];
+            const alreadyConfigured = existing.some((h) => h.hooks?.some((hh) => hh.command?.includes('notification.sh')));
+            if (!alreadyConfigured) {
+                settings.hooks.Notification = [...existing, hookConfig];
+                updated = true;
+            }
+        }
+        // Write updated settings
+        if (updated) {
+            fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+            console.log('Status hooks configured in', settingsPath);
+        }
+        else {
+            console.log('Status hooks already configured');
+        }
+    }
+    catch (err) {
+        console.error('Failed to configure status hooks:', err);
+    }
+}
+// ============== Orchestrator MCP Setup ==============
+// Get the path to the bundled MCP orchestrator
+function getMcpOrchestratorPath() {
+    // In production, MCP orchestrator is in extraResources
+    if (electron_1.app.isPackaged) {
+        return path.join(process.resourcesPath, 'mcp-orchestrator', 'dist', 'index.js');
+    }
+    // In development, it's in the project directory
+    return path.join(__dirname, '..', 'mcp-orchestrator', 'dist', 'index.js');
 }
 // Auto-setup MCP orchestrator on app start using claude mcp add command
 async function setupMcpOrchestrator() {
@@ -2655,17 +3641,39 @@ async function setupMcpOrchestrator() {
             console.log('MCP orchestrator not found at', orchestratorPath);
             return;
         }
-        // Check if already configured by running claude mcp list
         const { execSync } = require('child_process');
-        try {
-            const listOutput = execSync('claude mcp list 2>&1', { encoding: 'utf-8' });
-            if (listOutput.includes('claude-mgr-orchestrator')) {
-                console.log('MCP orchestrator already configured');
-                return;
+        const claudeDir = path.join(os.homedir(), '.claude');
+        const mcpConfigPath = path.join(claudeDir, 'mcp.json');
+        // Check if current config path matches the expected path
+        let needsUpdate = true;
+        if (fs.existsSync(mcpConfigPath)) {
+            try {
+                const mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
+                const existingConfig = mcpConfig.mcpServers?.['claude-mgr-orchestrator'];
+                if (existingConfig?.args?.[0] === orchestratorPath) {
+                    console.log('MCP orchestrator already configured with correct path');
+                    needsUpdate = false;
+                }
+                else if (existingConfig) {
+                    console.log('MCP orchestrator path changed, updating...');
+                    console.log('  Old path:', existingConfig.args?.[0]);
+                    console.log('  New path:', orchestratorPath);
+                }
+            }
+            catch {
+                // Config parsing failed, will update
             }
         }
+        if (!needsUpdate) {
+            return;
+        }
+        // Remove existing config first (in case path changed)
+        try {
+            execSync('claude mcp remove -s user claude-mgr-orchestrator 2>&1', { encoding: 'utf-8', stdio: 'pipe' });
+            console.log('Removed old MCP orchestrator config');
+        }
         catch {
-            // claude mcp list might fail if no servers configured, that's ok
+            // Ignore errors if it doesn't exist
         }
         // Add the MCP server using claude mcp add with -s user for global scope
         // Format: claude mcp add -s user <name> <command> [args...]
@@ -2678,8 +3686,6 @@ async function setupMcpOrchestrator() {
         catch (addErr) {
             console.error('Failed to add MCP server via claude mcp add -s user:', addErr);
             // Fallback: also write to mcp.json for compatibility
-            const claudeDir = path.join(os.homedir(), '.claude');
-            const mcpConfigPath = path.join(claudeDir, 'mcp.json');
             if (!fs.existsSync(claudeDir)) {
                 fs.mkdirSync(claudeDir, { recursive: true });
             }
@@ -3011,5 +4017,989 @@ electron_1.ipcMain.handle('shell:killPty', async (_event, { ptyId }) => {
         return { success: true };
     }
     return { success: false, error: 'PTY not found' };
+});
+// ============================================
+// Scheduler (claude-code-scheduler plugin) IPC handlers
+// ============================================
+// Scheduler metadata storage (extends the plugin's schedules.json with our own metadata)
+const SCHEDULER_METADATA_PATH = path.join(os.homedir(), '.claude-manager', 'scheduler-metadata.json');
+function loadSchedulerMetadata() {
+    try {
+        if (fs.existsSync(SCHEDULER_METADATA_PATH)) {
+            return JSON.parse(fs.readFileSync(SCHEDULER_METADATA_PATH, 'utf-8'));
+        }
+    }
+    catch {
+        // Ignore errors
+    }
+    return {};
+}
+function saveSchedulerMetadata(metadata) {
+    try {
+        const dir = path.dirname(SCHEDULER_METADATA_PATH);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        fs.writeFileSync(SCHEDULER_METADATA_PATH, JSON.stringify(metadata, null, 2));
+    }
+    catch (err) {
+        console.error('Error saving scheduler metadata:', err);
+    }
+}
+// Convert cron expression to human-readable format
+function cronToHuman(cron) {
+    const parts = cron.split(' ');
+    if (parts.length !== 5)
+        return cron;
+    const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
+    // Every minute
+    if (minute === '*' && hour === '*')
+        return 'Every minute';
+    // Hourly
+    if (hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
+        return minute === '0' ? 'Every hour' : `Every hour at :${minute.padStart(2, '0')}`;
+    }
+    // Daily
+    if (dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
+        const h = parseInt(hour, 10);
+        const m = minute.padStart(2, '0');
+        const period = h >= 12 ? 'PM' : 'AM';
+        const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h;
+        return `Daily at ${displayHour}:${m} ${period}`;
+    }
+    // Weekdays
+    if (dayOfWeek === '1-5' && dayOfMonth === '*' && month === '*') {
+        const h = parseInt(hour, 10);
+        const m = minute.padStart(2, '0');
+        const period = h >= 12 ? 'PM' : 'AM';
+        const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h;
+        return `Weekdays at ${displayHour}:${m} ${period}`;
+    }
+    // Weekly (specific day)
+    if (dayOfMonth === '*' && month === '*' && dayOfWeek !== '*') {
+        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const dayNum = parseInt(dayOfWeek, 10);
+        const dayName = days[dayNum] || dayOfWeek;
+        const h = parseInt(hour, 10);
+        const m = minute.padStart(2, '0');
+        const period = h >= 12 ? 'PM' : 'AM';
+        const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h;
+        return `${dayName}s at ${displayHour}:${m} ${period}`;
+    }
+    // Monthly
+    if (dayOfMonth !== '*' && month === '*' && dayOfWeek === '*') {
+        const h = parseInt(hour, 10);
+        const m = minute.padStart(2, '0');
+        const period = h >= 12 ? 'PM' : 'AM';
+        const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h;
+        const daySuffix = dayOfMonth === '1' ? 'st' : dayOfMonth === '2' ? 'nd' : dayOfMonth === '3' ? 'rd' : 'th';
+        return `Monthly on the ${dayOfMonth}${daySuffix} at ${displayHour}:${m} ${period}`;
+    }
+    return cron;
+}
+// Calculate next run time from cron expression
+function getNextRunTime(cron) {
+    try {
+        const parts = cron.split(' ');
+        if (parts.length !== 5)
+            return undefined;
+        const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
+        const now = new Date();
+        const next = new Date(now);
+        // Set the time
+        if (hour !== '*')
+            next.setHours(parseInt(hour, 10));
+        if (minute !== '*')
+            next.setMinutes(parseInt(minute, 10));
+        next.setSeconds(0);
+        next.setMilliseconds(0);
+        // If the time has passed today, move to tomorrow
+        if (next <= now) {
+            next.setDate(next.getDate() + 1);
+        }
+        // Handle day of week
+        if (dayOfWeek !== '*') {
+            const targetDays = dayOfWeek.split(',').map(d => parseInt(d, 10));
+            while (!targetDays.includes(next.getDay())) {
+                next.setDate(next.getDate() + 1);
+            }
+        }
+        // Handle day of month
+        if (dayOfMonth !== '*') {
+            const targetDay = parseInt(dayOfMonth, 10);
+            while (next.getDate() !== targetDay) {
+                next.setDate(next.getDate() + 1);
+            }
+        }
+        return next.toISOString();
+    }
+    catch {
+        return undefined;
+    }
+}
+// Fix MCP server paths (can be called manually)
+electron_1.ipcMain.handle('scheduler:fixMcpPaths', async () => {
+    try {
+        await fixMcpServerPaths();
+        return { success: true };
+    }
+    catch (err) {
+        console.error('Error fixing MCP paths:', err);
+        return { success: false, error: err instanceof Error ? err.message : 'Failed to fix MCP paths' };
+    }
+});
+// Check if scheduler plugin is installed
+electron_1.ipcMain.handle('scheduler:checkInstalled', async () => {
+    try {
+        // Check settings.json for enabledPlugins (primary method for /plugin install)
+        const settingsPath = path.join(os.homedir(), '.claude', 'settings.json');
+        if (fs.existsSync(settingsPath)) {
+            const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+            const enabledPlugins = settings.enabledPlugins || {};
+            // Look for scheduler plugin in enabled plugins
+            const hasScheduler = Object.keys(enabledPlugins).some(key => key.toLowerCase().includes('scheduler') && enabledPlugins[key] === true);
+            if (hasScheduler) {
+                return { installed: true };
+            }
+        }
+        // Fallback: check installed_plugins.json
+        const pluginsPath = path.join(os.homedir(), '.claude', 'plugins', 'installed_plugins.json');
+        if (fs.existsSync(pluginsPath)) {
+            const plugins = JSON.parse(fs.readFileSync(pluginsPath, 'utf-8'));
+            if (Array.isArray(plugins)) {
+                const isInstalled = plugins.some((p) => p.name?.toLowerCase().includes('scheduler') ||
+                    p.path?.toLowerCase().includes('claude-code-scheduler'));
+                if (isInstalled) {
+                    return { installed: true };
+                }
+            }
+        }
+        return { installed: false };
+    }
+    catch (err) {
+        console.error('Error checking scheduler plugin:', err);
+        return { installed: false };
+    }
+});
+// Install scheduler plugin
+electron_1.ipcMain.handle('scheduler:install', async () => {
+    return new Promise((resolve) => {
+        const shell = os.platform() === 'win32' ? 'powershell.exe' : process.env.SHELL || '/bin/zsh';
+        const shellArgs = os.platform() === 'win32' ? [] : ['-l'];
+        const installPty = pty.spawn(shell, shellArgs, {
+            name: 'xterm-256color',
+            cols: 120,
+            rows: 30,
+            cwd: os.homedir(),
+            env: { ...process.env, TERM: 'xterm-256color' },
+        });
+        let output = '';
+        let resolved = false;
+        const timeout = setTimeout(() => {
+            if (!resolved) {
+                resolved = true;
+                installPty.kill();
+                resolve({ success: false, error: 'Installation timed out' });
+            }
+        }, 120000); // 2 minute timeout
+        installPty.onData((data) => {
+            output += data;
+            // Check for success indicators
+            if (output.includes('successfully installed') || output.includes('Plugin installed')) {
+                if (!resolved) {
+                    resolved = true;
+                    clearTimeout(timeout);
+                    setTimeout(() => {
+                        installPty.kill();
+                        resolve({ success: true });
+                    }, 1000);
+                }
+            }
+        });
+        installPty.onExit(({ exitCode }) => {
+            clearTimeout(timeout);
+            if (!resolved) {
+                resolved = true;
+                resolve({
+                    success: exitCode === 0,
+                    error: exitCode !== 0 ? `Installation failed with exit code ${exitCode}` : undefined,
+                });
+            }
+        });
+        // Run the installation commands
+        installPty.write('claude /plugin marketplace add jshchnz/claude-code-scheduler\r');
+        setTimeout(() => {
+            installPty.write('claude /plugin install scheduler@claude-code-scheduler\r');
+        }, 5000);
+        setTimeout(() => {
+            installPty.write('exit\r');
+        }, 15000);
+    });
+});
+// List scheduled tasks
+electron_1.ipcMain.handle('scheduler:listTasks', async () => {
+    try {
+        const tasks = [];
+        // Load our metadata
+        const metadata = loadSchedulerMetadata();
+        // Read global schedules
+        const globalSchedulesPath = path.join(os.homedir(), '.claude', 'schedules.json');
+        if (fs.existsSync(globalSchedulesPath)) {
+            try {
+                const schedules = JSON.parse(fs.readFileSync(globalSchedulesPath, 'utf-8'));
+                if (Array.isArray(schedules)) {
+                    for (const schedule of schedules) {
+                        const taskMeta = metadata[schedule.id] || {
+                            notifications: { telegram: false, slack: false },
+                            createdAt: new Date().toISOString(),
+                        };
+                        // Check for log file to get last run info
+                        let lastRun;
+                        let lastRunStatus;
+                        const logPath = path.join(os.homedir(), '.claude', 'logs', `${schedule.id}.log`);
+                        if (fs.existsSync(logPath)) {
+                            const stat = fs.statSync(logPath);
+                            lastRun = stat.mtime.toISOString();
+                            // Try to determine status from log content
+                            try {
+                                const logContent = fs.readFileSync(logPath, 'utf-8');
+                                lastRunStatus = logContent.includes('error') || logContent.includes('Error') ? 'error' : 'success';
+                            }
+                            catch {
+                                lastRunStatus = 'success';
+                            }
+                        }
+                        tasks.push({
+                            id: schedule.id || (0, uuid_1.v4)(),
+                            prompt: schedule.prompt || schedule.task || '',
+                            schedule: schedule.schedule || schedule.cron || '',
+                            scheduleHuman: cronToHuman(schedule.schedule || schedule.cron || ''),
+                            projectPath: schedule.projectPath || schedule.project || os.homedir(),
+                            agentId: taskMeta.agentId,
+                            agentName: taskMeta.agentName,
+                            autonomous: schedule.autonomous ?? true,
+                            worktree: schedule.worktree,
+                            notifications: taskMeta.notifications,
+                            createdAt: taskMeta.createdAt,
+                            lastRun,
+                            lastRunStatus,
+                            nextRun: getNextRunTime(schedule.schedule || schedule.cron || ''),
+                        });
+                    }
+                }
+            }
+            catch (err) {
+                console.error('Error reading global schedules:', err);
+            }
+        }
+        // Also check project-level schedules in known project paths
+        const projectsDir = path.join(os.homedir(), '.claude', 'projects');
+        if (fs.existsSync(projectsDir)) {
+            try {
+                const projectDirs = fs.readdirSync(projectsDir);
+                for (const projectDir of projectDirs) {
+                    const projectSchedulesPath = path.join(projectsDir, projectDir, 'schedules.json');
+                    if (fs.existsSync(projectSchedulesPath)) {
+                        try {
+                            const schedules = JSON.parse(fs.readFileSync(projectSchedulesPath, 'utf-8'));
+                            if (Array.isArray(schedules)) {
+                                for (const schedule of schedules) {
+                                    const taskMeta = metadata[schedule.id] || {
+                                        notifications: { telegram: false, slack: false },
+                                        createdAt: new Date().toISOString(),
+                                    };
+                                    let lastRun;
+                                    let lastRunStatus;
+                                    const logPath = path.join(os.homedir(), '.claude', 'logs', `${schedule.id}.log`);
+                                    if (fs.existsSync(logPath)) {
+                                        const stat = fs.statSync(logPath);
+                                        lastRun = stat.mtime.toISOString();
+                                        try {
+                                            const logContent = fs.readFileSync(logPath, 'utf-8');
+                                            lastRunStatus = logContent.includes('error') || logContent.includes('Error') ? 'error' : 'success';
+                                        }
+                                        catch {
+                                            lastRunStatus = 'success';
+                                        }
+                                    }
+                                    // Decode project path from directory name
+                                    const decodedProjectPath = projectDir.replace(/-/g, '/');
+                                    tasks.push({
+                                        id: schedule.id || (0, uuid_1.v4)(),
+                                        prompt: schedule.prompt || schedule.task || '',
+                                        schedule: schedule.schedule || schedule.cron || '',
+                                        scheduleHuman: cronToHuman(schedule.schedule || schedule.cron || ''),
+                                        projectPath: schedule.projectPath || decodedProjectPath,
+                                        agentId: taskMeta.agentId,
+                                        agentName: taskMeta.agentName,
+                                        autonomous: schedule.autonomous ?? true,
+                                        worktree: schedule.worktree,
+                                        notifications: taskMeta.notifications,
+                                        createdAt: taskMeta.createdAt,
+                                        lastRun,
+                                        lastRunStatus,
+                                        nextRun: getNextRunTime(schedule.schedule || schedule.cron || ''),
+                                    });
+                                }
+                            }
+                        }
+                        catch {
+                            // Ignore parse errors for individual project schedules
+                        }
+                    }
+                }
+            }
+            catch {
+                // Ignore errors reading project directories
+            }
+        }
+        // Also scan LaunchAgents for tasks created by the scheduler plugin
+        const launchAgentsPath = path.join(os.homedir(), 'Library', 'LaunchAgents');
+        if (fs.existsSync(launchAgentsPath)) {
+            try {
+                const files = fs.readdirSync(launchAgentsPath);
+                for (const file of files) {
+                    if (file.startsWith('com.claude.schedule.') && file.endsWith('.plist')) {
+                        // Extract task ID from filename: com.claude.schedule.<id>.plist
+                        const taskId = file.replace('com.claude.schedule.', '').replace('.plist', '');
+                        // Skip if we already have this task from schedules.json
+                        if (tasks.some(t => t.id === taskId))
+                            continue;
+                        const plistPath = path.join(launchAgentsPath, file);
+                        try {
+                            // Read plist file content
+                            const plistContent = fs.readFileSync(plistPath, 'utf-8');
+                            // Extract info from plist (basic parsing)
+                            let prompt = '';
+                            let projectPath = os.homedir();
+                            let schedule = '';
+                            // Try to extract the prompt from the -p argument in bash command
+                            const promptMatch = plistContent.match(/-p\s*"([^"]+)"/);
+                            if (promptMatch) {
+                                prompt = promptMatch[1];
+                            }
+                            else {
+                                // Try single quote format
+                                const promptMatch2 = plistContent.match(/-p\s*'([^']+)'/);
+                                if (promptMatch2) {
+                                    prompt = promptMatch2[1];
+                                }
+                            }
+                            // Try to extract working directory from cd command
+                            const cdMatch = plistContent.match(/cd\s*"([^"]+)"/);
+                            if (cdMatch) {
+                                projectPath = cdMatch[1];
+                            }
+                            // Try to extract schedule from StartCalendarInterval
+                            const hourMatch = plistContent.match(/<key>Hour<\/key>\s*<integer>(\d+)<\/integer>/);
+                            const minuteMatch = plistContent.match(/<key>Minute<\/key>\s*<integer>(\d+)<\/integer>/);
+                            const weekdayMatch = plistContent.match(/<key>Weekday<\/key>\s*<integer>(\d+)<\/integer>/);
+                            const dayMatch = plistContent.match(/<key>Day<\/key>\s*<integer>(\d+)<\/integer>/);
+                            if (minuteMatch || hourMatch) {
+                                const minute = minuteMatch ? minuteMatch[1] : '0';
+                                const hour = hourMatch ? hourMatch[1] : '*';
+                                const day = dayMatch ? dayMatch[1] : '*';
+                                const weekday = weekdayMatch ? weekdayMatch[1] : '*';
+                                schedule = `${minute} ${hour} ${day} * ${weekday}`;
+                            }
+                            // Extract log paths from plist
+                            const stdOutMatch = plistContent.match(/<key>StandardOutPath<\/key>\s*<string>([^<]+)<\/string>/);
+                            const stdErrMatch = plistContent.match(/<key>StandardErrorPath<\/key>\s*<string>([^<]+)<\/string>/);
+                            const logPath = stdOutMatch ? stdOutMatch[1] : path.join(os.homedir(), '.claude', 'logs', `${taskId}.log`);
+                            const errorLogPath = stdErrMatch ? stdErrMatch[1] : path.join(os.homedir(), '.claude', 'logs', `${taskId}.error.log`);
+                            const taskMeta = metadata[taskId] || {
+                                notifications: { telegram: false, slack: false },
+                                createdAt: new Date().toISOString(),
+                            };
+                            // Check log files and launchctl for status
+                            let lastRun;
+                            let lastRunStatus;
+                            // Check error log first - if it has recent content, likely an error
+                            if (fs.existsSync(errorLogPath)) {
+                                const errorStat = fs.statSync(errorLogPath);
+                                const errorContent = fs.readFileSync(errorLogPath, 'utf-8').trim();
+                                if (errorContent) {
+                                    lastRun = errorStat.mtime.toISOString();
+                                    lastRunStatus = 'error';
+                                }
+                            }
+                            // Check stdout log
+                            if (fs.existsSync(logPath)) {
+                                const stat = fs.statSync(logPath);
+                                const logContent = fs.readFileSync(logPath, 'utf-8');
+                                // Use the more recent of error log or stdout log
+                                if (!lastRun || new Date(stat.mtime) > new Date(lastRun)) {
+                                    lastRun = stat.mtime.toISOString();
+                                }
+                                // Check for error indicators in stdout if we don't already have an error status
+                                if (lastRunStatus !== 'error') {
+                                    // Check for common error patterns
+                                    const hasError = logContent.includes('Error:') ||
+                                        logContent.includes('error:') ||
+                                        logContent.includes('command not found') ||
+                                        logContent.includes('No such file') ||
+                                        logContent.includes('Permission denied') ||
+                                        logContent.includes('failed') ||
+                                        logContent.includes('FAILED');
+                                    // Check for success indicators
+                                    const hasSuccess = logContent.includes('✓') ||
+                                        logContent.includes('completed') ||
+                                        logContent.includes('Completed') ||
+                                        logContent.includes('successfully') ||
+                                        logContent.includes('Success');
+                                    if (hasError && !hasSuccess) {
+                                        lastRunStatus = 'error';
+                                    }
+                                    else if (logContent.trim()) {
+                                        lastRunStatus = 'success';
+                                    }
+                                }
+                            }
+                            tasks.push({
+                                id: taskId,
+                                prompt: prompt || `Scheduled task: ${taskId}`,
+                                schedule: schedule || '0 9 * * *',
+                                scheduleHuman: schedule ? cronToHuman(schedule) : 'Daily at 9:00 AM',
+                                projectPath,
+                                agentId: taskMeta.agentId,
+                                agentName: taskMeta.agentName,
+                                autonomous: true,
+                                worktree: undefined,
+                                notifications: taskMeta.notifications,
+                                createdAt: taskMeta.createdAt,
+                                lastRun,
+                                lastRunStatus,
+                                nextRun: schedule ? getNextRunTime(schedule) : undefined,
+                            });
+                        }
+                        catch {
+                            // Ignore errors reading individual plist files
+                        }
+                    }
+                }
+            }
+            catch {
+                // Ignore errors reading LaunchAgents directory
+            }
+        }
+        return { tasks };
+    }
+    catch (err) {
+        console.error('Error listing tasks:', err);
+        return { tasks: [] };
+    }
+});
+// Create a scheduled task
+electron_1.ipcMain.handle('scheduler:createTask', async (_event, params) => {
+    try {
+        const { agentId, prompt, schedule, autonomous, useWorktree, notifications } = params;
+        // Get agent info
+        const agent = agents.get(agentId);
+        if (!agent) {
+            return { success: false, error: 'Agent not found' };
+        }
+        const taskId = (0, uuid_1.v4)();
+        // Create the schedule entry
+        const scheduleEntry = {
+            id: taskId,
+            prompt,
+            schedule,
+            projectPath: agent.projectPath,
+            autonomous,
+            worktree: useWorktree ? { enabled: true, branchPrefix: 'scheduled-' } : undefined,
+            createdAt: new Date().toISOString(),
+        };
+        // Save to global schedules.json
+        const globalSchedulesPath = path.join(os.homedir(), '.claude', 'schedules.json');
+        let schedules = [];
+        if (fs.existsSync(globalSchedulesPath)) {
+            try {
+                schedules = JSON.parse(fs.readFileSync(globalSchedulesPath, 'utf-8'));
+                if (!Array.isArray(schedules))
+                    schedules = [];
+            }
+            catch {
+                schedules = [];
+            }
+        }
+        schedules.push(scheduleEntry);
+        // Ensure .claude directory exists
+        const claudeDir = path.join(os.homedir(), '.claude');
+        if (!fs.existsSync(claudeDir)) {
+            fs.mkdirSync(claudeDir, { recursive: true });
+        }
+        fs.writeFileSync(globalSchedulesPath, JSON.stringify(schedules, null, 2));
+        // Save our metadata (agent info, notifications)
+        const metadata = loadSchedulerMetadata();
+        metadata[taskId] = {
+            agentId,
+            agentName: agent.name,
+            notifications,
+            createdAt: new Date().toISOString(),
+        };
+        saveSchedulerMetadata(metadata);
+        // Fix MCP server paths to use absolute node path (required for launchd/cron)
+        await fixMcpServerPaths();
+        // Create the launchd plist (macOS) or cron job (Linux)
+        if (os.platform() === 'darwin') {
+            await createLaunchdJob(taskId, schedule, agent.projectPath, prompt, autonomous);
+        }
+        else {
+            await createCronJob(taskId, schedule, agent.projectPath, prompt, autonomous);
+        }
+        return { success: true, taskId };
+    }
+    catch (err) {
+        console.error('Error creating task:', err);
+        return { success: false, error: err instanceof Error ? err.message : 'Failed to create task' };
+    }
+});
+// Helper: Get the full path to claude CLI
+async function getClaudePath() {
+    return new Promise((resolve) => {
+        // Try to find claude in common locations
+        const proc = (0, child_process_1.spawn)('which', ['claude']);
+        let claudePath = '';
+        proc.stdout.on('data', (data) => {
+            claudePath += data.toString().trim();
+        });
+        proc.on('close', () => {
+            if (claudePath) {
+                resolve(claudePath);
+            }
+            else {
+                // Fallback to common locations
+                const commonPaths = [
+                    path.join(os.homedir(), '.local', 'bin', 'claude'),
+                    '/usr/local/bin/claude',
+                    '/opt/homebrew/bin/claude',
+                ];
+                for (const p of commonPaths) {
+                    if (fs.existsSync(p)) {
+                        resolve(p);
+                        return;
+                    }
+                }
+                // Last resort: just use 'claude' and hope it's in PATH
+                resolve('claude');
+            }
+        });
+        proc.on('error', () => resolve('claude'));
+    });
+}
+// Helper: Get the full path to node
+async function getNodePath() {
+    return new Promise((resolve) => {
+        // Try to find node using which
+        const proc = (0, child_process_1.spawn)('which', ['node']);
+        let nodePath = '';
+        proc.stdout.on('data', (data) => {
+            nodePath += data.toString().trim();
+        });
+        proc.on('close', () => {
+            if (nodePath) {
+                resolve(nodePath);
+            }
+            else {
+                // Fallback to common locations
+                const commonPaths = [
+                    '/usr/local/bin/node',
+                    '/opt/homebrew/bin/node',
+                    path.join(os.homedir(), '.local', 'bin', 'node'),
+                ];
+                // Also check nvm installations
+                const nvmDir = path.join(os.homedir(), '.nvm', 'versions', 'node');
+                if (fs.existsSync(nvmDir)) {
+                    try {
+                        const versions = fs.readdirSync(nvmDir).sort().reverse();
+                        for (const version of versions) {
+                            const nvmNodePath = path.join(nvmDir, version, 'bin', 'node');
+                            if (fs.existsSync(nvmNodePath)) {
+                                commonPaths.unshift(nvmNodePath);
+                                break;
+                            }
+                        }
+                    }
+                    catch {
+                        // Ignore errors reading nvm directory
+                    }
+                }
+                for (const p of commonPaths) {
+                    if (fs.existsSync(p)) {
+                        resolve(p);
+                        return;
+                    }
+                }
+                // Last resort: just use 'node' and hope it's in PATH
+                resolve('node');
+            }
+        });
+        proc.on('error', () => resolve('node'));
+    });
+}
+// Helper: Fix MCP server paths to use absolute node path
+async function fixMcpServerPaths() {
+    const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
+    // Skip if no mcp.json exists
+    if (!fs.existsSync(mcpConfigPath)) {
+        return;
+    }
+    try {
+        const mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
+        if (!mcpConfig.mcpServers || typeof mcpConfig.mcpServers !== 'object') {
+            return;
+        }
+        let hasChanges = false;
+        const nodePath = await getNodePath();
+        // If we only got 'node' (not found), don't make changes
+        if (nodePath === 'node') {
+            console.log('Could not find absolute node path, skipping MCP config fix');
+            return;
+        }
+        for (const serverName of Object.keys(mcpConfig.mcpServers)) {
+            const server = mcpConfig.mcpServers[serverName];
+            // Check if command is just 'node' (not an absolute path)
+            if (server.command === 'node') {
+                server.command = nodePath;
+                hasChanges = true;
+                console.log(`Fixed MCP server "${serverName}" to use absolute node path: ${nodePath}`);
+            }
+        }
+        if (hasChanges) {
+            // Backup original config
+            const backupPath = mcpConfigPath + '.backup';
+            if (!fs.existsSync(backupPath)) {
+                fs.copyFileSync(mcpConfigPath, backupPath);
+            }
+            // Write updated config
+            fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
+            console.log('Updated mcp.json with absolute node paths');
+        }
+    }
+    catch (err) {
+        console.error('Error fixing MCP server paths:', err);
+    }
+}
+// Helper: Create launchd job for macOS
+async function createLaunchdJob(taskId, schedule, projectPath, prompt, autonomous) {
+    const label = `com.claude-manager.scheduler.${taskId}`;
+    const plistPath = path.join(os.homedir(), 'Library', 'LaunchAgents', `${label}.plist`);
+    // Get the full path to claude CLI
+    const claudePath = await getClaudePath();
+    const claudeDir = path.dirname(claudePath);
+    // Parse cron expression
+    const [minute, hour, dayOfMonth, month, dayOfWeek] = schedule.split(' ');
+    // Build calendar interval
+    const calendarInterval = {};
+    if (minute !== '*')
+        calendarInterval.Minute = parseInt(minute, 10);
+    if (hour !== '*')
+        calendarInterval.Hour = parseInt(hour, 10);
+    if (dayOfMonth !== '*')
+        calendarInterval.Day = parseInt(dayOfMonth, 10);
+    if (month !== '*')
+        calendarInterval.Month = parseInt(month, 10);
+    if (dayOfWeek !== '*')
+        calendarInterval.Weekday = parseInt(dayOfWeek, 10);
+    // Create script to run
+    const scriptPath = path.join(os.homedir(), '.claude-manager', 'scripts', `${taskId}.sh`);
+    const scriptsDir = path.dirname(scriptPath);
+    if (!fs.existsSync(scriptsDir)) {
+        fs.mkdirSync(scriptsDir, { recursive: true });
+    }
+    const logPath = path.join(os.homedir(), '.claude', 'logs', `${taskId}.log`);
+    const logsDir = path.dirname(logPath);
+    if (!fs.existsSync(logsDir)) {
+        fs.mkdirSync(logsDir, { recursive: true });
+    }
+    // Escape the prompt for shell
+    const escapedPrompt = prompt.replace(/'/g, "'\\''");
+    const flags = autonomous ? '--dangerously-skip-permissions' : '';
+    // Use full path to claude and ensure its directory is in PATH
+    const scriptContent = `#!/bin/bash
+export PATH="${claudeDir}:$PATH"
+cd "${projectPath}"
+echo "=== Task started at $(date) ===" >> "${logPath}"
+"${claudePath}" ${flags} -p '${escapedPrompt}' >> "${logPath}" 2>&1
+echo "=== Task completed at $(date) ===" >> "${logPath}"
+`;
+    fs.writeFileSync(scriptPath, scriptContent);
+    fs.chmodSync(scriptPath, '755');
+    // Create plist
+    const plist = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>${label}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>${scriptPath}</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+${Object.entries(calendarInterval).map(([k, v]) => `        <key>${k}</key>\n        <integer>${v}</integer>`).join('\n')}
+    </dict>
+    <key>StandardOutPath</key>
+    <string>${logPath}</string>
+    <key>StandardErrorPath</key>
+    <string>${logPath}</string>
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>`;
+    const launchAgentsDir = path.join(os.homedir(), 'Library', 'LaunchAgents');
+    if (!fs.existsSync(launchAgentsDir)) {
+        fs.mkdirSync(launchAgentsDir, { recursive: true });
+    }
+    fs.writeFileSync(plistPath, plist);
+    // Load the job
+    await new Promise((resolve, reject) => {
+        const proc = (0, child_process_1.spawn)('launchctl', ['load', plistPath]);
+        proc.on('close', (code) => {
+            if (code === 0)
+                resolve();
+            else
+                reject(new Error(`launchctl load failed with code ${code}`));
+        });
+        proc.on('error', reject);
+    });
+}
+// Helper: Create cron job for Linux
+async function createCronJob(taskId, schedule, projectPath, prompt, autonomous) {
+    // Get the full path to claude CLI
+    const claudePath = await getClaudePath();
+    const claudeDir = path.dirname(claudePath);
+    // Create script to run
+    const scriptPath = path.join(os.homedir(), '.claude-manager', 'scripts', `${taskId}.sh`);
+    const scriptsDir = path.dirname(scriptPath);
+    if (!fs.existsSync(scriptsDir)) {
+        fs.mkdirSync(scriptsDir, { recursive: true });
+    }
+    const logPath = path.join(os.homedir(), '.claude', 'logs', `${taskId}.log`);
+    const logsDir = path.dirname(logPath);
+    if (!fs.existsSync(logsDir)) {
+        fs.mkdirSync(logsDir, { recursive: true });
+    }
+    // Escape the prompt for shell
+    const escapedPrompt = prompt.replace(/'/g, "'\\''");
+    const flags = autonomous ? '--dangerously-skip-permissions' : '';
+    // Use full path to claude and ensure its directory is in PATH
+    const scriptContent = `#!/bin/bash
+export PATH="${claudeDir}:$PATH"
+cd "${projectPath}"
+echo "=== Task started at $(date) ===" >> "${logPath}"
+"${claudePath}" ${flags} -p '${escapedPrompt}' >> "${logPath}" 2>&1
+echo "=== Task completed at $(date) ===" >> "${logPath}"
+`;
+    fs.writeFileSync(scriptPath, scriptContent);
+    fs.chmodSync(scriptPath, '755');
+    // Add to crontab
+    const cronLine = `${schedule} ${scriptPath} # claude-manager-${taskId}`;
+    await new Promise((resolve, reject) => {
+        // Get existing crontab
+        const getCron = (0, child_process_1.spawn)('crontab', ['-l']);
+        let existingCron = '';
+        getCron.stdout.on('data', (data) => { existingCron += data; });
+        getCron.on('close', () => {
+            // Add new line
+            const newCron = existingCron + '\n' + cronLine + '\n';
+            // Write new crontab
+            const setCron = (0, child_process_1.spawn)('crontab', ['-']);
+            setCron.stdin.write(newCron);
+            setCron.stdin.end();
+            setCron.on('close', (code) => {
+                if (code === 0)
+                    resolve();
+                else
+                    reject(new Error(`crontab failed with code ${code}`));
+            });
+            setCron.on('error', reject);
+        });
+        getCron.on('error', () => {
+            // No existing crontab, create new one
+            const setCron = (0, child_process_1.spawn)('crontab', ['-']);
+            setCron.stdin.write(cronLine + '\n');
+            setCron.stdin.end();
+            setCron.on('close', (code) => {
+                if (code === 0)
+                    resolve();
+                else
+                    reject(new Error(`crontab failed with code ${code}`));
+            });
+            setCron.on('error', reject);
+        });
+    });
+}
+// Delete a scheduled task
+electron_1.ipcMain.handle('scheduler:deleteTask', async (_event, taskId) => {
+    try {
+        // Remove from schedules.json
+        const globalSchedulesPath = path.join(os.homedir(), '.claude', 'schedules.json');
+        if (fs.existsSync(globalSchedulesPath)) {
+            let schedules = JSON.parse(fs.readFileSync(globalSchedulesPath, 'utf-8'));
+            if (Array.isArray(schedules)) {
+                schedules = schedules.filter((s) => s.id !== taskId);
+                fs.writeFileSync(globalSchedulesPath, JSON.stringify(schedules, null, 2));
+            }
+        }
+        // Remove metadata
+        const metadata = loadSchedulerMetadata();
+        delete metadata[taskId];
+        saveSchedulerMetadata(metadata);
+        // Remove launchd job (macOS)
+        if (os.platform() === 'darwin') {
+            // Try both label formats: claude-manager and scheduler plugin format
+            const labels = [
+                `com.claude-manager.scheduler.${taskId}`,
+                `com.claude.schedule.${taskId}`,
+            ];
+            const uid = process.getuid?.() || 501;
+            for (const label of labels) {
+                const plistPath = path.join(os.homedir(), 'Library', 'LaunchAgents', `${label}.plist`);
+                // Unregister from launchd using bootout (modern way)
+                try {
+                    await new Promise((resolve) => {
+                        const proc = (0, child_process_1.spawn)('launchctl', ['bootout', `gui/${uid}/${label}`]);
+                        proc.on('close', () => resolve());
+                        proc.on('error', () => resolve());
+                    });
+                }
+                catch {
+                    // Ignore unload errors
+                }
+                // Delete plist file
+                if (fs.existsSync(plistPath)) {
+                    fs.unlinkSync(plistPath);
+                }
+            }
+        }
+        else {
+            // Remove from crontab (Linux)
+            await new Promise((resolve) => {
+                const getCron = (0, child_process_1.spawn)('crontab', ['-l']);
+                let existingCron = '';
+                getCron.stdout.on('data', (data) => { existingCron += data; });
+                getCron.on('close', () => {
+                    // Remove lines with our task ID
+                    const newCron = existingCron
+                        .split('\n')
+                        .filter(line => !line.includes(`claude-manager-${taskId}`))
+                        .join('\n');
+                    const setCron = (0, child_process_1.spawn)('crontab', ['-']);
+                    setCron.stdin.write(newCron);
+                    setCron.stdin.end();
+                    setCron.on('close', () => resolve());
+                    setCron.on('error', () => resolve());
+                });
+                getCron.on('error', () => resolve());
+            });
+        }
+        // Remove script file
+        const scriptPath = path.join(os.homedir(), '.claude-manager', 'scripts', `${taskId}.sh`);
+        if (fs.existsSync(scriptPath)) {
+            fs.unlinkSync(scriptPath);
+        }
+        return { success: true };
+    }
+    catch (err) {
+        console.error('Error deleting task:', err);
+        return { success: false, error: err instanceof Error ? err.message : 'Failed to delete task' };
+    }
+});
+// Run a task immediately
+electron_1.ipcMain.handle('scheduler:runTask', async (_event, taskId) => {
+    try {
+        // Get task info from schedules
+        const globalSchedulesPath = path.join(os.homedir(), '.claude', 'schedules.json');
+        let task;
+        if (fs.existsSync(globalSchedulesPath)) {
+            const schedules = JSON.parse(fs.readFileSync(globalSchedulesPath, 'utf-8'));
+            if (Array.isArray(schedules)) {
+                task = schedules.find((s) => s.id === taskId);
+            }
+        }
+        if (!task) {
+            return { success: false, error: 'Task not found' };
+        }
+        // Run the script directly
+        const scriptPath = path.join(os.homedir(), '.claude-manager', 'scripts', `${taskId}.sh`);
+        if (fs.existsSync(scriptPath)) {
+            (0, child_process_1.spawn)('bash', [scriptPath], {
+                detached: true,
+                stdio: 'ignore',
+            }).unref();
+            return { success: true };
+        }
+        // If no script exists, run claude directly
+        const logPath = path.join(os.homedir(), '.claude', 'logs', `${taskId}.log`);
+        const logsDir = path.dirname(logPath);
+        if (!fs.existsSync(logsDir)) {
+            fs.mkdirSync(logsDir, { recursive: true });
+        }
+        const flags = task.autonomous ? '--dangerously-skip-permissions' : '';
+        const proc = (0, child_process_1.spawn)('bash', ['-c', `cd "${task.projectPath}" && claude ${flags} -p '${task.prompt?.replace(/'/g, "'\\''")}' >> "${logPath}" 2>&1`], {
+            detached: true,
+            stdio: 'ignore',
+        });
+        proc.unref();
+        return { success: true };
+    }
+    catch (err) {
+        console.error('Error running task:', err);
+        return { success: false, error: err instanceof Error ? err.message : 'Failed to run task' };
+    }
+});
+// Get task logs
+electron_1.ipcMain.handle('scheduler:getLogs', async (_event, taskId) => {
+    try {
+        const logPath = path.join(os.homedir(), '.claude', 'logs', `${taskId}.log`);
+        const errorLogPath = path.join(os.homedir(), '.claude', 'logs', `${taskId}.error.log`);
+        // Also check if there's a plist with custom log paths
+        const plistPath = path.join(os.homedir(), 'Library', 'LaunchAgents', `com.claude.schedule.${taskId}.plist`);
+        let customLogPath = logPath;
+        let customErrorLogPath = errorLogPath;
+        if (fs.existsSync(plistPath)) {
+            const plistContent = fs.readFileSync(plistPath, 'utf-8');
+            const stdOutMatch = plistContent.match(/<key>StandardOutPath<\/key>\s*<string>([^<]+)<\/string>/);
+            const stdErrMatch = plistContent.match(/<key>StandardErrorPath<\/key>\s*<string>([^<]+)<\/string>/);
+            if (stdOutMatch)
+                customLogPath = stdOutMatch[1];
+            if (stdErrMatch)
+                customErrorLogPath = stdErrMatch[1];
+        }
+        let logs = '';
+        let hasLogs = false;
+        // Read stdout log
+        if (fs.existsSync(customLogPath)) {
+            const stat = fs.statSync(customLogPath);
+            const content = fs.readFileSync(customLogPath, 'utf-8');
+            if (content.trim()) {
+                hasLogs = true;
+                logs += `=== Output Log (${stat.mtime.toLocaleString()}) ===\n`;
+                logs += content;
+            }
+        }
+        // Read stderr log
+        if (fs.existsSync(customErrorLogPath)) {
+            const stat = fs.statSync(customErrorLogPath);
+            const errorContent = fs.readFileSync(customErrorLogPath, 'utf-8');
+            if (errorContent.trim()) {
+                hasLogs = true;
+                if (logs)
+                    logs += '\n\n';
+                logs += `=== Error Log (${stat.mtime.toLocaleString()}) ===\n`;
+                logs += errorContent;
+            }
+        }
+        if (!hasLogs) {
+            return { logs: 'No logs available yet. The task has not run.', error: undefined };
+        }
+        return { logs, error: undefined };
+    }
+    catch (err) {
+        console.error('Error reading logs:', err);
+        return { logs: '', error: err instanceof Error ? err.message : 'Failed to read logs' };
+    }
 });
 //# sourceMappingURL=main.js.map

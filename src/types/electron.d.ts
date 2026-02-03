@@ -106,6 +106,16 @@ export interface ElectronAPI {
     onInstallOutput: (callback: (event: SkillInstallOutputEvent) => void) => () => void;
   };
 
+  // Plugin management (with in-app terminal)
+  plugin?: {
+    installStart: (params: { command: string; cols?: number; rows?: number }) => Promise<{ id: string; command: string }>;
+    installWrite: (params: { id: string; data: string }) => Promise<{ success: boolean }>;
+    installResize: (params: { id: string; cols: number; rows: number }) => Promise<{ success: boolean }>;
+    installKill: (params: { id: string }) => Promise<{ success: boolean }>;
+    onPtyData: (callback: (event: { id: string; data: string }) => void) => () => void;
+    onPtyExit: (callback: (event: { id: string; exitCode: number }) => void) => () => void;
+  };
+
   // File system
   fs: {
     listProjects: () => Promise<{ path: string; name: string; lastModified: string }[]>;
@@ -233,6 +243,50 @@ export interface ElectronAPI {
       success: boolean;
       error?: string;
     }>;
+  };
+
+  // Scheduler (native implementation)
+  scheduler?: {
+    listTasks: () => Promise<{
+      tasks: Array<{
+        id: string;
+        prompt: string;
+        schedule: string;
+        scheduleHuman: string;
+        projectPath: string;
+        agentId?: string;
+        agentName?: string;
+        autonomous: boolean;
+        worktree?: {
+          enabled: boolean;
+          branchPrefix?: string;
+        };
+        notifications: {
+          telegram: boolean;
+          slack: boolean;
+        };
+        createdAt: string;
+        lastRun?: string;
+        lastRunStatus?: 'success' | 'error';
+        nextRun?: string;
+      }>;
+    }>;
+    createTask: (params: {
+      agentId?: string;
+      prompt: string;
+      schedule: string;
+      projectPath: string;
+      autonomous: boolean;
+      useWorktree?: boolean;
+      notifications?: {
+        telegram: boolean;
+        slack: boolean;
+      };
+    }) => Promise<{ success: boolean; error?: string; taskId?: string }>;
+    deleteTask: (taskId: string) => Promise<{ success: boolean; error?: string }>;
+    runTask: (taskId: string) => Promise<{ success: boolean; error?: string }>;
+    getLogs: (taskId: string) => Promise<{ logs: string; error?: string }>;
+    fixMcpPaths: () => Promise<{ success: boolean; error?: string }>;
   };
 
   // Platform info

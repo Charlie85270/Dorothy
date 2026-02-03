@@ -84,6 +84,23 @@ electron_1.contextBridge.exposeInMainWorld('electronAPI', {
             return () => electron_1.ipcRenderer.removeListener('skill:install-output', listener);
         },
     },
+    // Plugin management (with in-app terminal)
+    plugin: {
+        installStart: (params) => electron_1.ipcRenderer.invoke('plugin:install-start', params),
+        installWrite: (params) => electron_1.ipcRenderer.invoke('plugin:install-write', params),
+        installResize: (params) => electron_1.ipcRenderer.invoke('plugin:install-resize', params),
+        installKill: (params) => electron_1.ipcRenderer.invoke('plugin:install-kill', params),
+        onPtyData: (callback) => {
+            const listener = (_, event) => callback(event);
+            electron_1.ipcRenderer.on('plugin:pty-data', listener);
+            return () => electron_1.ipcRenderer.removeListener('plugin:pty-data', listener);
+        },
+        onPtyExit: (callback) => {
+            const listener = (_, event) => callback(event);
+            electron_1.ipcRenderer.on('plugin:pty-exit', listener);
+            return () => electron_1.ipcRenderer.removeListener('plugin:pty-exit', listener);
+        },
+    },
     // File system
     fs: {
         listProjects: () => electron_1.ipcRenderer.invoke('fs:list-projects'),
@@ -148,6 +165,15 @@ electron_1.contextBridge.exposeInMainWorld('electronAPI', {
         getStatus: () => electron_1.ipcRenderer.invoke('orchestrator:getStatus'),
         setup: () => electron_1.ipcRenderer.invoke('orchestrator:setup'),
         remove: () => electron_1.ipcRenderer.invoke('orchestrator:remove'),
+    },
+    // Scheduler (native implementation)
+    scheduler: {
+        listTasks: () => electron_1.ipcRenderer.invoke('scheduler:listTasks'),
+        createTask: (params) => electron_1.ipcRenderer.invoke('scheduler:createTask', params),
+        deleteTask: (taskId) => electron_1.ipcRenderer.invoke('scheduler:deleteTask', taskId),
+        runTask: (taskId) => electron_1.ipcRenderer.invoke('scheduler:runTask', taskId),
+        getLogs: (taskId) => electron_1.ipcRenderer.invoke('scheduler:getLogs', taskId),
+        fixMcpPaths: () => electron_1.ipcRenderer.invoke('scheduler:fixMcpPaths'),
     },
     // Platform info
     platform: process.platform,

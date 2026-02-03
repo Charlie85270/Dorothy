@@ -1,61 +1,101 @@
+/**
+ * claude.mgr - Main Electron Entry Point
+ *
+ * This file initializes and wires together all the modular components:
+ * - Window management and protocol handling
+ * - Agent state and PTY management
+ * - IPC handlers for renderer communication
+ * - External services (Telegram, Slack, HTTP API)
+ * - MCP orchestrator integration
+ * - Scheduler for automated tasks
+ */
 
-import { app, BrowserWindow, protocol } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import * as fs from 'fs';
-import TelegramBot from 'node-telegram-bot-api';
-import { App as SlackApp } from '@slack/bolt';
+import * as path from 'path';
+import * as os from 'os';
 
-// Import types
-import { AppSettings } from './types';
+// Types
+import type { AppSettings, AgentStatus } from './types';
 
-// Import constants
-import { APP_SETTINGS_FILE } from './constants';
+// Constants
+import { DATA_DIR, APP_SETTINGS_FILE } from './constants';
 
-// Import utilities
-import { ensureDataDir, setMainWindow as setUtilsMainWindow } from './utils';
-
-// Import core modules
-import { ptyProcesses } from './core/pty-manager';
-import {
-  agents,
-  saveAgents,
-  loadAgents,
-  initAgentPty,
-  getSuperAgentOutputBuffer,
-} from './core/agent-manager';
+// Core modules
 import {
   createWindow,
   registerProtocolSchemes,
   setupProtocolHandler,
-  setMainWindow,
   getMainWindow,
+  setMainWindow,
 } from './core/window-manager';
 
-// Import services
-import { startApiServer, stopApiServer } from './services/api-server';
 import {
-  initTelegramBot,
-  stopTelegramBot,
+  agents,
+  loadAgents,
+  saveAgents,
+  initAgentPty,
+  handleStatusChangeNotification,
+  setSuperAgentTelegramTask,
+  getSuperAgentOutputBuffer,
+  clearSuperAgentOutputBuffer,
+} from './core/agent-manager';
+
+import {
+  ptyProcesses,
+  quickPtyProcesses,
+  skillPtyProcesses,
+  pluginPtyProcesses,
+  createQuickPty,
+} from './core/pty-manager';
+
+// Services
+import { startApiServer } from './services/api-server';
+import {
+  initTelegramBotService,
+  initTelegramBot as initTelegramBotHandlers,
   getTelegramBot,
-  sendToSuperAgent,
+  sendTelegramMessage,
+  sendSuperAgentResponseToTelegram,
 } from './services/telegram-bot';
 import {
   initSlackBot,
-  stopSlackBot,
   getSlackApp,
-  setGetClaudeStatsRef,
+  getSlackResponseChannel,
+  getSlackResponseThreadTs,
 } from './services/slack-bot';
-import { getClaudeStats } from './services/claude-service';
+import {
+  getClaudeSettings,
+  getClaudeStats,
+  getClaudeProjects,
+  getClaudePlugins,
+  getClaudeSkills,
+  getClaudeHistory,
+} from './services/claude-service';
 import { configureStatusHooks } from './services/hooks-manager';
-import { setupMcpOrchestrator } from './services/mcp-orchestrator';
+import {
+  setupMcpOrchestrator,
+  registerMcpOrchestratorHandlers,
+  getMcpOrchestratorPath,
+} from './services/mcp-orchestrator';
 
-// Import handlers
-import { registerIpcHandlers } from './handlers/ipc-handlers';
+// Handlers
+import { registerIpcHandlers, IpcHandlerDependencies } from './handlers/ipc-handlers';
+import { registerSchedulerHandlers } from './handlers/scheduler-handlers';
 
-// ============== Global State ==============
+// Utils
+import {
+  setMainWindow as setUtilsMainWindow,
+  sendNotification,
+  isSuperAgent,
+  getSuperAgent,
+  detectAgentStatus,
+  ensureDataDir,
+} from './utils';
 
-let appSettings: AppSettings;
+// ============== App Settings Management ==============
 
-// ============== App Settings Functions ==============
+let appSettings: AppSettings = loadAppSettings();
 
 function loadAppSettings(): AppSettings {
   const defaults: AppSettings = {
@@ -71,6 +111,7 @@ function loadAppSettings(): AppSettings {
     slackAppToken: '',
     slackSigningSecret: '',
     slackChannelId: '',
+    verboseModeEnabled: false,
   };
   try {
     if (fs.existsSync(APP_SETTINGS_FILE)) {
@@ -83,7 +124,7 @@ function loadAppSettings(): AppSettings {
   return defaults;
 }
 
-function saveAppSettings(settings: AppSettings) {
+function saveAppSettingsToFile(settings: AppSettings) {
   try {
     ensureDataDir();
     fs.writeFileSync(APP_SETTINGS_FILE, JSON.stringify(settings, null, 2));
@@ -92,204 +133,194 @@ function saveAppSettings(settings: AppSettings) {
   }
 }
 
-// ============== Auto-Start Function ==============
+// ============== Telegram Bot Initialization ==============
 
-async function autoStartSuperAgent() {
-  const superAgentEntry = Array.from(agents.values()).find((agent) => {
-    const name = agent.name?.toLowerCase() || '';
-    return name.includes('super agent') || name.includes('orchestrator');
-  });
-
-  if (!superAgentEntry) {
-    console.log('No Super Agent found - skipping auto-start');
-    return;
-  }
-
-  console.log(`Found Super Agent: ${superAgentEntry.name} (status: ${superAgentEntry.status})`);
-
-  // Only auto-start if idle, completed, or error
-  if (
-    superAgentEntry.status !== 'idle' &&
-    superAgentEntry.status !== 'completed' &&
-    superAgentEntry.status !== 'error'
-  ) {
-    console.log(`Super Agent is ${superAgentEntry.status} - skipping auto-start`);
-    return;
-  }
-
-  try {
-    // Initialize PTY if needed
-    if (!superAgentEntry.ptyId || !ptyProcesses.has(superAgentEntry.ptyId)) {
-      console.log('Initializing PTY for Super Agent...');
-      const ptyId = await initAgentPty(superAgentEntry);
-      superAgentEntry.ptyId = ptyId;
-    }
-
-    const ptyProcess = ptyProcesses.get(superAgentEntry.ptyId);
-    if (!ptyProcess) {
-      console.error('Failed to get PTY process for Super Agent');
-      return;
-    }
-
-    // Build orchestrator prompt
-    const orchestratorPrompt = `You are the Super Agent - an orchestrator that manages other agents using MCP tools.
-
-AVAILABLE MCP TOOLS (from "claude-mgr-orchestrator"):
-- list_agents: List all agents with status, project, ID
-- get_agent_output: Read agent's terminal output (use to see responses!)
-- start_agent: Start agent with a prompt (auto-sends to running agents too)
-- send_message: Send message to agent (auto-starts idle agents)
-- stop_agent: Stop a running agent
-- create_agent: Create a new agent
-- remove_agent: Delete an agent
-
-WORKFLOW - When asked to talk to an agent:
-1. Use start_agent or send_message with your question (both auto-handle idle/running states)
-2. Wait 5-10 seconds for the agent to process
-3. Use get_agent_output to read their response
-4. Relay the response back to the user
-
-IMPORTANT:
-- Always read agent outputs with get_agent_output before responding
-- Wait before reading output (agents need time to process)
-- You can manage multiple agents in parallel
-- Create new agents for new tasks if needed
-
-You are running continuously. When users (via Telegram/Slack) send messages, they'll appear here.
-Ready to orchestrate!`;
-
-    // Update status
-    superAgentEntry.status = 'running';
-    superAgentEntry.currentTask = 'Orchestrator ready - awaiting tasks';
-    superAgentEntry.lastActivity = new Date().toISOString();
-
-    // Write the prompt
-    ptyProcess.write(orchestratorPrompt + '\n');
-
-    // Notify window
-    const mainWindow = getMainWindow();
-    if (mainWindow) {
-      mainWindow.webContents.send('agent:statusChanged', {
-        id: superAgentEntry.id,
-        status: superAgentEntry.status,
-        currentTask: superAgentEntry.currentTask,
-      });
-    }
-
-    console.log('Super Agent auto-started successfully');
-  } catch (err) {
-    console.error('Failed to auto-start Super Agent:', err);
-    superAgentEntry.status = 'error';
-    superAgentEntry.error = String(err);
-  }
-}
-
-// ============== Protocol Registration ==============
-// This must be called before app.whenReady()
-
-registerProtocolSchemes();
-
-// ============== App Lifecycle Events ==============
-
-app.whenReady().then(async () => {
-  // Load app settings
-  appSettings = loadAppSettings();
-
-  // Load persisted agents
-  loadAgents();
-
-  // Auto-setup MCP orchestrator if not already configured
-  await setupMcpOrchestrator();
-
-  // Configure status hooks for Claude Code
-  await configureStatusHooks();
-
-  // Start API server
-  startApiServer(
+function initTelegramBot() {
+  // First inject dependencies into the Telegram bot service
+  initTelegramBotService(
     agents,
     ptyProcesses,
-    () => getMainWindow(),
-    getSuperAgentOutputBuffer
+    appSettings,
+    getMainWindow(),
+    () => getSuperAgent(agents),
+    saveAgents,
+    getClaudeStats,
+    (agent: AgentStatus) => initAgentPty(
+      agent,
+      getMainWindow(),
+      handleStatusChangeNotificationWrapper,
+      saveAgents
+    ),
+    saveAppSettingsToFile
   );
 
-  // Set up Slack bot reference to getClaudeStats
-  setGetClaudeStatsRef(getClaudeStats);
+  // Then initialize the bot with handlers
+  initTelegramBotHandlers();
+}
 
-  // Initialize Telegram bot if enabled
-  if (appSettings.telegramEnabled) {
-    initTelegramBot(appSettings, agents, ptyProcesses, () => getMainWindow());
-  }
+// ============== Notification Handler Wrapper ==============
 
-  // Initialize Slack bot if enabled
-  if (appSettings.slackEnabled) {
-    initSlackBot(
-      appSettings,
-      agents,
-      ptyProcesses,
-      () => getMainWindow(),
-      getClaudeStats
-    );
-  }
-
-  // Register protocol handler
-  setupProtocolHandler();
-
-  // Create main window
-  createWindow();
-
-  // Register IPC handlers
-  registerIpcHandlers({
-    agents,
-    ptyProcesses,
-    getMainWindow,
+function handleStatusChangeNotificationWrapper(agent: AgentStatus, newStatus: string) {
+  handleStatusChangeNotification(
+    agent,
+    newStatus,
     appSettings,
-    loadAppSettings,
-    saveAppSettings,
+    sendNotification,
+    (text: string) => sendTelegramMessage(text),
+    sendSuperAgentResponseToTelegram
+  );
+}
+
+// ============== IPC Handler Dependencies ==============
+
+function createIpcDependencies(): IpcHandlerDependencies {
+  return {
+    // State
+    ptyProcesses,
+    agents,
+    skillPtyProcesses,
+    quickPtyProcesses,
+    pluginPtyProcesses,
+
+    // Functions
+    getMainWindow,
+    getAppSettings: () => appSettings,
+    setAppSettings: (settings: AppSettings) => { appSettings = settings; },
+    saveAppSettings: saveAppSettingsToFile,
+    saveAgents,
+    initAgentPty: (agent: AgentStatus) => initAgentPty(
+      agent,
+      getMainWindow(),
+      handleStatusChangeNotificationWrapper,
+      saveAgents
+    ),
+    detectAgentStatus,
+    handleStatusChangeNotification: handleStatusChangeNotificationWrapper,
+    isSuperAgent,
+    getMcpOrchestratorPath,
+    initTelegramBot,
+    initSlackBot: () => initSlackBot(appSettings, (settings) => {
+      appSettings = settings;
+      saveAppSettingsToFile(settings);
+    }, getMainWindow()),
     getTelegramBot,
     getSlackApp,
-    initTelegramBot: () => initTelegramBot(appSettings, agents, ptyProcesses, () => getMainWindow()),
-    stopTelegramBot,
-    initSlackBot: () => initSlackBot(appSettings, agents, ptyProcesses, () => getMainWindow(), getClaudeStats),
-    stopSlackBot,
-    sendToSuperAgent,
-  });
+    getSuperAgentTelegramTask: () => {
+      // Import from agent-manager state
+      const { superAgentTelegramTask } = require('./core/agent-manager');
+      return superAgentTelegramTask;
+    },
+    getSuperAgentOutputBuffer,
+    setSuperAgentOutputBuffer: (buffer: string[]) => {
+      // This is handled internally by agent-manager
+      clearSuperAgentOutputBuffer();
+      buffer.forEach(item => getSuperAgentOutputBuffer().push(item));
+    },
 
-  // Set main window reference in utils
+    // Claude data functions
+    getClaudeSettings,
+    getClaudeStats,
+    getClaudeProjects,
+    getClaudePlugins,
+    getClaudeSkills,
+    getClaudeHistory,
+  };
+}
+
+// ============== API Server Initialization ==============
+
+function initApiServer() {
+  startApiServer(
+    getMainWindow(),
+    appSettings,
+    getTelegramBot,
+    getSlackApp,
+    getSlackResponseChannel(),
+    getSlackResponseThreadTs(),
+    handleStatusChangeNotificationWrapper,
+    sendNotification,
+    (agent: AgentStatus) => initAgentPty(
+      agent,
+      getMainWindow(),
+      handleStatusChangeNotificationWrapper,
+      saveAgents
+    )
+  );
+}
+
+// ============== App Initialization ==============
+
+// Register protocol schemes before app is ready
+registerProtocolSchemes();
+
+app.whenReady().then(async () => {
+  console.log('App ready, initializing...');
+
+  // Ensure data directory exists
+  ensureDataDir();
+
+  // Load agents from disk
+  loadAgents();
+
+  // Setup protocol handler for production
+  setupProtocolHandler();
+
+  // Create the main window
+  createWindow();
+
+  // Set the main window reference in utils
   setUtilsMainWindow(getMainWindow());
 
-  // Auto-start Super Agent if it exists
-  await autoStartSuperAgent();
+  // Register all IPC handlers
+  const deps = createIpcDependencies();
+  registerIpcHandlers(deps);
+  registerSchedulerHandlers();
+  registerMcpOrchestratorHandlers();
+
+  // Initialize services
+  initTelegramBot();
+  initSlackBot(appSettings, (settings) => {
+    appSettings = settings;
+    saveAppSettingsToFile(settings);
+  }, getMainWindow());
+  initApiServer();
+
+  // Setup MCP orchestrator and hooks
+  await setupMcpOrchestrator();
+  await configureStatusHooks();
+
+  console.log('App initialization complete');
 });
 
+// Quit when all windows are closed (except on macOS)
 app.on('window-all-closed', () => {
-  // Save agents before quitting
-  saveAgents();
-
-  // Stop the API server
-  stopApiServer();
-
-  // Stop Telegram bot
-  stopTelegramBot();
-
-  // Stop Slack bot
-  stopSlackBot();
-
-  // Kill all PTY processes
-  ptyProcesses.forEach((ptyProcess) => {
-    ptyProcess.kill();
-  });
-
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
 
+// Re-create window on macOS when dock icon is clicked
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow();
+    setUtilsMainWindow(getMainWindow());
+  }
+});
+
+// Save agents before quitting
 app.on('before-quit', () => {
+  console.log('App quitting, saving agents...');
   saveAgents();
 });
 
-app.on('activate', () => {
-  if (getMainWindow() === null) {
-    createWindow();
+// Handle certificate errors in development
+app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
+  if (url.startsWith('https://localhost')) {
+    event.preventDefault();
+    callback(true);
+  } else {
+    callback(false);
   }
 });
+
+export { appSettings, getTelegramBot };

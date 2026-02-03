@@ -99,6 +99,32 @@ export function formatSlackAgentStatus(a: AgentStatus): string {
   return text;
 }
 
+/**
+ * Get the path to the super agent instructions file
+ */
+export function getSuperAgentInstructionsPath(): string {
+  const appPath = app.getAppPath();
+  // In development, appPath is the project root
+  // In production (asar), appPath is inside the asar archive
+  return path.join(appPath, 'electron', 'resources', 'super-agent-instructions.md');
+}
+
+/**
+ * Read super agent instructions from file
+ */
+export function getSuperAgentInstructions(): string {
+  const instructionsPath = getSuperAgentInstructionsPath();
+  try {
+    if (fs.existsSync(instructionsPath)) {
+      return fs.readFileSync(instructionsPath, 'utf-8');
+    }
+  } catch (err) {
+    console.error('Failed to read super agent instructions:', err);
+  }
+  // Fallback instructions
+  return 'You are the Super Agent - an orchestrator that manages other Claude agents using MCP tools. Use list_agents, start_agent, get_agent_output, send_telegram, and send_slack tools.';
+}
+
 export function detectAgentStatus(agent: AgentStatus): 'running' | 'waiting' | 'completed' | 'error' | 'idle' {
   const lastChunk = agent.output.slice(-1).join('');
   const recentChunks = agent.output.slice(-10).join('');

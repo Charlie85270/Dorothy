@@ -38,4 +38,5 @@ export interface AppSettings {
   slackAppToken: string;
   slackSigningSecret: string;
   slackChannelId: string;
+  verboseModeEnabled: boolean;
 }

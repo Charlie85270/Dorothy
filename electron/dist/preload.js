@@ -166,10 +166,8 @@ electron_1.contextBridge.exposeInMainWorld('electronAPI', {
         setup: () => electron_1.ipcRenderer.invoke('orchestrator:setup'),
         remove: () => electron_1.ipcRenderer.invoke('orchestrator:remove'),
     },
-    // Scheduler (claude-code-scheduler plugin)
+    // Scheduler (native implementation)
     scheduler: {
-        checkInstalled: () => electron_1.ipcRenderer.invoke('scheduler:checkInstalled'),
-        install: () => electron_1.ipcRenderer.invoke('scheduler:install'),
         listTasks: () => electron_1.ipcRenderer.invoke('scheduler:listTasks'),
         createTask: (params) => electron_1.ipcRenderer.invoke('scheduler:createTask', params),
         deleteTask: (taskId) => electron_1.ipcRenderer.invoke('scheduler:deleteTask', taskId),

@@ -245,10 +245,8 @@ export interface ElectronAPI {
     }>;
   };
 
-  // Scheduler (claude-code-scheduler plugin)
+  // Scheduler (native implementation)
   scheduler?: {
-    checkInstalled: () => Promise<{ installed: boolean }>;
-    install: () => Promise<{ success: boolean; error?: string }>;
     listTasks: () => Promise<{
       tasks: Array<{
         id: string;
@@ -274,12 +272,13 @@ export interface ElectronAPI {
       }>;
     }>;
     createTask: (params: {
-      agentId: string;
+      agentId?: string;
       prompt: string;
       schedule: string;
+      projectPath: string;
       autonomous: boolean;
-      useWorktree: boolean;
-      notifications: {
+      useWorktree?: boolean;
+      notifications?: {
         telegram: boolean;
         slack: boolean;
       };

@@ -17,6 +17,7 @@ export interface IpcHandlerDependencies {
   agents: Map<string, AgentStatus>;
   skillPtyProcesses: Map<string, pty.IPty>;
   quickPtyProcesses: Map<string, pty.IPty>;
+  pluginPtyProcesses: Map<string, pty.IPty>;
 
   // Functions
   getMainWindow: () => Electron.BrowserWindow | null;
@@ -53,10 +54,11 @@ export function registerIpcHandlers(deps: IpcHandlerDependencies): void {
   registerPtyHandlers(deps);
   registerAgentHandlers(deps);
   registerSkillHandlers(deps);
+  registerPluginHandlers(deps);
   registerClaudeDataHandlers(deps);
   registerSettingsHandlers(deps);
   registerAppSettingsHandlers(deps);
-  registerOrchestratorHandlers(deps);
+  // Orchestrator handlers are registered separately in services/mcp-orchestrator.ts
   registerFileSystemHandlers(deps);
   registerShellHandlers(deps);
 }
@@ -134,6 +136,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     agents,
     ptyProcesses,
     getMainWindow,
+    getAppSettings,
     saveAgents,
     initAgentPty,
     detectAgentStatus,
@@ -373,6 +376,12 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       if (fs.existsSync(mcpConfigPath)) {
         command += ` --mcp-config '${mcpConfigPath}'`;
       }
+      // Add super agent instructions
+      const { getSuperAgentInstructionsPath } = await import('../utils');
+      const instructionsPath = getSuperAgentInstructionsPath();
+      if (fs.existsSync(instructionsPath)) {
+        command += ` --append-system-prompt "$(cat '${instructionsPath}')"`;
+      }
     }
 
     if (options?.model) {
@@ -381,6 +390,12 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
 
     if (options?.resume) {
       command += ' --resume';
+    }
+
+    // Add verbose flag if enabled in app settings
+    const currentAppSettings = getAppSettings();
+    if (currentAppSettings.verboseModeEnabled) {
+      command += ' --verbose';
     }
 
     // Add skip permissions flag if enabled
@@ -394,8 +409,15 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       command += ` --add-dir '${escapedSecondaryPath}'`;
     }
 
+    // Build the final prompt with skills directive if agent has skills
+    let finalPrompt = prompt;
+    if (agent.skills && agent.skills.length > 0 && !isSuperAgentCheck) {
+      const skillsList = agent.skills.join(', ');
+      finalPrompt = `[IMPORTANT: Use these skills for this session: ${skillsList}. Invoke them with /<skill-name> when relevant to the task.] ${prompt}`;
+    }
+
     // Add the prompt (escape single quotes)
-    const escapedPrompt = prompt.replace(/'/g, "'\\''");
+    const escapedPrompt = finalPrompt.replace(/'/g, "'\\''");
     command += ` '${escapedPrompt}'`;
 
     // Update status
@@ -711,6 +733,80 @@ function registerSkillHandlers(deps: IpcHandlerDependencies): void {
   });
 }
 
+// ============== Plugin IPC Handlers ==============
+
+function registerPluginHandlers(deps: IpcHandlerDependencies): void {
+  const { pluginPtyProcesses, getMainWindow } = deps;
+
+  // Start plugin installation (creates interactive PTY)
+  ipcMain.handle('plugin:install-start', async (_event, { command, cols, rows }: { command: string; cols?: number; rows?: number }) => {
+    const id = uuidv4();
+    const shell = process.env.SHELL || '/bin/zsh';
+
+    const ptyProcess = pty.spawn(shell, ['-l'], {
+      name: 'xterm-256color',
+      cols: cols || 80,
+      rows: rows || 24,
+      cwd: os.homedir(),
+      env: process.env as { [key: string]: string },
+    });
+
+    pluginPtyProcesses.set(id, ptyProcess);
+
+    // Forward PTY output to renderer
+    ptyProcess.onData((data) => {
+      getMainWindow()?.webContents.send('plugin:pty-data', { id, data });
+    });
+
+    // Handle PTY exit
+    ptyProcess.onExit(({ exitCode }) => {
+      getMainWindow()?.webContents.send('plugin:pty-exit', { id, exitCode });
+      pluginPtyProcesses.delete(id);
+    });
+
+    // Send the install command after a short delay to let shell initialize
+    // If the command starts with /, it's a Claude CLI slash command - prefix with 'claude'
+    const finalCommand = command.startsWith('/') ? `claude "${command}"` : command;
+    setTimeout(() => {
+      ptyProcess.write(finalCommand);
+      ptyProcess.write('\r');
+    }, 500);
+
+    return { id };
+  });
+
+  // Write to plugin installation PTY
+  ipcMain.handle('plugin:install-write', async (_event, { id, data }: { id: string; data: string }) => {
+    const ptyProcess = pluginPtyProcesses.get(id);
+    if (ptyProcess) {
+      ptyProcess.write(data);
+      return { success: true };
+    }
+    return { success: false, error: 'PTY not found' };
+  });
+
+  // Resize plugin installation PTY
+  ipcMain.handle('plugin:install-resize', async (_event, { id, cols, rows }: { id: string; cols: number; rows: number }) => {
+    const ptyProcess = pluginPtyProcesses.get(id);
+    if (ptyProcess) {
+      ptyProcess.resize(cols, rows);
+      return { success: true };
+    }
+    return { success: false, error: 'PTY not found' };
+  });
+
+  // Kill plugin installation PTY
+  ipcMain.handle('plugin:install-kill', async (_event, { id }: { id: string }) => {
+    const ptyProcess = pluginPtyProcesses.get(id);
+    if (ptyProcess) {
+      ptyProcess.kill();
+      pluginPtyProcesses.delete(id);
+      return { success: true };
+    }
+    return { success: false, error: 'PTY not found' };
+  });
+}
+
 // ============== Claude Data IPC Handlers ==============
 
 function registerClaudeDataHandlers(deps: IpcHandlerDependencies): void {
@@ -961,161 +1057,6 @@ function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
       return { success: true };
     } catch (err) {
       console.error('Slack send test failed:', err);
-      return { success: false, error: String(err) };
-    }
-  });
-}
-
-// ============== MCP Orchestrator IPC Handlers ==============
-
-function registerOrchestratorHandlers(deps: IpcHandlerDependencies): void {
-  const { getMcpOrchestratorPath } = deps;
-
-  // Check if orchestrator is configured (uses claude mcp list command)
-  ipcMain.handle('orchestrator:getStatus', async () => {
-    try {
-      const orchestratorPath = getMcpOrchestratorPath();
-      const orchestratorExists = fs.existsSync(orchestratorPath);
-
-      const { execSync } = require('child_process');
-
-      // Check using claude mcp list
-      let isConfigured = false;
-      try {
-        const listOutput = execSync('claude mcp list 2>&1', { encoding: 'utf-8' });
-        isConfigured = listOutput.includes('claude-mgr-orchestrator');
-      } catch {
-        // claude mcp list might fail if no servers configured
-        isConfigured = false;
-      }
-
-      // Also check mcp.json as fallback
-      const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
-      let mcpJsonConfigured = false;
-      if (fs.existsSync(mcpConfigPath)) {
-        try {
-          const mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
-          mcpJsonConfigured = mcpConfig?.mcpServers?.['claude-mgr-orchestrator'] !== undefined;
-        } catch {
-          // Ignore parse errors
-        }
-      }
-
-      return {
-        configured: isConfigured || mcpJsonConfigured,
-        orchestratorPath,
-        orchestratorExists,
-        mcpListConfigured: isConfigured,
-        mcpJsonConfigured
-      };
-    } catch (err) {
-      console.error('Failed to get orchestrator status:', err);
-      return { configured: false, error: String(err) };
-    }
-  });
-
-  // Setup orchestrator using claude mcp add command
-  ipcMain.handle('orchestrator:setup', async () => {
-    try {
-      const orchestratorPath = getMcpOrchestratorPath();
-
-      // Check if orchestrator exists
-      if (!fs.existsSync(orchestratorPath)) {
-        return {
-          success: false,
-          error: `MCP orchestrator not found at ${orchestratorPath}. Try reinstalling the app.`
-        };
-      }
-
-      const { execSync } = require('child_process');
-
-      // First try to remove any existing config to avoid duplicates (from both user and project scope)
-      try {
-        execSync('claude mcp remove -s user claude-mgr-orchestrator 2>&1', { encoding: 'utf-8', stdio: 'pipe' });
-      } catch {
-        // Ignore errors if it doesn't exist
-      }
-      try {
-        execSync('claude mcp remove claude-mgr-orchestrator 2>&1', { encoding: 'utf-8', stdio: 'pipe' });
-      } catch {
-        // Ignore errors if it doesn't exist in project scope
-      }
-
-      // Add the MCP server using claude mcp add with -s user for global scope
-      const addCommand = `claude mcp add -s user claude-mgr-orchestrator node "${orchestratorPath}"`;
-      console.log('Running:', addCommand);
-
-      try {
-        execSync(addCommand, { encoding: 'utf-8', stdio: 'pipe' });
-        console.log('MCP orchestrator configured globally via claude mcp add -s user');
-        return { success: true, method: 'claude-mcp-add-global' };
-      } catch (addErr) {
-        console.error('Failed to add MCP server via claude mcp add -s user:', addErr);
-
-        // Fallback: write to mcp.json
-        const claudeDir = path.join(os.homedir(), '.claude');
-        const mcpConfigPath = path.join(claudeDir, 'mcp.json');
-
-        if (!fs.existsSync(claudeDir)) {
-          fs.mkdirSync(claudeDir, { recursive: true });
-        }
-
-        let mcpConfig: { mcpServers?: Record<string, unknown> } = { mcpServers: {} };
-        if (fs.existsSync(mcpConfigPath)) {
-          try {
-            mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
-            if (!mcpConfig.mcpServers) {
-              mcpConfig.mcpServers = {};
-            }
-          } catch {
-            mcpConfig = { mcpServers: {} };
-          }
-        }
-
-        mcpConfig.mcpServers!['claude-mgr-orchestrator'] = {
-          command: 'node',
-          args: [orchestratorPath]
-        };
-
-        fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
-        console.log('MCP orchestrator configured via mcp.json fallback');
-        return { success: true, path: mcpConfigPath, method: 'mcp-json-fallback' };
-      }
-    } catch (err) {
-      console.error('Failed to setup orchestrator:', err);
-      return { success: false, error: String(err) };
-    }
-  });
-
-  // Remove orchestrator from Claude's global config
-  ipcMain.handle('orchestrator:remove', async () => {
-    try {
-      const { execSync } = require('child_process');
-
-      // Remove from global user scope
-      try {
-        execSync('claude mcp remove -s user claude-mgr-orchestrator 2>&1', { encoding: 'utf-8', stdio: 'pipe' });
-      } catch {
-        // Ignore errors if it doesn't exist
-      }
-
-      // Also clean up mcp.json fallback if it exists
-      const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
-      if (fs.existsSync(mcpConfigPath)) {
-        try {
-          const mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
-          if (mcpConfig?.mcpServers?.['claude-mgr-orchestrator']) {
-            delete mcpConfig.mcpServers['claude-mgr-orchestrator'];
-            fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
-          }
-        } catch {
-          // Ignore parse errors
-        }
-      }
-
-      return { success: true };
-    } catch (err) {
-      console.error('Failed to remove orchestrator:', err);
       return { success: false, error: String(err) };
     }
   });

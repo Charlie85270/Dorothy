@@ -3,8 +3,10 @@ import * as fs from 'fs';
 import { App as SlackApp, LogLevel } from '@slack/bolt';
 import { AgentStatus, AppSettings } from '../types';
 import { SLACK_CHARACTER_FACES } from '../constants';
-import { formatSlackAgentStatus, isSuperAgent, getSuperAgent } from '../utils';
-import { agents, saveAgents, initAgentPty, ptyProcesses } from '../core/agent-manager';
+import { formatSlackAgentStatus, isSuperAgent, getSuperAgent, getSuperAgentInstructionsPath } from '../utils';
+import { agents, saveAgents, initAgentPty } from '../core/agent-manager';
+import { ptyProcesses } from '../core/pty-manager';
+import { getMainWindow } from '../core/window-manager';
 import { app } from 'electron';
 
 // Slack bot state
@@ -57,6 +59,19 @@ export function setSuperAgentSlackBuffer(buffer: string[]): void {
 
 export function clearSuperAgentSlackBuffer(): void {
   superAgentSlackBuffer = [];
+}
+
+// Helper to initialize agent PTY with proper callbacks
+async function initAgentPtyWithCallbacks(agent: AgentStatus): Promise<string> {
+  return initAgentPty(
+    agent,
+    getMainWindow(),
+    (agent: AgentStatus, newStatus: string) => {
+      // Simple status change handler - just update the agent
+      agent.status = newStatus as AgentStatus['status'];
+    },
+    saveAgents
+  );
 }
 
 // Send message to Slack
@@ -427,7 +442,7 @@ export async function handleSlackCommand(
       const workingPath = (agent.worktreePath || agent.projectPath).replace(/'/g, "'\\''");
 
       if (!agent.ptyId || !ptyProcesses.has(agent.ptyId)) {
-        const ptyId = await initAgentPty(agent);
+        const ptyId = await initAgentPtyWithCallbacks(agent);
         agent.ptyId = ptyId;
       }
 
@@ -518,7 +533,7 @@ export async function sendToSuperAgentFromSlack(
   try {
     // Initialize PTY if needed
     if (!superAgent.ptyId || !ptyProcesses.has(superAgent.ptyId)) {
-      const ptyId = await initAgentPty(superAgent);
+      const ptyId = await initAgentPtyWithCallbacks(superAgent);
       superAgent.ptyId = ptyId;
     }
 
@@ -554,37 +569,7 @@ export async function sendToSuperAgentFromSlack(
         "'\\''",
       );
 
-      const orchestratorPrompt = `You are the Super Agent - an orchestrator that manages other agents using MCP tools.
-
-THIS REQUEST IS FROM SLACK - You MUST use send_slack to respond!
-
-AVAILABLE MCP TOOLS (from "claude-mgr-orchestrator"):
-- list_agents: List all agents with status, project, ID
-- get_agent_output: Read agent's terminal output (use to see responses!)
-- start_agent: Start agent with a prompt (auto-sends to running agents too)
-- send_message: Send message to agent (auto-starts idle agents)
-- stop_agent: Stop a running agent
-- create_agent: Create a new agent
-- remove_agent: Delete an agent
-- send_slack: Send your response back to Slack (USE THIS!)
-
-WORKFLOW FOR SLACK REQUESTS:
-1. Use start_agent or send_message with your task/question
-2. Wait 5-10 seconds for the agent to process
-3. Use get_agent_output to read their response
-4. Use send_slack to send a summary/response back to the user
-
-IMPORTANT - AUTONOMOUS MODE:
-When giving tasks to agents, ALWAYS include these instructions in your prompt:
-- "Work autonomously without asking for user feedback or choices"
-- "Make decisions on your own and proceed with the best approach"
-- "Do not wait for user confirmation - execute the task fully"
-This is because the user is on Slack and cannot respond to agent questions.
-
-CRITICAL: This request came from Slack. When you have an answer, you MUST call send_slack with your response. The user is waiting on Slack for your reply!
-
-USER REQUEST: ${sanitizedMessage}`;
-
+      // Build command with instructions file
       let command = 'claude';
 
       const mcpConfigPath = path.join(app.getPath('home'), '.claude', 'mcp.json');
@@ -592,8 +577,17 @@ USER REQUEST: ${sanitizedMessage}`;
         command += ` --mcp-config '${mcpConfigPath}'`;
       }
 
+      // Add system prompt from instructions file
+      const instructionsPath = getSuperAgentInstructionsPath();
+      if (fs.existsSync(instructionsPath)) {
+        command += ` --append-system-prompt "$(cat '${instructionsPath}')"`;
+      }
+
       if (superAgent.skipPermissions) command += ' --dangerously-skip-permissions';
-      command += ` '${orchestratorPrompt.replace(/'/g, "'\\''")}'`;
+
+      // Simple prompt with Slack context - the detailed instructions come from the file
+      const userPrompt = `[FROM SLACK - Use send_slack MCP tool to respond!] ${sanitizedMessage}`;
+      command += ` '${userPrompt.replace(/'/g, "'\\''")}'`;
 
       superAgent.status = 'running';
       superAgent.currentTask = sanitizedMessage.slice(0, 100);

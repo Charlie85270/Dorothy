@@ -5,7 +5,7 @@ import TelegramBot from 'node-telegram-bot-api';
 import * as pty from 'node-pty';
 import { AgentStatus, AppSettings } from '../types';
 import { TG_CHARACTER_FACES } from '../constants';
-import { isSuperAgent, formatAgentStatus } from '../utils';
+import { isSuperAgent, formatAgentStatus, getSuperAgentInstructionsPath } from '../utils';
 
 // ============== Telegram Bot State ==============
 let telegramBot: TelegramBot | null = null;
@@ -669,38 +669,7 @@ export async function sendToSuperAgent(chatId: string, message: string) {
       // No active session, start a new one
       const workingPath = (superAgent.worktreePath || superAgent.projectPath).replace(/'/g, "'\\''");
 
-      // Build orchestrator prompt with user's message
-      const orchestratorPrompt = `You are the Super Agent - an orchestrator that manages other agents using MCP tools.
-
-THIS REQUEST IS FROM TELEGRAM - You MUST use send_telegram to respond!
-
-AVAILABLE MCP TOOLS (from "claude-mgr-orchestrator"):
-- list_agents: List all agents with status, project, ID
-- get_agent_output: Read agent's terminal output (use to see responses!)
-- start_agent: Start agent with a prompt (auto-sends to running agents too)
-- send_message: Send message to agent (auto-starts idle agents)
-- stop_agent: Stop a running agent
-- create_agent: Create a new agent
-- remove_agent: Delete an agent
-- send_telegram: Send your response back to Telegram (USE THIS!)
-
-WORKFLOW FOR TELEGRAM REQUESTS:
-1. Use start_agent or send_message with your task/question
-2. Wait 5-10 seconds for the agent to process
-3. Use get_agent_output to read their response
-4. Use send_telegram to send a summary/response back to the user
-
-IMPORTANT - AUTONOMOUS MODE:
-When giving tasks to agents, ALWAYS include these instructions in your prompt:
-- "Work autonomously without asking for user feedback or choices"
-- "Make decisions on your own and proceed with the best approach"
-- "Do not wait for user confirmation - execute the task fully"
-This is because the user is on Telegram and cannot respond to agent questions.
-
-CRITICAL: This request came from Telegram. When you have an answer, you MUST call send_telegram with your response. The user is waiting on Telegram for your reply!
-
-USER REQUEST: ${sanitizedMessage}`;
-
+      // Build command with instructions file
       let command = 'claude';
 
       // Add MCP config
@@ -709,8 +678,17 @@ USER REQUEST: ${sanitizedMessage}`;
         command += ` --mcp-config '${mcpConfigPath}'`;
       }
 
+      // Add system prompt from instructions file
+      const instructionsPath = getSuperAgentInstructionsPath();
+      if (fs.existsSync(instructionsPath)) {
+        command += ` --append-system-prompt "$(cat '${instructionsPath}')"`;
+      }
+
       if (superAgent.skipPermissions) command += ' --dangerously-skip-permissions';
-      command += ` '${orchestratorPrompt.replace(/'/g, "'\\''")}'`;
+
+      // Simple prompt with Telegram context - the detailed instructions come from the file
+      const userPrompt = `[FROM TELEGRAM - Use send_telegram MCP tool to respond!] ${sanitizedMessage}`;
+      command += ` '${userPrompt.replace(/'/g, "'\\''")}'`;
 
       superAgent.status = 'running';
       superAgent.currentTask = sanitizedMessage.slice(0, 100);

@@ -5,6 +5,8 @@ import { BrowserWindow } from 'electron';
 
 export const ptyProcesses: Map<string, pty.IPty> = new Map();
 export const quickPtyProcesses: Map<string, pty.IPty> = new Map();
+export const skillPtyProcesses: Map<string, pty.IPty> = new Map();
+export const pluginPtyProcesses: Map<string, pty.IPty> = new Map();
 
 export function killPty(ptyId: string, isQuick = false): boolean {
   const processes = isQuick ? quickPtyProcesses : ptyProcesses;

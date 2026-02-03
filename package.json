@@ -1,6 +1,6 @@
 {
   "name": "claude-mgr",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "private": true,
   "main": "electron/dist/main.js",
   "scripts": {
@@ -22,6 +22,7 @@
     },
     "files": [
       "electron/dist/**/*",
+      "electron/resources/**/*",
       "out/**/*",
       "mcp-orchestrator/dist/**/*",
       "mcp-orchestrator/package.json",

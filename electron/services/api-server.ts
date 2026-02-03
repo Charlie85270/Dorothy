@@ -17,8 +17,8 @@ let apiServer: http.Server | null = null;
 export function startApiServer(
   mainWindow: BrowserWindow | null,
   appSettings: AppSettings,
-  telegramBot: TelegramBot | null,
-  slackApp: SlackApp | null,
+  getTelegramBot: () => TelegramBot | null,
+  getSlackApp: () => SlackApp | null,
   slackResponseChannel: string | null,
   slackResponseThreadTs: string | null,
   handleStatusChangeNotificationCallback: (agent: AgentStatus, newStatus: string) => void,
@@ -158,7 +158,6 @@ export function startApiServer(
           return;
         }
 
-        const effectivePrompt = prompt;
         const workingDir = agent.worktreePath || agent.projectPath;
         let command = `cd '${workingDir}' && claude`;
 
@@ -181,7 +180,14 @@ export function startApiServer(
         if (model) {
           command += ` --model ${model}`;
         }
-        command += ` '${effectivePrompt.replace(/'/g, "'\\''")}'`;
+
+        // Build final prompt with skills directive if agent has skills
+        let finalPrompt = prompt;
+        if (agent.skills && agent.skills.length > 0 && !isSuperAgentApi) {
+          const skillsList = agent.skills.join(', ');
+          finalPrompt = `[IMPORTANT: Use these skills for this session: ${skillsList}. Invoke them with /<skill-name> when relevant to the task.] ${prompt}`;
+        }
+        command += ` '${finalPrompt.replace(/'/g, "'\\''")}'`;
 
         const shell = process.env.SHELL || '/bin/zsh';
         const ptyProcess = pty.spawn(shell, ['-l', '-c', command], {
@@ -189,7 +195,13 @@ export function startApiServer(
           cols: 120,
           rows: 40,
           cwd: workingDir,
-          env: { ...process.env, TERM: 'xterm-256color' },
+          env: {
+            ...process.env,
+            TERM: 'xterm-256color',
+            CLAUDE_SKILLS: agent.skills?.join(',') || '',
+            CLAUDE_AGENT_ID: agent.id,
+            CLAUDE_PROJECT_PATH: agent.projectPath,
+          },
         });
 
         const ptyId = uuidv4();
@@ -321,6 +333,7 @@ export function startApiServer(
           return;
         }
 
+        const telegramBot = getTelegramBot();
         if (!telegramBot || !appSettings.telegramChatId) {
           sendJson({ error: 'Telegram not configured or no chat ID' }, 400);
           return;
@@ -348,6 +361,7 @@ export function startApiServer(
           return;
         }
 
+        const slackApp = getSlackApp();
         if (!slackApp || !appSettings.slackChannelId) {
           sendJson({ error: 'Slack not configured or no channel ID' }, 400);
           return;

@@ -271,21 +271,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('orchestrator:remove'),
   },
 
-  // Scheduler (claude-code-scheduler plugin)
+  // Scheduler (native implementation)
   scheduler: {
-    checkInstalled: () =>
-      ipcRenderer.invoke('scheduler:checkInstalled'),
-    install: () =>
-      ipcRenderer.invoke('scheduler:install'),
     listTasks: () =>
       ipcRenderer.invoke('scheduler:listTasks'),
     createTask: (params: {
-      agentId: string;
+      agentId?: string;
       prompt: string;
       schedule: string;
+      projectPath: string;
       autonomous: boolean;
-      useWorktree: boolean;
-      notifications: { telegram: boolean; slack: boolean };
+      useWorktree?: boolean;
+      notifications?: { telegram: boolean; slack: boolean };
     }) =>
       ipcRenderer.invoke('scheduler:createTask', params),
     deleteTask: (taskId: string) =>

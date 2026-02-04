@@ -106,18 +106,58 @@ function intervalToCron(minutes) {
 }
 // Get path to claude CLI
 async function getClaudePath() {
-    return new Promise((resolve) => {
-        const proc = (0, child_process_1.spawn)('which', ['claude']);
+    // Try multiple methods to find claude
+    // Method 1: Run which with bash to get proper PATH (including nvm, etc.)
+    const shellWhich = await new Promise((resolve) => {
+        const proc = (0, child_process_1.spawn)('/bin/bash', ['-l', '-c', 'which claude'], {
+            env: { ...process.env, HOME: os.homedir() }
+        });
         let output = '';
         proc.stdout.on('data', (data) => { output += data; });
-        proc.on('close', () => {
-            const claudePath = output.trim() || '/usr/local/bin/claude';
-            resolve(claudePath);
+        proc.on('close', (code) => {
+            if (code === 0 && output.trim()) {
+                resolve(output.trim());
+            }
+            else {
+                resolve(null);
+            }
         });
-        proc.on('error', () => {
-            resolve('/usr/local/bin/claude');
-        });
+        proc.on('error', () => resolve(null));
     });
+    if (shellWhich && fs.existsSync(shellWhich)) {
+        return shellWhich;
+    }
+    // Method 2: Check common locations
+    const commonPaths = [
+        path.join(os.homedir(), '.nvm/versions/node', 'v20.11.1', 'bin', 'claude'),
+        path.join(os.homedir(), '.nvm/versions/node', 'v22.0.0', 'bin', 'claude'),
+        '/usr/local/bin/claude',
+        '/opt/homebrew/bin/claude',
+        path.join(os.homedir(), '.local/bin/claude'),
+    ];
+    // Also check for any nvm node version
+    const nvmDir = path.join(os.homedir(), '.nvm/versions/node');
+    if (fs.existsSync(nvmDir)) {
+        try {
+            const versions = fs.readdirSync(nvmDir);
+            for (const version of versions) {
+                const claudePath = path.join(nvmDir, version, 'bin', 'claude');
+                if (fs.existsSync(claudePath)) {
+                    return claudePath;
+                }
+            }
+        }
+        catch {
+            // Ignore errors
+        }
+    }
+    for (const p of commonPaths) {
+        if (fs.existsSync(p)) {
+            return p;
+        }
+    }
+    // Fallback
+    return '/usr/local/bin/claude';
 }
 // Create launchd job for automation (macOS)
 async function createAutomationLaunchdJob(automation) {
@@ -149,8 +189,28 @@ async function createAutomationLaunchdJob(automation) {
     const escapedPrompt = prompt.replace(/'/g, "'\\''");
     const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
     const projectPath = automation.agent.projectPath || os.homedir();
+    const homeDir = os.homedir();
+    // Script sources bash profile for proper PATH (nvm, etc.)
     const scriptContent = `#!/bin/bash
+
+# Source bash profile for proper PATH (nvm, homebrew, etc.)
+export HOME="${homeDir}"
+
+# Source nvm if available
+if [ -s "${homeDir}/.nvm/nvm.sh" ]; then
+  source "${homeDir}/.nvm/nvm.sh" 2>/dev/null || true
+fi
+
+# Source bashrc
+if [ -f "${homeDir}/.bashrc" ]; then
+  source "${homeDir}/.bashrc" 2>/dev/null || true
+elif [ -f "${homeDir}/.bash_profile" ]; then
+  source "${homeDir}/.bash_profile" 2>/dev/null || true
+fi
+
+# Also add claude directory to PATH as fallback
 export PATH="${claudeDir}:$PATH"
+
 cd "${projectPath}"
 echo "=== Automation started at $(date) ===" >> "${logPath}"
 "${claudePath}" --dangerously-skip-permissions --mcp-config "${mcpConfigPath}" -p '${escapedPrompt}' >> "${logPath}" 2>&1
@@ -396,40 +456,52 @@ function registerAutomationHandlers() {
             return { success: false, error: err instanceof Error ? err.message : 'Failed to run automation' };
         }
     });
-    // Get automation logs
+    // Get automation logs - parsed into individual runs
     electron_1.ipcMain.handle('automation:getLogs', async (_event, id) => {
         try {
             const logPath = path.join(os.homedir(), '.claude-manager', 'logs', `automation-${id}.log`);
-            const errorLogPath = path.join(os.homedir(), '.claude-manager', 'logs', `automation-${id}.error.log`);
-            let logs = '';
-            let hasLogs = false;
-            if (fs.existsSync(logPath)) {
-                const content = fs.readFileSync(logPath, 'utf-8');
-                if (content.trim()) {
-                    hasLogs = true;
-                    logs += content;
+            if (!fs.existsSync(logPath)) {
+                return { runs: [], logs: 'No logs available yet. The automation has not run.' };
+            }
+            const content = fs.readFileSync(logPath, 'utf-8');
+            if (!content.trim()) {
+                return { runs: [], logs: 'No logs available yet.' };
+            }
+            // Parse logs into individual runs based on "=== Automation started/completed ===" markers
+            const runs = [];
+            const runPattern = /=== Automation started at (.+?) ===([\s\S]*?)(?:=== Automation completed at (.+?) ===|$)/g;
+            let match;
+            let runIndex = 0;
+            while ((match = runPattern.exec(content)) !== null) {
+                const startedAt = match[1]?.trim();
+                const runContent = match[2]?.trim() || '';
+                const completedAt = match[3]?.trim();
+                // Determine status based on content
+                let status = 'completed';
+                if (!completedAt) {
+                    status = 'running';
                 }
-            }
-            if (fs.existsSync(errorLogPath)) {
-                const errorContent = fs.readFileSync(errorLogPath, 'utf-8');
-                if (errorContent.trim()) {
-                    hasLogs = true;
-                    if (logs)
-                        logs += '\n\n=== Errors ===\n';
-                    logs += errorContent;
+                else if (runContent.includes('error') || runContent.includes('Error') || runContent.includes('command not found')) {
+                    status = 'error';
                 }
+                else if (runContent.includes('successfully')) {
+                    status = 'completed';
+                }
+                runs.push({
+                    id: `run-${runIndex++}`,
+                    startedAt,
+                    completedAt,
+                    content: runContent,
+                    status,
+                });
             }
-            if (!hasLogs) {
-                return { logs: 'No logs available yet. The automation has not run.' };
-            }
-            // Return last 500 lines
-            const lines = logs.split('\n');
-            const lastLines = lines.slice(-500).join('\n');
-            return { logs: lastLines };
+            // Return last 10 runs, most recent first
+            const recentRuns = runs.slice(-10).reverse();
+            return { runs: recentRuns, logs: content };
         }
         catch (err) {
             console.error('Error getting automation logs:', err);
-            return { logs: '', error: err instanceof Error ? err.message : 'Failed to get logs' };
+            return { runs: [], logs: '', error: err instanceof Error ? err.message : 'Failed to get logs' };
         }
     });
 }

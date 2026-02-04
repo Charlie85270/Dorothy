@@ -176,6 +176,12 @@ export interface ElectronAPI {
       slackAppToken: string;
       slackSigningSecret: string;
       slackChannelId: string;
+      cliPaths?: {
+        claude: string;
+        gh: string;
+        node: string;
+        additionalPaths: string[];
+      };
     }>;
     save: (settings: {
       notificationsEnabled?: boolean;
@@ -190,6 +196,12 @@ export interface ElectronAPI {
       slackAppToken?: string;
       slackSigningSecret?: string;
       slackChannelId?: string;
+      cliPaths?: {
+        claude: string;
+        gh: string;
+        node: string;
+        additionalPaths: string[];
+      };
     }) => Promise<{ success: boolean; error?: string }>;
     onUpdated?: (callback: (settings: unknown) => void) => () => void;
   };
@@ -337,6 +349,27 @@ export interface ElectronAPI {
       logs: string;
       error?: string;
     }>;
+  };
+
+  // CLI paths management
+  cliPaths?: {
+    detect: () => Promise<{
+      claude: string;
+      gh: string;
+      node: string;
+    }>;
+    get: () => Promise<{
+      claude: string;
+      gh: string;
+      node: string;
+      additionalPaths: string[];
+    }>;
+    save: (paths: {
+      claude: string;
+      gh: string;
+      node: string;
+      additionalPaths: string[];
+    }) => Promise<{ success: boolean; error?: string }>;
   };
 
   // Get home path helper

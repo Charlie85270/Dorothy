@@ -83,6 +83,7 @@ import {
 import { registerIpcHandlers, IpcHandlerDependencies } from './handlers/ipc-handlers';
 import { registerSchedulerHandlers } from './handlers/scheduler-handlers';
 import { registerAutomationHandlers } from './handlers/automation-handlers';
+import { registerCLIPathsHandlers, getCLIPathsConfig } from './handlers/cli-paths-handlers';
 
 // Utils
 import {
@@ -113,6 +114,12 @@ function loadAppSettings(): AppSettings {
     slackSigningSecret: '',
     slackChannelId: '',
     verboseModeEnabled: false,
+    cliPaths: {
+      claude: '',
+      gh: '',
+      node: '',
+      additionalPaths: [],
+    },
   };
   try {
     if (fs.existsSync(APP_SETTINGS_FILE)) {
@@ -278,6 +285,11 @@ app.whenReady().then(async () => {
   registerSchedulerHandlers();
   registerAutomationHandlers();
   registerMcpOrchestratorHandlers();
+  registerCLIPathsHandlers({
+    getAppSettings: () => appSettings,
+    setAppSettings: (settings) => { appSettings = settings; },
+    saveAppSettings: saveAppSettingsToFile,
+  });
 
   // Initialize services
   initTelegramBot();

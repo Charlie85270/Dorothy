@@ -7,6 +7,7 @@ import {
   Sparkles,
   Monitor,
   Brain,
+  Terminal,
 } from 'lucide-react';
 import { SlackIcon } from './SlackIcon';
 import type { SettingsSection } from './types';
@@ -20,6 +21,7 @@ export const SECTIONS: { id: SettingsSection; label: string; icon: React.Compone
   { id: 'slack', label: 'Slack', icon: SlackIcon },
   { id: 'permissions', label: 'Permissions', icon: Shield },
   { id: 'skills', label: 'Skills & Plugins', icon: Sparkles },
+  { id: 'cli', label: 'CLI Paths', icon: Terminal },
   { id: 'system', label: 'System', icon: Monitor },
 ];
 
@@ -37,4 +39,10 @@ export const DEFAULT_APP_SETTINGS = {
   slackSigningSecret: '',
   slackChannelId: '',
   verboseModeEnabled: false,
+  cliPaths: {
+    claude: '',
+    gh: '',
+    node: '',
+    additionalPaths: [],
+  },
 };

@@ -25,6 +25,13 @@ export interface AgentStatus {
   currentSessionId?: string;
 }
 
+export interface CLIPaths {
+  claude: string;
+  gh: string;
+  node: string;
+  additionalPaths: string[];
+}
+
 export interface AppSettings {
   notificationsEnabled: boolean;
   notifyOnWaiting: boolean;
@@ -39,4 +46,5 @@ export interface AppSettings {
   slackSigningSecret: string;
   slackChannelId: string;
   verboseModeEnabled: boolean;
+  cliPaths: CLIPaths;
 }

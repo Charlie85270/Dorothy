@@ -134,11 +134,10 @@ export function useAgentTerminal({ selectedAgentId, terminalRef }: UseAgentTermi
       term.writeln('');
 
       // Fetch latest agent data from main process to get all stored output
-      console.log('Fetching agent data for:', selectedAgentId);
       if (window.electronAPI?.agent?.get) {
         try {
           const latestAgent = await window.electronAPI.agent.get(selectedAgentId);
-          console.log('Fetched agent data:', latestAgent?.id, 'output length:', latestAgent?.output?.length);
+        
           if (latestAgent && latestAgent.output && latestAgent.output.length > 0) {
             term.writeln(`\x1b[33m--- Replaying ${latestAgent.output.length} previous output chunks ---\x1b[0m`);
             latestAgent.output.forEach(line => {
@@ -180,14 +179,12 @@ export function useAgentTerminal({ selectedAgentId, terminalRef }: UseAgentTermi
       return;
     }
 
-    console.log('Setting up agent output listener');
+   
     const unsubscribe = window.electronAPI.agent.onOutput((event) => {
-      console.log('Received agent output event:', event.agentId, 'data length:', event.data?.length);
+     
       if (event.agentId === selectedAgentIdRef.current && xtermRef.current) {
         xtermRef.current.write(event.data);
-      } else {
-        console.log('Skipping event - agent:', selectedAgentIdRef.current, 'xterm:', !!xtermRef.current);
-      }
+      } 
     });
 
     return unsubscribe;

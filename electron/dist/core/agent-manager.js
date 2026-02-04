@@ -42,6 +42,7 @@ exports.saveAgents = saveAgents;
 exports.loadAgents = loadAgents;
 exports.initAgentPty = initAgentPty;
 const fs = __importStar(require("fs"));
+const os = __importStar(require("os"));
 const path = __importStar(require("path"));
 const pty = __importStar(require("node-pty"));
 const uuid_1 = require("uuid");
@@ -205,9 +206,35 @@ function loadAgents() {
     }
 }
 async function initAgentPty(agent, mainWindow, handleStatusChangeNotificationCallback, saveAgentsCallback) {
-    const shell = process.env.SHELL || '/bin/zsh';
+    // Use bash for more reliable PATH handling with nvm
+    const shell = '/bin/bash';
     const cwd = agent.worktreePath || agent.projectPath;
     console.log(`Initializing PTY for restored agent ${agent.id} in ${cwd}`);
+    // Build PATH that includes nvm and other common locations for claude
+    const homeDir = process.env.HOME || os.homedir();
+    const existingPath = process.env.PATH || '';
+    // Add nvm paths and other common locations
+    const additionalPaths = [
+        path.join(homeDir, '.nvm/versions/node/v20.11.1/bin'),
+        path.join(homeDir, '.nvm/versions/node/v22.0.0/bin'),
+        '/usr/local/bin',
+        '/opt/homebrew/bin',
+        path.join(homeDir, '.local/bin'),
+    ];
+    // Find any nvm node version directories
+    const nvmDir = path.join(homeDir, '.nvm/versions/node');
+    if (fs.existsSync(nvmDir)) {
+        try {
+            const versions = fs.readdirSync(nvmDir);
+            for (const version of versions) {
+                additionalPaths.push(path.join(nvmDir, version, 'bin'));
+            }
+        }
+        catch {
+            // Ignore errors
+        }
+    }
+    const fullPath = [...new Set([...additionalPaths, ...existingPath.split(':')])].join(':');
     const ptyProcess = pty.spawn(shell, ['-l'], {
         name: 'xterm-256color',
         cols: 120,
@@ -215,6 +242,7 @@ async function initAgentPty(agent, mainWindow, handleStatusChangeNotificationCal
         cwd,
         env: {
             ...process.env,
+            PATH: fullPath,
             CLAUDE_SKILLS: agent.skills.join(','),
             CLAUDE_AGENT_ID: agent.id,
             CLAUDE_PROJECT_PATH: agent.projectPath,

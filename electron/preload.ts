@@ -327,6 +327,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('automation:getLogs', id),
   },
 
+  // CLI Paths management
+  cliPaths: {
+    detect: () =>
+      ipcRenderer.invoke('cliPaths:detect'),
+    get: () =>
+      ipcRenderer.invoke('cliPaths:get'),
+    save: (paths: { claude: string; gh: string; node: string; additionalPaths: string[] }) =>
+      ipcRenderer.invoke('cliPaths:save', paths),
+  },
+
   // Platform info
   platform: process.platform,
 });

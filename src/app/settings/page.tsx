@@ -15,6 +15,7 @@ import {
   SlackSection,
   PermissionsSection,
   SkillsSection,
+  CLIPathsSection,
   SystemSection,
 } from '@/components/Settings';
 import type { SettingsSection } from '@/components/Settings';
@@ -99,6 +100,13 @@ export default function SettingsPage() {
         return <PermissionsSection settings={settings} />;
       case 'skills':
         return <SkillsSection skills={skills} />;
+      case 'cli':
+        return (
+          <CLIPathsSection
+            appSettings={appSettings}
+            onSaveAppSettings={handleSaveAppSettings}
+          />
+        );
       case 'system':
         return (
           <SystemSection

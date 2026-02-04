@@ -24,6 +24,13 @@ export interface Skill {
   projectName?: string;
 }
 
+export interface CLIPaths {
+  claude: string;
+  gh: string;
+  node: string;
+  additionalPaths: string[];
+}
+
 export interface AppSettings {
   notificationsEnabled: boolean;
   notifyOnWaiting: boolean;
@@ -38,6 +45,7 @@ export interface AppSettings {
   slackSigningSecret: string;
   slackChannelId: string;
   verboseModeEnabled: boolean;
+  cliPaths: CLIPaths;
 }
 
-export type SettingsSection = 'general' | 'memory' | 'git' | 'notifications' | 'telegram' | 'slack' | 'permissions' | 'skills' | 'system';
+export type SettingsSection = 'general' | 'memory' | 'git' | 'notifications' | 'telegram' | 'slack' | 'permissions' | 'skills' | 'cli' | 'system';

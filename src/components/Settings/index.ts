@@ -19,4 +19,5 @@ export { TelegramSection } from './TelegramSection';
 export { SlackSection } from './SlackSection';
 export { PermissionsSection } from './PermissionsSection';
 export { SkillsSection } from './SkillsSection';
+export { CLIPathsSection } from './CLIPathsSection';
 export { SystemSection } from './SystemSection';

@@ -40,8 +40,31 @@ import { apiRequest } from "../utils/api.js";
 
 const execAsyncRaw = promisify(exec);
 
+// Shared config file path that the Electron app writes to
+const CLI_PATHS_CONFIG_FILE = path.join(os.homedir(), ".claude-manager", "cli-paths.json");
+
+// Load CLI paths config from the shared config file
+function loadCLIPathsConfig(): { fullPath?: string; claude?: string; gh?: string; node?: string; additionalPaths?: string[] } | null {
+  try {
+    if (fs.existsSync(CLI_PATHS_CONFIG_FILE)) {
+      const content = fs.readFileSync(CLI_PATHS_CONFIG_FILE, "utf-8");
+      return JSON.parse(content);
+    }
+  } catch {
+    // Ignore
+  }
+  return null;
+}
+
 // Build a PATH that includes common locations for CLI tools like gh, claude, etc.
 function buildFullPath(): string {
+  // First try to use the shared config from the Electron app
+  const config = loadCLIPathsConfig();
+  if (config?.fullPath) {
+    return config.fullPath;
+  }
+
+  // Fall back to default path building
   const homeDir = process.env.HOME || os.homedir();
   const existingPath = process.env.PATH || "";
 
@@ -52,6 +75,11 @@ function buildFullPath(): string {
     path.join(homeDir, ".nvm/versions/node/v20.11.1/bin"),
     path.join(homeDir, ".nvm/versions/node/v22.0.0/bin"),
   ];
+
+  // Add user-configured additional paths
+  if (config?.additionalPaths) {
+    additionalPaths.push(...config.additionalPaths);
+  }
 
   // Find any nvm node version directories
   const nvmDir = path.join(homeDir, ".nvm/versions/node");
@@ -69,14 +97,17 @@ function buildFullPath(): string {
   return [...new Set([...additionalPaths, ...existingPath.split(":")])].join(":");
 }
 
-const fullPath = buildFullPath();
+// Get the full PATH - refreshes on each call to pick up config changes
+function getFullPath(): string {
+  return buildFullPath();
+}
 
 // Wrapper around exec that includes proper PATH for CLI tools
 async function execAsync(command: string): Promise<{ stdout: string; stderr: string }> {
   return execAsyncRaw(command, {
     env: {
       ...process.env,
-      PATH: fullPath,
+      PATH: getFullPath(),
     },
   });
 }

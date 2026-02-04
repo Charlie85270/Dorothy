@@ -189,7 +189,37 @@ export function startApiServer(
         }
         command += ` '${finalPrompt.replace(/'/g, "'\\''")}'`;
 
-        const shell = process.env.SHELL || '/bin/zsh';
+        // Use bash for more reliable PATH handling with nvm
+        const shell = '/bin/bash';
+
+        // Build PATH that includes nvm and other common locations for claude
+        const homeDir = process.env.HOME || app.getPath('home');
+        const existingPath = process.env.PATH || '';
+
+        // Add nvm paths and other common locations
+        const additionalPaths = [
+          path.join(homeDir, '.nvm/versions/node/v20.11.1/bin'),
+          path.join(homeDir, '.nvm/versions/node/v22.0.0/bin'),
+          '/usr/local/bin',
+          '/opt/homebrew/bin',
+          path.join(homeDir, '.local/bin'),
+        ];
+
+        // Find any nvm node version directories
+        const nvmDir = path.join(homeDir, '.nvm/versions/node');
+        if (fs.existsSync(nvmDir)) {
+          try {
+            const versions = fs.readdirSync(nvmDir);
+            for (const version of versions) {
+              additionalPaths.push(path.join(nvmDir, version, 'bin'));
+            }
+          } catch {
+            // Ignore errors
+          }
+        }
+
+        const fullPath = [...new Set([...additionalPaths, ...existingPath.split(':')])].join(':');
+
         const ptyProcess = pty.spawn(shell, ['-l', '-c', command], {
           name: 'xterm-256color',
           cols: 120,
@@ -197,6 +227,7 @@ export function startApiServer(
           cwd: workingDir,
           env: {
             ...process.env,
+            PATH: fullPath,
             TERM: 'xterm-256color',
             CLAUDE_SKILLS: agent.skills?.join(',') || '',
             CLAUDE_AGENT_ID: agent.id,

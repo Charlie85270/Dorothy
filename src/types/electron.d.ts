@@ -326,18 +326,7 @@ export interface ElectronAPI {
     update: (id: string, params: { enabled?: boolean; name?: string }) => Promise<{ success: boolean; error?: string }>;
     delete: (id: string) => Promise<{ success: boolean; error?: string }>;
     run: (id: string) => Promise<{ success: boolean; error?: string; itemsProcessed?: number; itemsFound?: number }>;
-    getLogs: (id: string) => Promise<{
-      runs: Array<{
-        id: string;
-        automationId: string;
-        startedAt: string;
-        completedAt?: string;
-        status: 'running' | 'completed' | 'error';
-        itemsFound: number;
-        itemsProcessed: number;
-        error?: string;
-      }>;
-    }>;
+    getLogs: (id: string) => Promise<{ logs: string; error?: string }>;
   };
 
   // Get home path helper

@@ -175,6 +175,15 @@ electron_1.contextBridge.exposeInMainWorld('electronAPI', {
         getLogs: (taskId) => electron_1.ipcRenderer.invoke('scheduler:getLogs', taskId),
         fixMcpPaths: () => electron_1.ipcRenderer.invoke('scheduler:fixMcpPaths'),
     },
+    // Automations
+    automation: {
+        list: () => electron_1.ipcRenderer.invoke('automation:list'),
+        create: (params) => electron_1.ipcRenderer.invoke('automation:create', params),
+        update: (id, params) => electron_1.ipcRenderer.invoke('automation:update', id, params),
+        delete: (id) => electron_1.ipcRenderer.invoke('automation:delete', id),
+        run: (id) => electron_1.ipcRenderer.invoke('automation:run', id),
+        getLogs: (id) => electron_1.ipcRenderer.invoke('automation:getLogs', id),
+    },
     // Platform info
     platform: process.platform,
 });

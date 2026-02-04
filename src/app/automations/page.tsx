@@ -117,7 +117,7 @@ export default function AutomationsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [selectedLogs, setSelectedLogs] = useState<{ automation: Automation; runs: AutomationRun[] } | null>(null);
+  const [selectedLogs, setSelectedLogs] = useState<{ automation: Automation; logs: string } | null>(null);
   const [runningAutomationId, setRunningAutomationId] = useState<string | null>(null);
   const [expandedAutomations, setExpandedAutomations] = useState<Set<string>>(new Set());
 
@@ -296,9 +296,10 @@ export default function AutomationsPage() {
     if (!isElectron()) return;
     try {
       const result = await window.electronAPI?.automation?.getLogs(automation.id);
-      setSelectedLogs({ automation, runs: result?.runs || [] });
+      setSelectedLogs({ automation, logs: result?.logs || 'No logs available' });
     } catch (err) {
       console.error('Error fetching logs:', err);
+      setSelectedLogs({ automation, logs: 'Error fetching logs' });
     }
   };
 
@@ -954,31 +955,9 @@ Post the tweet as a comment.`}
                 </button>
               </div>
               <div className="flex-1 overflow-auto p-4 bg-[#0a0a0f]">
-                {selectedLogs.runs.length === 0 ? (
-                  <p className="text-muted-foreground text-sm">No runs yet</p>
-                ) : (
-                  <div className="space-y-3">
-                    {selectedLogs.runs.map((run) => (
-                      <div key={run.id} className="border border-border rounded-lg p-3">
-                        <div className="flex items-center gap-2 mb-2">
-                          {run.status === 'completed' && <CheckCircle className="w-4 h-4 text-green-500" />}
-                          {run.status === 'error' && <XCircle className="w-4 h-4 text-red-500" />}
-                          {run.status === 'running' && <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />}
-                          <span className="text-sm font-medium">{run.status}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(run.startedAt).toLocaleString()}
-                          </span>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          Items: {run.itemsProcessed}/{run.itemsFound} processed
-                          {run.error && (
-                            <p className="text-red-400 mt-1">Error: {run.error}</p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <pre className="text-xs text-gray-300 font-mono whitespace-pre-wrap break-words">
+                  {selectedLogs.logs}
+                </pre>
               </div>
             </motion.div>
           </motion.div>

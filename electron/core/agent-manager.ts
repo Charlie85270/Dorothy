@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import * as pty from 'node-pty';
 import { v4 as uuidv4 } from 'uuid';
@@ -228,6 +229,34 @@ export async function initAgentPty(
 
   console.log(`Initializing PTY for restored agent ${agent.id} in ${cwd}`);
 
+  // Build PATH that includes nvm and other common locations for claude
+  const homeDir = process.env.HOME || os.homedir();
+  const existingPath = process.env.PATH || '';
+
+  // Add nvm paths and other common locations
+  const additionalPaths = [
+    path.join(homeDir, '.nvm/versions/node/v20.11.1/bin'),
+    path.join(homeDir, '.nvm/versions/node/v22.0.0/bin'),
+    '/usr/local/bin',
+    '/opt/homebrew/bin',
+    path.join(homeDir, '.local/bin'),
+  ];
+
+  // Find any nvm node version directories
+  const nvmDir = path.join(homeDir, '.nvm/versions/node');
+  if (fs.existsSync(nvmDir)) {
+    try {
+      const versions = fs.readdirSync(nvmDir);
+      for (const version of versions) {
+        additionalPaths.push(path.join(nvmDir, version, 'bin'));
+      }
+    } catch {
+      // Ignore errors
+    }
+  }
+
+  const fullPath = [...new Set([...additionalPaths, ...existingPath.split(':')])].join(':');
+
   const ptyProcess = pty.spawn(shell, ['-l'], {
     name: 'xterm-256color',
     cols: 120,
@@ -235,6 +264,7 @@ export async function initAgentPty(
     cwd,
     env: {
       ...process.env as { [key: string]: string },
+      PATH: fullPath,
       CLAUDE_SKILLS: agent.skills.join(','),
       CLAUDE_AGENT_ID: agent.id,
       CLAUDE_PROJECT_PATH: agent.projectPath,

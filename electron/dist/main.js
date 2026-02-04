@@ -64,6 +64,7 @@ const mcp_orchestrator_1 = require("./services/mcp-orchestrator");
 // Handlers
 const ipc_handlers_1 = require("./handlers/ipc-handlers");
 const scheduler_handlers_1 = require("./handlers/scheduler-handlers");
+const automation_handlers_1 = require("./handlers/automation-handlers");
 // Utils
 const utils_1 = require("./utils");
 // ============== App Settings Management ==============
@@ -186,6 +187,7 @@ electron_1.app.whenReady().then(async () => {
     const deps = createIpcDependencies();
     (0, ipc_handlers_1.registerIpcHandlers)(deps);
     (0, scheduler_handlers_1.registerSchedulerHandlers)();
+    (0, automation_handlers_1.registerAutomationHandlers)();
     (0, mcp_orchestrator_1.registerMcpOrchestratorHandlers)();
     // Initialize services
     initTelegramBot();

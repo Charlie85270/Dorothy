@@ -2,6 +2,7 @@ import { ipcMain } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { spawn } from 'child_process';
 
 // ============================================
 // Automation IPC handlers
@@ -99,6 +100,172 @@ function generateId(): string {
   return Math.random().toString(36).substring(2, 10);
 }
 
+// Convert interval minutes to cron expression
+function intervalToCron(minutes: number): string {
+  if (minutes < 60) {
+    // Every X minutes
+    return `*/${minutes} * * * *`;
+  } else if (minutes === 60) {
+    // Every hour
+    return '0 * * * *';
+  } else if (minutes < 1440) {
+    // Every X hours
+    const hours = Math.floor(minutes / 60);
+    return `0 */${hours} * * *`;
+  } else {
+    // Daily or more
+    return '0 0 * * *';
+  }
+}
+
+// Get path to claude CLI
+async function getClaudePath(): Promise<string> {
+  return new Promise((resolve) => {
+    const proc = spawn('which', ['claude']);
+    let output = '';
+    proc.stdout.on('data', (data) => { output += data; });
+    proc.on('close', () => {
+      const claudePath = output.trim() || '/usr/local/bin/claude';
+      resolve(claudePath);
+    });
+    proc.on('error', () => {
+      resolve('/usr/local/bin/claude');
+    });
+  });
+}
+
+// Create launchd job for automation (macOS)
+async function createAutomationLaunchdJob(automation: Automation): Promise<void> {
+  const claudePath = await getClaudePath();
+  const claudeDir = path.dirname(claudePath);
+
+  // Convert schedule to cron
+  let cronSchedule: string;
+  if (automation.schedule.type === 'cron' && automation.schedule.cron) {
+    cronSchedule = automation.schedule.cron;
+  } else {
+    cronSchedule = intervalToCron(automation.schedule.intervalMinutes || 60);
+  }
+
+  const [minute, hour, dayOfMonth, , dayOfWeek] = cronSchedule.split(' ');
+
+  const logPath = path.join(os.homedir(), '.claude-manager', 'logs', `automation-${automation.id}.log`);
+  const errorLogPath = path.join(os.homedir(), '.claude-manager', 'logs', `automation-${automation.id}.error.log`);
+  const logsDir = path.dirname(logPath);
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+  }
+
+  // Create script to run
+  const scriptPath = path.join(os.homedir(), '.claude-manager', 'scripts', `automation-${automation.id}.sh`);
+  const scriptsDir = path.dirname(scriptPath);
+  if (!fs.existsSync(scriptsDir)) {
+    fs.mkdirSync(scriptsDir, { recursive: true });
+  }
+
+  // The script will call Claude with MCP to run the automation
+  const prompt = `Use the run_automation MCP tool to run automation with id "${automation.id}". Report the results briefly.`;
+  const escapedPrompt = prompt.replace(/'/g, "'\\''");
+  const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
+  const projectPath = automation.agent.projectPath || os.homedir();
+
+  const scriptContent = `#!/bin/bash
+export PATH="${claudeDir}:$PATH"
+cd "${projectPath}"
+echo "=== Automation started at $(date) ===" >> "${logPath}"
+"${claudePath}" --dangerously-skip-permissions --mcp-config "${mcpConfigPath}" -p '${escapedPrompt}' >> "${logPath}" 2>&1
+echo "=== Automation completed at $(date) ===" >> "${logPath}"
+`;
+
+  fs.writeFileSync(scriptPath, scriptContent);
+  fs.chmodSync(scriptPath, '755');
+
+  // Build StartCalendarInterval or StartInterval
+  const label = `com.claude-manager.automation.${automation.id}`;
+  const plistPath = path.join(os.homedir(), 'Library', 'LaunchAgents', `${label}.plist`);
+  const launchAgentsDir = path.dirname(plistPath);
+  if (!fs.existsSync(launchAgentsDir)) {
+    fs.mkdirSync(launchAgentsDir, { recursive: true });
+  }
+
+  let scheduleXml: string;
+
+  // For interval-based schedules, use StartInterval (simpler and more reliable for frequent runs)
+  if (automation.schedule.type === 'interval' && automation.schedule.intervalMinutes) {
+    const intervalSeconds = automation.schedule.intervalMinutes * 60;
+    scheduleXml = `  <key>StartInterval</key>
+  <integer>${intervalSeconds}</integer>`;
+  } else {
+    // For cron-based, use StartCalendarInterval
+    const calendarInterval: Record<string, number> = {};
+    if (minute !== '*' && !minute.includes('/')) calendarInterval.Minute = parseInt(minute, 10);
+    if (hour !== '*' && !hour.includes('/')) calendarInterval.Hour = parseInt(hour, 10);
+    if (dayOfMonth !== '*') calendarInterval.Day = parseInt(dayOfMonth, 10);
+    if (dayOfWeek !== '*') calendarInterval.Weekday = parseInt(dayOfWeek, 10);
+
+    scheduleXml = `  <key>StartCalendarInterval</key>
+  <dict>
+${Object.entries(calendarInterval).map(([k, v]) => `    <key>${k}</key>\n    <integer>${v}</integer>`).join('\n')}
+  </dict>`;
+  }
+
+  const plistContent = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${label}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>${scriptPath}</string>
+  </array>
+${scheduleXml}
+  <key>StandardOutPath</key>
+  <string>${logPath}</string>
+  <key>StandardErrorPath</key>
+  <string>${errorLogPath}</string>
+  <key>RunAtLoad</key>
+  <false/>
+</dict>
+</plist>`;
+
+  fs.writeFileSync(plistPath, plistContent);
+
+  // Register with launchd
+  const uid = process.getuid?.() || 501;
+  await new Promise<void>((resolve) => {
+    const proc = spawn('launchctl', ['bootstrap', `gui/${uid}`, plistPath]);
+    proc.on('close', () => resolve());
+    proc.on('error', () => resolve());
+  });
+}
+
+// Remove launchd job for automation (macOS)
+async function removeAutomationLaunchdJob(automationId: string): Promise<void> {
+  const label = `com.claude-manager.automation.${automationId}`;
+  const plistPath = path.join(os.homedir(), 'Library', 'LaunchAgents', `${label}.plist`);
+  const scriptPath = path.join(os.homedir(), '.claude-manager', 'scripts', `automation-${automationId}.sh`);
+
+  // Unload from launchd
+  const uid = process.getuid?.() || 501;
+  await new Promise<void>((resolve) => {
+    const proc = spawn('launchctl', ['bootout', `gui/${uid}/${label}`]);
+    proc.on('close', () => resolve());
+    proc.on('error', () => resolve());
+  });
+
+  // Remove plist file
+  if (fs.existsSync(plistPath)) {
+    fs.unlinkSync(plistPath);
+  }
+
+  // Remove script file
+  if (fs.existsSync(scriptPath)) {
+    fs.unlinkSync(scriptPath);
+  }
+}
+
 /**
  * Register all automation IPC handlers
  */
@@ -187,6 +354,11 @@ export function registerAutomationHandlers(): void {
       automations.push(newAutomation);
       saveAutomations(automations);
 
+      // Create launchd job on macOS
+      if (os.platform() === 'darwin') {
+        await createAutomationLaunchdJob(newAutomation);
+      }
+
       return { success: true, automationId: newAutomation.id };
     } catch (err) {
       console.error('Error creating automation:', err);
@@ -206,6 +378,8 @@ export function registerAutomationHandlers(): void {
         return { success: false, error: 'Automation not found' };
       }
 
+      const wasEnabled = automations[index].enabled;
+
       if (params.enabled !== undefined) {
         automations[index].enabled = params.enabled;
       }
@@ -215,6 +389,18 @@ export function registerAutomationHandlers(): void {
       automations[index].updatedAt = new Date().toISOString();
 
       saveAutomations(automations);
+
+      // Handle enable/disable of launchd job
+      if (os.platform() === 'darwin' && params.enabled !== undefined && params.enabled !== wasEnabled) {
+        if (params.enabled) {
+          // Re-create the launchd job
+          await createAutomationLaunchdJob(automations[index]);
+        } else {
+          // Remove the launchd job
+          await removeAutomationLaunchdJob(id);
+        }
+      }
+
       return { success: true };
     } catch (err) {
       console.error('Error updating automation:', err);
@@ -233,6 +419,12 @@ export function registerAutomationHandlers(): void {
 
       automations.splice(index, 1);
       saveAutomations(automations);
+
+      // Remove launchd job on macOS
+      if (os.platform() === 'darwin') {
+        await removeAutomationLaunchdJob(id);
+      }
+
       return { success: true };
     } catch (err) {
       console.error('Error deleting automation:', err);
@@ -249,9 +441,17 @@ export function registerAutomationHandlers(): void {
         return { success: false, error: 'Automation not found' };
       }
 
-      // For now, just return success - the actual running is done via MCP tools
-      // The UI can call the MCP tools through the orchestrator
-      return { success: true, itemsProcessed: 0, itemsFound: 0 };
+      // Run the script directly
+      const scriptPath = path.join(os.homedir(), '.claude-manager', 'scripts', `automation-${id}.sh`);
+      if (fs.existsSync(scriptPath)) {
+        spawn('bash', [scriptPath], {
+          detached: true,
+          stdio: 'ignore',
+        }).unref();
+        return { success: true, message: 'Automation triggered' };
+      }
+
+      return { success: false, error: 'Automation script not found' };
     } catch (err) {
       console.error('Error running automation:', err);
       return { success: false, error: err instanceof Error ? err.message : 'Failed to run automation' };
@@ -261,14 +461,41 @@ export function registerAutomationHandlers(): void {
   // Get automation logs
   ipcMain.handle('automation:getLogs', async (_event, id: string) => {
     try {
-      const runs = loadRuns();
-      const automationRuns = runs
-        .filter(r => r.automationId === id)
-        .slice(-20);
-      return { runs: automationRuns };
+      const logPath = path.join(os.homedir(), '.claude-manager', 'logs', `automation-${id}.log`);
+      const errorLogPath = path.join(os.homedir(), '.claude-manager', 'logs', `automation-${id}.error.log`);
+
+      let logs = '';
+      let hasLogs = false;
+
+      if (fs.existsSync(logPath)) {
+        const content = fs.readFileSync(logPath, 'utf-8');
+        if (content.trim()) {
+          hasLogs = true;
+          logs += content;
+        }
+      }
+
+      if (fs.existsSync(errorLogPath)) {
+        const errorContent = fs.readFileSync(errorLogPath, 'utf-8');
+        if (errorContent.trim()) {
+          hasLogs = true;
+          if (logs) logs += '\n\n=== Errors ===\n';
+          logs += errorContent;
+        }
+      }
+
+      if (!hasLogs) {
+        return { logs: 'No logs available yet. The automation has not run.' };
+      }
+
+      // Return last 500 lines
+      const lines = logs.split('\n');
+      const lastLines = lines.slice(-500).join('\n');
+
+      return { logs: lastLines };
     } catch (err) {
       console.error('Error getting automation logs:', err);
-      return { runs: [], error: err instanceof Error ? err.message : 'Failed to get logs' };
+      return { logs: '', error: err instanceof Error ? err.message : 'Failed to get logs' };
     }
   });
 }

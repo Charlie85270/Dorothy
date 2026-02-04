@@ -396,6 +396,7 @@ IMPORTANT INSTRUCTIONS:
 ${outputInstructions.length > 0 ? outputInstructions.join("\n") : "- Output your final result directly"}
 - Do NOT output explanations or multiple options - just create and send the final content`;
 
+        let agentId: string | null = null;
         try {
           // Create and start agent via API
           const createResponse = await apiRequest("/api/agents", "POST", {
@@ -404,7 +405,7 @@ ${outputInstructions.length > 0 ? outputInstructions.join("\n") : "- Output your
             skipPermissions: true,
           }) as { agent: { id: string } };
 
-          const agentId = createResponse.agent.id;
+          agentId = createResponse.agent.id;
 
           await apiRequest(`/api/agents/${agentId}/start`, "POST", {
             prompt,
@@ -427,9 +428,6 @@ ${outputInstructions.length > 0 ? outputInstructions.join("\n") : "- Output your
             status = agentResponse.agent.status;
             agentOutput = agentResponse.agent.output?.join("") || "";
           }
-
-          // Clean up agent
-          await apiRequest(`/api/agents/${agentId}`, "DELETE");
         } catch (error) {
           agentOutput = `Agent error: ${error}`;
           // If agent failed, try to send error notification
@@ -442,6 +440,15 @@ ${outputInstructions.length > 0 ? outputInstructions.join("\n") : "- Output your
               } catch {
                 // Ignore
               }
+            }
+          }
+        } finally {
+          // Always clean up the agent after processing
+          if (agentId) {
+            try {
+              await apiRequest(`/api/agents/${agentId}`, "DELETE");
+            } catch {
+              // Ignore delete errors
             }
           }
         }

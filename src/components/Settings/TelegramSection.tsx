@@ -18,6 +18,7 @@ export const TelegramSection = ({ appSettings, onSaveAppSettings, onUpdateLocalS
   const [telegramTestResult, setTelegramTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [generatingToken, setGeneratingToken] = useState(false);
   const [copiedToken, setCopiedToken] = useState(false);
+  const [tokenGenerated, setTokenGenerated] = useState(false);
 
   const handleTestToken = async () => {
     if (!window.electronAPI?.telegram?.test) return;
@@ -62,6 +63,7 @@ export const TelegramSection = ({ appSettings, onSaveAppSettings, onUpdateLocalS
       const result = await window.electronAPI.telegram.generateAuthToken();
       if (result.success) {
         onUpdateLocalSettings({ telegramAuthToken: result.token });
+        setTokenGenerated(true);
       }
     } catch (err) {
       console.error('Failed to generate auth token:', err);
@@ -253,6 +255,11 @@ export const TelegramSection = ({ appSettings, onSaveAppSettings, onUpdateLocalS
             {!appSettings.telegramAuthToken && (
               <div className="mt-2 p-2 bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs">
                 Auth token required: Generate a token to enable Telegram bot functionality.
+              </div>
+            )}
+            {tokenGenerated && (
+              <div className="mt-2 p-2 bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-xs">
+                Restart the app to apply the new token.
               </div>
             )}
           </div>

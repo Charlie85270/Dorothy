@@ -103,12 +103,17 @@ export const TelegramSection = ({ appSettings, onSaveAppSettings, onUpdateLocalS
             <Send className="w-5 h-5 text-muted-foreground" />
             <div>
               <p className="font-medium">Enable Telegram Bot</p>
-              <p className="text-sm text-muted-foreground">Receive notifications and send commands via Telegram</p>
+              <p className="text-sm text-muted-foreground">
+                {!appSettings.telegramAuthToken
+                  ? 'Generate an auth token first (required for security)'
+                  : 'Receive notifications and send commands via Telegram'}
+              </p>
             </div>
           </div>
           <Toggle
             enabled={appSettings.telegramEnabled}
             onChange={() => onSaveAppSettings({ telegramEnabled: !appSettings.telegramEnabled })}
+            disabled={!appSettings.telegramAuthToken || !appSettings.telegramBotToken}
           />
         </div>
 
@@ -243,11 +248,11 @@ export const TelegramSection = ({ appSettings, onSaveAppSettings, onUpdateLocalS
             <p className="text-xs text-muted-foreground mt-2">
               {appSettings.telegramAuthToken
                 ? 'Share this token with trusted users. They must send /auth <token> to your bot.'
-                : 'Generate a token to enable authentication. Without it, anyone can use your bot!'}
+                : 'Auth token is required to enable Telegram. Generate one to get started.'}
             </p>
-            {!appSettings.telegramAuthToken && appSettings.telegramEnabled && (
-              <div className="mt-2 p-2 bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-xs">
-                Warning: No auth token configured. Anyone who finds your bot can control your agents!
+            {!appSettings.telegramAuthToken && (
+              <div className="mt-2 p-2 bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs">
+                Auth token required: Generate a token to enable Telegram bot functionality.
               </div>
             )}
           </div>

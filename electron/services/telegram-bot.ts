@@ -203,7 +203,12 @@ export function initTelegramBot() {
   }
 
   if (!appSettings.telegramEnabled || !appSettings.telegramBotToken) {
-    console.log('Telegram bot disabled or no token');
+    console.log('Telegram bot disabled or no bot token');
+    return;
+  }
+
+  if (!appSettings.telegramAuthToken) {
+    console.log('Telegram bot disabled: no auth token configured (security requirement)');
     return;
   }
 

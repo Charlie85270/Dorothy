@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Zap,
@@ -52,7 +52,7 @@ interface Automation {
     intervalMinutes?: number;
   };
   source: {
-    type: 'github' | 'jira' | 'pipedrive' | 'twitter' | 'rss' | 'custom';
+    type: string;
     config: Record<string, unknown>;
   };
   trigger: {
@@ -67,7 +67,7 @@ interface Automation {
     model?: string;
   };
   outputs: Array<{
-    type: 'telegram' | 'slack' | 'github_comment';
+    type: string;
     enabled: boolean;
     template?: string;
   }>;
@@ -84,14 +84,19 @@ interface AutomationRun {
   error?: string;
 }
 
-const SOURCE_ICONS: Record<string, React.ElementType> = {
-  github: Github,
-  jira: Globe,
-  pipedrive: Globe,
-  twitter: MessageSquare,
-  rss: Globe,
-  custom: Globe,
-};
+type IconComponent = React.ComponentType<{ className?: string }>;
+
+function getSourceIcon(type: string): IconComponent {
+  const icons: Record<string, IconComponent> = {
+    github: Github,
+    jira: Globe,
+    pipedrive: Globe,
+    twitter: MessageSquare,
+    rss: Globe,
+    custom: Globe,
+  };
+  return icons[type] || Globe;
+}
 
 const SCHEDULE_PRESETS = [
   { value: '15', label: 'Every 15 minutes', minutes: 15 },
@@ -136,25 +141,13 @@ export default function AutomationsPage() {
   const loadAutomations = useCallback(async () => {
     if (!isElectron()) return;
     try {
-      // For now, read directly from the automations file
-      // In production, this would go through the API
       const result = await window.electronAPI?.automation?.list();
       if (result?.automations) {
         setAutomations(result.automations);
       }
     } catch (err) {
       console.error('Error loading automations:', err);
-      // Try fallback to file read
-      try {
-        const fileResult = await window.electronAPI?.fs?.readFile(
-          `${window.electronAPI?.getHomePath?.()}/.claude-manager/automations.json`
-        );
-        if (fileResult) {
-          setAutomations(JSON.parse(fileResult));
-        }
-      } catch {
-        setAutomations([]);
-      }
+      setAutomations([]);
     }
   }, []);
 
@@ -411,7 +404,7 @@ export default function AutomationsPage() {
               </div>
             ) : (
               automations.map((automation) => {
-                const SourceIcon = SOURCE_ICONS[automation.source.type] || Globe;
+                const SourceIcon = getSourceIcon(automation.source.type);
                 return (
                   <motion.div
                     key={automation.id}

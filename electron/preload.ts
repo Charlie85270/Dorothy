@@ -295,6 +295,38 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('scheduler:fixMcpPaths'),
   },
 
+  // Automations
+  automation: {
+    list: () =>
+      ipcRenderer.invoke('automation:list'),
+    create: (params: {
+      name: string;
+      description?: string;
+      sourceType: string;
+      sourceConfig: string;
+      scheduleMinutes?: number;
+      scheduleCron?: string;
+      eventTypes?: string[];
+      onNewItem?: boolean;
+      agentEnabled?: boolean;
+      agentPrompt?: string;
+      agentProjectPath?: string;
+      outputTelegram?: boolean;
+      outputSlack?: boolean;
+      outputGitHubComment?: boolean;
+      outputTemplate?: string;
+    }) =>
+      ipcRenderer.invoke('automation:create', params),
+    update: (id: string, params: { enabled?: boolean; name?: string }) =>
+      ipcRenderer.invoke('automation:update', id, params),
+    delete: (id: string) =>
+      ipcRenderer.invoke('automation:delete', id),
+    run: (id: string) =>
+      ipcRenderer.invoke('automation:run', id),
+    getLogs: (id: string) =>
+      ipcRenderer.invoke('automation:getLogs', id),
+  },
+
   // Platform info
   platform: process.platform,
 });

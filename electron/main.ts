@@ -82,6 +82,7 @@ import {
 // Handlers
 import { registerIpcHandlers, IpcHandlerDependencies } from './handlers/ipc-handlers';
 import { registerSchedulerHandlers } from './handlers/scheduler-handlers';
+import { registerAutomationHandlers } from './handlers/automation-handlers';
 
 // Utils
 import {
@@ -275,6 +276,7 @@ app.whenReady().then(async () => {
   const deps = createIpcDependencies();
   registerIpcHandlers(deps);
   registerSchedulerHandlers();
+  registerAutomationHandlers();
   registerMcpOrchestratorHandlers();
 
   // Initialize services

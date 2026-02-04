@@ -152,7 +152,7 @@ export function startApiServer(
           return;
         }
 
-        const { prompt, model, skipPermissions } = body as { prompt: string; model?: string; skipPermissions?: boolean };
+        const { prompt, model, skipPermissions, printMode } = body as { prompt: string; model?: string; skipPermissions?: boolean; printMode?: boolean };
         if (!prompt) {
           sendJson({ error: 'prompt is required' }, 400);
           return;
@@ -160,6 +160,15 @@ export function startApiServer(
 
         const workingDir = agent.worktreePath || agent.projectPath;
         let command = `cd '${workingDir}' && claude`;
+
+        // Detect if this is an automation agent (use print mode for one-shot execution)
+        const isAutomationAgent = agent.name?.toLowerCase().includes('automation:');
+        const usePrintMode = printMode || isAutomationAgent;
+
+        // Add -p flag for print mode (one-shot execution, no interactive prompt)
+        if (usePrintMode) {
+          command += ' -p';
+        }
 
         const isSuperAgentApi = agent.name?.toLowerCase().includes('super agent') ||
                                agent.name?.toLowerCase().includes('orchestrator');

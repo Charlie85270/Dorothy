@@ -45,3 +45,4 @@ release/
 # mcp-orchestrator
 mcp-orchestrator/node_modules
 mcp-orchestrator/dist
+electron/dist

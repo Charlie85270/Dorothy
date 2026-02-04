@@ -122,10 +122,9 @@ function intervalToCron(minutes: number): string {
 async function getClaudePath(): Promise<string> {
   // Try multiple methods to find claude
 
-  // Method 1: Run which with user's shell to get proper PATH (including nvm, etc.)
+  // Method 1: Run which with bash to get proper PATH (including nvm, etc.)
   const shellWhich = await new Promise<string | null>((resolve) => {
-    const shell = process.env.SHELL || '/bin/zsh';
-    const proc = spawn(shell, ['-l', '-c', 'which claude'], {
+    const proc = spawn('/bin/bash', ['-l', '-c', 'which claude'], {
       env: { ...process.env, HOME: os.homedir() }
     });
     let output = '';
@@ -215,15 +214,22 @@ async function createAutomationLaunchdJob(automation: Automation): Promise<void>
   const projectPath = automation.agent.projectPath || os.homedir();
   const homeDir = os.homedir();
 
-  // Script sources shell profile for proper PATH (nvm, etc.)
+  // Script sources bash profile for proper PATH (nvm, etc.)
   const scriptContent = `#!/bin/bash
 
-# Source shell profile for proper PATH (nvm, homebrew, etc.)
+# Source bash profile for proper PATH (nvm, homebrew, etc.)
 export HOME="${homeDir}"
-if [ -f "${homeDir}/.zshrc" ]; then
-  source "${homeDir}/.zshrc" 2>/dev/null || true
-elif [ -f "${homeDir}/.bashrc" ]; then
+
+# Source nvm if available
+if [ -s "${homeDir}/.nvm/nvm.sh" ]; then
+  source "${homeDir}/.nvm/nvm.sh" 2>/dev/null || true
+fi
+
+# Source bashrc
+if [ -f "${homeDir}/.bashrc" ]; then
   source "${homeDir}/.bashrc" 2>/dev/null || true
+elif [ -f "${homeDir}/.bash_profile" ]; then
+  source "${homeDir}/.bash_profile" 2>/dev/null || true
 fi
 
 # Also add claude directory to PATH as fallback

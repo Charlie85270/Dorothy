@@ -224,7 +224,8 @@ export async function initAgentPty(
   handleStatusChangeNotificationCallback: (agent: AgentStatus, newStatus: string) => void,
   saveAgentsCallback: () => void
 ): Promise<string> {
-  const shell = process.env.SHELL || '/bin/zsh';
+  // Use bash for more reliable PATH handling with nvm
+  const shell = '/bin/bash';
   const cwd = agent.worktreePath || agent.projectPath;
 
   console.log(`Initializing PTY for restored agent ${agent.id} in ${cwd}`);

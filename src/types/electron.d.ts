@@ -289,6 +289,60 @@ export interface ElectronAPI {
     fixMcpPaths: () => Promise<{ success: boolean; error?: string }>;
   };
 
+  // Automations
+  automation?: {
+    list: () => Promise<{
+      automations: Array<{
+        id: string;
+        name: string;
+        description?: string;
+        enabled: boolean;
+        createdAt: string;
+        updatedAt: string;
+        schedule: { type: 'cron' | 'interval'; cron?: string; intervalMinutes?: number };
+        source: { type: string; config: Record<string, unknown> };
+        trigger: { eventTypes: string[]; onNewItem: boolean; onUpdatedItem?: boolean };
+        agent: { enabled: boolean; projectPath?: string; prompt: string; model?: string };
+        outputs: Array<{ type: string; enabled: boolean; template?: string }>;
+      }>;
+    }>;
+    create: (params: {
+      name: string;
+      description?: string;
+      sourceType: string;
+      sourceConfig: string;
+      scheduleMinutes?: number;
+      scheduleCron?: string;
+      eventTypes?: string[];
+      onNewItem?: boolean;
+      agentEnabled?: boolean;
+      agentPrompt?: string;
+      agentProjectPath?: string;
+      outputTelegram?: boolean;
+      outputSlack?: boolean;
+      outputGitHubComment?: boolean;
+      outputTemplate?: string;
+    }) => Promise<{ success: boolean; error?: string; automationId?: string }>;
+    update: (id: string, params: { enabled?: boolean; name?: string }) => Promise<{ success: boolean; error?: string }>;
+    delete: (id: string) => Promise<{ success: boolean; error?: string }>;
+    run: (id: string) => Promise<{ success: boolean; error?: string; itemsProcessed?: number; itemsFound?: number }>;
+    getLogs: (id: string) => Promise<{
+      runs: Array<{
+        id: string;
+        automationId: string;
+        startedAt: string;
+        completedAt?: string;
+        status: 'running' | 'completed' | 'error';
+        itemsFound: number;
+        itemsProcessed: number;
+        error?: string;
+      }>;
+    }>;
+  };
+
+  // Get home path helper
+  getHomePath?: () => string;
+
   // Platform info
   platform: string;
 }

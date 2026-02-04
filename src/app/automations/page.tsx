@@ -606,6 +606,18 @@ export default function AutomationsPage() {
                 {/* GitHub-specific config */}
                 {formData.sourceType === 'github' && (
                   <>
+                    {/* gh CLI requirement notice */}
+                    <div className="flex items-start gap-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                      <AlertCircle className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+                      <div className="text-sm">
+                        <span className="text-blue-500 font-medium">Requires GitHub CLI</span>
+                        <p className="text-muted-foreground mt-0.5">
+                          This feature uses the <code className="px-1 py-0.5 bg-secondary rounded text-xs">gh</code> CLI for authentication.
+                          Install it from <a href="https://cli.github.com" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">cli.github.com</a> and run <code className="px-1 py-0.5 bg-secondary rounded text-xs">gh auth login</code>.
+                        </p>
+                      </div>
+                    </div>
+
                     <div>
                       <label className="block text-sm font-medium mb-2">Repositories *</label>
                       <input

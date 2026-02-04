@@ -9,6 +9,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { exec } from "child_process";
 import { promisify } from "util";
+import * as os from "os";
+import * as path from "path";
+import * as fs from "fs";
 import {
   loadAutomations,
   getAutomation,
@@ -35,7 +38,48 @@ import {
 } from "../utils/automations.js";
 import { apiRequest } from "../utils/api.js";
 
-const execAsync = promisify(exec);
+const execAsyncRaw = promisify(exec);
+
+// Build a PATH that includes common locations for CLI tools like gh, claude, etc.
+function buildFullPath(): string {
+  const homeDir = process.env.HOME || os.homedir();
+  const existingPath = process.env.PATH || "";
+
+  const additionalPaths = [
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    path.join(homeDir, ".local/bin"),
+    path.join(homeDir, ".nvm/versions/node/v20.11.1/bin"),
+    path.join(homeDir, ".nvm/versions/node/v22.0.0/bin"),
+  ];
+
+  // Find any nvm node version directories
+  const nvmDir = path.join(homeDir, ".nvm/versions/node");
+  if (fs.existsSync(nvmDir)) {
+    try {
+      const versions = fs.readdirSync(nvmDir);
+      for (const version of versions) {
+        additionalPaths.push(path.join(nvmDir, version, "bin"));
+      }
+    } catch {
+      // Ignore errors
+    }
+  }
+
+  return [...new Set([...additionalPaths, ...existingPath.split(":")])].join(":");
+}
+
+const fullPath = buildFullPath();
+
+// Wrapper around exec that includes proper PATH for CLI tools
+async function execAsync(command: string): Promise<{ stdout: string; stderr: string }> {
+  return execAsyncRaw(command, {
+    env: {
+      ...process.env,
+      PATH: fullPath,
+    },
+  });
+}
 
 // ============================================================================
 // SOURCE POLLERS

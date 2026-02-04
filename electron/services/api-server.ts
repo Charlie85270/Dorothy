@@ -173,7 +173,8 @@ export function startApiServer(
         const isSuperAgentApi = agent.name?.toLowerCase().includes('super agent') ||
                                agent.name?.toLowerCase().includes('orchestrator');
 
-        if (isSuperAgentApi) {
+        // Give MCP config to Super Agent and Automation agents so they can use MCP tools
+        if (isSuperAgentApi || isAutomationAgent) {
           const mcpConfigPath = path.join(app.getPath('home'), '.claude', 'mcp.json');
           if (fs.existsSync(mcpConfigPath)) {
             command += ` --mcp-config '${mcpConfigPath}'`;

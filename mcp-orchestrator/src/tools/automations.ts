@@ -112,6 +112,7 @@ async function execAsync(command: string): Promise<{ stdout: string; stderr: str
   });
 }
 
+
 // ============================================================================
 // SOURCE POLLERS
 // ============================================================================
@@ -369,7 +370,31 @@ async function runAutomation(automation: Automation): Promise<AutomationRun> {
 
       // Run agent if enabled
       if (automation.agent.enabled && automation.agent.prompt) {
-        const prompt = interpolateTemplate(automation.agent.prompt, variables);
+        const basePrompt = interpolateTemplate(automation.agent.prompt, variables);
+
+        // Build output instructions based on configured outputs
+        const outputInstructions: string[] = [];
+        for (const output of automation.outputs) {
+          if (output.enabled) {
+            if (output.type === "telegram") {
+              outputInstructions.push("- Use the send_telegram MCP tool to send your final result to Telegram");
+            }
+            if (output.type === "github_comment") {
+              const repo = variables.repo as string;
+              const number = variables.number as number;
+              outputInstructions.push(`- Post your result as a comment on GitHub PR #${number} in ${repo} using: gh pr comment ${number} --repo ${repo} --body "YOUR_CONTENT"`);
+            }
+          }
+        }
+
+        // Add instructions for using MCP tools to send output
+        const prompt = `${basePrompt}
+
+IMPORTANT INSTRUCTIONS:
+- Work autonomously without asking for user feedback
+- Generate your content and then send it using the tools below
+${outputInstructions.length > 0 ? outputInstructions.join("\n") : "- Output your final result directly"}
+- Do NOT output explanations or multiple options - just create and send the final content`;
 
         try {
           // Create and start agent via API
@@ -407,23 +432,23 @@ async function runAutomation(automation: Automation): Promise<AutomationRun> {
           await apiRequest(`/api/agents/${agentId}`, "DELETE");
         } catch (error) {
           agentOutput = `Agent error: ${error}`;
+          // If agent failed, try to send error notification
+          for (const output of automation.outputs) {
+            if (output.enabled && output.type === "telegram") {
+              try {
+                await apiRequest("/api/telegram/send", "POST", {
+                  message: `Automation "${automation.name}" failed: ${error}`
+                });
+              } catch {
+                // Ignore
+              }
+            }
+          }
         }
       }
 
-      // Send outputs
-      const outputVariables = {
-        ...variables,
-        agent_output: agentOutput,
-        automation_name: automation.name,
-      };
-
-      for (const output of automation.outputs) {
-        try {
-          await sendOutput(output, agentOutput || `Processed: ${item.title}`, outputVariables);
-        } catch (error) {
-          console.error(`Failed to send output to ${output.type}:`, error);
-        }
-      }
+      // Note: Output sending is now handled by the agent using MCP tools (send_telegram, gh pr comment, etc.)
+      // The agent is instructed to use these tools directly in its prompt
 
       // Mark as processed
       markItemProcessed({

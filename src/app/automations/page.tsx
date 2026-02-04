@@ -22,6 +22,11 @@ import {
   Github,
   Globe,
   MessageSquare,
+  ChevronDown,
+  ChevronUp,
+  GitPullRequest,
+  GitBranch,
+  Tag,
 } from 'lucide-react';
 import { isElectron } from '@/hooks/useElectron';
 
@@ -114,6 +119,7 @@ export default function AutomationsPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedLogs, setSelectedLogs] = useState<{ automation: Automation; runs: AutomationRun[] } | null>(null);
   const [runningAutomationId, setRunningAutomationId] = useState<string | null>(null);
+  const [expandedAutomations, setExpandedAutomations] = useState<Set<string>>(new Set());
 
   // Form state
   const [formData, setFormData] = useState({
@@ -311,6 +317,19 @@ export default function AutomationsPage() {
     return 'Unknown';
   };
 
+  // Toggle expanded state
+  const toggleExpanded = (id: string) => {
+    setExpandedAutomations(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
   if (!isElectron()) {
     return (
       <div className="p-6">
@@ -405,130 +424,241 @@ export default function AutomationsPage() {
             ) : (
               automations.map((automation) => {
                 const SourceIcon = getSourceIcon(automation.source.type);
+                const isExpanded = expandedAutomations.has(automation.id);
+                const githubConfig = automation.source.config as { repos?: string[]; pollFor?: string[] };
                 return (
                   <motion.div
                     key={automation.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className={`bg-card border rounded-lg p-4 hover:border-primary/30 transition-colors ${
+                    className={`bg-card border rounded-lg overflow-hidden transition-colors ${
                       automation.enabled ? 'border-border' : 'border-border/50 opacity-60'
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <SourceIcon className="w-4 h-4 text-primary shrink-0" />
-                          <span className="font-medium">{automation.name}</span>
-                          {automation.enabled ? (
-                            <span className="px-1.5 py-0.5 bg-green-500/10 text-green-500 rounded text-[10px] font-medium">
-                              ENABLED
-                            </span>
-                          ) : (
-                            <span className="px-1.5 py-0.5 bg-gray-500/10 text-gray-500 rounded text-[10px] font-medium">
-                              PAUSED
-                            </span>
-                          )}
-                        </div>
-
-                        {automation.description && (
-                          <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
-                            {automation.description}
-                          </p>
-                        )}
-
-                        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                          <div className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {formatSchedule(automation.schedule)}
-                          </div>
-
-                          <div className="flex items-center gap-1">
-                            <SourceIcon className="w-3 h-3" />
-                            {automation.source.type}
-                            {automation.source.type === 'github' && (
-                              <span className="text-muted-foreground/60">
-                                ({(automation.source.config as { repos?: string[] })?.repos?.length || 0} repos)
+                    <div className="p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <SourceIcon className="w-4 h-4 text-primary shrink-0" />
+                            <span className="font-medium">{automation.name}</span>
+                            {automation.enabled ? (
+                              <span className="px-1.5 py-0.5 bg-green-500/10 text-green-500 rounded text-[10px] font-medium">
+                                ENABLED
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.5 bg-gray-500/10 text-gray-500 rounded text-[10px] font-medium">
+                                PAUSED
                               </span>
                             )}
                           </div>
 
-                          {automation.agent.enabled && (
+                          {automation.description && (
+                            <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
+                              {automation.description}
+                            </p>
+                          )}
+
+                          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                             <div className="flex items-center gap-1">
-                              <Bot className="w-3 h-3" />
-                              Agent enabled
+                              <Clock className="w-3 h-3" />
+                              {formatSchedule(automation.schedule)}
                             </div>
-                          )}
 
-                          {automation.agent.projectPath && (
                             <div className="flex items-center gap-1">
-                              <FolderOpen className="w-3 h-3" />
-                              {automation.agent.projectPath.split('/').pop()}
+                              <SourceIcon className="w-3 h-3" />
+                              {automation.source.type}
+                              {automation.source.type === 'github' && (
+                                <span className="text-muted-foreground/60">
+                                  ({githubConfig?.repos?.length || 0} repos)
+                                </span>
+                              )}
                             </div>
-                          )}
 
-                          {automation.outputs.some(o => o.type === 'telegram' && o.enabled) && (
-                            <div className="flex items-center gap-1 text-blue-400">
-                              <Send className="w-3 h-3" />
-                              Telegram
-                            </div>
-                          )}
+                            {automation.agent.enabled && (
+                              <div className="flex items-center gap-1">
+                                <Bot className="w-3 h-3" />
+                                Agent enabled
+                              </div>
+                            )}
 
-                          {automation.outputs.some(o => o.type === 'slack' && o.enabled) && (
-                            <div className="flex items-center gap-1 text-purple-400">
-                              <SlackIcon className="w-3 h-3" />
-                              Slack
-                            </div>
-                          )}
+                            {automation.agent.projectPath && (
+                              <div className="flex items-center gap-1">
+                                <FolderOpen className="w-3 h-3" />
+                                {automation.agent.projectPath.split('/').pop()}
+                              </div>
+                            )}
 
-                          {automation.outputs.some(o => o.type === 'github_comment' && o.enabled) && (
-                            <div className="flex items-center gap-1 text-gray-400">
-                              <Github className="w-3 h-3" />
-                              PR Comment
-                            </div>
-                          )}
+                            {automation.outputs.some(o => o.type === 'telegram' && o.enabled) && (
+                              <div className="flex items-center gap-1 text-blue-400">
+                                <Send className="w-3 h-3" />
+                                Telegram
+                              </div>
+                            )}
+
+                            {automation.outputs.some(o => o.type === 'slack' && o.enabled) && (
+                              <div className="flex items-center gap-1 text-purple-400">
+                                <SlackIcon className="w-3 h-3" />
+                                Slack
+                              </div>
+                            )}
+
+                            {automation.outputs.some(o => o.type === 'github_comment' && o.enabled) && (
+                              <div className="flex items-center gap-1 text-gray-400">
+                                <Github className="w-3 h-3" />
+                                PR Comment
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
 
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleRunAutomation(automation.id)}
-                          disabled={runningAutomationId === automation.id}
-                          className="p-2 hover:bg-green-500/10 text-green-500 rounded-lg transition-colors disabled:opacity-50"
-                          title="Run now"
-                        >
-                          {runningAutomationId === automation.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Play className="w-4 h-4" />
-                          )}
-                        </button>
-                        <button
-                          onClick={() => handleToggleAutomation(automation)}
-                          className={`p-2 rounded-lg transition-colors ${
-                            automation.enabled
-                              ? 'hover:bg-yellow-500/10 text-yellow-500'
-                              : 'hover:bg-green-500/10 text-green-500'
-                          }`}
-                          title={automation.enabled ? 'Pause' : 'Resume'}
-                        >
-                          {automation.enabled ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                        </button>
-                        <button
-                          onClick={() => handleViewLogs(automation)}
-                          className="p-2 hover:bg-secondary rounded-lg transition-colors"
-                          title="View logs"
-                        >
-                          <FileText className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteAutomation(automation.id)}
-                          className="p-2 hover:bg-red-500/10 text-red-500 rounded-lg transition-colors"
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => toggleExpanded(automation.id)}
+                            className="p-2 hover:bg-secondary rounded-lg transition-colors"
+                            title={isExpanded ? 'Show less' : 'Show more'}
+                          >
+                            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          </button>
+                          <button
+                            onClick={() => handleRunAutomation(automation.id)}
+                            disabled={runningAutomationId === automation.id}
+                            className="p-2 hover:bg-green-500/10 text-green-500 rounded-lg transition-colors disabled:opacity-50"
+                            title="Run now"
+                          >
+                            {runningAutomationId === automation.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Play className="w-4 h-4" />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => handleToggleAutomation(automation)}
+                            className={`p-2 rounded-lg transition-colors ${
+                              automation.enabled
+                                ? 'hover:bg-yellow-500/10 text-yellow-500'
+                                : 'hover:bg-green-500/10 text-green-500'
+                            }`}
+                            title={automation.enabled ? 'Pause' : 'Resume'}
+                          >
+                            {automation.enabled ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                          </button>
+                          <button
+                            onClick={() => handleViewLogs(automation)}
+                            className="p-2 hover:bg-secondary rounded-lg transition-colors"
+                            title="View logs"
+                          >
+                            <FileText className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteAutomation(automation.id)}
+                            className="p-2 hover:bg-red-500/10 text-red-500 rounded-lg transition-colors"
                           title="Delete"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
+                    </div>
+
+                    {/* Expandable Details Section */}
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="px-4 pb-4 pt-2 border-t border-border/50 space-y-3">
+                            {/* GitHub Repos */}
+                            {automation.source.type === 'github' && githubConfig?.repos && githubConfig.repos.length > 0 && (
+                              <div>
+                                <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
+                                  <Github className="w-3 h-3" />
+                                  Repositories
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {githubConfig.repos.map((repo, i) => (
+                                    <span key={i} className="px-2 py-0.5 bg-secondary rounded text-xs font-mono">
+                                      {repo}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Poll For */}
+                            {automation.source.type === 'github' && githubConfig?.pollFor && githubConfig.pollFor.length > 0 && (
+                              <div>
+                                <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
+                                  <GitBranch className="w-3 h-3" />
+                                  Polling for
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {githubConfig.pollFor.map((type, i) => (
+                                    <span key={i} className="px-2 py-0.5 bg-secondary rounded text-xs flex items-center gap-1">
+                                      {type === 'pull_requests' && <GitPullRequest className="w-3 h-3" />}
+                                      {type === 'issues' && <AlertCircle className="w-3 h-3" />}
+                                      {type === 'releases' && <Tag className="w-3 h-3" />}
+                                      {type.replace('_', ' ')}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Agent Prompt */}
+                            {automation.agent.enabled && automation.agent.prompt && (
+                              <div>
+                                <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
+                                  <Bot className="w-3 h-3" />
+                                  Agent Prompt
+                                </div>
+                                <div className="px-3 py-2 bg-secondary/50 rounded text-xs font-mono whitespace-pre-wrap max-h-32 overflow-y-auto">
+                                  {automation.agent.prompt}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Project Path */}
+                            {automation.agent.projectPath && (
+                              <div>
+                                <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
+                                  <FolderOpen className="w-3 h-3" />
+                                  Project Path
+                                </div>
+                                <div className="px-2 py-1 bg-secondary rounded text-xs font-mono truncate">
+                                  {automation.agent.projectPath}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Output Template */}
+                            {automation.outputs.some(o => o.template) && (
+                              <div>
+                                <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
+                                  <MessageSquare className="w-3 h-3" />
+                                  Output Template
+                                </div>
+                                <div className="px-3 py-2 bg-secondary/50 rounded text-xs font-mono whitespace-pre-wrap max-h-24 overflow-y-auto">
+                                  {automation.outputs.find(o => o.template)?.template}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Metadata */}
+                            <div className="flex flex-wrap gap-4 text-[10px] text-muted-foreground/60 pt-2 border-t border-border/30">
+                              <span>ID: {automation.id}</span>
+                              <span>Created: {new Date(automation.createdAt).toLocaleDateString()}</span>
+                              {automation.updatedAt !== automation.createdAt && (
+                                <span>Updated: {new Date(automation.updatedAt).toLocaleDateString()}</span>
+                              )}
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </motion.div>
                 );
               })

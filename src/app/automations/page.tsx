@@ -117,7 +117,17 @@ export default function AutomationsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [selectedLogs, setSelectedLogs] = useState<{ automation: Automation; logs: string } | null>(null);
+  const [selectedLogs, setSelectedLogs] = useState<{
+    automation: Automation;
+    runs: Array<{
+      id: string;
+      startedAt: string;
+      completedAt?: string;
+      content: string;
+      status: 'completed' | 'error' | 'running';
+    }>;
+    selectedRunIndex: number;
+  } | null>(null);
   const [runningAutomationId, setRunningAutomationId] = useState<string | null>(null);
   const [expandedAutomations, setExpandedAutomations] = useState<Set<string>>(new Set());
 
@@ -296,10 +306,14 @@ export default function AutomationsPage() {
     if (!isElectron()) return;
     try {
       const result = await window.electronAPI?.automation?.getLogs(automation.id);
-      setSelectedLogs({ automation, logs: result?.logs || 'No logs available' });
+      setSelectedLogs({
+        automation,
+        runs: result?.runs || [],
+        selectedRunIndex: 0,
+      });
     } catch (err) {
       console.error('Error fetching logs:', err);
-      setSelectedLogs({ automation, logs: 'Error fetching logs' });
+      setSelectedLogs({ automation, runs: [], selectedRunIndex: 0 });
     }
   };
 
@@ -943,21 +957,71 @@ Post the tweet as a comment.`}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-card border border-border rounded-xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col"
+              className="bg-card border border-border rounded-xl w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col"
             >
-              <div className="p-4 border-b border-border flex items-center justify-between">
-                <h2 className="font-semibold">Logs: {selectedLogs.automation.name}</h2>
+              <div className="p-4 border-b border-border flex items-center justify-between gap-4">
+                <h2 className="font-semibold shrink-0">Logs: {selectedLogs.automation.name}</h2>
+
+                {/* Run selector dropdown */}
+                {selectedLogs.runs.length > 0 ? (
+                  <select
+                    value={selectedLogs.selectedRunIndex}
+                    onChange={(e) => setSelectedLogs({
+                      ...selectedLogs,
+                      selectedRunIndex: parseInt(e.target.value, 10)
+                    })}
+                    className="flex-1 max-w-xs px-3 py-1.5 bg-secondary border border-border rounded-lg text-sm"
+                  >
+                    {selectedLogs.runs.map((run, index) => (
+                      <option key={run.id} value={index}>
+                        {run.status === 'completed' ? '✓' : run.status === 'error' ? '✗' : '⏳'}{' '}
+                        {run.startedAt}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="text-sm text-muted-foreground">No runs yet</span>
+                )}
+
                 <button
                   onClick={() => setSelectedLogs(null)}
-                  className="p-1 hover:bg-secondary rounded-lg transition-colors"
+                  className="p-1 hover:bg-secondary rounded-lg transition-colors shrink-0"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
+
+              {/* Run status badge */}
+              {selectedLogs.runs.length > 0 && selectedLogs.runs[selectedLogs.selectedRunIndex] && (
+                <div className="px-4 py-2 border-b border-border/50 flex items-center gap-3 text-sm">
+                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                    selectedLogs.runs[selectedLogs.selectedRunIndex].status === 'completed'
+                      ? 'bg-green-500/10 text-green-500'
+                      : selectedLogs.runs[selectedLogs.selectedRunIndex].status === 'error'
+                      ? 'bg-red-500/10 text-red-500'
+                      : 'bg-blue-500/10 text-blue-500'
+                  }`}>
+                    {selectedLogs.runs[selectedLogs.selectedRunIndex].status.toUpperCase()}
+                  </span>
+                  <span className="text-muted-foreground">
+                    Started: {selectedLogs.runs[selectedLogs.selectedRunIndex].startedAt}
+                  </span>
+                  {selectedLogs.runs[selectedLogs.selectedRunIndex].completedAt && (
+                    <span className="text-muted-foreground">
+                      Completed: {selectedLogs.runs[selectedLogs.selectedRunIndex].completedAt}
+                    </span>
+                  )}
+                </div>
+              )}
+
               <div className="flex-1 overflow-auto p-4 bg-[#0a0a0f]">
-                <pre className="text-xs text-gray-300 font-mono whitespace-pre-wrap break-words">
-                  {selectedLogs.logs}
-                </pre>
+                {selectedLogs.runs.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">No runs recorded yet. Run the automation to see logs.</p>
+                ) : (
+                  <pre className="text-xs text-gray-300 font-mono whitespace-pre-wrap break-words">
+                    {selectedLogs.runs[selectedLogs.selectedRunIndex]?.content || 'No content for this run'}
+                  </pre>
+                )}
               </div>
             </motion.div>
           </motion.div>

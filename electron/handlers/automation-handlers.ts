@@ -522,44 +522,64 @@ export function registerAutomationHandlers(): void {
     }
   });
 
-  // Get automation logs
+  // Get automation logs - parsed into individual runs
   ipcMain.handle('automation:getLogs', async (_event, id: string) => {
     try {
       const logPath = path.join(os.homedir(), '.claude-manager', 'logs', `automation-${id}.log`);
-      const errorLogPath = path.join(os.homedir(), '.claude-manager', 'logs', `automation-${id}.error.log`);
 
-      let logs = '';
-      let hasLogs = false;
+      if (!fs.existsSync(logPath)) {
+        return { runs: [], logs: 'No logs available yet. The automation has not run.' };
+      }
 
-      if (fs.existsSync(logPath)) {
-        const content = fs.readFileSync(logPath, 'utf-8');
-        if (content.trim()) {
-          hasLogs = true;
-          logs += content;
+      const content = fs.readFileSync(logPath, 'utf-8');
+      if (!content.trim()) {
+        return { runs: [], logs: 'No logs available yet.' };
+      }
+
+      // Parse logs into individual runs based on "=== Automation started/completed ===" markers
+      const runs: Array<{
+        id: string;
+        startedAt: string;
+        completedAt?: string;
+        content: string;
+        status: 'completed' | 'error' | 'running';
+      }> = [];
+
+      const runPattern = /=== Automation started at (.+?) ===([\s\S]*?)(?:=== Automation completed at (.+?) ===|$)/g;
+      let match;
+      let runIndex = 0;
+
+      while ((match = runPattern.exec(content)) !== null) {
+        const startedAt = match[1]?.trim();
+        const runContent = match[2]?.trim() || '';
+        const completedAt = match[3]?.trim();
+
+        // Determine status based on content
+        let status: 'completed' | 'error' | 'running' = 'completed';
+        if (!completedAt) {
+          status = 'running';
+        } else if (runContent.includes('error') || runContent.includes('Error') || runContent.includes('command not found')) {
+          status = 'error';
+        } else if (runContent.includes('successfully')) {
+          status = 'completed';
         }
+
+        runs.push({
+          id: `run-${runIndex++}`,
+          startedAt,
+          completedAt,
+          content: runContent,
+          status,
+        });
       }
 
-      if (fs.existsSync(errorLogPath)) {
-        const errorContent = fs.readFileSync(errorLogPath, 'utf-8');
-        if (errorContent.trim()) {
-          hasLogs = true;
-          if (logs) logs += '\n\n=== Errors ===\n';
-          logs += errorContent;
-        }
-      }
+      // Return last 10 runs, most recent first
+      const recentRuns = runs.slice(-10).reverse();
 
-      if (!hasLogs) {
-        return { logs: 'No logs available yet. The automation has not run.' };
-      }
-
-      // Return last 500 lines
-      const lines = logs.split('\n');
-      const lastLines = lines.slice(-500).join('\n');
-
-      return { logs: lastLines };
+      return { runs: recentRuns, logs: content };
     } catch (err) {
       console.error('Error getting automation logs:', err);
-      return { logs: '', error: err instanceof Error ? err.message : 'Failed to get logs' };
+      return { runs: [], logs: '', error: err instanceof Error ? err.message : 'Failed to get logs' };
     }
   });
 }

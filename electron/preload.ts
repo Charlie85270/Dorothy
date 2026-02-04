@@ -217,6 +217,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('telegram:test'),
     sendTest: () =>
       ipcRenderer.invoke('telegram:sendTest'),
+    generateAuthToken: () =>
+      ipcRenderer.invoke('telegram:generateAuthToken'),
+    removeAuthorizedChatId: (chatId: string) =>
+      ipcRenderer.invoke('telegram:removeAuthorizedChatId', chatId),
   },
 
   // Slack bot

@@ -15,26 +15,15 @@ var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (
 }) : function(o, v) {
     o["default"] = v;
 });
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.startApiServer = startApiServer;
-exports.stopApiServer = stopApiServer;
+exports.stopApiServer = exports.startApiServer = void 0;
 const http = __importStar(require("http"));
 const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
@@ -155,13 +144,20 @@ function startApiServer(mainWindow, appSettings, getTelegramBot, getSlackApp, sl
                     sendJson({ error: 'Agent not found' }, 404);
                     return;
                 }
-                const { prompt, model, skipPermissions } = body;
+                const { prompt, model, skipPermissions, printMode } = body;
                 if (!prompt) {
                     sendJson({ error: 'prompt is required' }, 400);
                     return;
                 }
                 const workingDir = agent.worktreePath || agent.projectPath;
                 let command = `cd '${workingDir}' && claude`;
+                // Detect if this is an automation agent (use print mode for one-shot execution)
+                const isAutomationAgent = agent.name?.toLowerCase().includes('automation:');
+                const usePrintMode = printMode || isAutomationAgent;
+                // Add -p flag for print mode (one-shot execution, no interactive prompt)
+                if (usePrintMode) {
+                    command += ' -p';
+                }
                 const isSuperAgentApi = agent.name?.toLowerCase().includes('super agent') ||
                     agent.name?.toLowerCase().includes('orchestrator');
                 if (isSuperAgentApi) {
@@ -497,10 +493,12 @@ function startApiServer(mainWindow, appSettings, getTelegramBot, getSlackApp, sl
         }
     });
 }
+exports.startApiServer = startApiServer;
 function stopApiServer() {
     if (apiServer) {
         apiServer.close();
         apiServer = null;
     }
 }
+exports.stopApiServer = stopApiServer;
 //# sourceMappingURL=api-server.js.map

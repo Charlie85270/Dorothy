@@ -931,6 +931,7 @@ function registerSettingsHandlers(_deps: IpcHandlerDependencies): void {
 
 function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
   const {
+    getMainWindow,
     getAppSettings,
     setAppSettings,
     saveAppSettings,
@@ -999,17 +1000,60 @@ function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
     const appSettings = getAppSettings();
     const telegramBot = getTelegramBot();
 
-    if (!telegramBot || !appSettings.telegramChatId) {
-      return { success: false, error: 'Bot not connected or no chat ID. Send /start to the bot first.' };
+    // Use the first authorized chat ID, or fall back to legacy chatId
+    const chatId = appSettings.telegramAuthorizedChatIds?.[0] || appSettings.telegramChatId;
+
+    if (!telegramBot || !chatId) {
+      return { success: false, error: 'Bot not connected or no authorized users. Authenticate with /auth <token> first.' };
     }
 
     try {
-      await telegramBot.sendMessage(appSettings.telegramChatId, '✅ Test message from Claude Manager!');
+      await telegramBot.sendMessage(chatId, '✅ Test message from Claude Manager!');
       return { success: true };
     } catch (err) {
       console.error('Telegram send test failed:', err);
       return { success: false, error: String(err) };
     }
+  });
+
+  // Generate or regenerate Telegram auth token
+  ipcMain.handle('telegram:generateAuthToken', async () => {
+    const appSettings = getAppSettings();
+    const crypto = require('crypto');
+    const newToken = crypto.randomBytes(16).toString('hex');
+
+    appSettings.telegramAuthToken = newToken;
+    saveAppSettings(appSettings);
+    setAppSettings(appSettings);
+
+    return { success: true, token: newToken };
+  });
+
+  // Remove an authorized Telegram chat ID
+  ipcMain.handle('telegram:removeAuthorizedChatId', async (_event, chatId: string) => {
+    const appSettings = getAppSettings();
+
+    if (!appSettings.telegramAuthorizedChatIds) {
+      return { success: false, error: 'No authorized chat IDs' };
+    }
+
+    appSettings.telegramAuthorizedChatIds = appSettings.telegramAuthorizedChatIds.filter(
+      (id: string) => id !== chatId
+    );
+
+    // If removing the legacy chatId, clear it too
+    if (appSettings.telegramChatId === chatId) {
+      appSettings.telegramChatId = appSettings.telegramAuthorizedChatIds[0] || '';
+    }
+
+    saveAppSettings(appSettings);
+    setAppSettings(appSettings);
+
+    // Notify frontend of settings change
+    const mainWindow = getMainWindow();
+    mainWindow?.webContents.send('settings:updated', appSettings);
+
+    return { success: true };
   });
 
   // Test Slack connection

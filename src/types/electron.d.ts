@@ -171,6 +171,8 @@ export interface ElectronAPI {
       telegramEnabled: boolean;
       telegramBotToken: string;
       telegramChatId: string;
+      telegramAuthToken: string;
+      telegramAuthorizedChatIds: string[];
       slackEnabled: boolean;
       slackBotToken: string;
       slackAppToken: string;
@@ -191,6 +193,8 @@ export interface ElectronAPI {
       telegramEnabled?: boolean;
       telegramBotToken?: string;
       telegramChatId?: string;
+      telegramAuthToken?: string;
+      telegramAuthorizedChatIds?: string[];
       slackEnabled?: boolean;
       slackBotToken?: string;
       slackAppToken?: string;
@@ -210,6 +214,8 @@ export interface ElectronAPI {
   telegram?: {
     test: () => Promise<{ success: boolean; botName?: string; error?: string }>;
     sendTest: () => Promise<{ success: boolean; error?: string }>;
+    generateAuthToken: () => Promise<{ success: boolean; token?: string; error?: string }>;
+    removeAuthorizedChatId: (chatId: string) => Promise<{ success: boolean; error?: string }>;
   };
 
   // Slack bot

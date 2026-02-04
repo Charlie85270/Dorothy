@@ -51,22 +51,34 @@ export function initTelegramBotService(
 }
 
 /**
- * Send message to Telegram
+ * Send message to Telegram (to all authorized users)
  */
 export function sendTelegramMessage(text: string, parseMode: 'Markdown' | 'HTML' = 'Markdown') {
-  if (!telegramBot || !appSettings.telegramChatId) return;
-  try {
-    // Telegram has a 4096 char limit, truncate if needed
-    const maxLen = 4000;
-    const truncated = text.length > maxLen ? text.slice(0, maxLen) + '\n\n_(truncated)_' : text;
-    telegramBot.sendMessage(appSettings.telegramChatId, truncated, { parse_mode: parseMode });
-  } catch (err) {
-    console.error('Failed to send Telegram message:', err);
-    // Try without markdown if it fails (in case of formatting issues)
+  if (!telegramBot) return;
+
+  // Get all authorized chat IDs, or fall back to legacy chatId
+  const chatIds = appSettings.telegramAuthorizedChatIds?.length > 0
+    ? appSettings.telegramAuthorizedChatIds
+    : (appSettings.telegramChatId ? [appSettings.telegramChatId] : []);
+
+  if (chatIds.length === 0) return;
+
+  // Telegram has a 4096 char limit, truncate if needed
+  const maxLen = 4000;
+  const truncated = text.length > maxLen ? text.slice(0, maxLen) + '\n\n_(truncated)_' : text;
+
+  // Send to all authorized users
+  for (const chatId of chatIds) {
     try {
-      telegramBot.sendMessage(appSettings.telegramChatId, text.replace(/[*_`\[\]]/g, ''));
-    } catch {
-      // Give up
+      telegramBot.sendMessage(chatId, truncated, { parse_mode: parseMode });
+    } catch (err) {
+      console.error(`Failed to send Telegram message to ${chatId}:`, err);
+      // Try without markdown if it fails (in case of formatting issues)
+      try {
+        telegramBot.sendMessage(chatId, text.replace(/[*_`\[\]]/g, ''));
+      } catch {
+        // Give up for this user
+      }
     }
   }
 }
@@ -161,6 +173,26 @@ export function sendSuperAgentResponseToTelegram(agent: AgentStatus) {
 }
 
 /**
+ * Check if a chat ID is authorized
+ */
+function isAuthorized(chatId: string): boolean {
+  return appSettings.telegramAuthorizedChatIds?.includes(chatId) || false;
+}
+
+/**
+ * Send unauthorized message
+ */
+function sendUnauthorizedMessage(chatId: string | number) {
+  telegramBot?.sendMessage(chatId,
+    `🔒 *Authentication Required*\n\n` +
+    `You are not authorized to use this bot.\n\n` +
+    `Use \`/auth <token>\` with your secret token to authenticate.\n\n` +
+    `_Get the token from Claude Manager Settings → Telegram_`,
+    { parse_mode: 'Markdown' }
+  );
+}
+
+/**
  * Initialize Telegram bot and set up handlers
  */
 export function initTelegramBot() {
@@ -179,16 +211,63 @@ export function initTelegramBot() {
     telegramBot = new TelegramBot(appSettings.telegramBotToken, { polling: true });
     console.log('Telegram bot started');
 
+    // Handle /auth command - ALWAYS accessible (for authentication)
+    telegramBot.onText(/\/auth\s+(.+)/, (msg, match) => {
+      const chatId = msg.chat.id.toString();
+      const providedToken = match?.[1]?.trim();
+
+      if (!providedToken) {
+        telegramBot?.sendMessage(chatId, '⚠️ Usage: /auth <token>');
+        return;
+      }
+
+      // Check if auth token is configured
+      if (!appSettings.telegramAuthToken) {
+        telegramBot?.sendMessage(chatId,
+          '⚠️ No authentication token configured.\n\n' +
+          '_Generate one in Claude Manager Settings → Telegram_',
+          { parse_mode: 'Markdown' }
+        );
+        return;
+      }
+
+      // Verify the token
+      if (providedToken === appSettings.telegramAuthToken) {
+        // Add to authorized list if not already there
+        if (!appSettings.telegramAuthorizedChatIds) {
+          appSettings.telegramAuthorizedChatIds = [];
+        }
+        if (!appSettings.telegramAuthorizedChatIds.includes(chatId)) {
+          appSettings.telegramAuthorizedChatIds.push(chatId);
+          // Also update legacy field for backwards compatibility
+          appSettings.telegramChatId = chatId;
+          saveAppSettings(appSettings);
+          mainWindow?.webContents.send('settings:updated', appSettings);
+        }
+
+        telegramBot?.sendMessage(chatId,
+          `✅ *Authentication Successful!*\n\n` +
+          `Your chat ID \`${chatId}\` has been authorized.\n\n` +
+          `You can now use all bot commands. Type /help to see available commands.`,
+          { parse_mode: 'Markdown' }
+        );
+      } else {
+        telegramBot?.sendMessage(chatId,
+          '❌ *Invalid token*\n\n' +
+          '_Check your token in Claude Manager Settings → Telegram_',
+          { parse_mode: 'Markdown' }
+        );
+      }
+    });
+
     // Handle /start command
-    telegramBot.onText(/\/start/, (msg) => {
+    telegramBot.onText(/\/start$/, (msg) => {
       const chatId = msg.chat.id.toString();
 
-      // Save chat ID for future messages
-      if (appSettings.telegramChatId !== chatId) {
-        appSettings.telegramChatId = chatId;
-        saveAppSettings(appSettings);
-        // Notify frontend of chat ID change
-        mainWindow?.webContents.send('settings:updated', appSettings);
+      // Check authorization
+      if (!isAuthorized(chatId)) {
+        sendUnauthorizedMessage(chatId);
+        return;
       }
 
       telegramBot?.sendMessage(chatId,
@@ -210,6 +289,14 @@ export function initTelegramBot() {
 
     // Handle /help command
     telegramBot.onText(/\/help/, (msg) => {
+      const chatId = msg.chat.id.toString();
+
+      // Check authorization
+      if (!isAuthorized(chatId)) {
+        sendUnauthorizedMessage(chatId);
+        return;
+      }
+
       telegramBot?.sendMessage(msg.chat.id,
         `📖 *Available Commands*\n\n` +
         `/status - Quick overview of all agents\n` +
@@ -230,6 +317,12 @@ export function initTelegramBot() {
 
     // Handle /projects command
     telegramBot.onText(/\/projects/, (msg) => {
+      const chatId = msg.chat.id.toString();
+      if (!isAuthorized(chatId)) {
+        sendUnauthorizedMessage(chatId);
+        return;
+      }
+
       const agentList = Array.from(agents.values()).filter(a => !isSuperAgent(a));
 
       if (agentList.length === 0) {
@@ -265,6 +358,12 @@ export function initTelegramBot() {
 
     // Handle /status command
     telegramBot.onText(/\/status/, (msg) => {
+      const chatId = msg.chat.id.toString();
+      if (!isAuthorized(chatId)) {
+        sendUnauthorizedMessage(chatId);
+        return;
+      }
+
       const agentList = Array.from(agents.values());
       if (agentList.length === 0) {
         telegramBot?.sendMessage(msg.chat.id, '📭 No agents created yet.');
@@ -334,6 +433,12 @@ export function initTelegramBot() {
 
     // Handle /agents command (detailed list)
     telegramBot.onText(/\/agents/, (msg) => {
+      const chatId = msg.chat.id.toString();
+      if (!isAuthorized(chatId)) {
+        sendUnauthorizedMessage(chatId);
+        return;
+      }
+
       const agentList = Array.from(agents.values());
       if (agentList.length === 0) {
         telegramBot?.sendMessage(msg.chat.id, '📭 No agents created yet.');
@@ -350,6 +455,12 @@ export function initTelegramBot() {
 
     // Handle /start_agent command
     telegramBot.onText(/\/start_agent\s+(.+)/, async (msg, match) => {
+      const chatId = msg.chat.id.toString();
+      if (!isAuthorized(chatId)) {
+        sendUnauthorizedMessage(chatId);
+        return;
+      }
+
       if (!match) return;
       const input = match[1].trim();
       const firstSpaceIndex = input.indexOf(' ');
@@ -423,6 +534,12 @@ export function initTelegramBot() {
 
     // Handle /stop_agent command
     telegramBot.onText(/\/stop_agent\s+(.+)/, (msg, match) => {
+      const chatId = msg.chat.id.toString();
+      if (!isAuthorized(chatId)) {
+        sendUnauthorizedMessage(chatId);
+        return;
+      }
+
       if (!match) return;
       const agentName = match[1].trim().toLowerCase();
 
@@ -456,6 +573,12 @@ export function initTelegramBot() {
 
     // Handle /usage command (show usage and cost stats)
     telegramBot.onText(/\/usage/, async (msg) => {
+      const chatId = msg.chat.id.toString();
+      if (!isAuthorized(chatId)) {
+        sendUnauthorizedMessage(chatId);
+        return;
+      }
+
       try {
         const stats = await getClaudeStats();
 
@@ -586,9 +709,15 @@ export function initTelegramBot() {
 
     // Handle /ask command (send to Super Agent)
     telegramBot.onText(/\/ask\s+(.+)/, async (msg, match) => {
+      const chatId = msg.chat.id.toString();
+      if (!isAuthorized(chatId)) {
+        sendUnauthorizedMessage(chatId);
+        return;
+      }
+
       if (!match) return;
       const message = match[1].trim();
-      await sendToSuperAgent(msg.chat.id.toString(), message);
+      await sendToSuperAgent(chatId, message);
     });
 
     // Handle regular messages (forward to Super Agent)
@@ -597,11 +726,12 @@ export function initTelegramBot() {
       if (msg.text?.startsWith('/')) return;
       if (!msg.text) return;
 
-      // Save chat ID if not saved
       const chatId = msg.chat.id.toString();
-      if (appSettings.telegramChatId !== chatId) {
-        appSettings.telegramChatId = chatId;
-        saveAppSettings(appSettings);
+
+      // Check authorization
+      if (!isAuthorized(chatId)) {
+        sendUnauthorizedMessage(chatId);
+        return;
       }
 
       await sendToSuperAgent(chatId, msg.text);

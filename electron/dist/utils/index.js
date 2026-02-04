@@ -15,35 +15,15 @@ var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (
 }) : function(o, v) {
     o["default"] = v;
 });
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.setMainWindow = setMainWindow;
-exports.getAppBasePath = getAppBasePath;
-exports.ensureDataDir = ensureDataDir;
-exports.sendNotification = sendNotification;
-exports.isSuperAgent = isSuperAgent;
-exports.getSuperAgent = getSuperAgent;
-exports.formatAgentStatus = formatAgentStatus;
-exports.formatSlackAgentStatus = formatSlackAgentStatus;
-exports.getSuperAgentInstructionsPath = getSuperAgentInstructionsPath;
-exports.getSuperAgentInstructions = getSuperAgentInstructions;
-exports.detectAgentStatus = detectAgentStatus;
+exports.detectAgentStatus = exports.getSuperAgentInstructions = exports.getSuperAgentInstructionsPath = exports.formatSlackAgentStatus = exports.formatAgentStatus = exports.getSuperAgent = exports.isSuperAgent = exports.sendNotification = exports.ensureDataDir = exports.getAppBasePath = exports.setMainWindow = void 0;
 const electron_1 = require("electron");
 const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
@@ -52,6 +32,7 @@ let mainWindow = null;
 function setMainWindow(window) {
     mainWindow = window;
 }
+exports.setMainWindow = setMainWindow;
 function getAppBasePath() {
     let appPath = electron_1.app.getAppPath();
     if (appPath.includes('app.asar')) {
@@ -59,11 +40,13 @@ function getAppBasePath() {
     }
     return path.join(appPath, 'out');
 }
+exports.getAppBasePath = getAppBasePath;
 function ensureDataDir() {
     if (!fs.existsSync(constants_1.DATA_DIR)) {
         fs.mkdirSync(constants_1.DATA_DIR, { recursive: true });
     }
 }
+exports.ensureDataDir = ensureDataDir;
 function sendNotification(title, body, agentId, appSettings) {
     if (!appSettings?.notificationsEnabled)
         return;
@@ -84,13 +67,16 @@ function sendNotification(title, body, agentId, appSettings) {
     });
     notification.show();
 }
+exports.sendNotification = sendNotification;
 function isSuperAgent(agent) {
     const name = agent.name?.toLowerCase() || '';
     return name.includes('super agent') || name.includes('orchestrator');
 }
+exports.isSuperAgent = isSuperAgent;
 function getSuperAgent(agents) {
     return Array.from(agents.values()).find(a => isSuperAgent(a));
 }
+exports.getSuperAgent = getSuperAgent;
 function formatAgentStatus(agent) {
     const isSuper = isSuperAgent(agent);
     const emoji = isSuper ? '👑' : (constants_1.TG_CHARACTER_FACES[agent.character || ''] || '🤖');
@@ -107,6 +93,7 @@ function formatAgentStatus(agent) {
     }
     return text;
 }
+exports.formatAgentStatus = formatAgentStatus;
 function formatSlackAgentStatus(a) {
     const isSuper = isSuperAgent(a);
     const emoji = isSuper ? ':crown:' : (constants_1.SLACK_CHARACTER_FACES[a.character || ''] || ':robot_face:');
@@ -126,6 +113,7 @@ function formatSlackAgentStatus(a) {
     }
     return text;
 }
+exports.formatSlackAgentStatus = formatSlackAgentStatus;
 /**
  * Get the path to the super agent instructions file
  */
@@ -135,6 +123,7 @@ function getSuperAgentInstructionsPath() {
     // In production (asar), appPath is inside the asar archive
     return path.join(appPath, 'electron', 'resources', 'super-agent-instructions.md');
 }
+exports.getSuperAgentInstructionsPath = getSuperAgentInstructionsPath;
 /**
  * Read super agent instructions from file
  */
@@ -151,6 +140,7 @@ function getSuperAgentInstructions() {
     // Fallback instructions
     return 'You are the Super Agent - an orchestrator that manages other Claude agents using MCP tools. Use list_agents, start_agent, get_agent_output, send_telegram, and send_slack tools.';
 }
+exports.getSuperAgentInstructions = getSuperAgentInstructions;
 function detectAgentStatus(agent) {
     const lastChunk = agent.output.slice(-1).join('');
     const recentChunks = agent.output.slice(-10).join('');
@@ -248,4 +238,5 @@ function detectAgentStatus(agent) {
     }
     return agent.status;
 }
+exports.detectAgentStatus = detectAgentStatus;
 //# sourceMappingURL=index.js.map

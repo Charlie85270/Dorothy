@@ -129,6 +129,8 @@ electron_1.contextBridge.exposeInMainWorld('electronAPI', {
     telegram: {
         test: () => electron_1.ipcRenderer.invoke('telegram:test'),
         sendTest: () => electron_1.ipcRenderer.invoke('telegram:sendTest'),
+        generateAuthToken: () => electron_1.ipcRenderer.invoke('telegram:generateAuthToken'),
+        removeAuthorizedChatId: (chatId) => electron_1.ipcRenderer.invoke('telegram:removeAuthorizedChatId', chatId),
     },
     // Slack bot
     slack: {
@@ -183,6 +185,12 @@ electron_1.contextBridge.exposeInMainWorld('electronAPI', {
         delete: (id) => electron_1.ipcRenderer.invoke('automation:delete', id),
         run: (id) => electron_1.ipcRenderer.invoke('automation:run', id),
         getLogs: (id) => electron_1.ipcRenderer.invoke('automation:getLogs', id),
+    },
+    // CLI Paths management
+    cliPaths: {
+        detect: () => electron_1.ipcRenderer.invoke('cliPaths:detect'),
+        get: () => electron_1.ipcRenderer.invoke('cliPaths:get'),
+        save: (paths) => electron_1.ipcRenderer.invoke('cliPaths:save', paths),
     },
     // Platform info
     platform: process.platform,

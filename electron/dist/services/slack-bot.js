@@ -15,41 +15,15 @@ var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (
 }) : function(o, v) {
     o["default"] = v;
 });
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getSlackApp = getSlackApp;
-exports.setSlackApp = setSlackApp;
-exports.getSlackResponseChannel = getSlackResponseChannel;
-exports.setSlackResponseChannel = setSlackResponseChannel;
-exports.getSlackResponseThreadTs = getSlackResponseThreadTs;
-exports.setSlackResponseThreadTs = setSlackResponseThreadTs;
-exports.getSuperAgentSlackTask = getSuperAgentSlackTask;
-exports.setSuperAgentSlackTask = setSuperAgentSlackTask;
-exports.getSuperAgentSlackBuffer = getSuperAgentSlackBuffer;
-exports.setSuperAgentSlackBuffer = setSuperAgentSlackBuffer;
-exports.clearSuperAgentSlackBuffer = clearSuperAgentSlackBuffer;
-exports.sendSlackMessage = sendSlackMessage;
-exports.initSlackBot = initSlackBot;
-exports.handleSlackCommand = handleSlackCommand;
-exports.sendToSuperAgentFromSlack = sendToSuperAgentFromSlack;
-exports.stopSlackBot = stopSlackBot;
-exports.setGetClaudeStatsRef = setGetClaudeStatsRef;
+exports.setGetClaudeStatsRef = exports.stopSlackBot = exports.sendToSuperAgentFromSlack = exports.handleSlackCommand = exports.initSlackBot = exports.sendSlackMessage = exports.clearSuperAgentSlackBuffer = exports.setSuperAgentSlackBuffer = exports.getSuperAgentSlackBuffer = exports.setSuperAgentSlackTask = exports.getSuperAgentSlackTask = exports.setSlackResponseThreadTs = exports.getSlackResponseThreadTs = exports.setSlackResponseChannel = exports.getSlackResponseChannel = exports.setSlackApp = exports.getSlackApp = void 0;
 const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
 const bolt_1 = require("@slack/bolt");
@@ -69,36 +43,47 @@ let superAgentSlackBuffer = [];
 function getSlackApp() {
     return slackApp;
 }
+exports.getSlackApp = getSlackApp;
 function setSlackApp(app) {
     slackApp = app;
 }
+exports.setSlackApp = setSlackApp;
 function getSlackResponseChannel() {
     return slackResponseChannel;
 }
+exports.getSlackResponseChannel = getSlackResponseChannel;
 function setSlackResponseChannel(channel) {
     slackResponseChannel = channel;
 }
+exports.setSlackResponseChannel = setSlackResponseChannel;
 function getSlackResponseThreadTs() {
     return slackResponseThreadTs;
 }
+exports.getSlackResponseThreadTs = getSlackResponseThreadTs;
 function setSlackResponseThreadTs(ts) {
     slackResponseThreadTs = ts;
 }
+exports.setSlackResponseThreadTs = setSlackResponseThreadTs;
 function getSuperAgentSlackTask() {
     return superAgentSlackTask;
 }
+exports.getSuperAgentSlackTask = getSuperAgentSlackTask;
 function setSuperAgentSlackTask(value) {
     superAgentSlackTask = value;
 }
+exports.setSuperAgentSlackTask = setSuperAgentSlackTask;
 function getSuperAgentSlackBuffer() {
     return superAgentSlackBuffer;
 }
+exports.getSuperAgentSlackBuffer = getSuperAgentSlackBuffer;
 function setSuperAgentSlackBuffer(buffer) {
     superAgentSlackBuffer = buffer;
 }
+exports.setSuperAgentSlackBuffer = setSuperAgentSlackBuffer;
 function clearSuperAgentSlackBuffer() {
     superAgentSlackBuffer = [];
 }
+exports.clearSuperAgentSlackBuffer = clearSuperAgentSlackBuffer;
 // Helper to initialize agent PTY with proper callbacks
 async function initAgentPtyWithCallbacks(agent) {
     return (0, agent_manager_1.initAgentPty)(agent, (0, window_manager_1.getMainWindow)(), (agent, newStatus) => {
@@ -125,6 +110,7 @@ async function sendSlackMessage(text, appSettings, channel) {
         console.error('Failed to send Slack message:', err);
     }
 }
+exports.sendSlackMessage = sendSlackMessage;
 // Initialize Slack bot
 function initSlackBot(appSettings, onSettingsChanged, mainWindow) {
     // Stop existing bot if any
@@ -207,6 +193,7 @@ function initSlackBot(appSettings, onSettingsChanged, mainWindow) {
         slackApp = null;
     }
 }
+exports.initSlackBot = initSlackBot;
 // Handle Slack commands
 async function handleSlackCommand(text, channel, say, appSettings, mainWindow) {
     const lowerText = text.toLowerCase().trim();
@@ -459,6 +446,7 @@ async function handleSlackCommand(text, channel, say, appSettings, mainWindow) {
     // Default: forward to Super Agent
     await sendToSuperAgentFromSlack(channel, text, say, appSettings, mainWindow);
 }
+exports.handleSlackCommand = handleSlackCommand;
 // Send message to Super Agent from Slack
 async function sendToSuperAgentFromSlack(channel, message, say, appSettings, mainWindow) {
     const superAgent = (0, utils_1.getSuperAgent)(agent_manager_1.agents);
@@ -531,6 +519,7 @@ async function sendToSuperAgentFromSlack(channel, message, say, appSettings, mai
         await say(`:x: Error: ${err}`);
     }
 }
+exports.sendToSuperAgentFromSlack = sendToSuperAgentFromSlack;
 // Stop Slack bot
 function stopSlackBot() {
     if (slackApp) {
@@ -539,11 +528,13 @@ function stopSlackBot() {
         console.log('Slack bot stopped');
     }
 }
+exports.stopSlackBot = stopSlackBot;
 // Helper function to get Claude stats - provided by caller
 let getClaudeStatsRef = null;
 function setGetClaudeStatsRef(fn) {
     getClaudeStatsRef = fn;
 }
+exports.setGetClaudeStatsRef = setGetClaudeStatsRef;
 async function getClaudeStats() {
     if (!getClaudeStatsRef) {
         return undefined;

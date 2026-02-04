@@ -38,7 +38,9 @@ export interface AppSettings {
   notifyOnError: boolean;
   telegramEnabled: boolean;
   telegramBotToken: string;
-  telegramChatId: string;
+  telegramChatId: string; // Legacy - kept for backwards compatibility
+  telegramAuthToken: string; // Secret token for authentication
+  telegramAuthorizedChatIds: string[]; // List of authorized chat IDs
   slackEnabled: boolean;
   slackBotToken: string;
   slackAppToken: string;

@@ -120,18 +120,63 @@ function intervalToCron(minutes: number): string {
 
 // Get path to claude CLI
 async function getClaudePath(): Promise<string> {
-  return new Promise((resolve) => {
-    const proc = spawn('which', ['claude']);
+  // Try multiple methods to find claude
+
+  // Method 1: Run which with user's shell to get proper PATH (including nvm, etc.)
+  const shellWhich = await new Promise<string | null>((resolve) => {
+    const shell = process.env.SHELL || '/bin/zsh';
+    const proc = spawn(shell, ['-l', '-c', 'which claude'], {
+      env: { ...process.env, HOME: os.homedir() }
+    });
     let output = '';
     proc.stdout.on('data', (data) => { output += data; });
-    proc.on('close', () => {
-      const claudePath = output.trim() || '/usr/local/bin/claude';
-      resolve(claudePath);
+    proc.on('close', (code) => {
+      if (code === 0 && output.trim()) {
+        resolve(output.trim());
+      } else {
+        resolve(null);
+      }
     });
-    proc.on('error', () => {
-      resolve('/usr/local/bin/claude');
-    });
+    proc.on('error', () => resolve(null));
   });
+
+  if (shellWhich && fs.existsSync(shellWhich)) {
+    return shellWhich;
+  }
+
+  // Method 2: Check common locations
+  const commonPaths = [
+    path.join(os.homedir(), '.nvm/versions/node', 'v20.11.1', 'bin', 'claude'),
+    path.join(os.homedir(), '.nvm/versions/node', 'v22.0.0', 'bin', 'claude'),
+    '/usr/local/bin/claude',
+    '/opt/homebrew/bin/claude',
+    path.join(os.homedir(), '.local/bin/claude'),
+  ];
+
+  // Also check for any nvm node version
+  const nvmDir = path.join(os.homedir(), '.nvm/versions/node');
+  if (fs.existsSync(nvmDir)) {
+    try {
+      const versions = fs.readdirSync(nvmDir);
+      for (const version of versions) {
+        const claudePath = path.join(nvmDir, version, 'bin', 'claude');
+        if (fs.existsSync(claudePath)) {
+          return claudePath;
+        }
+      }
+    } catch {
+      // Ignore errors
+    }
+  }
+
+  for (const p of commonPaths) {
+    if (fs.existsSync(p)) {
+      return p;
+    }
+  }
+
+  // Fallback
+  return '/usr/local/bin/claude';
 }
 
 // Create launchd job for automation (macOS)
@@ -168,9 +213,22 @@ async function createAutomationLaunchdJob(automation: Automation): Promise<void>
   const escapedPrompt = prompt.replace(/'/g, "'\\''");
   const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
   const projectPath = automation.agent.projectPath || os.homedir();
+  const homeDir = os.homedir();
 
+  // Script sources shell profile for proper PATH (nvm, etc.)
   const scriptContent = `#!/bin/bash
+
+# Source shell profile for proper PATH (nvm, homebrew, etc.)
+export HOME="${homeDir}"
+if [ -f "${homeDir}/.zshrc" ]; then
+  source "${homeDir}/.zshrc" 2>/dev/null || true
+elif [ -f "${homeDir}/.bashrc" ]; then
+  source "${homeDir}/.bashrc" 2>/dev/null || true
+fi
+
+# Also add claude directory to PATH as fallback
 export PATH="${claudeDir}:$PATH"
+
 cd "${projectPath}"
 echo "=== Automation started at $(date) ===" >> "${logPath}"
 "${claudePath}" --dangerously-skip-permissions --mcp-config "${mcpConfigPath}" -p '${escapedPrompt}' >> "${logPath}" 2>&1

@@ -110,6 +110,14 @@ export function getSuperAgentInstructionsPath(): string {
 }
 
 /**
+ * Get the path to the Telegram-specific instructions file
+ */
+export function getTelegramInstructionsPath(): string {
+  const appPath = app.getAppPath();
+  return path.join(appPath, 'electron', 'resources', 'telegram-instructions.md');
+}
+
+/**
  * Read super agent instructions from file
  */
 export function getSuperAgentInstructions(): string {

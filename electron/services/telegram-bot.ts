@@ -13,6 +13,7 @@ let telegramBot: TelegramBot | null = null;
 let superAgentTelegramTask = false;
 let superAgentOutputBuffer: string[] = [];
 let botUsername: string | null = null; // Cached bot username for mention detection
+let currentResponseChatId: string | null = null; // Track which chat to respond to
 
 // References to external state (will be injected)
 let agents: Map<string, AgentStatus>;
@@ -53,34 +54,56 @@ export function initTelegramBotService(
 }
 
 /**
- * Send message to Telegram (to all authorized users)
+ * Send message to Telegram
+ * @param text - Message text
+ * @param parseMode - Markdown or HTML
+ * @param targetChatId - Specific chat ID to send to (if not provided, sends to current response chat or all authorized)
  */
-export function sendTelegramMessage(text: string, parseMode: 'Markdown' | 'HTML' = 'Markdown') {
+export function sendTelegramMessage(text: string, parseMode: 'Markdown' | 'HTML' = 'Markdown', targetChatId?: string) {
   if (!telegramBot) return;
 
-  // Get all authorized chat IDs, or fall back to legacy chatId
+  // Telegram has a 4096 char limit, truncate if needed
+  const maxLen = 4000;
+  const truncated = text.length > maxLen ? text.slice(0, maxLen) + '\n\n_(truncated)_' : text;
+
+  // If specific target provided, send only to that chat
+  if (targetChatId) {
+    sendToChat(targetChatId, truncated, parseMode, text);
+    return;
+  }
+
+  // If we have a current response chat (from an active Telegram task), send there
+  if (currentResponseChatId) {
+    sendToChat(currentResponseChatId, truncated, parseMode, text);
+    return;
+  }
+
+  // Fallback: send to all authorized users (for notifications not from a specific chat)
   const chatIds = appSettings.telegramAuthorizedChatIds?.length > 0
     ? appSettings.telegramAuthorizedChatIds
     : (appSettings.telegramChatId ? [appSettings.telegramChatId] : []);
 
   if (chatIds.length === 0) return;
 
-  // Telegram has a 4096 char limit, truncate if needed
-  const maxLen = 4000;
-  const truncated = text.length > maxLen ? text.slice(0, maxLen) + '\n\n_(truncated)_' : text;
-
-  // Send to all authorized users
   for (const chatId of chatIds) {
+    sendToChat(chatId, truncated, parseMode, text);
+  }
+}
+
+/**
+ * Helper to send to a specific chat with error handling
+ */
+function sendToChat(chatId: string, truncated: string, parseMode: 'Markdown' | 'HTML', originalText: string) {
+  if (!telegramBot) return;
+  try {
+    telegramBot.sendMessage(chatId, truncated, { parse_mode: parseMode });
+  } catch (err) {
+    console.error(`Failed to send Telegram message to ${chatId}:`, err);
+    // Try without markdown if it fails (in case of formatting issues)
     try {
-      telegramBot.sendMessage(chatId, truncated, { parse_mode: parseMode });
-    } catch (err) {
-      console.error(`Failed to send Telegram message to ${chatId}:`, err);
-      // Try without markdown if it fails (in case of formatting issues)
-      try {
-        telegramBot.sendMessage(chatId, text.replace(/[*_`\[\]]/g, ''));
-      } catch {
-        // Give up for this user
-      }
+      telegramBot.sendMessage(chatId, originalText.replace(/[*_`\[\]]/g, ''));
+    } catch {
+      // Give up
     }
   }
 }
@@ -189,35 +212,57 @@ function isAuthorized(chatId: string): boolean {
  * - telegramRequireMention is enabled AND the bot is @mentioned
  */
 function shouldRespondToMessage(msg: TelegramBot.Message): boolean {
+  const chatType = msg.chat.type;
+  const text = msg.text || msg.caption || '';
+
   // Always respond to private/direct messages
-  if (msg.chat.type === 'private') {
+  if (chatType === 'private') {
+    console.log(`Telegram: Private chat, responding`);
     return true;
   }
 
   // If require mention is disabled, always respond
   if (!appSettings.telegramRequireMention) {
+    console.log(`Telegram: Mention not required, responding to group message`);
     return true;
   }
 
-  // In groups, check if bot is mentioned
-  const text = msg.text || msg.caption || '';
+  console.log(`Telegram: Checking for mention in ${chatType} chat. Bot username: @${botUsername || 'NOT_LOADED'}`);
+  console.log(`Telegram: Message text: "${text.substring(0, 100)}"`);
 
-  // Check for @username mention
-  if (botUsername && text.toLowerCase().includes(`@${botUsername.toLowerCase()}`)) {
+  // If botUsername isn't loaded yet, we can't detect mentions properly
+  // In this case, don't respond (user will need to retry after bot fully initializes)
+  if (!botUsername) {
+    console.log(`Telegram: Bot username not loaded yet, skipping message`);
+    return false;
+  }
+
+  // Check for @username mention (case insensitive)
+  const mentionPattern = `@${botUsername}`;
+  if (text.toLowerCase().includes(mentionPattern.toLowerCase())) {
+    console.log(`Telegram: Found mention in text`);
     return true;
   }
 
-  // Check entities for bot mention (more reliable)
+  // Check entities for bot mention (more reliable for formatted mentions)
   const entities = msg.entities || msg.caption_entities || [];
   for (const entity of entities) {
     if (entity.type === 'mention') {
       const mention = text.substring(entity.offset, entity.offset + entity.length);
-      if (botUsername && mention.toLowerCase() === `@${botUsername.toLowerCase()}`) {
+      console.log(`Telegram: Found mention entity: "${mention}"`);
+      if (mention.toLowerCase() === mentionPattern.toLowerCase()) {
+        console.log(`Telegram: Mention matches bot username`);
         return true;
       }
     }
+    // Also check text_mention (for users without public username mentioned by ID)
+    if (entity.type === 'text_mention' && (entity as any).user?.is_bot) {
+      console.log(`Telegram: Found text_mention for bot`);
+      return true;
+    }
   }
 
+  console.log(`Telegram: No mention found, not responding`);
   return false;
 }
 
@@ -1094,6 +1139,10 @@ export async function sendToSuperAgent(chatId: string, message: string, attached
     return;
   }
 
+  // Track which chat to respond to - this is crucial for multi-chat support
+  currentResponseChatId = chatId;
+  console.log(`Telegram: Setting response chat ID to ${chatId}`);
+
   // Build message with file information if files are attached
   let fullMessage = message;
   if (attachedFiles && attachedFiles.length > 0) {
@@ -1127,8 +1176,8 @@ export async function sendToSuperAgent(chatId: string, message: string, attached
       superAgent.lastActivity = new Date().toISOString();
       saveAgents();
 
-      // Include Telegram context in the message
-      const telegramMessage = `[FROM TELEGRAM - Use send_telegram MCP tool to respond!] ${sanitizedMessage}`;
+      // Include Telegram context in the message with the chat ID for proper routing
+      const telegramMessage = `[FROM TELEGRAM chat_id=${chatId} - Use send_telegram MCP tool with chat_id="${chatId}" to respond!] ${sanitizedMessage}`;
 
       // Write the message first, then send Enter separately
       ptyProcess.write(telegramMessage);
@@ -1165,8 +1214,8 @@ export async function sendToSuperAgent(chatId: string, message: string, attached
 
       if (superAgent.skipPermissions) command += ' --dangerously-skip-permissions';
 
-      // Simple prompt with Telegram context - the detailed instructions come from the file
-      const userPrompt = `[FROM TELEGRAM - Use send_telegram MCP tool to respond!] ${sanitizedMessage}`;
+      // Simple prompt with Telegram context including chat ID for proper routing
+      const userPrompt = `[FROM TELEGRAM chat_id=${chatId} - Use send_telegram MCP tool with chat_id="${chatId}" to respond!] ${sanitizedMessage}`;
       command += ` '${userPrompt.replace(/'/g, "'\\''")}'`;
 
       superAgent.status = 'running';

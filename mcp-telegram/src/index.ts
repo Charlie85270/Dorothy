@@ -18,6 +18,7 @@ const SETTINGS_FILE = path.join(os.homedir(), ".claude-manager", "app-settings.j
 interface AppSettings {
   telegramBotToken?: string;
   telegramChatId?: string;
+  telegramAuthorizedChatIds?: string[];
 }
 
 function loadSettings(): AppSettings {
@@ -146,19 +147,26 @@ const server = new McpServer({
 // Register send_telegram tool
 server.tool(
   "send_telegram",
-  "Send a text message to Telegram. Use this to notify the user or respond when the request came from Telegram.",
+  "Send a text message to Telegram. IMPORTANT: When responding to a Telegram message, you MUST include the chat_id from the original request to ensure the response goes to the correct chat.",
   {
     message: z.string().describe("The message to send to Telegram"),
+    chat_id: z.string().optional().describe("The chat ID to send to. REQUIRED when responding to a specific Telegram chat. Use the chat_id from the incoming Telegram message."),
   },
-  async ({ message }) => {
+  async ({ message, chat_id }) => {
     try {
       const settings = loadSettings();
-      if (!settings.telegramBotToken || !settings.telegramChatId) {
-        throw new Error("Telegram not configured - missing bot token or chat ID in settings");
+      if (!settings.telegramBotToken) {
+        throw new Error("Telegram not configured - missing bot token in settings");
+      }
+
+      // Use provided chat_id, or fall back to default from settings
+      const targetChatId = chat_id || settings.telegramChatId;
+      if (!targetChatId) {
+        throw new Error("No chat_id provided and no default chat ID configured");
       }
 
       await telegramApiRequest(settings.telegramBotToken, "sendMessage", {
-        chat_id: settings.telegramChatId,
+        chat_id: targetChatId,
         text: `👑 ${message}`,
         parse_mode: "Markdown",
       });
@@ -167,7 +175,7 @@ server.tool(
         content: [
           {
             type: "text",
-            text: `Message sent to Telegram: "${message.slice(0, 100)}${message.length > 100 ? "..." : ""}"`,
+            text: `Message sent to Telegram chat ${targetChatId}: "${message.slice(0, 100)}${message.length > 100 ? "..." : ""}"`,
           },
         ],
       };
@@ -192,17 +200,23 @@ server.tool(
   {
     photo_path: z.string().describe("The absolute file path to the photo/image to send (e.g., /Users/name/image.png)"),
     caption: z.string().optional().describe("Optional caption text to include with the photo"),
+    chat_id: z.string().optional().describe("The chat ID to send to. Use the chat_id from the incoming Telegram message."),
   },
-  async ({ photo_path, caption }) => {
+  async ({ photo_path, caption, chat_id }) => {
     try {
       const settings = loadSettings();
-      if (!settings.telegramBotToken || !settings.telegramChatId) {
-        throw new Error("Telegram not configured - missing bot token or chat ID in settings");
+      if (!settings.telegramBotToken) {
+        throw new Error("Telegram not configured - missing bot token in settings");
+      }
+
+      const targetChatId = chat_id || settings.telegramChatId;
+      if (!targetChatId) {
+        throw new Error("No chat_id provided and no default chat ID configured");
       }
 
       await sendFile(
         settings.telegramBotToken,
-        settings.telegramChatId,
+        targetChatId,
         "sendPhoto",
         photo_path,
         "photo",
@@ -213,7 +227,7 @@ server.tool(
         content: [
           {
             type: "text",
-            text: `Photo sent to Telegram: ${photo_path}${caption ? ` with caption: "${caption.slice(0, 50)}..."` : ""}`,
+            text: `Photo sent to Telegram chat ${targetChatId}: ${photo_path}${caption ? ` with caption: "${caption.slice(0, 50)}..."` : ""}`,
           },
         ],
       };
@@ -238,17 +252,23 @@ server.tool(
   {
     video_path: z.string().describe("The absolute file path to the video to send (e.g., /Users/name/video.mp4)"),
     caption: z.string().optional().describe("Optional caption text to include with the video"),
+    chat_id: z.string().optional().describe("The chat ID to send to. Use the chat_id from the incoming Telegram message."),
   },
-  async ({ video_path, caption }) => {
+  async ({ video_path, caption, chat_id }) => {
     try {
       const settings = loadSettings();
-      if (!settings.telegramBotToken || !settings.telegramChatId) {
-        throw new Error("Telegram not configured - missing bot token or chat ID in settings");
+      if (!settings.telegramBotToken) {
+        throw new Error("Telegram not configured - missing bot token in settings");
+      }
+
+      const targetChatId = chat_id || settings.telegramChatId;
+      if (!targetChatId) {
+        throw new Error("No chat_id provided and no default chat ID configured");
       }
 
       await sendFile(
         settings.telegramBotToken,
-        settings.telegramChatId,
+        targetChatId,
         "sendVideo",
         video_path,
         "video",
@@ -259,7 +279,7 @@ server.tool(
         content: [
           {
             type: "text",
-            text: `Video sent to Telegram: ${video_path}${caption ? ` with caption: "${caption.slice(0, 50)}..."` : ""}`,
+            text: `Video sent to Telegram chat ${targetChatId}: ${video_path}${caption ? ` with caption: "${caption.slice(0, 50)}..."` : ""}`,
           },
         ],
       };
@@ -284,17 +304,23 @@ server.tool(
   {
     document_path: z.string().describe("The absolute file path to the document to send (e.g., /Users/name/report.pdf)"),
     caption: z.string().optional().describe("Optional caption text to include with the document"),
+    chat_id: z.string().optional().describe("The chat ID to send to. Use the chat_id from the incoming Telegram message."),
   },
-  async ({ document_path, caption }) => {
+  async ({ document_path, caption, chat_id }) => {
     try {
       const settings = loadSettings();
-      if (!settings.telegramBotToken || !settings.telegramChatId) {
-        throw new Error("Telegram not configured - missing bot token or chat ID in settings");
+      if (!settings.telegramBotToken) {
+        throw new Error("Telegram not configured - missing bot token in settings");
+      }
+
+      const targetChatId = chat_id || settings.telegramChatId;
+      if (!targetChatId) {
+        throw new Error("No chat_id provided and no default chat ID configured");
       }
 
       await sendFile(
         settings.telegramBotToken,
-        settings.telegramChatId,
+        targetChatId,
         "sendDocument",
         document_path,
         "document",
@@ -305,7 +331,7 @@ server.tool(
         content: [
           {
             type: "text",
-            text: `Document sent to Telegram: ${document_path}${caption ? ` with caption: "${caption.slice(0, 50)}..."` : ""}`,
+            text: `Document sent to Telegram chat ${targetChatId}: ${document_path}${caption ? ` with caption: "${caption.slice(0, 50)}..."` : ""}`,
           },
         ],
       };

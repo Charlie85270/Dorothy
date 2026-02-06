@@ -35,6 +35,7 @@ export const DEFAULT_APP_SETTINGS = {
   telegramChatId: '',
   telegramAuthToken: '',
   telegramAuthorizedChatIds: [] as string[],
+  telegramRequireMention: false,
   slackEnabled: false,
   slackBotToken: '',
   slackAppToken: '',

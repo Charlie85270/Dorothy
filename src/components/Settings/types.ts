@@ -41,6 +41,7 @@ export interface AppSettings {
   telegramChatId: string; // Legacy - kept for backwards compatibility
   telegramAuthToken: string; // Secret token for authentication
   telegramAuthorizedChatIds: string[]; // List of authorized chat IDs
+  telegramRequireMention: boolean; // Only respond when bot is @mentioned in groups
   slackEnabled: boolean;
   slackBotToken: string;
   slackAppToken: string;

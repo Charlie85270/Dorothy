@@ -303,6 +303,33 @@ export const TelegramSection = ({ appSettings, onSaveAppSettings, onUpdateLocalS
         </div>
       </div>
 
+      {/* Group Behavior */}
+      <div className="border border-border bg-card p-6">
+        <div className="flex items-center gap-3 pb-4 border-b border-border">
+          <MessageCircle className="w-5 h-5 text-muted-foreground" />
+          <div>
+            <p className="font-medium">Group Behavior</p>
+            <p className="text-sm text-muted-foreground">Control how the bot responds in group chats</p>
+          </div>
+        </div>
+
+        <div className="pt-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium">Require @mention</p>
+              <p className="text-sm text-muted-foreground">
+                Only respond when the bot is @mentioned in group chats.
+                Direct messages always work.
+              </p>
+            </div>
+            <Toggle
+              enabled={appSettings.telegramRequireMention || false}
+              onChange={() => onSaveAppSettings({ telegramRequireMention: !appSettings.telegramRequireMention })}
+            />
+          </div>
+        </div>
+      </div>
+
       {/* Setup Guide */}
       <div className="border border-border bg-card p-6">
         <h3 className="font-medium mb-4">Setup Guide</h3>

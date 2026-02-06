@@ -112,6 +112,7 @@ function loadAppSettings(): AppSettings {
     telegramChatId: '',
     telegramAuthToken: '',
     telegramAuthorizedChatIds: [],
+    telegramRequireMention: false,
     slackEnabled: false,
     slackBotToken: '',
     slackAppToken: '',

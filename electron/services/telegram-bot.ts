@@ -12,6 +12,7 @@ import { isSuperAgent, formatAgentStatus, getSuperAgentInstructions, getTelegram
 let telegramBot: TelegramBot | null = null;
 let superAgentTelegramTask = false;
 let superAgentOutputBuffer: string[] = [];
+let botUsername: string | null = null; // Cached bot username for mention detection
 
 // References to external state (will be injected)
 let agents: Map<string, AgentStatus>;
@@ -181,6 +182,54 @@ function isAuthorized(chatId: string): boolean {
 }
 
 /**
+ * Check if the bot should respond to a message
+ * Returns true if:
+ * - It's a private/direct message (always respond)
+ * - telegramRequireMention is disabled (respond to all)
+ * - telegramRequireMention is enabled AND the bot is @mentioned
+ */
+function shouldRespondToMessage(msg: TelegramBot.Message): boolean {
+  // Always respond to private/direct messages
+  if (msg.chat.type === 'private') {
+    return true;
+  }
+
+  // If require mention is disabled, always respond
+  if (!appSettings.telegramRequireMention) {
+    return true;
+  }
+
+  // In groups, check if bot is mentioned
+  const text = msg.text || msg.caption || '';
+
+  // Check for @username mention
+  if (botUsername && text.toLowerCase().includes(`@${botUsername.toLowerCase()}`)) {
+    return true;
+  }
+
+  // Check entities for bot mention (more reliable)
+  const entities = msg.entities || msg.caption_entities || [];
+  for (const entity of entities) {
+    if (entity.type === 'mention') {
+      const mention = text.substring(entity.offset, entity.offset + entity.length);
+      if (botUsername && mention.toLowerCase() === `@${botUsername.toLowerCase()}`) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Remove bot mention from message text for cleaner prompts
+ */
+function removeBotMention(text: string): string {
+  if (!botUsername) return text;
+  return text.replace(new RegExp(`@${botUsername}\\s*`, 'gi'), '').trim();
+}
+
+/**
  * Send unauthorized message
  */
 function sendUnauthorizedMessage(chatId: string | number) {
@@ -300,6 +349,14 @@ export function initTelegramBot() {
   try {
     telegramBot = new TelegramBot(appSettings.telegramBotToken, { polling: true });
     console.log('Telegram bot started');
+
+    // Fetch and cache bot username for mention detection
+    telegramBot.getMe().then((me) => {
+      botUsername = me.username || null;
+      console.log(`Telegram bot username: @${botUsername}`);
+    }).catch((err) => {
+      console.error('Failed to get bot info:', err);
+    });
 
     // Handle /auth command - ALWAYS accessible (for authentication)
     telegramBot.onText(/\/auth\s+(.+)/, (msg, match) => {
@@ -818,6 +875,11 @@ export function initTelegramBot() {
         return;
       }
 
+      // Check if we should respond (mention required in groups)
+      if (!shouldRespondToMessage(msg)) {
+        return;
+      }
+
       try {
         // Get the largest photo (last in array)
         const photos = msg.photo;
@@ -829,7 +891,7 @@ export function initTelegramBot() {
         const fileName = `photo_${msg.message_id}.jpg`;
         const localPath = await downloadTelegramFile(photo.file_id, fileName);
 
-        const caption = msg.caption || '';
+        const caption = removeBotMention(msg.caption || '');
         const message = caption
           ? `[FILE ATTACHED - ${getFileTypeDescription(undefined, fileName)} saved to: ${localPath}] ${caption}`
           : `[FILE ATTACHED - ${getFileTypeDescription(undefined, fileName)} saved to: ${localPath}] Please analyze or use this image as needed.`;
@@ -849,6 +911,11 @@ export function initTelegramBot() {
         return;
       }
 
+      // Check if we should respond (mention required in groups)
+      if (!shouldRespondToMessage(msg)) {
+        return;
+      }
+
       try {
         const doc = msg.document;
         if (!doc) return;
@@ -859,7 +926,7 @@ export function initTelegramBot() {
         const localPath = await downloadTelegramFile(doc.file_id, fileName);
         const fileType = getFileTypeDescription(doc.mime_type, fileName);
 
-        const caption = msg.caption || '';
+        const caption = removeBotMention(msg.caption || '');
         const message = caption
           ? `[FILE ATTACHED - ${fileType} "${fileName}" saved to: ${localPath}] ${caption}`
           : `[FILE ATTACHED - ${fileType} "${fileName}" saved to: ${localPath}] Please analyze or use this file as needed.`;
@@ -879,6 +946,11 @@ export function initTelegramBot() {
         return;
       }
 
+      // Check if we should respond (mention required in groups)
+      if (!shouldRespondToMessage(msg)) {
+        return;
+      }
+
       try {
         const video = msg.video;
         if (!video) return;
@@ -888,7 +960,7 @@ export function initTelegramBot() {
         const fileName = (video as any).file_name || `video_${msg.message_id}.mp4`;
         const localPath = await downloadTelegramFile(video.file_id, fileName);
 
-        const caption = msg.caption || '';
+        const caption = removeBotMention(msg.caption || '');
         const message = caption
           ? `[FILE ATTACHED - video "${fileName}" saved to: ${localPath}] ${caption}`
           : `[FILE ATTACHED - video "${fileName}" saved to: ${localPath}] A video file has been downloaded for reference.`;
@@ -908,6 +980,11 @@ export function initTelegramBot() {
         return;
       }
 
+      // Check if we should respond (mention required in groups)
+      if (!shouldRespondToMessage(msg)) {
+        return;
+      }
+
       try {
         const audio = msg.audio;
         if (!audio) return;
@@ -917,7 +994,7 @@ export function initTelegramBot() {
         const fileName = (audio as any).file_name || `audio_${msg.message_id}.mp3`;
         const localPath = await downloadTelegramFile(audio.file_id, fileName);
 
-        const caption = msg.caption || '';
+        const caption = removeBotMention(msg.caption || '');
         const message = caption
           ? `[FILE ATTACHED - audio "${fileName}" saved to: ${localPath}] ${caption}`
           : `[FILE ATTACHED - audio "${fileName}" saved to: ${localPath}] An audio file has been downloaded for reference.`;
@@ -934,6 +1011,13 @@ export function initTelegramBot() {
       const chatId = msg.chat.id.toString();
       if (!isAuthorized(chatId)) {
         sendUnauthorizedMessage(chatId);
+        return;
+      }
+
+      // Voice messages in groups don't have captions for mentions, so we check reply-to
+      // For now, voice messages always trigger in groups (can't easily @mention with voice)
+      if (msg.chat.type !== 'private' && appSettings.telegramRequireMention) {
+        // In groups with require mention, voice messages are ignored unless replying to bot
         return;
       }
 
@@ -971,7 +1055,16 @@ export function initTelegramBot() {
         return;
       }
 
-      await sendToSuperAgent(chatId, msg.text);
+      // Check if we should respond (mention required in groups)
+      if (!shouldRespondToMessage(msg)) {
+        return;
+      }
+
+      // Remove bot mention from message for cleaner prompt
+      const cleanedText = removeBotMention(msg.text);
+      if (!cleanedText) return; // Don't process if message was just the mention
+
+      await sendToSuperAgent(chatId, cleanedText);
     });
 
     // Handle polling errors

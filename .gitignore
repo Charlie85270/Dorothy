@@ -45,4 +45,8 @@ release/
 # mcp-orchestrator
 mcp-orchestrator/node_modules
 mcp-orchestrator/dist
+mcp-telegram/node_modules
+mcp-telegram/dist
+mcp-kanban/node_modules
+mcp-kanban/dist
 electron/dist

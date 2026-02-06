@@ -1,6 +1,6 @@
 {
   "name": "claude-mgr",
-  "version": "0.0.11",
+  "version": "0.0.12",
   "private": true,
   "main": "electron/dist/main.js",
   "scripts": {

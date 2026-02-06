@@ -7,6 +7,7 @@ export const DATA_DIR = path.join(os.homedir(), '.claude-manager');
 export const AGENTS_FILE = path.join(DATA_DIR, 'agents.json');
 export const APP_SETTINGS_FILE = path.join(DATA_DIR, 'app-settings.json');
 export const KANBAN_FILE = path.join(DATA_DIR, 'kanban-tasks.json');
+export const TELEGRAM_DOWNLOADS_DIR = path.join(DATA_DIR, 'telegram-downloads');
 
 export const MIME_TYPES: { [key: string]: string } = {
   '.html': 'text/html',

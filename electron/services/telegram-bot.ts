@@ -1,10 +1,11 @@
 import * as path from 'path';
 import * as fs from 'fs';
+import * as https from 'https';
 import { app } from 'electron';
 import TelegramBot from 'node-telegram-bot-api';
 import * as pty from 'node-pty';
 import { AgentStatus, AppSettings } from '../types';
-import { TG_CHARACTER_FACES } from '../constants';
+import { TG_CHARACTER_FACES, TELEGRAM_DOWNLOADS_DIR } from '../constants';
 import { isSuperAgent, formatAgentStatus, getSuperAgentInstructionsPath, getTelegramInstructionsPath } from '../utils';
 
 // ============== Telegram Bot State ==============
@@ -190,6 +191,90 @@ function sendUnauthorizedMessage(chatId: string | number) {
     `_Get the token from Claude Manager Settings → Telegram_`,
     { parse_mode: 'Markdown' }
   );
+}
+
+/**
+ * Ensure telegram downloads directory exists
+ */
+function ensureDownloadsDir(): void {
+  if (!fs.existsSync(TELEGRAM_DOWNLOADS_DIR)) {
+    fs.mkdirSync(TELEGRAM_DOWNLOADS_DIR, { recursive: true });
+  }
+}
+
+/**
+ * Download a file from Telegram servers
+ */
+async function downloadTelegramFile(fileId: string, fileName: string): Promise<string> {
+  if (!telegramBot || !appSettings.telegramBotToken) {
+    throw new Error('Telegram bot not initialized');
+  }
+
+  ensureDownloadsDir();
+
+  // Get file info from Telegram
+  const file = await telegramBot.getFile(fileId);
+  if (!file.file_path) {
+    throw new Error('Could not get file path from Telegram');
+  }
+
+  // Generate unique filename with timestamp
+  const timestamp = Date.now();
+  const ext = path.extname(fileName) || path.extname(file.file_path) || '';
+  const baseName = path.basename(fileName, ext) || 'file';
+  const uniqueFileName = `${timestamp}-${baseName}${ext}`;
+  const localPath = path.join(TELEGRAM_DOWNLOADS_DIR, uniqueFileName);
+
+  // Download file from Telegram
+  const fileUrl = `https://api.telegram.org/file/bot${appSettings.telegramBotToken}/${file.file_path}`;
+
+  return new Promise((resolve, reject) => {
+    const fileStream = fs.createWriteStream(localPath);
+    https.get(fileUrl, (response) => {
+      if (response.statusCode !== 200) {
+        reject(new Error(`Failed to download file: HTTP ${response.statusCode}`));
+        return;
+      }
+      response.pipe(fileStream);
+      fileStream.on('finish', () => {
+        fileStream.close();
+        console.log(`Downloaded Telegram file to: ${localPath}`);
+        resolve(localPath);
+      });
+    }).on('error', (err) => {
+      fs.unlink(localPath, () => {}); // Clean up partial file
+      reject(err);
+    });
+  });
+}
+
+/**
+ * Get file type description for the agent
+ */
+function getFileTypeDescription(mimeType?: string, fileName?: string): string {
+  if (mimeType) {
+    if (mimeType.startsWith('image/')) return 'image';
+    if (mimeType.startsWith('video/')) return 'video';
+    if (mimeType.startsWith('audio/')) return 'audio';
+    if (mimeType === 'application/pdf') return 'PDF document';
+    if (mimeType.includes('document') || mimeType.includes('word')) return 'document';
+    if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return 'spreadsheet';
+  }
+  if (fileName) {
+    const ext = path.extname(fileName).toLowerCase();
+    if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'].includes(ext)) return 'image';
+    if (['.mp4', '.mov', '.avi', '.webm', '.mkv'].includes(ext)) return 'video';
+    if (['.mp3', '.wav', '.ogg', '.m4a', '.flac'].includes(ext)) return 'audio';
+    if (ext === '.pdf') return 'PDF document';
+    if (['.doc', '.docx', '.odt', '.rtf'].includes(ext)) return 'document';
+    if (['.xls', '.xlsx', '.csv', '.ods'].includes(ext)) return 'spreadsheet';
+    if (['.ppt', '.pptx', '.odp'].includes(ext)) return 'presentation';
+    if (['.zip', '.tar', '.gz', '.rar', '.7z'].includes(ext)) return 'archive';
+    if (['.js', '.ts', '.py', '.java', '.cpp', '.c', '.h', '.go', '.rs', '.rb'].includes(ext)) return 'code file';
+    if (['.json', '.xml', '.yaml', '.yml', '.toml'].includes(ext)) return 'data file';
+    if (['.md', '.txt', '.log'].includes(ext)) return 'text file';
+  }
+  return 'file';
 }
 
 /**
@@ -725,10 +810,157 @@ export function initTelegramBot() {
       await sendToSuperAgent(chatId, message);
     });
 
-    // Handle regular messages (forward to Super Agent)
+    // Handle photo messages
+    telegramBot.on('photo', async (msg) => {
+      const chatId = msg.chat.id.toString();
+      if (!isAuthorized(chatId)) {
+        sendUnauthorizedMessage(chatId);
+        return;
+      }
+
+      try {
+        // Get the largest photo (last in array)
+        const photos = msg.photo;
+        if (!photos || photos.length === 0) return;
+        const photo = photos[photos.length - 1];
+
+        telegramBot?.sendMessage(chatId, '📥 Downloading image...');
+
+        const fileName = `photo_${msg.message_id}.jpg`;
+        const localPath = await downloadTelegramFile(photo.file_id, fileName);
+
+        const caption = msg.caption || '';
+        const message = caption
+          ? `[FILE ATTACHED - ${getFileTypeDescription(undefined, fileName)} saved to: ${localPath}] ${caption}`
+          : `[FILE ATTACHED - ${getFileTypeDescription(undefined, fileName)} saved to: ${localPath}] Please analyze or use this image as needed.`;
+
+        await sendToSuperAgent(chatId, message, [localPath]);
+      } catch (err) {
+        console.error('Failed to download photo:', err);
+        telegramBot?.sendMessage(chatId, `❌ Failed to download image: ${err}`);
+      }
+    });
+
+    // Handle document messages (PDFs, files, etc.)
+    telegramBot.on('document', async (msg) => {
+      const chatId = msg.chat.id.toString();
+      if (!isAuthorized(chatId)) {
+        sendUnauthorizedMessage(chatId);
+        return;
+      }
+
+      try {
+        const doc = msg.document;
+        if (!doc) return;
+
+        telegramBot?.sendMessage(chatId, `📥 Downloading ${doc.file_name || 'document'}...`);
+
+        const fileName = doc.file_name || `document_${msg.message_id}`;
+        const localPath = await downloadTelegramFile(doc.file_id, fileName);
+        const fileType = getFileTypeDescription(doc.mime_type, fileName);
+
+        const caption = msg.caption || '';
+        const message = caption
+          ? `[FILE ATTACHED - ${fileType} "${fileName}" saved to: ${localPath}] ${caption}`
+          : `[FILE ATTACHED - ${fileType} "${fileName}" saved to: ${localPath}] Please analyze or use this file as needed.`;
+
+        await sendToSuperAgent(chatId, message, [localPath]);
+      } catch (err) {
+        console.error('Failed to download document:', err);
+        telegramBot?.sendMessage(chatId, `❌ Failed to download document: ${err}`);
+      }
+    });
+
+    // Handle video messages
+    telegramBot.on('video', async (msg) => {
+      const chatId = msg.chat.id.toString();
+      if (!isAuthorized(chatId)) {
+        sendUnauthorizedMessage(chatId);
+        return;
+      }
+
+      try {
+        const video = msg.video;
+        if (!video) return;
+
+        telegramBot?.sendMessage(chatId, '📥 Downloading video...');
+
+        const fileName = (video as any).file_name || `video_${msg.message_id}.mp4`;
+        const localPath = await downloadTelegramFile(video.file_id, fileName);
+
+        const caption = msg.caption || '';
+        const message = caption
+          ? `[FILE ATTACHED - video "${fileName}" saved to: ${localPath}] ${caption}`
+          : `[FILE ATTACHED - video "${fileName}" saved to: ${localPath}] A video file has been downloaded for reference.`;
+
+        await sendToSuperAgent(chatId, message, [localPath]);
+      } catch (err) {
+        console.error('Failed to download video:', err);
+        telegramBot?.sendMessage(chatId, `❌ Failed to download video: ${err}`);
+      }
+    });
+
+    // Handle audio/voice messages
+    telegramBot.on('audio', async (msg) => {
+      const chatId = msg.chat.id.toString();
+      if (!isAuthorized(chatId)) {
+        sendUnauthorizedMessage(chatId);
+        return;
+      }
+
+      try {
+        const audio = msg.audio;
+        if (!audio) return;
+
+        telegramBot?.sendMessage(chatId, '📥 Downloading audio...');
+
+        const fileName = (audio as any).file_name || `audio_${msg.message_id}.mp3`;
+        const localPath = await downloadTelegramFile(audio.file_id, fileName);
+
+        const caption = msg.caption || '';
+        const message = caption
+          ? `[FILE ATTACHED - audio "${fileName}" saved to: ${localPath}] ${caption}`
+          : `[FILE ATTACHED - audio "${fileName}" saved to: ${localPath}] An audio file has been downloaded for reference.`;
+
+        await sendToSuperAgent(chatId, message, [localPath]);
+      } catch (err) {
+        console.error('Failed to download audio:', err);
+        telegramBot?.sendMessage(chatId, `❌ Failed to download audio: ${err}`);
+      }
+    });
+
+    // Handle voice messages
+    telegramBot.on('voice', async (msg) => {
+      const chatId = msg.chat.id.toString();
+      if (!isAuthorized(chatId)) {
+        sendUnauthorizedMessage(chatId);
+        return;
+      }
+
+      try {
+        const voice = msg.voice;
+        if (!voice) return;
+
+        telegramBot?.sendMessage(chatId, '📥 Downloading voice message...');
+
+        const fileName = `voice_${msg.message_id}.ogg`;
+        const localPath = await downloadTelegramFile(voice.file_id, fileName);
+
+        const message = `[FILE ATTACHED - voice message saved to: ${localPath}] A voice message has been downloaded. Note: You may need to transcribe this audio file to understand its content.`;
+
+        await sendToSuperAgent(chatId, message, [localPath]);
+      } catch (err) {
+        console.error('Failed to download voice:', err);
+        telegramBot?.sendMessage(chatId, `❌ Failed to download voice message: ${err}`);
+      }
+    });
+
+    // Handle regular text messages (forward to Super Agent)
     telegramBot.on('message', async (msg) => {
       // Ignore commands
       if (msg.text?.startsWith('/')) return;
+      // Ignore messages already handled by specific handlers (photo, document, video, audio, voice)
+      if (msg.photo || msg.document || msg.video || msg.audio || msg.voice) return;
       if (!msg.text) return;
 
       const chatId = msg.chat.id.toString();
@@ -754,8 +986,11 @@ export function initTelegramBot() {
 
 /**
  * Send message to Super Agent
+ * @param chatId - Telegram chat ID
+ * @param message - Message text
+ * @param attachedFiles - Optional array of local file paths that were downloaded
  */
-export async function sendToSuperAgent(chatId: string, message: string) {
+export async function sendToSuperAgent(chatId: string, message: string, attachedFiles?: string[]) {
   const superAgent = getSuperAgent();
 
   if (!superAgent) {
@@ -766,8 +1001,15 @@ export async function sendToSuperAgent(chatId: string, message: string) {
     return;
   }
 
+  // Build message with file information if files are attached
+  let fullMessage = message;
+  if (attachedFiles && attachedFiles.length > 0) {
+    const filesList = attachedFiles.map(f => `  - ${f}`).join('\n');
+    fullMessage += `\n\nDownloaded files available at:\n${filesList}\n\nYou can read/analyze these files using your tools.`;
+  }
+
   // Sanitize message - replace newlines with spaces for terminal compatibility
-  const sanitizedMessage = message.replace(/\r?\n/g, ' ').trim();
+  const sanitizedMessage = fullMessage.replace(/\r?\n/g, ' ').trim();
 
   try {
     // Initialize PTY if needed

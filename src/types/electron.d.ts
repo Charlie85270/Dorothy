@@ -7,6 +7,23 @@ export interface AgentEvent {
   exitCode?: number;
 }
 
+export interface KanbanTaskElectron {
+  id: string;
+  title: string;
+  description: string;
+  column: 'backlog' | 'planned' | 'ongoing' | 'done';
+  projectId: string;
+  projectPath: string;
+  assignedAgentId: string | null;
+  requiredSkills: string[];
+  priority: 'low' | 'medium' | 'high';
+  progress: number;
+  createdAt: string;
+  updatedAt: string;
+  order: number;
+  labels: string[];
+}
+
 export interface WorktreeConfig {
   enabled: boolean;
   branchName: string;
@@ -227,6 +244,7 @@ export interface ElectronAPI {
   // Dialogs
   dialog: {
     openFolder: () => Promise<string | null>;
+    openFiles: () => Promise<string[]>;
   };
 
   // Shell operations
@@ -376,6 +394,50 @@ export interface ElectronAPI {
       node: string;
       additionalPaths: string[];
     }) => Promise<{ success: boolean; error?: string }>;
+  };
+
+  // Kanban board
+  kanban?: {
+    list: () => Promise<{ tasks: KanbanTaskElectron[]; error?: string }>;
+    get: (id: string) => Promise<{ success: boolean; task?: KanbanTaskElectron; error?: string }>;
+    create: (params: {
+      title: string;
+      description: string;
+      projectId: string;
+      projectPath: string;
+      requiredSkills?: string[];
+      priority?: 'low' | 'medium' | 'high';
+      labels?: string[];
+    }) => Promise<{ success: boolean; task?: KanbanTaskElectron; error?: string }>;
+    update: (params: {
+      id: string;
+      title?: string;
+      description?: string;
+      requiredSkills?: string[];
+      priority?: 'low' | 'medium' | 'high';
+      labels?: string[];
+      progress?: number;
+      assignedAgentId?: string | null;
+    }) => Promise<{ success: boolean; task?: KanbanTaskElectron; error?: string }>;
+    move: (params: {
+      id: string;
+      column: 'backlog' | 'planned' | 'ongoing' | 'done';
+      order?: number;
+    }) => Promise<{
+      success: boolean;
+      task?: KanbanTaskElectron;
+      agentSpawned?: boolean;
+      agentId?: string;
+      error?: string;
+    }>;
+    delete: (id: string) => Promise<{ success: boolean; error?: string }>;
+    reorder: (params: {
+      taskIds: string[];
+      column: 'backlog' | 'planned' | 'ongoing' | 'done';
+    }) => Promise<{ success: boolean; error?: string }>;
+    onTaskCreated: (callback: (task: KanbanTaskElectron) => void) => () => void;
+    onTaskUpdated: (callback: (task: KanbanTaskElectron) => void) => () => void;
+    onTaskDeleted: (callback: (event: { id: string }) => void) => () => void;
   };
 
   // Get home path helper

@@ -2,6 +2,7 @@ import * as http from 'http';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as pty from 'node-pty';
+import { exec } from 'child_process';
 import { app, BrowserWindow } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import TelegramBot from 'node-telegram-bot-api';
@@ -394,6 +395,105 @@ export function startApiServer(
         return;
       }
 
+      // POST /api/telegram/send-photo
+      if (pathname === '/api/telegram/send-photo' && req.method === 'POST') {
+        const { photo_path, caption } = body as { photo_path: string; caption?: string };
+        if (!photo_path) {
+          sendJson({ error: 'photo_path is required' }, 400);
+          return;
+        }
+
+        const telegramBot = getTelegramBot();
+        if (!telegramBot || !appSettings.telegramChatId) {
+          sendJson({ error: 'Telegram not configured or no chat ID' }, 400);
+          return;
+        }
+
+        try {
+          // Check if file exists
+          if (!fs.existsSync(photo_path)) {
+            sendJson({ error: `File not found: ${photo_path}` }, 400);
+            return;
+          }
+
+          await telegramBot.sendPhoto(
+            appSettings.telegramChatId,
+            photo_path,
+            { caption: caption ? `👑 ${caption}` : undefined, parse_mode: 'Markdown' }
+          );
+          sendJson({ success: true });
+        } catch (err) {
+          sendJson({ error: `Failed to send photo: ${err}` }, 500);
+        }
+        return;
+      }
+
+      // POST /api/telegram/send-video
+      if (pathname === '/api/telegram/send-video' && req.method === 'POST') {
+        const { video_path, caption } = body as { video_path: string; caption?: string };
+        if (!video_path) {
+          sendJson({ error: 'video_path is required' }, 400);
+          return;
+        }
+
+        const telegramBot = getTelegramBot();
+        if (!telegramBot || !appSettings.telegramChatId) {
+          sendJson({ error: 'Telegram not configured or no chat ID' }, 400);
+          return;
+        }
+
+        try {
+          // Check if file exists
+          if (!fs.existsSync(video_path)) {
+            sendJson({ error: `File not found: ${video_path}` }, 400);
+            return;
+          }
+
+          await telegramBot.sendVideo(
+            appSettings.telegramChatId,
+            video_path,
+            { caption: caption ? `👑 ${caption}` : undefined, parse_mode: 'Markdown' }
+          );
+          sendJson({ success: true });
+        } catch (err) {
+          sendJson({ error: `Failed to send video: ${err}` }, 500);
+        }
+        return;
+      }
+
+      // POST /api/telegram/send-document
+      if (pathname === '/api/telegram/send-document' && req.method === 'POST') {
+        const { document_path, caption } = body as { document_path: string; caption?: string };
+        if (!document_path) {
+          sendJson({ error: 'document_path is required' }, 400);
+          return;
+        }
+
+        const telegramBot = getTelegramBot();
+        if (!telegramBot || !appSettings.telegramChatId) {
+          sendJson({ error: 'Telegram not configured or no chat ID' }, 400);
+          return;
+        }
+
+        try {
+          // Check if file exists
+          if (!fs.existsSync(document_path)) {
+            sendJson({ error: `File not found: ${document_path}` }, 400);
+            return;
+          }
+
+          await telegramBot.sendDocument(
+            appSettings.telegramChatId,
+            document_path,
+            { caption: caption ? `👑 ${caption}` : undefined, parse_mode: 'Markdown' }
+          );
+          sendJson({ success: true });
+        } catch (err) {
+          sendJson({ error: `Failed to send document: ${err}` }, 500);
+        }
+        return;
+      }
+
       // POST /api/slack/send
       if (pathname === '/api/slack/send' && req.method === 'POST') {
         const { message } = body as { message: string };
@@ -546,6 +646,224 @@ export function startApiServer(
 
         sendJson({ success: true });
         return;
+      }
+
+      // POST /api/kanban/generate - Generate task details from natural language prompt using Claude
+      if (pathname === '/api/kanban/generate' && req.method === 'POST') {
+        const { prompt, availableProjects } = body as {
+          prompt: string;
+          availableProjects: Array<{ path: string; name: string }>;
+        };
+
+        if (!prompt) {
+          sendJson({ error: 'prompt is required' }, 400);
+          return;
+        }
+
+        try {
+          // Build the prompt for Claude to generate task details
+          const projectList = availableProjects.map(p => `- "${p.name}" (${p.path})`).join('\n');
+
+          const claudePrompt = `You are a task parser. Analyze the user's request and generate structured task details.
+
+Available projects:
+${projectList}
+
+User's request:
+${prompt}
+
+Based on this request, generate a JSON object with these fields:
+- title: A concise task title (max 80 chars)
+- description: The full task description (keep the original request, improve clarity if needed)
+- projectPath: The most relevant project path from the list above (use exact path)
+- priority: "low", "medium", or "high" based on urgency indicators
+- labels: Array of relevant labels (e.g., "bug", "feature", "refactor", "ui", "api", "docs", "test", "security", "performance")
+- requiredSkills: Array of skills the agent might need (e.g., "commit", "test", "deploy")
+
+IMPORTANT: Respond with ONLY the JSON object, no markdown, no explanation, just valid JSON.`;
+
+          // Build PATH with nvm and common locations
+          const homeDir = process.env.HOME || app.getPath('home');
+          const existingPath = process.env.PATH || '';
+          const additionalPaths = [
+            path.join(homeDir, '.nvm/versions/node/v20.11.1/bin'),
+            path.join(homeDir, '.nvm/versions/node/v22.0.0/bin'),
+            '/usr/local/bin',
+            '/opt/homebrew/bin',
+            path.join(homeDir, '.local/bin'),
+          ];
+          const nvmDir = path.join(homeDir, '.nvm/versions/node');
+          if (fs.existsSync(nvmDir)) {
+            try {
+              const versions = fs.readdirSync(nvmDir);
+              for (const version of versions) {
+                additionalPaths.push(path.join(nvmDir, version, 'bin'));
+              }
+            } catch {
+              // Ignore errors
+            }
+          }
+          const fullPath = [...new Set([...additionalPaths, ...existingPath.split(':')])].join(':');
+
+          // Escape the prompt for shell
+          const escapedPrompt = claudePrompt.replace(/'/g, "'\\''");
+
+          // Call Claude CLI with -p flag for quick one-shot response using haiku for speed
+          const command = `claude -p --model haiku '${escapedPrompt}'`;
+
+          const claudeResult = await new Promise<string>((resolve, reject) => {
+            exec(command, {
+              env: { ...process.env, PATH: fullPath },
+              timeout: 30000, // 30 second timeout
+              maxBuffer: 1024 * 1024,
+            }, (error, stdout, stderr) => {
+              if (error) {
+                console.error('[Kanban] Claude CLI error:', stderr || error.message);
+                reject(error);
+              } else {
+                resolve(stdout.trim());
+              }
+            });
+          });
+
+          // Parse the JSON response
+          let parsedTask;
+          try {
+            // Try to extract JSON from the response (in case there's extra text)
+            const jsonMatch = claudeResult.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              parsedTask = JSON.parse(jsonMatch[0]);
+            } else {
+              throw new Error('No JSON found in response');
+            }
+          } catch (parseErr) {
+            console.error('[Kanban] Failed to parse Claude response:', claudeResult);
+            // Fallback to simple extraction
+            const lines = prompt.split('\n').filter(l => l.trim());
+            parsedTask = {
+              title: (lines[0] || prompt).substring(0, 80),
+              description: prompt,
+              projectPath: availableProjects[0]?.path || '',
+              priority: 'medium',
+              labels: [],
+              requiredSkills: [],
+            };
+          }
+
+          // Validate and sanitize the response
+          const task = {
+            title: String(parsedTask.title || prompt.substring(0, 80)).substring(0, 80),
+            description: String(parsedTask.description || prompt),
+            projectPath: String(parsedTask.projectPath || availableProjects[0]?.path || ''),
+            projectId: String(parsedTask.projectPath || availableProjects[0]?.path || ''),
+            priority: ['low', 'medium', 'high'].includes(parsedTask.priority) ? parsedTask.priority : 'medium',
+            labels: Array.isArray(parsedTask.labels) ? parsedTask.labels.slice(0, 5) : [],
+            requiredSkills: Array.isArray(parsedTask.requiredSkills) ? parsedTask.requiredSkills.slice(0, 3) : [],
+          };
+
+          sendJson({ success: true, task });
+          return;
+        } catch (err) {
+          console.error('[Kanban] Failed to generate task:', err);
+          // Return a simple fallback task on error
+          const lines = prompt.split('\n').filter(l => l.trim());
+          sendJson({
+            success: true,
+            task: {
+              title: (lines[0] || prompt).substring(0, 80),
+              description: prompt,
+              projectPath: availableProjects[0]?.path || '',
+              projectId: availableProjects[0]?.path || '',
+              priority: 'medium',
+              labels: [],
+              requiredSkills: [],
+            },
+          });
+          return;
+        }
+      }
+
+      // POST /api/kanban/complete - Mark a kanban task as complete (called by hooks)
+      // Can be called with task_id OR agent_id (will look up task by assigned agent)
+      if (pathname === '/api/kanban/complete' && req.method === 'POST') {
+        const { task_id, agent_id, session_id, summary } = body as {
+          task_id?: string;
+          agent_id?: string;
+          session_id?: string;
+          summary?: string;
+        };
+
+        try {
+          // Import kanban handlers functions
+          const { loadTasks, saveTasks, emitTaskEvent } = await import('../handlers/kanban-handlers');
+
+          const tasks = loadTasks();
+          let task;
+
+          // Find task by task_id or by assigned agent
+          if (task_id) {
+            task = tasks.find(t => t.id === task_id);
+          } else if (agent_id) {
+            task = tasks.find(t => t.assignedAgentId === agent_id && t.column === 'ongoing');
+          } else if (session_id) {
+            // Try to find agent by session ID, then find task
+            let agentIdFromSession: string | undefined;
+            for (const [id, agent] of agents) {
+              if (agent.currentSessionId === session_id) {
+                agentIdFromSession = id;
+                break;
+              }
+            }
+            if (agentIdFromSession) {
+              task = tasks.find(t => t.assignedAgentId === agentIdFromSession && t.column === 'ongoing');
+            }
+          }
+
+          if (!task) {
+            // No task found - this is OK, not all agents are kanban tasks
+            sendJson({ success: true, message: 'No kanban task found for this agent' });
+            return;
+          }
+
+          // Only complete if task is in ongoing state
+          if (task.column !== 'ongoing') {
+            sendJson({ success: true, message: 'Task already completed', currentColumn: task.column });
+            return;
+          }
+
+          // Update task
+          task.column = 'done';
+          task.progress = 100;
+          task.completedAt = new Date().toISOString();
+          task.updatedAt = new Date().toISOString();
+          if (summary) {
+            task.completionSummary = summary;
+          }
+
+          // Delete agent if it was created specifically for this task
+          if (task.agentCreatedForTask && task.assignedAgentId) {
+            const agentToDelete = agents.get(task.assignedAgentId);
+            if (agentToDelete) {
+              console.log(`[Kanban] Deleting agent ${task.assignedAgentId} created for task`);
+              agents.delete(task.assignedAgentId);
+            }
+          }
+
+          saveTasks(tasks);
+
+          // Emit event to frontend
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('kanban:task-updated', task);
+          }
+
+          console.log(`[Kanban] Task "${task.title}" marked as complete via hook`);
+          sendJson({ success: true, task });
+          return;
+        } catch (err) {
+          console.error('[Kanban] Failed to complete task:', err);
+          sendJson({ error: 'Failed to complete task' }, 500);
+          return;
+        }
       }
 
       sendJson({ error: 'Not found' }, 404);

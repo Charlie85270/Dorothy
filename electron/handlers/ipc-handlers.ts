@@ -1185,6 +1185,19 @@ function registerFileSystemHandlers(deps: IpcHandlerDependencies): void {
     });
     return result.filePaths[0] || null;
   });
+
+  // Open files dialog (for attachments)
+  ipcMain.handle('dialog:open-files', async () => {
+    const result = await dialog.showOpenDialog(getMainWindow()!, {
+      properties: ['openFile', 'multiSelections'],
+      filters: [
+        { name: 'All Files', extensions: ['*'] },
+        { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'] },
+        { name: 'Documents', extensions: ['pdf', 'doc', 'docx', 'txt', 'md'] },
+      ],
+    });
+    return result.filePaths || [];
+  });
 }
 
 // ============== Shell IPC Handlers ==============

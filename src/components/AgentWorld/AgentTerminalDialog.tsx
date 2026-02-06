@@ -79,6 +79,7 @@ interface AgentTerminalDialogProps {
     skipPermissions?: boolean;
   }) => Promise<{ success: boolean; error?: string; agent?: AgentStatus }>;
   initialPanel?: PanelType; // Panel to expand when dialog opens
+  skipHistoricalOutput?: boolean; // Skip showing old output (useful when opening mid-task)
 }
 
 // Panel types for the sidebar
@@ -626,6 +627,7 @@ export default function AgentTerminalDialog({
   onAgentUpdated,
   onUpdateAgent,
   initialPanel,
+  skipHistoricalOutput = false,
 }: AgentTerminalDialogProps) {
   // Check if this is a Super Agent
   const isSuperAgentMode = isSuperAgent(agent);
@@ -772,8 +774,17 @@ export default function AgentTerminalDialog({
           try {
             const latestAgent = await window.electronAPI.agent.get(agent.id);
             if (latestAgent?.output && latestAgent.output.length > 0) {
-              term.writeln(`\x1b[33m--- Previous output ---\x1b[0m`);
-              latestAgent.output.forEach((line: string) => term.write(line));
+              if (skipHistoricalOutput) {
+                // Just show the last few chunks for context (recent output)
+                const recentOutput = latestAgent.output.slice(-20);
+                if (recentOutput.length > 0) {
+                  recentOutput.forEach((line: string) => term.write(line));
+                }
+              } else {
+                // Show all historical output
+                term.writeln(`\x1b[33m--- Previous output ---\x1b[0m`);
+                latestAgent.output.forEach((line: string) => term.write(line));
+              }
               setTimeout(fitAndResize, 50);
             }
           } catch (err) {
@@ -797,18 +808,21 @@ export default function AgentTerminalDialog({
     };
   }, [open, agent?.id]);
 
-  // Listen for agent output
+  // Listen for agent output - re-subscribe when terminal is ready or agent changes
   useEffect(() => {
-    if (!isElectron() || !window.electronAPI?.agent?.onOutput) return;
+    if (!isElectron() || !window.electronAPI?.agent?.onOutput || !terminalReady || !agent?.id) return;
+
+    // Set the ref to make sure it's current
+    agentIdRef.current = agent.id;
 
     const unsubscribe = window.electronAPI.agent.onOutput((event) => {
-      if (event.agentId === agentIdRef.current && xtermRef.current) {
+      if (event.agentId === agent.id && xtermRef.current) {
         xtermRef.current.write(event.data);
       }
     });
 
     return unsubscribe;
-  }, []);
+  }, [terminalReady, agent?.id]);
 
   // Handle resize
   useEffect(() => {

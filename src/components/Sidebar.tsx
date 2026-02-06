@@ -13,6 +13,7 @@ import {
   BarChart2,
   CalendarClock,
   Zap,
+  Columns,
 } from 'lucide-react';
 import { useStore } from '@/store';
 import Link from 'next/link';
@@ -21,12 +22,13 @@ import { usePathname } from 'next/navigation';
 const navItems = [
   { href: '/', icon: LayoutDashboard, label: 'Dashboard', shortcut: '1' },
   { href: '/agents', icon: Bot, label: 'Agents', shortcut: '2' },
-  { href: '/projects', icon: FolderKanban, label: 'Projects', shortcut: '3' },
-  { href: '/skills', icon: Sparkles, label: 'Skills', shortcut: '4' },
-  { href: '/plugins', icon: Puzzle, label: 'Plugins', shortcut: '5' },
-  { href: '/recurring-tasks', icon: CalendarClock, label: 'Scheduled Tasks', shortcut: '6' },
-  { href: '/automations', icon: Zap, label: 'Automations', shortcut: '7' },
-  { href: '/usage', icon: BarChart2, label: 'Usage', shortcut: '8' },
+  { href: '/kanban', icon: Columns, label: 'Kanban', shortcut: '3' },
+  { href: '/projects', icon: FolderKanban, label: 'Projects', shortcut: '4' },
+  { href: '/skills', icon: Sparkles, label: 'Skills', shortcut: '5' },
+  { href: '/plugins', icon: Puzzle, label: 'Plugins', shortcut: '6' },
+  { href: '/recurring-tasks', icon: CalendarClock, label: 'Scheduled Tasks', shortcut: '7' },
+  { href: '/automations', icon: Zap, label: 'Automations', shortcut: '8' },
+  { href: '/usage', icon: BarChart2, label: 'Usage', shortcut: '9' },
 ];
 
 interface SidebarProps {

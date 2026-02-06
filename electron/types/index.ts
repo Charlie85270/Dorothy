@@ -23,6 +23,7 @@ export interface AgentStatus {
   pathMissing?: boolean;
   skipPermissions?: boolean;
   currentSessionId?: string;
+  kanbanTaskId?: string;  // For kanban task completion tracking
 }
 
 export interface CLIPaths {

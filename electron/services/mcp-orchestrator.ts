@@ -15,16 +15,29 @@ import { execSync } from 'child_process';
 
 /**
  * Get the path to the bundled MCP orchestrator
- * In production, MCP orchestrator is in extraResources
- * In development, it's in the project directory
+ * Always uses the packaged app path - MCP servers are bundled in extraResources
  */
 export function getMcpOrchestratorPath(): string {
-  // In production, MCP orchestrator is in extraResources
-  if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'mcp-orchestrator', 'dist', 'index.js');
-  }
-  // In development, it's in the project directory
-  return path.join(__dirname, '..', 'mcp-orchestrator', 'dist', 'index.js');
+  // Always use the packaged app path - works for all users
+  return path.join(process.resourcesPath, 'mcp-orchestrator', 'dist', 'index.js');
+}
+
+/**
+ * Get the path to the bundled MCP telegram server
+ * Always uses the packaged app path - MCP servers are bundled in extraResources
+ */
+export function getMcpTelegramPath(): string {
+  // Always use the packaged app path - works for all users
+  return path.join(process.resourcesPath, 'mcp-telegram', 'dist', 'index.js');
+}
+
+/**
+ * Get the path to the bundled MCP kanban server
+ * Always uses the packaged app path - MCP servers are bundled in extraResources
+ */
+export function getMcpKanbanPath(): string {
+  // Always use the packaged app path - works for all users
+  return path.join(process.resourcesPath, 'mcp-kanban', 'dist', 'index.js');
 }
 
 /**
@@ -34,84 +47,105 @@ export function getMcpOrchestratorPath(): string {
 export async function setupMcpOrchestrator(): Promise<void> {
   try {
     const orchestratorPath = getMcpOrchestratorPath();
-
-    // Check if orchestrator exists
-    if (!fs.existsSync(orchestratorPath)) {
-      console.log('MCP orchestrator not found at', orchestratorPath);
-      return;
-    }
+    const telegramPath = getMcpTelegramPath();
+    const kanbanPath = getMcpKanbanPath();
 
     const claudeDir = path.join(os.homedir(), '.claude');
     const mcpConfigPath = path.join(claudeDir, 'mcp.json');
 
-    // Check if current config path matches the expected path
-    let needsUpdate = true;
-    if (fs.existsSync(mcpConfigPath)) {
-      try {
-        const mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
-        const existingConfig = mcpConfig.mcpServers?.['claude-mgr-orchestrator'];
-        if (existingConfig?.args?.[0] === orchestratorPath) {
-          console.log('MCP orchestrator already configured with correct path');
-          needsUpdate = false;
-        } else if (existingConfig) {
-          console.log('MCP orchestrator path changed, updating...');
-          console.log('  Old path:', existingConfig.args?.[0]);
-          console.log('  New path:', orchestratorPath);
-        }
-      } catch {
-        // Config parsing failed, will update
-      }
+    // Setup orchestrator if exists
+    if (fs.existsSync(orchestratorPath)) {
+      await setupMcpServer('claude-mgr-orchestrator', orchestratorPath, claudeDir, mcpConfigPath);
+    } else {
+      console.log('MCP orchestrator not found at', orchestratorPath);
     }
 
-    if (!needsUpdate) {
-      return;
+    // Setup telegram MCP server if exists (makes send_telegram available to all agents)
+    if (fs.existsSync(telegramPath)) {
+      await setupMcpServer('claude-mgr-telegram', telegramPath, claudeDir, mcpConfigPath);
+    } else {
+      console.log('MCP telegram not found at', telegramPath);
     }
 
-    // Remove existing config first (in case path changed)
-    try {
-      execSync('claude mcp remove -s user claude-mgr-orchestrator 2>&1', { encoding: 'utf-8', stdio: 'pipe' });
-      console.log('Removed old MCP orchestrator config');
-    } catch {
-      // Ignore errors if it doesn't exist
-    }
-
-    // Add the MCP server using claude mcp add with -s user for global scope
-    // Format: claude mcp add -s user <name> <command> [args...]
-    const addCommand = `claude mcp add -s user claude-mgr-orchestrator node "${orchestratorPath}"`;
-    console.log('Running:', addCommand);
-
-    try {
-      execSync(addCommand, { encoding: 'utf-8', stdio: 'pipe' });
-      console.log('MCP orchestrator configured globally via claude mcp add -s user');
-    } catch (addErr) {
-      console.error('Failed to add MCP server via claude mcp add -s user:', addErr);
-      // Fallback: also write to mcp.json for compatibility
-      if (!fs.existsSync(claudeDir)) {
-        fs.mkdirSync(claudeDir, { recursive: true });
-      }
-
-      let mcpConfig: { mcpServers?: Record<string, unknown> } = { mcpServers: {} };
-      if (fs.existsSync(mcpConfigPath)) {
-        try {
-          mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
-          if (!mcpConfig.mcpServers) {
-            mcpConfig.mcpServers = {};
-          }
-        } catch {
-          mcpConfig = { mcpServers: {} };
-        }
-      }
-
-      mcpConfig.mcpServers!['claude-mgr-orchestrator'] = {
-        command: 'node',
-        args: [orchestratorPath]
-      };
-
-      fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
-      console.log('MCP orchestrator configured via mcp.json fallback');
+    // Setup kanban MCP server if exists (makes task management available to all agents)
+    if (fs.existsSync(kanbanPath)) {
+      await setupMcpServer('claude-mgr-kanban', kanbanPath, claudeDir, mcpConfigPath);
+    } else {
+      console.log('MCP kanban not found at', kanbanPath);
     }
   } catch (err) {
-    console.error('Failed to auto-setup MCP orchestrator:', err);
+    console.error('Failed to auto-setup MCP servers:', err);
+  }
+}
+
+/**
+ * Helper to setup a single MCP server
+ */
+async function setupMcpServer(name: string, serverPath: string, claudeDir: string, mcpConfigPath: string): Promise<void> {
+  // Check if current config path matches the expected path
+  let needsUpdate = true;
+  if (fs.existsSync(mcpConfigPath)) {
+    try {
+      const mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
+      const existingConfig = mcpConfig.mcpServers?.[name];
+      if (existingConfig?.args?.[0] === serverPath) {
+        console.log(`${name} already configured with correct path`);
+        needsUpdate = false;
+      } else if (existingConfig) {
+        console.log(`${name} path changed, updating...`);
+        console.log('  Old path:', existingConfig.args?.[0]);
+        console.log('  New path:', serverPath);
+      }
+    } catch {
+      // Config parsing failed, will update
+    }
+  }
+
+  if (!needsUpdate) {
+    return;
+  }
+
+  // Remove existing config first (in case path changed)
+  try {
+    execSync(`claude mcp remove -s user ${name} 2>&1`, { encoding: 'utf-8', stdio: 'pipe' });
+    console.log(`Removed old ${name} config`);
+  } catch {
+    // Ignore errors if it doesn't exist
+  }
+
+  // Add the MCP server using claude mcp add with -s user for global scope
+  const addCommand = `claude mcp add -s user ${name} node "${serverPath}"`;
+  console.log('Running:', addCommand);
+
+  try {
+    execSync(addCommand, { encoding: 'utf-8', stdio: 'pipe' });
+    console.log(`${name} configured globally via claude mcp add -s user`);
+  } catch (addErr) {
+    console.error(`Failed to add ${name} via claude mcp add -s user:`, addErr);
+    // Fallback: also write to mcp.json for compatibility
+    if (!fs.existsSync(claudeDir)) {
+      fs.mkdirSync(claudeDir, { recursive: true });
+    }
+
+    let mcpConfig: { mcpServers?: Record<string, unknown> } = { mcpServers: {} };
+    if (fs.existsSync(mcpConfigPath)) {
+      try {
+        mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
+        if (!mcpConfig.mcpServers) {
+          mcpConfig.mcpServers = {};
+        }
+      } catch {
+        mcpConfig = { mcpServers: {} };
+      }
+    }
+
+    mcpConfig.mcpServers![name] = {
+      command: 'node',
+      args: [serverPath]
+    };
+
+    fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
+    console.log(`${name} configured via mcp.json fallback`);
   }
 }
 

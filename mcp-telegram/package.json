@@ -1,0 +1,18 @@
+{
+  "name": "mcp-telegram",
+  "version": "1.0.0",
+  "description": "Minimal MCP server for Telegram messaging",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}

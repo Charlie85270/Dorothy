@@ -235,6 +235,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dialog: {
     openFolder: () =>
       ipcRenderer.invoke('dialog:open-folder'),
+    openFiles: () =>
+      ipcRenderer.invoke('dialog:open-files') as Promise<string[]>,
   },
 
   // Shell operations
@@ -329,6 +331,57 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('automation:run', id),
     getLogs: (id: string) =>
       ipcRenderer.invoke('automation:getLogs', id),
+  },
+
+  // Kanban Board
+  kanban: {
+    list: () =>
+      ipcRenderer.invoke('kanban:list'),
+    get: (id: string) =>
+      ipcRenderer.invoke('kanban:get', id),
+    create: (params: {
+      title: string;
+      description: string;
+      projectId: string;
+      projectPath: string;
+      requiredSkills?: string[];
+      priority?: 'low' | 'medium' | 'high';
+      labels?: string[];
+    }) =>
+      ipcRenderer.invoke('kanban:create', params),
+    update: (params: {
+      id: string;
+      title?: string;
+      description?: string;
+      requiredSkills?: string[];
+      priority?: 'low' | 'medium' | 'high';
+      labels?: string[];
+      progress?: number;
+      assignedAgentId?: string | null;
+    }) =>
+      ipcRenderer.invoke('kanban:update', params),
+    move: (params: { id: string; column: 'backlog' | 'planned' | 'ongoing' | 'done'; order?: number }) =>
+      ipcRenderer.invoke('kanban:move', params),
+    delete: (id: string) =>
+      ipcRenderer.invoke('kanban:delete', id),
+    reorder: (params: { taskIds: string[]; column: 'backlog' | 'planned' | 'ongoing' | 'done' }) =>
+      ipcRenderer.invoke('kanban:reorder', params),
+    // Event listeners
+    onTaskCreated: (callback: (task: unknown) => void) => {
+      const listener = (_: unknown, task: unknown) => callback(task);
+      ipcRenderer.on('kanban:task-created', listener);
+      return () => ipcRenderer.removeListener('kanban:task-created', listener);
+    },
+    onTaskUpdated: (callback: (task: unknown) => void) => {
+      const listener = (_: unknown, task: unknown) => callback(task);
+      ipcRenderer.on('kanban:task-updated', listener);
+      return () => ipcRenderer.removeListener('kanban:task-updated', listener);
+    },
+    onTaskDeleted: (callback: (event: { id: string }) => void) => {
+      const listener = (_: unknown, event: { id: string }) => callback(event);
+      ipcRenderer.on('kanban:task-deleted', listener);
+      return () => ipcRenderer.removeListener('kanban:task-deleted', listener);
+    },
   },
 
   // CLI Paths management

@@ -84,6 +84,8 @@ import { registerIpcHandlers, IpcHandlerDependencies } from './handlers/ipc-hand
 import { registerSchedulerHandlers } from './handlers/scheduler-handlers';
 import { registerAutomationHandlers } from './handlers/automation-handlers';
 import { registerCLIPathsHandlers, getCLIPathsConfig } from './handlers/cli-paths-handlers';
+import { registerKanbanHandlers, KanbanHandlerDependencies } from './handlers/kanban-handlers';
+import { initKanbanAutomation, findMatchingAgent, createAgentForTask, startAgentForTask } from './services/kanban-automation';
 
 // Utils
 import {
@@ -291,6 +293,206 @@ app.whenReady().then(async () => {
     getAppSettings: () => appSettings,
     setAppSettings: (settings) => { appSettings = settings; },
     saveAppSettings: saveAppSettingsToFile,
+  });
+
+  // Initialize kanban automation service
+  initKanbanAutomation({
+    agents,
+    createAgent: async (config) => {
+      // Create agent directly - similar to agent:create handler
+      const { v4: uuidv4 } = await import('uuid');
+      const pty = await import('node-pty');
+
+      const id = uuidv4();
+      const shell = process.env.SHELL || '/bin/zsh';
+      let cwd = config.projectPath;
+
+      if (!fs.existsSync(cwd)) {
+        cwd = os.homedir();
+      }
+
+      const ptyProcess = pty.spawn(shell, ['-l'], {
+        name: 'xterm-256color',
+        cols: 120,
+        rows: 30,
+        cwd,
+        env: {
+          ...process.env as { [key: string]: string },
+          CLAUDE_SKILLS: config.skills.join(','),
+          CLAUDE_AGENT_ID: id,
+          CLAUDE_PROJECT_PATH: config.projectPath,
+        },
+      });
+
+      const ptyId = uuidv4();
+      ptyProcesses.set(ptyId, ptyProcess);
+
+      const status: AgentStatus = {
+        id,
+        status: 'idle',
+        projectPath: config.projectPath,
+        skills: config.skills,
+        output: [],
+        lastActivity: new Date().toISOString(),
+        ptyId,
+        character: config.character || 'robot',
+        name: config.name || `Agent ${id.slice(0, 4)}`,
+        skipPermissions: config.skipPermissions || false,
+      };
+
+      agents.set(id, status);
+      saveAgents();
+
+      // Setup PTY event handlers
+      ptyProcess.onData((data) => {
+        const agent = agents.get(id);
+        if (agent) {
+          agent.output.push(data);
+          agent.lastActivity = new Date().toISOString();
+          const newStatus = detectAgentStatus(agent);
+          if (newStatus !== agent.status) {
+            agent.status = newStatus;
+            handleStatusChangeNotificationWrapper(agent, newStatus);
+            getMainWindow()?.webContents.send('agent:status', {
+              type: 'status',
+              agentId: id,
+              status: newStatus,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        }
+        getMainWindow()?.webContents.send('agent:output', {
+          type: 'output',
+          agentId: id,
+          ptyId,
+          data,
+          timestamp: new Date().toISOString(),
+        });
+      });
+
+      ptyProcess.onExit(({ exitCode }) => {
+        const agent = agents.get(id);
+        if (agent) {
+          const newStatus = exitCode === 0 ? 'completed' : 'error';
+          agent.status = newStatus;
+          agent.lastActivity = new Date().toISOString();
+          handleStatusChangeNotificationWrapper(agent, newStatus);
+        }
+        ptyProcesses.delete(ptyId);
+        // Emit status event so kanban sync can detect completion
+        getMainWindow()?.webContents.send('agent:status', {
+          type: 'status',
+          agentId: id,
+          status: exitCode === 0 ? 'completed' : 'error',
+          timestamp: new Date().toISOString(),
+        });
+        getMainWindow()?.webContents.send('agent:complete', {
+          type: 'complete',
+          agentId: id,
+          ptyId,
+          exitCode,
+          timestamp: new Date().toISOString(),
+        });
+      });
+
+      return status;
+    },
+    startAgent: async (agentId, prompt) => {
+      const agent = agents.get(agentId);
+      if (!agent) throw new Error('Agent not found');
+
+      // Initialize PTY if needed
+      if (!agent.ptyId || !ptyProcesses.has(agent.ptyId)) {
+        const ptyId = await initAgentPty(
+          agent,
+          getMainWindow(),
+          handleStatusChangeNotificationWrapper,
+          saveAgents
+        );
+        agent.ptyId = ptyId;
+      }
+
+      const ptyProcess = ptyProcesses.get(agent.ptyId);
+      if (!ptyProcess) throw new Error('PTY not found');
+
+      // Build Claude command - always use dangerous mode for kanban tasks
+      let command = 'claude --dangerously-skip-permissions';
+      if (appSettings.verboseModeEnabled) {
+        command += ' --verbose';
+      }
+
+      // Build final prompt with skills
+      let finalPrompt = prompt;
+      if (agent.skills && agent.skills.length > 0) {
+        const skillsList = agent.skills.join(', ');
+        finalPrompt = `[IMPORTANT: Use these skills for this session: ${skillsList}. Invoke them with /<skill-name> when relevant to the task.] ${prompt}`;
+      }
+
+      const escapedPrompt = finalPrompt.replace(/'/g, "'\\''");
+      command += ` '${escapedPrompt}'`;
+
+      // Update status
+      agent.status = 'running';
+      agent.currentTask = prompt.slice(0, 100);
+      agent.lastActivity = new Date().toISOString();
+
+      const workingPath = (agent.worktreePath || agent.projectPath).replace(/'/g, "'\\''");
+      ptyProcess.write(`cd '${workingPath}' && ${command}`);
+      ptyProcess.write('\r');
+
+      saveAgents();
+    },
+    saveAgents,
+  });
+
+  // Register kanban handlers
+  registerKanbanHandlers({
+    getMainWindow,
+    findMatchingAgent,
+    createAgentForTask,
+    startAgent: startAgentForTask,
+    stopAgent: async (agentId: string) => {
+      const agent = agents.get(agentId);
+      if (agent?.ptyId) {
+        const ptyProcess = ptyProcesses.get(agent.ptyId);
+        if (ptyProcess) {
+          // Send Ctrl+C to interrupt
+          ptyProcess.write('\x03');
+        }
+        agent.status = 'idle';
+        agent.currentTask = undefined;
+        agent.lastActivity = new Date().toISOString();
+        saveAgents();
+
+        getMainWindow()?.webContents.send('agent:status', {
+          type: 'status',
+          agentId,
+          status: 'idle',
+          timestamp: new Date().toISOString(),
+        });
+      }
+    },
+    deleteAgent: async (agentId: string) => {
+      const agent = agents.get(agentId);
+      if (agent) {
+        // Stop PTY if running
+        if (agent.ptyId) {
+          const ptyProcess = ptyProcesses.get(agent.ptyId);
+          if (ptyProcess) {
+            ptyProcess.kill();
+          }
+          ptyProcesses.delete(agent.ptyId);
+        }
+        // Remove agent
+        agents.delete(agentId);
+        saveAgents();
+        console.log(`Agent ${agentId} deleted`);
+      }
+    },
+    getAgentOutput: (agentId: string) => {
+      const agent = agents.get(agentId);
+      return agent?.output || [];
+    },
   });
 
   // Initialize services

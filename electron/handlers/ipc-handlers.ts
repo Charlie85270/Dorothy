@@ -376,11 +376,12 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       if (fs.existsSync(mcpConfigPath)) {
         command += ` --mcp-config '${mcpConfigPath}'`;
       }
-      // Add super agent instructions
-      const { getSuperAgentInstructionsPath } = await import('../utils');
-      const instructionsPath = getSuperAgentInstructionsPath();
-      if (fs.existsSync(instructionsPath)) {
-        command += ` --append-system-prompt "$(cat '${instructionsPath}')"`;
+      // Add super agent instructions (read via Node.js, not cat - asar compatibility)
+      const { getSuperAgentInstructions } = await import('../utils');
+      const superAgentInstructions = getSuperAgentInstructions();
+      if (superAgentInstructions) {
+        const escapedInstructions = superAgentInstructions.replace(/'/g, "'\\''").replace(/"/g, '\\"').replace(/\n/g, ' ');
+        command += ` --append-system-prompt "${escapedInstructions}"`;
       }
     }
 

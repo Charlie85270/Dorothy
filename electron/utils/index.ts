@@ -133,6 +133,21 @@ export function getSuperAgentInstructions(): string {
   return 'You are the Super Agent - an orchestrator that manages other Claude agents using MCP tools. Use list_agents, start_agent, get_agent_output, send_telegram, and send_slack tools.';
 }
 
+/**
+ * Read Telegram-specific instructions from file
+ */
+export function getTelegramInstructions(): string {
+  const instructionsPath = getTelegramInstructionsPath();
+  try {
+    if (fs.existsSync(instructionsPath)) {
+      return fs.readFileSync(instructionsPath, 'utf-8');
+    }
+  } catch (err) {
+    console.error('Failed to read telegram instructions:', err);
+  }
+  return '';
+}
+
 export function detectAgentStatus(agent: AgentStatus): 'running' | 'waiting' | 'completed' | 'error' | 'idle' {
   const lastChunk = agent.output.slice(-1).join('');
   const recentChunks = agent.output.slice(-10).join('');

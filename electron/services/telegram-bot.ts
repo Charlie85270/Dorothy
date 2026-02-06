@@ -6,7 +6,7 @@ import TelegramBot from 'node-telegram-bot-api';
 import * as pty from 'node-pty';
 import { AgentStatus, AppSettings } from '../types';
 import { TG_CHARACTER_FACES, TELEGRAM_DOWNLOADS_DIR } from '../constants';
-import { isSuperAgent, formatAgentStatus, getSuperAgentInstructionsPath, getTelegramInstructionsPath } from '../utils';
+import { isSuperAgent, formatAgentStatus, getSuperAgentInstructions, getTelegramInstructions } from '../utils';
 
 // ============== Telegram Bot State ==============
 let telegramBot: TelegramBot | null = null;
@@ -1055,16 +1055,19 @@ export async function sendToSuperAgent(chatId: string, message: string, attached
         command += ` --mcp-config '${mcpConfigPath}'`;
       }
 
-      // Add system prompt from instructions files
-      const instructionsPath = getSuperAgentInstructionsPath();
-      if (fs.existsSync(instructionsPath)) {
-        command += ` --append-system-prompt "$(cat '${instructionsPath}')"`;
+      // Add system prompt from instructions (read via Node.js, not cat - asar compatibility)
+      const superAgentInstructions = getSuperAgentInstructions();
+      if (superAgentInstructions) {
+        // Escape for shell - replace single quotes and double quotes
+        const escapedInstructions = superAgentInstructions.replace(/'/g, "'\\''").replace(/"/g, '\\"').replace(/\n/g, ' ');
+        command += ` --append-system-prompt "${escapedInstructions}"`;
       }
 
       // Add Telegram-specific instructions
-      const telegramInstructionsPath = getTelegramInstructionsPath();
-      if (fs.existsSync(telegramInstructionsPath)) {
-        command += ` --append-system-prompt "$(cat '${telegramInstructionsPath}')"`;
+      const telegramInstructions = getTelegramInstructions();
+      if (telegramInstructions) {
+        const escapedTelegram = telegramInstructions.replace(/'/g, "'\\''").replace(/"/g, '\\"').replace(/\n/g, ' ');
+        command += ` --append-system-prompt "${escapedTelegram}"`;
       }
 
       if (superAgent.skipPermissions) command += ' --dangerously-skip-permissions';

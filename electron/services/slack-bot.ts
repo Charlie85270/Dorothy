@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import { App as SlackApp, LogLevel } from '@slack/bolt';
 import { AgentStatus, AppSettings } from '../types';
 import { SLACK_CHARACTER_FACES } from '../constants';
-import { formatSlackAgentStatus, isSuperAgent, getSuperAgent, getSuperAgentInstructionsPath } from '../utils';
+import { formatSlackAgentStatus, isSuperAgent, getSuperAgent, getSuperAgentInstructions } from '../utils';
 import { agents, saveAgents, initAgentPty } from '../core/agent-manager';
 import { ptyProcesses } from '../core/pty-manager';
 import { getMainWindow } from '../core/window-manager';
@@ -577,10 +577,11 @@ export async function sendToSuperAgentFromSlack(
         command += ` --mcp-config '${mcpConfigPath}'`;
       }
 
-      // Add system prompt from instructions file
-      const instructionsPath = getSuperAgentInstructionsPath();
-      if (fs.existsSync(instructionsPath)) {
-        command += ` --append-system-prompt "$(cat '${instructionsPath}')"`;
+      // Add system prompt from instructions (read via Node.js, not cat - asar compatibility)
+      const superAgentInstructions = getSuperAgentInstructions();
+      if (superAgentInstructions) {
+        const escapedInstructions = superAgentInstructions.replace(/'/g, "'\\''").replace(/"/g, '\\"').replace(/\n/g, ' ');
+        command += ` --append-system-prompt "${escapedInstructions}"`;
       }
 
       if (superAgent.skipPermissions) command += ' --dangerously-skip-permissions';

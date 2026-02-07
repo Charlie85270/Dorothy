@@ -1,18 +1,20 @@
 # claude.mgr
 
-A powerful desktop manager and orchestration platform for [Claude Code](https://claude.ai/code) by Anthropic. Manage multiple AI agents, automate workflows, control agents remotely via Telegram and Slack, and coordinate complex multi-agent tasks — all from one place.
+A desktop orchestration platform for running multiple [Claude Code](https://claude.ai/code) agents in parallel. Spawn simultaneous agents across projects, automate workflows with external triggers, manage tasks via Kanban, and control everything remotely through Telegram or Slack.
+
+Built to maximize developer productivity by turning Claude Code into a parallelized, automated workforce.
 
 ![claude.mgr Dashboard](screenshots/0.png)
 
 ## Table of Contents
 
-- [Features](#features)
-- [MCP Servers & Tools](#mcp-servers--tools)
+- [Why claude.mgr](#why-claudemgr)
+- [Core Features](#core-features)
 - [Automations](#automations)
+- [Kanban Task Management](#kanban-task-management)
 - [Scheduled Tasks](#scheduled-tasks)
-- [Kanban Board](#kanban-board)
-- [Telegram Integration](#telegram-integration)
-- [Slack Integration](#slack-integration)
+- [Remote Control](#remote-control)
+- [MCP Servers & Tools](#mcp-servers--tools)
 - [Installation](#installation)
 - [Architecture](#architecture)
 - [Project Structure](#project-structure)
@@ -24,197 +26,86 @@ A powerful desktop manager and orchestration platform for [Claude Code](https://
 
 ---
 
-## Features
+## Why claude.mgr
 
-### Dashboard
-Manage your agents with a clean, UX-friendly UI. Get notified when an agent task completes or needs your input.
+Claude Code is powerful — but it runs one agent at a time, in one terminal. claude.mgr removes that limitation:
 
-### Agent Management
-Create, monitor, and control multiple Claude Code agents simultaneously. Each agent runs in its own terminal with full PTY support for real-time interaction.
+- **Run 10+ agents simultaneously** across different projects and codebases
+- **Automate agent workflows** — trigger agents on GitHub PRs, issues, and external events
+- **Delegate and coordinate** — a Super Agent orchestrates other agents via MCP tools
+- **Manage tasks visually** — Kanban board with automatic agent assignment
+- **Schedule recurring work** — cron-based tasks that run autonomously
+- **Control from anywhere** — Telegram and Slack integration for remote management
+
+---
+
+## Core Features
+
+### Parallel Agent Management
+
+Run multiple Claude Code agents simultaneously, each in its own isolated PTY terminal session. Agents operate independently across different projects, codebases, and tasks.
 
 ![Agents View](screenshots/agetns.png)
 
 **Capabilities:**
-- Create agents with custom names, skills, and character avatars
-- Assign agents to specific project directories
-- Start agents with prompts and model selection (sonnet, opus, haiku)
-- Send interactive input to running agents
-- Real-time terminal output streaming
-- Agent states: `idle` → `running` → `completed` / `error` / `waiting`
-- Optional secondary project path via `--add-dir`
-- Git worktree support for isolated development
+- Spawn unlimited concurrent agents across multiple projects
+- Each agent runs in an isolated terminal with full PTY support
+- Assign skills, model selection (sonnet, opus, haiku), and project context per agent
+- Send interactive input to any running agent in real-time
+- Real-time terminal output streaming per agent
+- Agent lifecycle management: `idle` → `running` → `completed` / `error` / `waiting`
+- Secondary project paths via `--add-dir` for multi-repo context
+- Git worktree support for branch-isolated development
 - Persistent agent state across app restarts
-
-**Character Avatars:** robot, ninja, wizard, astronaut, knight, pirate, alien, viking
+- Autonomous execution mode (`--dangerously-skip-permissions`) for unattended operation
 
 ### Super Agent (Orchestrator)
-The Super Agent is a meta-agent that coordinates all other agents. Give it high-level tasks and it delegates work to the appropriate agents, monitors their progress, and reports back.
+
+A meta-agent that programmatically controls all other agents. Give it a high-level task and it delegates, monitors, and coordinates the work across your agent pool.
 
 ![Super Agent](screenshots/super-agent.png)
 
-- Automatically coordinates multiple agents
-- Delegates tasks based on agent capabilities and skills
-- Monitors progress and handles errors
-- Uses MCP tools to control other agents programmatically
-- Responds to Telegram and Slack messages
+- Creates, starts, and stops agents programmatically via MCP tools
+- Delegates tasks based on agent capabilities and assigned skills
+- Monitors progress, captures output, and handles errors
+- Responds to Telegram and Slack messages for remote orchestration
+- Can spin up temporary agents for one-off tasks and clean them up after
 
-### Usage Statistics
-Track your Claude Code usage with detailed statistics — conversation history, token usage, and activity patterns with visualizations.
+### Usage Tracking
+
+Monitor Claude Code API usage across all agents — token consumption, conversation history, cost tracking, and activity patterns.
 
 ![Usage Stats](screenshots/stats.png)
 
-### Skills & Plugins
-Browse and manage Claude Code skills with direct [skills.sh](https://skills.sh) integration.
+### Skills & Plugin System
+
+Extend agent capabilities with skills from [skills.sh](https://skills.sh) and the built-in plugin marketplace.
 
 ![Skills Management](screenshots/skills.png)
 
-**Plugin Marketplace:**
 - **Code Intelligence**: LSP plugins for TypeScript, Python, Rust, Go, and more
 - **External Integrations**: GitHub, GitLab, Jira, Figma, Slack, Vercel
 - **Development Workflows**: Commit commands, PR review tools
-- **Output Styles**: Customize Claude's response format
-
-### 3D Agent View
-Watch your agents work in a beautiful 3D office environment with animated characters.
-
-![3D View](screenshots/3d.png)
+- Install skills per-agent for specialized task handling
 
 ### Persistent Memory
-Powered by [claude-mem](https://github.com/thedotmack/claude-mem), agents recall past decisions, learnings, and context across sessions.
 
-- One-click activation from Settings
-- Automatic memory capture of decisions and learnings
-- Cross-session context persistence
+Powered by [claude-mem](https://github.com/thedotmack/claude-mem), agents retain decisions, learnings, and context across sessions.
+
+- Automatic memory capture of tool uses, decisions, and learnings
+- Cross-session context persistence — agents build on previous work
 - AI-powered summarization for efficient storage
-- Works across all Claude Code sessions
+- Works across all Claude Code sessions, not just claude.mgr
 
 ### Settings Management
-Configure Claude Code settings directly from the app — permissions, environment variables, hooks, and more.
 
----
-
-## MCP Servers & Tools
-
-Claude Manager includes **three MCP (Model Context Protocol) servers** that expose **30+ tools** for programmatic agent control. These tools are used by the Super Agent and can be added to any Claude Code session.
-
-### mcp-orchestrator
-
-The main orchestration server providing agent management, messaging, scheduling, and automation tools.
-
-**Location:** `mcp-orchestrator/`
-
-#### Agent Management Tools
-
-| Tool | Parameters | Description |
-|------|-----------|-------------|
-| `list_agents` | — | List all agents with status, ID, name, project, and current task |
-| `get_agent` | `id` | Get detailed info about a specific agent including full output history |
-| `get_agent_output` | `id`, `lines?` (default: 100) | Read an agent's recent terminal output |
-| `create_agent` | `projectPath`, `name?`, `skills?`, `character?`, `skipPermissions?` (default: true), `secondaryProjectPath?` | Create a new agent in idle state |
-| `start_agent` | `id`, `prompt`, `model?` | Start an agent with a task (or send message if already running) |
-| `send_message` | `id`, `message` | Send input to a running agent (auto-starts idle agents) |
-| `stop_agent` | `id` | Terminate a running agent (returns to idle) |
-| `remove_agent` | `id` | Permanently delete an agent |
-| `wait_for_agent` | `id`, `timeoutSeconds?` (default: 300), `pollIntervalSeconds?` (default: 5) | Poll agent status until completion, error, or waiting state |
-
-#### Messaging Tools
-
-| Tool | Parameters | Description |
-|------|-----------|-------------|
-| `send_telegram` | `message` | Send a text message to Telegram (truncates at 4096 chars) |
-| `send_slack` | `message` | Send a text message to Slack (truncates at 4000 chars) |
-
-#### Scheduler Tools
-
-| Tool | Parameters | Description |
-|------|-----------|-------------|
-| `list_scheduled_tasks` | — | List all recurring tasks with schedule and next run time |
-| `create_scheduled_task` | `prompt`, `schedule` (cron), `projectPath`, `autonomous?` (default: true) | Create a recurring task with cron expression |
-| `delete_scheduled_task` | `taskId` | Remove a scheduled task and clean up files |
-| `run_scheduled_task` | `taskId` | Manually execute a task immediately |
-| `get_scheduled_task_logs` | `taskId`, `lines?` (default: 50) | Get execution logs for a task |
-
-#### Automation Tools
-
-| Tool | Parameters | Description |
-|------|-----------|-------------|
-| `list_automations` | — | List all automations with status, source, schedule |
-| `get_automation` | `id` | Get automation details including recent runs |
-| `create_automation` | `name`, `sourceType`, `sourceConfig`, + [options](#automation-options) | Create a new automation |
-| `update_automation` | `id`, + optional fields | Update automation configuration |
-| `delete_automation` | `id` | Remove an automation |
-| `run_automation` | `id` | Manually trigger an automation |
-| `pause_automation` | `id` | Pause scheduled execution |
-| `resume_automation` | `id` | Resume a paused automation |
-| `run_due_automations` | — | Check and run all automations that are due |
-| `get_automation_logs` | `id`, `limit?` (default: 10) | Get recent execution history |
-
-##### Automation Options
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `description` | string | What the automation does |
-| `sourceType` | enum | `github`, `jira`, `pipedrive`, `twitter`, `rss`, `custom` |
-| `sourceConfig` | JSON string | Source configuration (e.g., `{"repos": ["owner/repo"], "pollFor": ["pull_requests"]}`) |
-| `scheduleMinutes` | number | Poll interval in minutes (default: 30) |
-| `scheduleCron` | string | Cron expression (alternative to scheduleMinutes) |
-| `eventTypes` | string[] | Event types to trigger on (e.g., `["pr", "issue"]`) |
-| `onNewItem` | boolean | Trigger on new items (default: true) |
-| `onUpdatedItem` | boolean | Trigger when items are updated |
-| `agentEnabled` | boolean | Enable Claude agent processing (default: true) |
-| `agentPrompt` | string | Prompt template with `{{variables}}` |
-| `agentProjectPath` | string | Project path for the agent |
-| `agentModel` | enum | `sonnet`, `opus`, or `haiku` |
-| `outputTelegram` | boolean | Send output to Telegram |
-| `outputSlack` | boolean | Send output to Slack |
-| `outputGitHubComment` | boolean | Post output as GitHub comment |
-| `outputTemplate` | string | Custom output message template |
-
----
-
-### mcp-telegram
-
-Independent MCP server for rich Telegram messaging with media support.
-
-**Location:** `mcp-telegram/`
-
-| Tool | Parameters | Description |
-|------|-----------|-------------|
-| `send_telegram` | `message`, `chat_id?` | Send a text message |
-| `send_telegram_photo` | `photo_path`, `chat_id?`, `caption?` | Send a photo/image |
-| `send_telegram_video` | `video_path`, `chat_id?`, `caption?` | Send a video |
-| `send_telegram_document` | `document_path`, `chat_id?`, `caption?` | Send a document/PDF |
-
-- Direct HTTPS API calls to Telegram
-- File uploads via multipart form data
-- Markdown formatting support
-
----
-
-### mcp-kanban
-
-MCP server for Kanban task management with agent assignment.
-
-**Location:** `mcp-kanban/`
-
-| Tool | Parameters | Description |
-|------|-----------|-------------|
-| `list_tasks` | `column?`, `assigned_to_me?` | List tasks, optionally filtered by column or assignment |
-| `get_task` | `task_id` (supports prefix matching) | Get full task details |
-| `create_task` | `title`, `description`, `project_path?`, `priority?`, `labels?` | Create a new task in backlog |
-| `move_task` | `task_id`, `column` | Move task between columns |
-| `update_task_progress` | `task_id`, `progress` (0-100) | Update progress percentage |
-| `mark_task_done` | `task_id`, `summary` | Complete a task with summary |
-| `assign_task` | `task_id`, `agent_id?` | Assign task to an agent |
-| `delete_task` | `task_id` | Remove a task |
-
-**Columns:** `backlog` → `planned` → `ongoing` → `done`
+Configure Claude Code settings directly — permissions, environment variables, hooks, and model defaults.
 
 ---
 
 ## Automations
 
-Automations poll external sources, detect new or updated items, and trigger Claude agents to process them with custom prompts.
+Automations poll external sources, detect new or updated items, and spawn Claude agents to process each item autonomously. This enables fully automated CI/CD-like workflows powered by AI.
 
 ### Supported Sources
 
@@ -227,16 +118,16 @@ Automations poll external sources, detect new or updated items, and trigger Clau
 | **RSS** | Planned | — |
 | **Custom** | Planned | Webhook support |
 
-### How It Works
+### Execution Pipeline
 
 1. **Scheduler** triggers the automation on its cron schedule or interval
 2. **Poller** fetches items from the source (e.g., GitHub PRs via `gh` CLI)
 3. **Filter** applies trigger conditions (event type, new vs. updated)
 4. **Deduplication** skips already-processed items using content hashing
-5. **Agent creation** — a temporary agent is created for each item
+5. **Agent spawning** — a temporary agent is created for each item
 6. **Prompt injection** — item data injected via template variables
-7. **Agent execution** — agent runs autonomously with MCP tools
-8. **Output delivery** — agent sends results via Telegram, Slack, or GitHub comments
+7. **Autonomous execution** — agent runs with full MCP tool access
+8. **Output delivery** — agent posts results to Telegram, Slack, or GitHub comments
 9. **Cleanup** — temporary agent is deleted after completion
 
 ### Template Variables
@@ -254,26 +145,57 @@ Use these in your `agentPrompt` and `outputTemplate`:
 | `{{number}}` | Item number (PR #, issue #) |
 | `{{type}}` | Item type (pull_request, issue, etc.) |
 
-### Example: GitHub PR Marketing Bot
+### Example: Automated PR Review Bot
 
-```
+```javascript
 create_automation({
-  name: "PR Tweet Generator",
+  name: "PR Code Reviewer",
   sourceType: "github",
   sourceConfig: '{"repos": ["myorg/myrepo"], "pollFor": ["pull_requests"]}',
-  scheduleMinutes: 30,
+  scheduleMinutes: 15,
   agentEnabled: true,
-  agentPrompt: "Write a marketing tweet for this PR: {{title}} - {{url}}",
-  outputTelegram: true,
-  outputGitHubComment: true
+  agentPrompt: "Review this PR for code quality, security issues, and performance. PR: {{title}} ({{url}}). Description: {{body}}",
+  agentProjectPath: "/path/to/myrepo",
+  outputGitHubComment: true,
+  outputSlack: true
 })
 ```
 
 ---
 
+## Kanban Task Management
+
+A task board integrated with the agent system. Tasks flow through columns and can be automatically assigned to agents based on skill matching.
+
+### Workflow
+
+```
+Backlog → Planned → Ongoing → Done
+```
+
+- **Priority levels**: Low, Medium, High
+- **Progress tracking**: 0-100% per task
+- **Agent assignment**: Assign tasks to specific agents or let the system auto-assign
+- **Labels and tags**: Organize and filter tasks
+- **Skill requirements**: Define required skills — the system matches tasks to capable agents
+
+### Automatic Agent Assignment
+
+The `kanban-automation` service continuously watches for new tasks and:
+
+1. Matches task skill requirements against available agents
+2. Creates new agents if no matching agent exists
+3. Assigns the task and moves it to `ongoing`
+4. Tracks progress as the agent works
+5. Marks the task `done` when the agent completes
+
+This enables a **self-managing task pipeline** — add tasks to the backlog and agents automatically pick them up.
+
+---
+
 ## Scheduled Tasks
 
-Create recurring tasks that run Claude Code on a cron schedule.
+Run Claude Code autonomously on a cron schedule. Useful for recurring maintenance, reporting, monitoring, or any periodic task.
 
 ### Cron Format
 
@@ -286,8 +208,6 @@ Create recurring tasks that run Claude Code on a cron schedule.
 │ │ │ │ │
 * * * * *
 ```
-
-### Examples
 
 | Expression | Schedule |
 |-----------|----------|
@@ -310,103 +230,168 @@ Create recurring tasks that run Claude Code on a cron schedule.
 
 ---
 
-## Kanban Board
+## Remote Control
 
-A visual task management board integrated with agent assignment and progress tracking.
+### Telegram Integration
 
-### Features
-
-- **4 columns**: Backlog → Planned → Ongoing → Done
-- **Drag-and-drop** task movement between columns
-- **Priority levels**: Low, Medium, High
-- **Progress tracking**: 0-100% per task
-- **Agent assignment**: Assign tasks to specific agents
-- **Labels and tags**: Organize tasks with custom labels
-- **Skill requirements**: Define required skills for tasks
-
-### Kanban Automation
-
-The `kanban-automation` service watches for new tasks and:
-1. Finds agents with matching skills
-2. Auto-creates agents if needed
-3. Assigns tasks to agents
-4. Updates task progress as agents work
-
----
-
-## Telegram Integration
-
-Control your agents remotely via Telegram.
-
-### Commands
+Control your entire agent fleet from Telegram. Start agents, check status, delegate tasks to the Super Agent — all from your phone.
 
 | Command | Description |
 |---------|-------------|
-| `/status` | Quick overview of all agents |
-| `/agents` | Detailed list of all agents |
+| `/status` | Overview of all agents and their states |
+| `/agents` | Detailed agent list with current tasks |
 | `/projects` | List all projects with their agents |
-| `/start_agent <name> <task>` | Create and start an agent with a task |
+| `/start_agent <name> <task>` | Spawn and start an agent with a task |
 | `/stop_agent <name>` | Stop a running agent |
-| `/ask <message>` | Send a task to the Super Agent |
-| `/usage` | Show API usage and cost statistics |
-| `/help` | Show available commands |
+| `/ask <message>` | Delegate a task to the Super Agent |
+| `/usage` | API usage and cost statistics |
+| `/help` | Command reference |
 
 Send any message without a command to talk directly to the Super Agent.
 
-### Setup
+**Media support** via the `mcp-telegram` server: send photos, videos, and documents.
 
+**Setup:**
 1. Create a bot via [@BotFather](https://t.me/botfather) and copy the token
-2. Go to **Settings** in Claude Manager
-3. Paste the bot token and save
-4. Send `/start` to your bot to register your chat ID
-5. Multiple users can authorize by sending `/start`
+2. Paste the bot token in **Settings**
+3. Send `/start` to your bot to register your chat ID
+4. Multiple users can authorize by sending `/start`
 
-### Media Support (via MCP)
+### Slack Integration
 
-The `mcp-telegram` server supports sending rich media:
-- Photos and images
-- Videos
-- Documents and PDFs
-
----
-
-## Slack Integration
-
-Control your agents via Slack with @mentions or direct messages.
-
-### Commands
+Same capabilities as Telegram, accessible via @mentions or direct messages.
 
 | Command | Description |
 |---------|-------------|
-| `status` | Quick overview of all agents |
-| `agents` | Detailed list of all agents |
-| `projects` | List all projects with their agents |
-| `start <name> <task>` | Create and start an agent |
+| `status` | Overview of all agents |
+| `agents` | Detailed agent list |
+| `projects` | List projects with agents |
+| `start <name> <task>` | Spawn and start an agent |
 | `stop <name>` | Stop a running agent |
-| `usage` | Show API usage and cost statistics |
-| `help` | Show available commands |
+| `usage` | API usage and cost statistics |
+| `help` | Command reference |
 
-Send any message without a command to talk directly to the Super Agent.
+**Features:** @mentions in channels, DMs, Socket Mode (no public URL), thread-aware responses.
 
-### Features
-
-- **@mentions** in channels
-- **Direct messages** (DMs)
-- **Socket Mode** — no public URL required
-- **Thread-aware** — replies stay in the same thread
-
-### Setup
-
+**Setup:**
 1. Go to [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → **From scratch**
 2. Name it "Claude Manager" and select your workspace
-3. **Socket Mode** → Enable → Generate App Token with scope `connections:write` (starts with `xapp-`)
-4. **OAuth & Permissions** → Add Bot Token Scopes:
-   - `app_mentions:read`, `chat:write`, `im:history`, `im:read`, `im:write`
-5. **Install to Workspace** → Copy Bot Token (starts with `xoxb-`)
+3. **Socket Mode** → Enable → Generate App Token with scope `connections:write` (`xapp-...`)
+4. **OAuth & Permissions** → Add scopes: `app_mentions:read`, `chat:write`, `im:history`, `im:read`, `im:write`
+5. **Install to Workspace** → Copy Bot Token (`xoxb-...`)
 6. **Event Subscriptions** → Enable → Subscribe to: `app_mention`, `message.im`
-7. **App Home** → Enable "Messages Tab" → Check "Allow users to send Slash commands and messages"
+7. **App Home** → Enable "Messages Tab"
 8. Paste both tokens in **Settings → Slack** and enable
-9. Mention @Claude Manager in any channel or DM the bot
+
+---
+
+## MCP Servers & Tools
+
+claude.mgr exposes **three MCP (Model Context Protocol) servers** with **30+ tools** for programmatic agent control. These are used internally by the Super Agent and can be registered in any Claude Code session via `~/.claude/settings.json`.
+
+### mcp-orchestrator
+
+The main orchestration server — agent management, messaging, scheduling, and automations.
+
+#### Agent Management Tools
+
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `list_agents` | — | List all agents with status, ID, name, project, and current task |
+| `get_agent` | `id` | Get detailed info about a specific agent including output history |
+| `get_agent_output` | `id`, `lines?` (default: 100) | Read an agent's recent terminal output |
+| `create_agent` | `projectPath`, `name?`, `skills?`, `character?`, `skipPermissions?` (default: true), `secondaryProjectPath?` | Create a new agent in idle state |
+| `start_agent` | `id`, `prompt`, `model?` | Start an agent with a task (or send message if already running) |
+| `send_message` | `id`, `message` | Send input to a running agent (auto-starts idle agents) |
+| `stop_agent` | `id` | Terminate a running agent (returns to idle) |
+| `remove_agent` | `id` | Permanently delete an agent |
+| `wait_for_agent` | `id`, `timeoutSeconds?` (300), `pollIntervalSeconds?` (5) | Poll agent until completion, error, or waiting state |
+
+#### Messaging Tools
+
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `send_telegram` | `message` | Send a text message to Telegram (truncates at 4096 chars) |
+| `send_slack` | `message` | Send a text message to Slack (truncates at 4000 chars) |
+
+#### Scheduler Tools
+
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `list_scheduled_tasks` | — | List all recurring tasks with schedule and next run time |
+| `create_scheduled_task` | `prompt`, `schedule` (cron), `projectPath`, `autonomous?` (true) | Create a recurring task |
+| `delete_scheduled_task` | `taskId` | Remove a scheduled task |
+| `run_scheduled_task` | `taskId` | Execute a task immediately |
+| `get_scheduled_task_logs` | `taskId`, `lines?` (50) | Get execution logs |
+
+#### Automation Tools
+
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `list_automations` | — | List all automations with status, source, schedule |
+| `get_automation` | `id` | Get details including recent runs |
+| `create_automation` | `name`, `sourceType`, `sourceConfig`, + [options](#automation-create-options) | Create a new automation |
+| `update_automation` | `id`, + optional fields | Update configuration |
+| `delete_automation` | `id` | Remove an automation |
+| `run_automation` | `id` | Trigger immediately |
+| `pause_automation` | `id` | Pause scheduled execution |
+| `resume_automation` | `id` | Resume a paused automation |
+| `run_due_automations` | — | Check and run all due automations |
+| `get_automation_logs` | `id`, `limit?` (10) | Get execution history |
+
+##### Automation Create Options
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `sourceType` | enum | `github`, `jira`, `pipedrive`, `twitter`, `rss`, `custom` |
+| `sourceConfig` | JSON string | Source config (e.g., `{"repos": ["owner/repo"], "pollFor": ["pull_requests"]}`) |
+| `scheduleMinutes` | number | Poll interval in minutes (default: 30) |
+| `scheduleCron` | string | Cron expression (alternative to interval) |
+| `eventTypes` | string[] | Filter by event type (e.g., `["pr", "issue"]`) |
+| `onNewItem` | boolean | Trigger on new items (default: true) |
+| `onUpdatedItem` | boolean | Trigger on updated items |
+| `agentEnabled` | boolean | Enable agent processing (default: true) |
+| `agentPrompt` | string | Prompt template with `{{variables}}` |
+| `agentProjectPath` | string | Project path for the agent |
+| `agentModel` | enum | `sonnet`, `opus`, or `haiku` |
+| `outputTelegram` | boolean | Post output to Telegram |
+| `outputSlack` | boolean | Post output to Slack |
+| `outputGitHubComment` | boolean | Post output as GitHub comment |
+| `outputTemplate` | string | Custom output message template |
+
+---
+
+### mcp-telegram
+
+Standalone MCP server for Telegram messaging with media support.
+
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `send_telegram` | `message`, `chat_id?` | Send a text message |
+| `send_telegram_photo` | `photo_path`, `chat_id?`, `caption?` | Send a photo/image |
+| `send_telegram_video` | `video_path`, `chat_id?`, `caption?` | Send a video |
+| `send_telegram_document` | `document_path`, `chat_id?`, `caption?` | Send a document/file |
+
+Direct HTTPS API calls. File uploads via multipart form data. Markdown formatting support.
+
+---
+
+### mcp-kanban
+
+MCP server for programmatic Kanban task management.
+
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `list_tasks` | `column?`, `assigned_to_me?` | List tasks, filter by column or assignment |
+| `get_task` | `task_id` (prefix matching) | Get full task details |
+| `create_task` | `title`, `description`, `project_path?`, `priority?`, `labels?` | Create a task in backlog |
+| `move_task` | `task_id`, `column` | Move task between columns |
+| `update_task_progress` | `task_id`, `progress` (0-100) | Update progress |
+| `mark_task_done` | `task_id`, `summary` | Complete a task with summary |
+| `assign_task` | `task_id`, `agent_id?` | Assign task to an agent |
+| `delete_task` | `task_id` | Remove a task |
+
+**Columns:** `backlog` → `planned` → `ongoing` → `done`
 
 ---
 
@@ -416,8 +401,8 @@ Send any message without a command to talk directly to the Super Agent.
 
 - **Node.js** 18+
 - **npm** or yarn
-- **Claude Code CLI** installed: `npm install -g @anthropic-ai/claude-code`
-- **GitHub CLI** (`gh`) for GitHub automations
+- **Claude Code CLI**: `npm install -g @anthropic-ai/claude-code`
+- **GitHub CLI** (`gh`) — required for GitHub automations
 
 ### Clone
 
@@ -429,22 +414,15 @@ cd claude-manager/app/claude-manager
 ### Option 1: Electron App (Recommended)
 
 ```bash
-# Install dependencies
 npm install
-
-# Rebuild native modules for Electron
-npx @electron/rebuild
-
-# Development mode
-npm run electron:dev
-
-# Production build
-npm run electron:build
+npx @electron/rebuild        # Rebuild native modules for Electron
+npm run electron:dev          # Development mode
+npm run electron:build        # Production build (DMG)
 ```
 
-The built app will be in `release/`:
+Output in `release/`:
 - **macOS**: `release/mac-arm64/claude.mgr.app` (Apple Silicon) or `release/mac/claude.mgr.app` (Intel)
-- DMG installer also available
+- DMG installer included
 
 ### Option 2: Web Browser (Development)
 
@@ -453,15 +431,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Some features (agent management, terminal) require the Electron app.
-
-### Option 3: Landing Page
-
-```bash
-cd landing
-npm install
-npm run dev
-```
+Open [http://localhost:3000](http://localhost:3000). Agent management and terminal features require the Electron app.
 
 ---
 
@@ -470,57 +440,55 @@ npm run dev
 ### System Overview
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Electron App                          │
-│                                                          │
-│  ┌──────────────────┐  ┌─────────────────────────────┐  │
-│  │   React/Next.js   │  │    Electron Main Process     │  │
-│  │   (Renderer)      │←→│                              │  │
-│  │                   │  │  ┌────────────────────────┐  │  │
-│  │  - Agents UI      │  │  │   Agent Manager        │  │  │
-│  │  - Kanban Board   │  │  │   (node-pty spawning)  │  │  │
-│  │  - Automations    │  │  ├────────────────────────┤  │  │
-│  │  - Settings       │  │  │   PTY Manager          │  │  │
-│  │  - Usage Stats    │  │  │   (terminal sessions)  │  │  │
-│  │  - 3D View        │  │  ├────────────────────────┤  │  │
-│  │  - Skills         │  │  │   Window Manager       │  │  │
-│  │                   │  │  ├────────────────────────┤  │  │
-│  └──────────────────┘  │  │   Services:            │  │  │
-│         ↕ IPC           │  │   - Telegram Bot       │  │  │
-│  ┌──────────────────┐  │  │   - Slack Bot          │  │  │
-│  │   API Routes      │  │  │   - API Server         │  │  │
-│  │   (Next.js)       │←→│  │   - MCP Launcher      │  │  │
-│  └──────────────────┘  │  │   - Kanban Automation  │  │  │
-│                         │  └────────────────────────┘  │  │
-│                         └─────────────────────────────┘  │
-└─────────────────────────────────────────────────────────┘
-          ↕ stdio                    ↕ stdio
-┌──────────────────┐  ┌──────────────┐  ┌──────────────┐
-│ mcp-orchestrator │  │ mcp-telegram │  │  mcp-kanban  │
-│ (30+ tools)      │  │ (4 tools)    │  │  (8 tools)   │
-└──────────────────┘  └──────────────┘  └──────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                     Electron App                          │
+│                                                           │
+│  ┌───────────────────┐  ┌──────────────────────────────┐ │
+│  │  React / Next.js   │  │   Electron Main Process      │ │
+│  │  (Renderer)        │←→│                               │ │
+│  │                    │  │  ┌──────────────────────────┐ │ │
+│  │  - Agent Dashboard │  │  │  Agent Manager           │ │ │
+│  │  - Kanban Board    │  │  │  (node-pty, N parallel)  │ │ │
+│  │  - Automations     │  │  ├──────────────────────────┤ │ │
+│  │  - Scheduled Tasks │  │  │  PTY Manager             │ │ │
+│  │  - Usage Stats     │  │  │  (terminal multiplexing) │ │ │
+│  │  - Skills/Plugins  │  │  ├──────────────────────────┤ │ │
+│  │  - Settings        │  │  │  Services:               │ │ │
+│  │                    │  │  │  - Telegram Bot           │ │ │
+│  └───────────────────┘  │  │  - Slack Bot              │ │ │
+│          ↕ IPC           │  │  - Kanban Automation      │ │ │
+│  ┌───────────────────┐  │  │  - MCP Server Launcher    │ │ │
+│  │  API Routes        │  │  │  - API Server             │ │ │
+│  │  (Next.js)         │←→│  └──────────────────────────┘ │ │
+│  └───────────────────┘  └──────────────────────────────┘ │
+└──────────────────────────────────────────────────────────┘
+           ↕ stdio                     ↕ stdio
+┌───────────────────┐  ┌───────────────┐  ┌───────────────┐
+│  mcp-orchestrator  │  │  mcp-telegram  │  │   mcp-kanban   │
+│  (26+ tools)       │  │  (4 tools)     │  │   (8 tools)    │
+└───────────────────┘  └───────────────┘  └───────────────┘
 ```
 
-### Data Flow: Agent Execution
+### Data Flow: Parallel Agent Execution
 
-1. User creates agent → API route → Agent Manager
-2. Agent Manager spawns `claude` CLI process via node-pty
-3. PTY output streamed in real-time to the renderer via IPC
-4. Status detected by parsing output patterns (running/waiting/completed/error)
-5. Services notified (Telegram, Slack, Kanban) on status changes
-6. Agent state persisted to `~/.claude-manager/agents.json`
+1. User (or Super Agent) creates agent → API route → Agent Manager
+2. Agent Manager spawns `claude` CLI process via node-pty (one per agent)
+3. Multiple agents run concurrently, each in an isolated PTY session
+4. Output streamed in real-time to the renderer via IPC
+5. Status detected by parsing output patterns (running/waiting/completed/error)
+6. Services notified (Telegram, Slack, Kanban) on status changes
+7. Agent state persisted to `~/.claude-manager/agents.json`
 
-### Data Flow: Automation Execution
+### Data Flow: Automation Pipeline
 
-1. Scheduler triggers automation on schedule
+1. Scheduler triggers automation on cron schedule
 2. Poller fetches items from source (GitHub via `gh` CLI)
-3. Filter applies trigger conditions and checks for duplicates
-4. Temporary agent created for each new/updated item
+3. Filter applies trigger conditions, deduplicates via content hashing
+4. Temporary agent spawned for each new/updated item
 5. Prompt injected with item data via template variables
-6. Agent runs autonomously with MCP tools available
-7. Agent uses MCP tools (send_telegram, etc.) to deliver output
-8. Temporary agent deleted after completion
-9. Item marked as processed with content hash
+6. Agent executes autonomously with full MCP tool access
+7. Agent delivers output via MCP tools (Telegram, Slack, GitHub comments)
+8. Temporary agent deleted, item marked as processed
 
 ### MCP Communication
 
@@ -543,11 +511,11 @@ claude-manager/app/claude-manager/
 │   │   ├── agents/                # Agent management UI
 │   │   ├── kanban/                # Kanban board UI
 │   │   ├── automations/           # Automation management UI
+│   │   ├── recurring-tasks/       # Scheduled tasks UI
 │   │   ├── settings/              # Settings page
 │   │   ├── skills/                # Skills management
 │   │   ├── usage/                 # Usage statistics
 │   │   ├── projects/              # Projects overview
-│   │   ├── recurring-tasks/       # Scheduled tasks UI
 │   │   ├── plugins/               # Plugin marketplace
 │   │   └── api/                   # Backend API routes
 │   ├── components/                # React components
@@ -558,34 +526,30 @@ claude-manager/app/claude-manager/
 ├── electron/                      # Electron main process
 │   ├── main.ts                    # Entry point
 │   ├── preload.ts                 # Preload script
-│   ├── core/                      # Core modules
-│   │   ├── agent-manager.ts       # Agent lifecycle management
-│   │   ├── pty-manager.ts         # Terminal PTY management
+│   ├── core/
+│   │   ├── agent-manager.ts       # Agent lifecycle & parallel execution
+│   │   ├── pty-manager.ts         # Terminal session multiplexing
 │   │   └── window-manager.ts      # Window management
-│   ├── services/                  # External service integrations
+│   ├── services/
 │   │   ├── telegram-bot.ts        # Telegram bot integration
 │   │   ├── slack-bot.ts           # Slack bot integration
 │   │   ├── api-server.ts          # HTTP API server
 │   │   ├── mcp-orchestrator.ts    # MCP server launcher
-│   │   ├── claude-service.ts      # Claude Code integration
+│   │   ├── claude-service.ts      # Claude Code CLI integration
 │   │   ├── hooks-manager.ts       # Git hooks management
-│   │   └── kanban-automation.ts   # Kanban task automation
+│   │   └── kanban-automation.ts   # Task → Agent auto-assignment
 │   └── handlers/                  # IPC handlers
 ├── mcp-orchestrator/              # MCP server (orchestration)
-│   └── src/
-│       ├── tools/
-│       │   ├── agents.ts          # Agent management tools (9 tools)
-│       │   ├── messaging.ts       # Telegram/Slack tools (2 tools)
-│       │   ├── scheduler.ts       # Scheduled task tools (5 tools)
-│       │   └── automations.ts     # Automation tools (10+ tools)
-│       └── utils/
+│   └── src/tools/
+│       ├── agents.ts              # Agent management tools (9)
+│       ├── messaging.ts           # Telegram/Slack tools (2)
+│       ├── scheduler.ts           # Scheduled task tools (5)
+│       └── automations.ts         # Automation tools (10+)
 ├── mcp-telegram/                  # MCP server (Telegram media)
-│   └── src/index.ts               # Photo, video, document tools (4 tools)
+│   └── src/index.ts               # Text, photo, video, document (4)
 ├── mcp-kanban/                    # MCP server (task management)
-│   └── src/index.ts               # Kanban task tools (8 tools)
-├── landing/                       # Marketing landing page
-├── public/                        # Static assets
-└── screenshots/                   # App screenshots
+│   └── src/index.ts               # Kanban CRUD tools (8)
+└── landing/                       # Marketing landing page
 ```
 
 ---
@@ -599,7 +563,6 @@ claude-manager/app/claude-manager/
 | **Desktop** | Electron | 33 |
 | **Styling** | Tailwind CSS | 4 |
 | **State** | Zustand | 5 |
-| **3D Graphics** | React Three Fiber | 9 |
 | **Animations** | Framer Motion | 12 |
 | **Terminal** | xterm.js + node-pty | 5 / 1.1 |
 | **Database** | better-sqlite3 | 11 |
@@ -607,7 +570,6 @@ claude-manager/app/claude-manager/
 | **Telegram** | node-telegram-bot-api | 0.67 |
 | **Slack** | @slack/bolt | 4.0 |
 | **Validation** | Zod | 3.22 |
-| **Icons** | Lucide React | 0.563 |
 | **Language** | TypeScript | 5 |
 
 ---
@@ -626,10 +588,10 @@ claude-manager/app/claude-manager/
 
 | File | Description |
 |------|-------------|
-| `~/.claude-manager/agents.json` | Persisted agent state |
+| `~/.claude-manager/agents.json` | Persisted agent state (all agents, all sessions) |
 | `~/.claude-manager/kanban-tasks.json` | Kanban board tasks |
-| `~/.claude-manager/automations.json` | Automation definitions |
-| `~/.claude-manager/processed-items.json` | Automation processed items tracking |
+| `~/.claude-manager/automations.json` | Automation definitions and state |
+| `~/.claude-manager/processed-items.json` | Automation deduplication tracking |
 | `~/.claude/schedules.json` | Scheduled task definitions |
 
 ### Generated Files
@@ -646,25 +608,20 @@ claude-manager/app/claude-manager/
 ### Scripts
 
 ```bash
-# Development
-npm run dev              # Start Next.js dev server
-npm run electron:dev     # Start Electron in dev mode (concurrent)
-
-# Building
-npm run build            # Build Next.js for production
-npm run electron:build   # Build distributable Electron app (DMG)
-npm run electron:pack    # Pack Electron app (directory only)
-
-# Linting
-npm run lint             # Run ESLint
+npm run dev              # Next.js dev server
+npm run electron:dev     # Electron + Next.js concurrent dev mode
+npm run build            # Next.js production build
+npm run electron:build   # Distributable Electron app (DMG)
+npm run electron:pack    # Electron directory package
+npm run lint             # ESLint
 ```
 
 ### Build Pipeline
 
 1. Next.js production build
-2. TypeScript compilation (electron + MCP servers)
+2. TypeScript compilation (Electron + MCP servers)
 3. MCP servers built independently
-4. `electron-builder` packages everything into a distributable
+4. `electron-builder` packages into distributable
 
 ### Environment
 
@@ -677,12 +634,12 @@ The app reads Claude Code configuration from:
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome. Please submit a Pull Request.
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
+2. Create your feature branch (`git checkout -b feature/my-feature`)
+3. Commit your changes
+4. Push to the branch
 5. Open a Pull Request
 
 ## License
@@ -694,10 +651,3 @@ This project is open source and available under the [MIT License](LICENSE).
 - [Anthropic](https://anthropic.com) for Claude Code
 - [skills.sh](https://skills.sh) for the skills ecosystem
 - [claude-mem](https://github.com/thedotmack/claude-mem) for persistent memory
-- All contributors and users of this project
-
----
-
-<p align="center">
-  Made with care for the Claude Code community
-</p>

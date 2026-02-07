@@ -10,7 +10,7 @@ const redis = process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_RE
   : null;
 
 // Download URL - update this to your actual release URL
-const DOWNLOAD_URL = 'https://github.com/Charlie85270/claude-mgr/releases/download/0.0.13/claude.mgr-0.0.13-arm64.dmg';
+const DOWNLOAD_URL = 'https://github.com/Charlie85270/claude-mgr/releases/download/0.0.16/claude.mgr-0.0.16-arm64.dmg';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);

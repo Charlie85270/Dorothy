@@ -10,6 +10,7 @@ import {
   Terminal,
 } from 'lucide-react';
 import { SlackIcon } from './SlackIcon';
+import { JiraIcon } from './JiraIcon';
 import type { SettingsSection } from './types';
 
 export const SECTIONS: { id: SettingsSection; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -19,6 +20,7 @@ export const SECTIONS: { id: SettingsSection; label: string; icon: React.Compone
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'telegram', label: 'Telegram', icon: Send },
   { id: 'slack', label: 'Slack', icon: SlackIcon },
+  { id: 'jira', label: 'JIRA', icon: JiraIcon },
   { id: 'permissions', label: 'Permissions', icon: Shield },
   { id: 'skills', label: 'Skills & Plugins', icon: Sparkles },
   { id: 'cli', label: 'CLI Paths', icon: Terminal },
@@ -41,6 +43,10 @@ export const DEFAULT_APP_SETTINGS = {
   slackAppToken: '',
   slackSigningSecret: '',
   slackChannelId: '',
+  jiraEnabled: false,
+  jiraDomain: '',
+  jiraEmail: '',
+  jiraApiToken: '',
   verboseModeEnabled: false,
   cliPaths: {
     claude: '',

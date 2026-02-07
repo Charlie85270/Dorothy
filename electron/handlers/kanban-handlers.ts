@@ -299,6 +299,19 @@ export function registerKanbanHandlers(dependencies: KanbanHandlerDependencies):
           // Build prompt from task
           let prompt = `# Task: ${task.title}\n\n${task.description}`;
 
+          // Add JIRA-specific project discovery instructions
+          const isJiraTask = task.labels?.some(l => l.startsWith('jira:'));
+          if (isJiraTask) {
+            prompt += '\n\n## Project Discovery\n';
+            prompt += 'This task originates from JIRA. The configured project path may not be exact.\n';
+            prompt += 'Before starting work, verify you are in the correct project directory:\n';
+            prompt += '1. Check if the current working directory contains the relevant codebase\n';
+            prompt += '2. If not, search for the project by listing directories under ~/Documents, ~/Projects, ~/repos, or ~/Desktop\n';
+            prompt += '3. Look for directory names that match the JIRA project name, key, or related repository\n';
+            prompt += '4. Use `ls` and `find` to locate the right project, then `cd` into it before starting work\n';
+            prompt += '5. If you cannot find the project, proceed with the task in the current directory and note this in your completion summary\n';
+          }
+
           // Add attachments section if there are any
           if (task.attachments && task.attachments.length > 0) {
             prompt += '\n\n## Reference Files\n';

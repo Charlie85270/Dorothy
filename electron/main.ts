@@ -118,6 +118,10 @@ function loadAppSettings(): AppSettings {
     slackAppToken: '',
     slackSigningSecret: '',
     slackChannelId: '',
+    jiraEnabled: false,
+    jiraDomain: '',
+    jiraEmail: '',
+    jiraApiToken: '',
     verboseModeEnabled: false,
     cliPaths: {
       claude: '',

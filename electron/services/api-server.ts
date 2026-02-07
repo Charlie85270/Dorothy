@@ -376,17 +376,18 @@ export function startApiServer(
         }
 
         const telegramBot = getTelegramBot();
-        if (!telegramBot || !appSettings.telegramChatId) {
-          sendJson({ error: 'Telegram not configured or no chat ID' }, 400);
+        const targetChatId = appSettings.telegramChatId || appSettings.telegramAuthorizedChatIds?.[0];
+        if (!telegramBot || !targetChatId) {
+          sendJson({ error: 'Telegram not configured or no chat ID. Set a default chat in Settings > Telegram.' }, 400);
           return;
         }
 
         try {
-          await telegramBot.sendMessage(appSettings.telegramChatId, `👑 ${message}`, { parse_mode: 'Markdown' });
+          await telegramBot.sendMessage(targetChatId, `👑 ${message}`, { parse_mode: 'Markdown' });
           sendJson({ success: true });
         } catch (err) {
           try {
-            await telegramBot.sendMessage(appSettings.telegramChatId, `👑 ${message}`);
+            await telegramBot.sendMessage(targetChatId, `👑 ${message}`);
             sendJson({ success: true });
           } catch (err2) {
             sendJson({ error: `Failed to send: ${err2}` }, 500);
@@ -404,20 +405,20 @@ export function startApiServer(
         }
 
         const telegramBot = getTelegramBot();
-        if (!telegramBot || !appSettings.telegramChatId) {
+        const targetChatId = appSettings.telegramChatId || appSettings.telegramAuthorizedChatIds?.[0];
+        if (!telegramBot || !targetChatId) {
           sendJson({ error: 'Telegram not configured or no chat ID' }, 400);
           return;
         }
 
         try {
-          // Check if file exists
           if (!fs.existsSync(photo_path)) {
             sendJson({ error: `File not found: ${photo_path}` }, 400);
             return;
           }
 
           await telegramBot.sendPhoto(
-            appSettings.telegramChatId,
+            targetChatId,
             photo_path,
             { caption: caption ? `👑 ${caption}` : undefined, parse_mode: 'Markdown' }
           );
@@ -437,20 +438,20 @@ export function startApiServer(
         }
 
         const telegramBot = getTelegramBot();
-        if (!telegramBot || !appSettings.telegramChatId) {
+        const targetChatId = appSettings.telegramChatId || appSettings.telegramAuthorizedChatIds?.[0];
+        if (!telegramBot || !targetChatId) {
           sendJson({ error: 'Telegram not configured or no chat ID' }, 400);
           return;
         }
 
         try {
-          // Check if file exists
           if (!fs.existsSync(video_path)) {
             sendJson({ error: `File not found: ${video_path}` }, 400);
             return;
           }
 
           await telegramBot.sendVideo(
-            appSettings.telegramChatId,
+            targetChatId,
             video_path,
             { caption: caption ? `👑 ${caption}` : undefined, parse_mode: 'Markdown' }
           );
@@ -470,20 +471,20 @@ export function startApiServer(
         }
 
         const telegramBot = getTelegramBot();
-        if (!telegramBot || !appSettings.telegramChatId) {
+        const targetChatId = appSettings.telegramChatId || appSettings.telegramAuthorizedChatIds?.[0];
+        if (!telegramBot || !targetChatId) {
           sendJson({ error: 'Telegram not configured or no chat ID' }, 400);
           return;
         }
 
         try {
-          // Check if file exists
           if (!fs.existsSync(document_path)) {
             sendJson({ error: `File not found: ${document_path}` }, 400);
             return;
           }
 
           await telegramBot.sendDocument(
-            appSettings.telegramChatId,
+            targetChatId,
             document_path,
             { caption: caption ? `👑 ${caption}` : undefined, parse_mode: 'Markdown' }
           );

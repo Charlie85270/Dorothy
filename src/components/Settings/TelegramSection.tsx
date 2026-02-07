@@ -267,7 +267,7 @@ export const TelegramSection = ({ appSettings, onSaveAppSettings, onUpdateLocalS
           {/* Authorized Chat IDs */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium">Authorized Users</label>
+              <label className="text-sm font-medium">Authorized Chats</label>
               <span className="text-xs text-muted-foreground">
                 {appSettings.telegramAuthorizedChatIds?.length || 0} authorized
               </span>
@@ -275,29 +275,55 @@ export const TelegramSection = ({ appSettings, onSaveAppSettings, onUpdateLocalS
 
             {appSettings.telegramAuthorizedChatIds?.length > 0 ? (
               <div className="space-y-2">
-                {appSettings.telegramAuthorizedChatIds.map((chatId) => (
-                  <div
-                    key={chatId}
-                    className="flex items-center justify-between px-3 py-2 bg-secondary border border-border"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Check className="w-4 h-4 text-green-400" />
-                      <code className="text-sm font-mono">{chatId}</code>
-                    </div>
-                    <button
-                      onClick={() => handleRemoveChatId(chatId)}
-                      className="p-1 text-muted-foreground hover:text-red-400 transition-colors"
-                      title="Remove authorization"
+                {appSettings.telegramAuthorizedChatIds.map((chatId) => {
+                  const isDefault = appSettings.telegramChatId === chatId;
+                  return (
+                    <div
+                      key={chatId}
+                      className={`flex items-center justify-between px-3 py-2 bg-secondary border transition-colors ${
+                        isDefault ? 'border-green-500/50' : 'border-border'
+                      }`}
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+                      <div className="flex items-center gap-2">
+                        <Check className={`w-4 h-4 ${isDefault ? 'text-green-400' : 'text-muted-foreground/40'}`} />
+                        <code className="text-sm font-mono">{chatId}</code>
+                        {isDefault && (
+                          <span className="px-1.5 py-0.5 bg-green-500/10 text-green-500 rounded text-[10px] font-medium">
+                            DEFAULT
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {!isDefault && (
+                          <button
+                            onClick={() => onSaveAppSettings({ telegramChatId: chatId })}
+                            className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors"
+                            title="Set as default"
+                          >
+                            Set default
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleRemoveChatId(chatId)}
+                          className="p-1 text-muted-foreground hover:text-red-400 transition-colors"
+                          title="Remove authorization"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div className="px-3 py-4 bg-secondary border border-border text-sm text-muted-foreground text-center">
-                No authorized users yet. Users must authenticate with /auth &lt;token&gt;
+                No authorized chats yet. Users must authenticate with /auth &lt;token&gt;
               </div>
+            )}
+            {appSettings.telegramAuthorizedChatIds?.length > 0 && (
+              <p className="text-xs text-muted-foreground mt-2">
+                The default chat receives messages from automations and notifications. Click &quot;Set default&quot; to change it.
+              </p>
             )}
           </div>
         </div>

@@ -27,6 +27,7 @@ import {
   GitPullRequest,
   GitBranch,
   Tag,
+  TicketCheck,
 } from 'lucide-react';
 import { isElectron } from '@/hooks/useElectron';
 
@@ -94,7 +95,7 @@ type IconComponent = React.ComponentType<{ className?: string }>;
 function getSourceIcon(type: string): IconComponent {
   const icons: Record<string, IconComponent> = {
     github: Github,
-    jira: Globe,
+    jira: TicketCheck,
     pipedrive: Globe,
     twitter: MessageSquare,
     rss: Globe,
@@ -104,6 +105,8 @@ function getSourceIcon(type: string): IconComponent {
 }
 
 const SCHEDULE_PRESETS = [
+  { value: '1', label: 'Every 1 minute', minutes: 1 },
+  { value: '5', label: 'Every 5 minutes', minutes: 5 },
   { value: '15', label: 'Every 15 minutes', minutes: 15 },
   { value: '30', label: 'Every 30 minutes', minutes: 30 },
   { value: '60', label: 'Every hour', minutes: 60 },
@@ -138,6 +141,8 @@ export default function AutomationsPage() {
     sourceType: 'github' as Automation['source']['type'],
     repos: '',
     pollFor: ['pull_requests'] as string[],
+    jiraProjectKeys: '',
+    jiraJql: '',
     scheduleMinutes: '30',
     eventTypes: ['pr'] as string[],
     onNewItem: true,
@@ -147,6 +152,9 @@ export default function AutomationsPage() {
     outputTelegram: false,
     outputSlack: false,
     outputGitHubComment: false,
+    outputJiraComment: false,
+    outputJiraTransition: false,
+    jiraTransitionTarget: 'Done',
     outputTemplate: '',
   });
   const [isCreating, setIsCreating] = useState(false);
@@ -193,10 +201,21 @@ export default function AutomationsPage() {
     setCreateError(null);
 
     try {
-      const sourceConfig = {
-        repos: formData.repos.split(',').map(r => r.trim()).filter(Boolean),
-        pollFor: formData.pollFor,
-      };
+      let sourceConfig: Record<string, unknown>;
+      if (formData.sourceType === 'jira') {
+        sourceConfig = {
+          projectKeys: formData.jiraProjectKeys.split(',').map(k => k.trim()).filter(Boolean),
+          jql: formData.jiraJql || undefined,
+        };
+      } else {
+        sourceConfig = {
+          repos: formData.repos.split(',').map(r => r.trim()).filter(Boolean),
+          pollFor: formData.pollFor,
+        };
+      }
+
+      // For JIRA, don't send GitHub-specific event types - use empty array to match all
+      const eventTypes = formData.sourceType === 'jira' ? [] : formData.eventTypes;
 
       const result = await window.electronAPI?.automation?.create({
         name: formData.name,
@@ -204,7 +223,7 @@ export default function AutomationsPage() {
         sourceType: formData.sourceType,
         sourceConfig: JSON.stringify(sourceConfig),
         scheduleMinutes: parseInt(formData.scheduleMinutes),
-        eventTypes: formData.eventTypes,
+        eventTypes,
         onNewItem: formData.onNewItem,
         agentEnabled: formData.agentEnabled,
         agentPrompt: formData.agentPrompt,
@@ -212,8 +231,10 @@ export default function AutomationsPage() {
         outputTelegram: formData.outputTelegram,
         outputSlack: formData.outputSlack,
         outputGitHubComment: formData.outputGitHubComment,
+        outputJiraComment: formData.outputJiraComment,
+        outputJiraTransition: formData.outputJiraTransition ? formData.jiraTransitionTarget : undefined,
         outputTemplate: formData.outputTemplate || undefined,
-      });
+      } as Record<string, unknown>);
 
       if (result?.success) {
         setShowCreateForm(false);
@@ -223,6 +244,8 @@ export default function AutomationsPage() {
           sourceType: 'github',
           repos: '',
           pollFor: ['pull_requests'],
+          jiraProjectKeys: '',
+          jiraJql: '',
           scheduleMinutes: '30',
           eventTypes: ['pr'],
           onNewItem: true,
@@ -232,6 +255,9 @@ export default function AutomationsPage() {
           outputTelegram: false,
           outputSlack: false,
           outputGitHubComment: false,
+          outputJiraComment: false,
+          outputJiraTransition: false,
+          jiraTransitionTarget: 'Done',
           outputTemplate: '',
         });
         await loadAutomations();
@@ -441,6 +467,7 @@ export default function AutomationsPage() {
                 const SourceIcon = getSourceIcon(automation.source.type);
                 const isExpanded = expandedAutomations.has(automation.id);
                 const githubConfig = automation.source.config as { repos?: string[]; pollFor?: string[] };
+                const jiraConfig = automation.source.config as { projectKeys?: string[]; jql?: string };
                 return (
                   <motion.div
                     key={automation.id}
@@ -487,6 +514,11 @@ export default function AutomationsPage() {
                                   ({githubConfig?.repos?.length || 0} repos)
                                 </span>
                               )}
+                              {automation.source.type === 'jira' && (
+                                <span className="text-muted-foreground/60">
+                                  ({jiraConfig?.projectKeys?.length || 0} projects)
+                                </span>
+                              )}
                             </div>
 
                             {automation.agent.enabled && (
@@ -521,6 +553,20 @@ export default function AutomationsPage() {
                               <div className="flex items-center gap-1 text-gray-400">
                                 <Github className="w-3 h-3" />
                                 PR Comment
+                              </div>
+                            )}
+
+                            {automation.outputs.some(o => o.type === 'jira_comment' && o.enabled) && (
+                              <div className="flex items-center gap-1 text-blue-400">
+                                <TicketCheck className="w-3 h-3" />
+                                JIRA Comment
+                              </div>
+                            )}
+
+                            {automation.outputs.some(o => o.type === 'jira_transition' && o.enabled) && (
+                              <div className="flex items-center gap-1 text-green-400">
+                                <TicketCheck className="w-3 h-3" />
+                                JIRA Transition
                               </div>
                             )}
                           </div>
@@ -619,6 +665,36 @@ export default function AutomationsPage() {
                                       {type.replace('_', ' ')}
                                     </span>
                                   ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* JIRA Project Keys */}
+                            {automation.source.type === 'jira' && jiraConfig?.projectKeys && jiraConfig.projectKeys.length > 0 && (
+                              <div>
+                                <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
+                                  <TicketCheck className="w-3 h-3" />
+                                  Project Keys
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {jiraConfig.projectKeys.map((key, i) => (
+                                    <span key={i} className="px-2 py-0.5 bg-secondary rounded text-xs font-mono">
+                                      {key}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* JIRA JQL */}
+                            {automation.source.type === 'jira' && jiraConfig?.jql && (
+                              <div>
+                                <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
+                                  <TicketCheck className="w-3 h-3" />
+                                  JQL Query
+                                </div>
+                                <div className="px-3 py-2 bg-secondary/50 rounded text-xs font-mono whitespace-pre-wrap">
+                                  {jiraConfig.jql}
                                 </div>
                               </div>
                             )}
@@ -743,7 +819,7 @@ export default function AutomationsPage() {
                     className="w-full px-3 py-2 bg-secondary border border-border rounded-lg"
                   >
                     <option value="github">GitHub</option>
-                    <option value="jira" disabled>JIRA (coming soon)</option>
+                    <option value="jira">JIRA</option>
                     <option value="pipedrive" disabled>Pipedrive (coming soon)</option>
                   </select>
                 </div>
@@ -802,6 +878,50 @@ export default function AutomationsPage() {
                   </>
                 )}
 
+                {/* JIRA-specific config */}
+                {formData.sourceType === 'jira' && (
+                  <>
+                    <div className="flex items-start gap-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                      <AlertCircle className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+                      <div className="text-sm">
+                        <span className="text-blue-500 font-medium">Requires JIRA credentials</span>
+                        <p className="text-muted-foreground mt-0.5">
+                          Configure your JIRA domain, email, and API token in{' '}
+                          <span className="font-medium text-foreground">Settings &gt; JIRA</span> first.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Project Keys *</label>
+                      <input
+                        type="text"
+                        value={formData.jiraProjectKeys}
+                        onChange={(e) => setFormData({ ...formData, jiraProjectKeys: e.target.value })}
+                        placeholder="PROJ, TEAM, DEV"
+                        className="w-full px-3 py-2 bg-secondary border border-border rounded-lg font-mono text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Comma-separated JIRA project keys to poll
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Custom JQL (optional)</label>
+                      <input
+                        type="text"
+                        value={formData.jiraJql}
+                        onChange={(e) => setFormData({ ...formData, jiraJql: e.target.value })}
+                        placeholder='project = PROJ AND status != Done ORDER BY updated DESC'
+                        className="w-full px-3 py-2 bg-secondary border border-border rounded-lg font-mono text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Override default JQL query. Leave empty to use project keys above.
+                      </p>
+                    </div>
+                  </>
+                )}
+
                 {/* Schedule */}
                 <div>
                   <label className="block text-sm font-medium mb-2">Poll Interval</label>
@@ -847,7 +967,10 @@ Post the tweet as a comment.`}
                           className="w-full px-3 py-2 bg-secondary border border-border rounded-lg resize-none font-mono text-sm"
                         />
                         <p className="text-xs text-muted-foreground mt-1">
-                          Variables: {'{{number}}'}, {'{{title}}'}, {'{{repo}}'}, {'{{author}}'}, {'{{url}}'}
+                          {formData.sourceType === 'jira'
+                            ? <>Variables: {'{{key}}'}, {'{{summary}}'}, {'{{status}}'}, {'{{issueType}}'}, {'{{priority}}'}, {'{{assignee}}'}, {'{{reporter}}'}, {'{{url}}'}</>
+                            : <>Variables: {'{{number}}'}, {'{{title}}'}, {'{{repo}}'}, {'{{author}}'}, {'{{url}}'}</>
+                          }
                         </p>
                       </div>
 
@@ -901,7 +1024,46 @@ Post the tweet as a comment.`}
                       <Github className="w-4 h-4 text-gray-400" />
                       <span className="text-sm">PR Comment</span>
                     </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.outputJiraComment}
+                        onChange={(e) => setFormData({ ...formData, outputJiraComment: e.target.checked })}
+                        className="w-4 h-4 rounded border-border"
+                      />
+                      <TicketCheck className="w-4 h-4 text-blue-400" />
+                      <span className="text-sm">JIRA Comment</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.outputJiraTransition}
+                        onChange={(e) => setFormData({ ...formData, outputJiraTransition: e.target.checked })}
+                        className="w-4 h-4 rounded border-border"
+                      />
+                      <TicketCheck className="w-4 h-4 text-green-400" />
+                      <span className="text-sm">JIRA Transition</span>
+                    </label>
                   </div>
+
+                  {/* JIRA transition target */}
+                  {formData.outputJiraTransition && (
+                    <div className="mt-3">
+                      <label className="block text-sm font-medium mb-2">Transition To Status</label>
+                      <input
+                        type="text"
+                        value={formData.jiraTransitionTarget}
+                        onChange={(e) => setFormData({ ...formData, jiraTransitionTarget: e.target.value })}
+                        placeholder="Done"
+                        className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        The target JIRA status name (e.g., &quot;Done&quot;, &quot;In Review&quot;, &quot;Closed&quot;)
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {createError && (
@@ -921,7 +1083,7 @@ Post the tweet as a comment.`}
                 </button>
                 <button
                   onClick={handleCreateAutomation}
-                  disabled={isCreating || !formData.name || !formData.repos || (formData.agentEnabled && !formData.agentPrompt)}
+                  disabled={isCreating || !formData.name || (formData.sourceType === 'github' && !formData.repos) || (formData.sourceType === 'jira' && !formData.jiraProjectKeys && !formData.jiraJql) || (formData.agentEnabled && !formData.agentPrompt)}
                   className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg transition-colors disabled:opacity-50"
                 >
                   {isCreating ? (

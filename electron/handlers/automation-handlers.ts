@@ -361,6 +361,8 @@ export function registerAutomationHandlers(): void {
     outputTelegram?: boolean;
     outputSlack?: boolean;
     outputGitHubComment?: boolean;
+    outputJiraComment?: boolean;
+    outputJiraTransition?: string; // Target status name, e.g., "Done"
     outputTemplate?: string;
   }) => {
     try {
@@ -389,6 +391,12 @@ export function registerAutomationHandlers(): void {
       }
       if (params.outputGitHubComment) {
         outputs.push({ type: 'github_comment', enabled: true, template: params.outputTemplate });
+      }
+      if (params.outputJiraComment) {
+        outputs.push({ type: 'jira_comment', enabled: true, template: params.outputTemplate });
+      }
+      if (params.outputJiraTransition) {
+        outputs.push({ type: 'jira_transition', enabled: true, template: params.outputJiraTransition });
       }
 
       const newAutomation: Automation = {

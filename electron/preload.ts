@@ -231,6 +231,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('slack:sendTest'),
   },
 
+  // JIRA
+  jira: {
+    test: () =>
+      ipcRenderer.invoke('jira:test'),
+  },
+
   // Dialogs
   dialog: {
     openFolder: () =>
@@ -320,8 +326,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       outputTelegram?: boolean;
       outputSlack?: boolean;
       outputGitHubComment?: boolean;
+      outputJiraComment?: boolean;
+      outputJiraTransition?: string;
       outputTemplate?: string;
-    }) =>
+    } | Record<string, unknown>) =>
       ipcRenderer.invoke('automation:create', params),
     update: (id: string, params: { enabled?: boolean; name?: string }) =>
       ipcRenderer.invoke('automation:update', id, params),

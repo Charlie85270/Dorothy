@@ -11,7 +11,7 @@ import * as os from "os";
 // ============================================================================
 
 export type SourceType = "github" | "jira" | "pipedrive" | "twitter" | "rss" | "custom";
-export type OutputType = "telegram" | "slack" | "github_comment" | "email" | "discord" | "webhook";
+export type OutputType = "telegram" | "slack" | "github_comment" | "email" | "discord" | "webhook" | "jira_comment" | "jira_transition";
 
 export interface GitHubSourceConfig {
   repos: string[];

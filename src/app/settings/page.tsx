@@ -13,6 +13,7 @@ import {
   NotificationsSection,
   TelegramSection,
   SlackSection,
+  JiraSection,
   PermissionsSection,
   SkillsSection,
   CLIPathsSection,
@@ -91,6 +92,14 @@ export default function SettingsPage() {
       case 'slack':
         return (
           <SlackSection
+            appSettings={appSettings}
+            onSaveAppSettings={handleSaveAppSettings}
+            onUpdateLocalSettings={updateLocalAppSettings}
+          />
+        );
+      case 'jira':
+        return (
+          <JiraSection
             appSettings={appSettings}
             onSaveAppSettings={handleSaveAppSettings}
             onUpdateLocalSettings={updateLocalAppSettings}

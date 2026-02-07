@@ -196,6 +196,10 @@ export interface ElectronAPI {
       slackAppToken: string;
       slackSigningSecret: string;
       slackChannelId: string;
+      jiraEnabled: boolean;
+      jiraDomain: string;
+      jiraEmail: string;
+      jiraApiToken: string;
       cliPaths?: {
         claude: string;
         gh: string;
@@ -219,6 +223,10 @@ export interface ElectronAPI {
       slackAppToken?: string;
       slackSigningSecret?: string;
       slackChannelId?: string;
+      jiraEnabled?: boolean;
+      jiraDomain?: string;
+      jiraEmail?: string;
+      jiraApiToken?: string;
       cliPaths?: {
         claude: string;
         gh: string;
@@ -241,6 +249,11 @@ export interface ElectronAPI {
   slack?: {
     test: () => Promise<{ success: boolean; botName?: string; error?: string }>;
     sendTest: () => Promise<{ success: boolean; error?: string }>;
+  };
+
+  // JIRA
+  jira?: {
+    test: () => Promise<{ success: boolean; displayName?: string; email?: string; error?: string }>;
   };
 
   // Dialogs
@@ -359,8 +372,10 @@ export interface ElectronAPI {
       outputTelegram?: boolean;
       outputSlack?: boolean;
       outputGitHubComment?: boolean;
+      outputJiraComment?: boolean;
+      outputJiraTransition?: string;
       outputTemplate?: string;
-    }) => Promise<{ success: boolean; error?: string; automationId?: string }>;
+    } | Record<string, unknown>) => Promise<{ success: boolean; error?: string; automationId?: string }>;
     update: (id: string, params: { enabled?: boolean; name?: string }) => Promise<{ success: boolean; error?: string }>;
     delete: (id: string) => Promise<{ success: boolean; error?: string }>;
     run: (id: string) => Promise<{ success: boolean; error?: string; itemsProcessed?: number; itemsFound?: number }>;

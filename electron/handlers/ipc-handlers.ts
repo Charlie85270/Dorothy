@@ -1105,6 +1105,37 @@ function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
       return { success: false, error: String(err) };
     }
   });
+
+  // ============== JIRA IPC Handlers ==============
+
+  ipcMain.handle('jira:test', async () => {
+    const appSettings = getAppSettings();
+    if (!appSettings.jiraDomain || !appSettings.jiraEmail || !appSettings.jiraApiToken) {
+      return { success: false, error: 'JIRA domain, email, and API token are all required' };
+    }
+
+    try {
+      const auth = Buffer.from(`${appSettings.jiraEmail}:${appSettings.jiraApiToken}`).toString('base64');
+      const res = await fetch(`https://${appSettings.jiraDomain}.atlassian.net/rest/api/3/myself`, {
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        return { success: true, displayName: data.displayName, email: data.emailAddress };
+      } else {
+        const text = await res.text();
+        return { success: false, error: `HTTP ${res.status}: ${text.slice(0, 200)}` };
+      }
+    } catch (err) {
+      console.error('JIRA test failed:', err);
+      return { success: false, error: String(err) };
+    }
+  });
 }
 
 // ============== File System IPC Handlers ==============

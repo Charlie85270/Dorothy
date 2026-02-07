@@ -112,7 +112,7 @@ Automations poll external sources, detect new or updated items, and spawn Claude
 | Source | Status | Polling Method |
 |--------|--------|---------------|
 | **GitHub** | Active | `gh` CLI — pull requests, issues, releases |
-| **JIRA** | Planned | — |
+| **JIRA** | Active | REST API v3 — issues, bugs, stories, tasks |
 | **Pipedrive** | Planned | — |
 | **Twitter** | Planned | — |
 | **RSS** | Planned | — |
@@ -134,6 +134,8 @@ Automations poll external sources, detect new or updated items, and spawn Claude
 
 Use these in your `agentPrompt` and `outputTemplate`:
 
+#### GitHub Variables
+
 | Variable | Description |
 |----------|-------------|
 | `{{title}}` | Item title (PR title, issue title, etc.) |
@@ -144,6 +146,20 @@ Use these in your `agentPrompt` and `outputTemplate`:
 | `{{repo}}` | Repository name |
 | `{{number}}` | Item number (PR #, issue #) |
 | `{{type}}` | Item type (pull_request, issue, etc.) |
+
+#### JIRA Variables
+
+| Variable | Description |
+|----------|-------------|
+| `{{key}}` | Issue key (e.g., `PROJ-123`) |
+| `{{summary}}` | Issue summary |
+| `{{status}}` | Current issue status |
+| `{{issueType}}` | Issue type (Task, Bug, Story, etc.) |
+| `{{priority}}` | Issue priority |
+| `{{assignee}}` | Assigned user |
+| `{{reporter}}` | Reporter name |
+| `{{url}}` | Issue URL |
+| `{{body}}` | Issue description |
 
 ### Example: Automated PR Review Bot
 
@@ -160,6 +176,25 @@ create_automation({
   outputSlack: true
 })
 ```
+
+### Example: JIRA Issue Processor
+
+```javascript
+create_automation({
+  name: "JIRA Task Agent",
+  sourceType: "jira",
+  sourceConfig: '{"projectKeys": ["PROJ"], "jql": "status = Open"}',
+  scheduleMinutes: 5,
+  agentEnabled: true,
+  agentPrompt: "Work on JIRA issue {{key}}: {{summary}}. Description: {{body}}. Priority: {{priority}}.",
+  agentProjectPath: "/path/to/project",
+  outputJiraComment: true,
+  outputJiraTransition: true,
+  outputTelegram: true
+})
+```
+
+JIRA automations also create Kanban tasks automatically in the backlog, allowing agents to pick them up via the auto-assignment system.
 
 ---
 
@@ -338,6 +373,7 @@ The main orchestration server — agent management, messaging, scheduling, and a
 | `resume_automation` | `id` | Resume a paused automation |
 | `run_due_automations` | — | Check and run all due automations |
 | `get_automation_logs` | `id`, `limit?` (10) | Get execution history |
+| `update_jira_issue` | `issueKey`, `transitionName?`, `comment?` | Update JIRA issue status and/or add a comment |
 
 ##### Automation Create Options
 
@@ -357,6 +393,8 @@ The main orchestration server — agent management, messaging, scheduling, and a
 | `outputTelegram` | boolean | Post output to Telegram |
 | `outputSlack` | boolean | Post output to Slack |
 | `outputGitHubComment` | boolean | Post output as GitHub comment |
+| `outputJiraComment` | boolean | Post a comment on the JIRA issue |
+| `outputJiraTransition` | boolean | Transition the JIRA issue status |
 | `outputTemplate` | string | Custom output message template |
 
 ---
@@ -482,13 +520,14 @@ Open [http://localhost:3000](http://localhost:3000). Agent management and termin
 ### Data Flow: Automation Pipeline
 
 1. Scheduler triggers automation on cron schedule
-2. Poller fetches items from source (GitHub via `gh` CLI)
+2. Poller fetches items from source (GitHub via `gh` CLI, JIRA via REST API)
 3. Filter applies trigger conditions, deduplicates via content hashing
 4. Temporary agent spawned for each new/updated item
 5. Prompt injected with item data via template variables
 6. Agent executes autonomously with full MCP tool access
-7. Agent delivers output via MCP tools (Telegram, Slack, GitHub comments)
-8. Temporary agent deleted, item marked as processed
+7. Agent delivers output via MCP tools (Telegram, Slack, GitHub comments, JIRA comments/transitions)
+8. For JIRA automations, Kanban tasks are auto-created in the backlog
+9. Temporary agent deleted, item marked as processed
 
 ### MCP Communication
 

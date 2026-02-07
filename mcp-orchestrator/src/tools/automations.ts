@@ -34,6 +34,7 @@ import {
   Automation,
   AutomationRun,
   GitHubSourceConfig,
+  JiraSourceConfig,
   OutputConfig,
 } from "../utils/automations.js";
 import { apiRequest } from "../utils/api.js";
@@ -215,12 +216,211 @@ async function pollGitHub(config: GitHubSourceConfig, automation: Automation): P
   return { items };
 }
 
+// ============================================================================
+// JIRA HELPERS
+// ============================================================================
+
+const APP_SETTINGS_FILE = path.join(os.homedir(), ".claude-manager", "app-settings.json");
+const KANBAN_FILE = path.join(os.homedir(), ".claude-manager", "kanban-tasks.json");
+
+// Kanban task creation helper for JIRA items
+function createKanbanTaskFromJiraItem(
+  item: PollResult["items"][0],
+  automation: Automation
+): void {
+  try {
+    // Load existing kanban tasks
+    let tasks: Array<Record<string, unknown>> = [];
+    if (fs.existsSync(KANBAN_FILE)) {
+      tasks = JSON.parse(fs.readFileSync(KANBAN_FILE, "utf-8"));
+    }
+
+    // Check if a task with this JIRA key already exists (avoid duplicates)
+    const jiraKey = item.raw.key as string;
+    const existingTask = tasks.find(
+      (t) => t.labels && Array.isArray(t.labels) && (t.labels as string[]).includes(`jira:${jiraKey}`)
+    );
+    if (existingTask) {
+      return; // Already exists
+    }
+
+    // Find max order in backlog
+    const backlogTasks = tasks.filter((t) => t.column === "backlog");
+    const maxOrder = backlogTasks.length > 0
+      ? Math.max(...backlogTasks.map((t) => (t.order as number) || 0))
+      : -1;
+
+    // Map JIRA priority to kanban priority
+    const jiraPriority = (item.raw.priority as string || "").toLowerCase();
+    let priority: "low" | "medium" | "high" = "medium";
+    if (jiraPriority.includes("high") || jiraPriority.includes("critical") || jiraPriority.includes("blocker")) {
+      priority = "high";
+    } else if (jiraPriority.includes("low") || jiraPriority.includes("trivial")) {
+      priority = "low";
+    }
+
+    // Resolve project path - handle relative paths and missing home prefix
+    let projectPath = automation.agent.projectPath || os.homedir();
+    if (!path.isAbsolute(projectPath)) {
+      projectPath = path.join(os.homedir(), projectPath);
+    } else if (!fs.existsSync(projectPath) && fs.existsSync(path.join(os.homedir(), projectPath.replace(/^\//, "")))) {
+      projectPath = path.join(os.homedir(), projectPath.replace(/^\//, ""));
+    }
+
+    const newTask = {
+      id: generateId() + generateId(), // Longer ID to match uuid-like format
+      title: `[${jiraKey}] ${item.title}`,
+      description: `**JIRA Issue:** ${item.url}\n**Project Key:** ${jiraKey.split("-")[0]}\n**Type:** ${item.type}\n**Status:** ${item.raw.status}\n**Priority:** ${item.raw.priority || "Unset"}\n**Reporter:** ${item.author}\n**Assignee:** ${item.raw.assignee || "Unassigned"}\n\n${item.body || "No description"}`,
+      column: "backlog",
+      projectId: jiraKey,
+      projectPath,
+      assignedAgentId: null,
+      agentCreatedForTask: false,
+      requiredSkills: [],
+      priority,
+      progress: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      order: maxOrder + 1,
+      labels: [`jira:${jiraKey}`, "jira", item.type],
+      attachments: [],
+    };
+
+    tasks.push(newTask);
+
+    // Ensure directory exists
+    const dir = path.dirname(KANBAN_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(KANBAN_FILE, JSON.stringify(tasks, null, 2));
+  } catch (error) {
+    console.error("Failed to create kanban task from JIRA item:", error);
+  }
+}
+
+function loadJiraCredentials(config: JiraSourceConfig): { domain: string; email: string; apiToken: string } | null {
+  // Try automation config first
+  if (config.email && config.apiToken && config.domain) {
+    return { domain: config.domain, email: config.email, apiToken: config.apiToken };
+  }
+  // Fallback: load from app settings
+  try {
+    if (fs.existsSync(APP_SETTINGS_FILE)) {
+      const settings = JSON.parse(fs.readFileSync(APP_SETTINGS_FILE, "utf-8"));
+      if (settings.jiraEnabled && settings.jiraEmail && settings.jiraApiToken && settings.jiraDomain) {
+        return { domain: settings.jiraDomain, email: settings.jiraEmail, apiToken: settings.jiraApiToken };
+      }
+    }
+  } catch {
+    // Ignore
+  }
+  return null;
+}
+
+function jiraAuthHeaders(email: string, apiToken: string): Record<string, string> {
+  const auth = Buffer.from(`${email}:${apiToken}`).toString("base64");
+  return {
+    "Authorization": `Basic ${auth}`,
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+  };
+}
+
+function extractAdfText(node: unknown): string {
+  if (!node || typeof node !== "object") return "";
+  const n = node as Record<string, unknown>;
+  if (n.type === "text" && typeof n.text === "string") return n.text;
+  if (Array.isArray(n.content)) {
+    return n.content.map(extractAdfText).join("");
+  }
+  return "";
+}
+
+async function pollJira(config: JiraSourceConfig, automation: Automation): Promise<PollResult> {
+  const creds = loadJiraCredentials(config);
+  if (!creds) {
+    return { items: [], error: "JIRA credentials not configured. Set them in Settings > JIRA or in the automation source config." };
+  }
+
+  const { domain, email, apiToken } = creds;
+  const headers = jiraAuthHeaders(email, apiToken);
+  const items: PollResult["items"] = [];
+
+  try {
+    // Build JQL
+    let jql = config.jql;
+    if (!jql) {
+      if (config.projectKeys && config.projectKeys.length > 0) {
+        const keys = config.projectKeys.map((k) => `"${k}"`).join(", ");
+        jql = `project IN (${keys}) ORDER BY updated DESC`;
+      } else {
+        jql = "ORDER BY updated DESC";
+      }
+    }
+
+    const searchUrl = `https://${domain}.atlassian.net/rest/api/3/search/jql`;
+    const res = await fetch(searchUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        jql,
+        maxResults: 20,
+        fields: ["summary", "description", "status", "issuetype", "reporter", "assignee", "priority", "updated", "created", "labels"],
+      }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      return { items: [], error: `JIRA API error (${res.status}): ${text.slice(0, 300)}` };
+    }
+
+    const data = await res.json();
+    const issues = data.issues || [];
+
+    for (const issue of issues) {
+      const fields = issue.fields || {};
+      const hash = hashContent(fields.updated || "");
+      const descriptionText = fields.description ? extractAdfText(fields.description) : "";
+
+      items.push({
+        id: createItemId("jira", domain, "issue", issue.key),
+        type: fields.issuetype?.name || "Issue",
+        title: fields.summary || issue.key,
+        url: `https://${domain}.atlassian.net/browse/${issue.key}`,
+        author: fields.reporter?.displayName || "Unknown",
+        body: descriptionText,
+        labels: fields.labels || [],
+        createdAt: fields.created || "",
+        updatedAt: fields.updated || "",
+        hash,
+        raw: {
+          key: issue.key,
+          summary: fields.summary,
+          status: fields.status?.name,
+          statusCategory: fields.status?.statusCategory?.name,
+          issueType: fields.issuetype?.name,
+          priority: fields.priority?.name,
+          assignee: fields.assignee?.displayName,
+          reporter: fields.reporter?.displayName,
+          labels: fields.labels,
+          domain,
+        },
+      });
+    }
+
+    return { items };
+  } catch (error) {
+    return { items: [], error: `JIRA polling failed: ${error}` };
+  }
+}
+
 async function pollSource(automation: Automation): Promise<PollResult> {
   switch (automation.source.type) {
     case "github":
       return pollGitHub(automation.source.config as GitHubSourceConfig, automation);
     case "jira":
-      return { items: [], error: "JIRA polling not yet implemented" };
+      return pollJira(automation.source.config as JiraSourceConfig, automation);
     case "pipedrive":
       return { items: [], error: "Pipedrive polling not yet implemented" };
     case "twitter":
@@ -257,6 +457,59 @@ async function sendOutput(output: OutputConfig, message: string, variables: Reco
           ? `gh issue comment ${number} --repo ${repo} --body '${finalMessage.replace(/'/g, "'\\''")}'`
           : `gh pr comment ${number} --repo ${repo} --body '${finalMessage.replace(/'/g, "'\\''")}'`;
         await execAsync(cmd);
+      }
+      break;
+    }
+    case "jira_comment": {
+      const { key: issueKey, domain: jiraDomain } = variables as { key?: string; domain?: string };
+      if (issueKey && jiraDomain) {
+        // Load credentials
+        const jiraCreds = loadJiraCredentials({ domain: jiraDomain, projectKeys: [] } as JiraSourceConfig);
+        if (jiraCreds) {
+          const jiraHeaders = jiraAuthHeaders(jiraCreds.email, jiraCreds.apiToken);
+          await fetch(`https://${jiraCreds.domain}.atlassian.net/rest/api/3/issue/${issueKey}/comment`, {
+            method: "POST",
+            headers: jiraHeaders,
+            body: JSON.stringify({
+              body: {
+                type: "doc",
+                version: 1,
+                content: [{
+                  type: "paragraph",
+                  content: [{ type: "text", text: finalMessage }],
+                }],
+              },
+            }),
+          });
+        }
+      }
+      break;
+    }
+    case "jira_transition": {
+      const { key: transIssueKey, domain: transDomain } = variables as { key?: string; domain?: string };
+      const targetTransition = output.template || "Done";
+      if (transIssueKey && transDomain) {
+        const jiraCreds = loadJiraCredentials({ domain: transDomain, projectKeys: [] } as JiraSourceConfig);
+        if (jiraCreds) {
+          const jiraHeaders = jiraAuthHeaders(jiraCreds.email, jiraCreds.apiToken);
+          // Get available transitions
+          const transRes = await fetch(`https://${jiraCreds.domain}.atlassian.net/rest/api/3/issue/${transIssueKey}/transitions`, {
+            headers: jiraHeaders,
+          });
+          if (transRes.ok) {
+            const transData = await transRes.json();
+            const transition = transData.transitions?.find((t: { name: string }) =>
+              t.name.toLowerCase() === targetTransition.toLowerCase()
+            );
+            if (transition) {
+              await fetch(`https://${jiraCreds.domain}.atlassian.net/rest/api/3/issue/${transIssueKey}/transitions`, {
+                method: "POST",
+                headers: jiraHeaders,
+                body: JSON.stringify({ transition: { id: transition.id } }),
+              });
+            }
+          }
+        }
       }
       break;
     }
@@ -354,7 +607,7 @@ async function runAutomation(automation: Automation): Promise<AutomationRun> {
 
     // Process each item
     for (const item of itemsToProcess) {
-      const variables = {
+      const variables: Record<string, unknown> = {
         ...item.raw,
         number: item.raw.number,
         title: item.title,
@@ -365,6 +618,21 @@ async function runAutomation(automation: Automation): Promise<AutomationRun> {
         repo: item.raw.repo,
         labels: item.labels?.join(", "),
       };
+
+      // Add JIRA-specific template variables
+      if (automation.source.type === "jira") {
+        variables.key = item.raw.key;
+        variables.summary = item.raw.summary;
+        variables.status = item.raw.status;
+        variables.issueType = item.raw.issueType;
+        variables.priority = item.raw.priority;
+        variables.assignee = item.raw.assignee;
+        variables.reporter = item.raw.reporter;
+        variables.domain = item.raw.domain;
+
+        // Create kanban task from JIRA issue
+        createKanbanTaskFromJiraItem(item, automation);
+      }
 
       let agentOutput = "";
 
@@ -383,6 +651,15 @@ async function runAutomation(automation: Automation): Promise<AutomationRun> {
               const repo = variables.repo as string;
               const number = variables.number as number;
               outputInstructions.push(`- Post your result as a comment on GitHub PR #${number} in ${repo} using: gh pr comment ${number} --repo ${repo} --body "YOUR_CONTENT"`);
+            }
+            if (output.type === "jira_comment") {
+              const issueKey = variables.key as string;
+              outputInstructions.push(`- When done, update the JIRA issue ${issueKey} by calling the update_jira_issue MCP tool with a comment containing your results`);
+            }
+            if (output.type === "jira_transition") {
+              const issueKey = variables.key as string;
+              const targetStatus = output.template || "Done";
+              outputInstructions.push(`- Transition JIRA issue ${issueKey} to "${targetStatus}" by calling the update_jira_issue MCP tool with transitionName: "${targetStatus}"`);
             }
           }
         }
@@ -627,6 +904,8 @@ ${runsFormatted}`,
       outputTelegram: z.boolean().optional().describe("Send output to Telegram"),
       outputSlack: z.boolean().optional().describe("Send output to Slack"),
       outputGitHubComment: z.boolean().optional().describe("Post output as GitHub comment"),
+      outputJiraComment: z.boolean().optional().describe("Post output as JIRA comment on the issue"),
+      outputJiraTransition: z.string().optional().describe("Transition JIRA issue to this status (e.g., 'Done')"),
       outputTemplate: z.string().optional().describe("Custom output message template"),
     },
     async ({
@@ -646,6 +925,8 @@ ${runsFormatted}`,
       outputTelegram,
       outputSlack,
       outputGitHubComment,
+      outputJiraComment,
+      outputJiraTransition,
       outputTemplate,
     }) => {
       try {
@@ -668,6 +949,12 @@ ${runsFormatted}`,
         }
         if (outputGitHubComment) {
           outputs.push({ type: "github_comment", enabled: true, template: outputTemplate });
+        }
+        if (outputJiraComment) {
+          outputs.push({ type: "jira_comment", enabled: true, template: outputTemplate });
+        }
+        if (outputJiraTransition) {
+          outputs.push({ type: "jira_transition", enabled: true, template: outputJiraTransition });
         }
 
         const automation = createAutomation({
@@ -960,6 +1247,107 @@ ${run.agentOutput ? `Output: ${run.agentOutput.slice(0, 200)}...` : ""}`,
       } catch (error) {
         return {
           content: [{ type: "text", text: `Error: ${error}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Tool: Update JIRA issue (for agents to call)
+  server.tool(
+    "update_jira_issue",
+    "Update a JIRA issue by adding a comment and/or transitioning its status. Use this to post results back to JIRA.",
+    {
+      issueKey: z.string().describe("The JIRA issue key (e.g., PROJ-123)"),
+      transitionName: z.string().optional().describe("Target status name to transition to (e.g., 'Done', 'In Review')"),
+      comment: z.string().optional().describe("Comment text to add to the issue"),
+    },
+    async ({ issueKey, transitionName, comment }) => {
+      try {
+        // Load credentials from app settings
+        let creds: { domain: string; email: string; apiToken: string } | null = null;
+        try {
+          if (fs.existsSync(APP_SETTINGS_FILE)) {
+            const settings = JSON.parse(fs.readFileSync(APP_SETTINGS_FILE, "utf-8"));
+            if (settings.jiraEnabled && settings.jiraEmail && settings.jiraApiToken && settings.jiraDomain) {
+              creds = { domain: settings.jiraDomain, email: settings.jiraEmail, apiToken: settings.jiraApiToken };
+            }
+          }
+        } catch {
+          // Ignore
+        }
+
+        if (!creds) {
+          return {
+            content: [{ type: "text", text: "JIRA credentials not configured. Set them in Settings > JIRA." }],
+            isError: true,
+          };
+        }
+
+        const headers = jiraAuthHeaders(creds.email, creds.apiToken);
+        const results: string[] = [];
+
+        // Transition if requested
+        if (transitionName) {
+          const transRes = await fetch(`https://${creds.domain}.atlassian.net/rest/api/3/issue/${issueKey}/transitions`, {
+            headers,
+          });
+          if (transRes.ok) {
+            const transData = await transRes.json();
+            const transition = transData.transitions?.find((t: { name: string }) =>
+              t.name.toLowerCase() === transitionName.toLowerCase()
+            );
+            if (transition) {
+              const doTransRes = await fetch(`https://${creds.domain}.atlassian.net/rest/api/3/issue/${issueKey}/transitions`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify({ transition: { id: transition.id } }),
+              });
+              if (doTransRes.ok) {
+                results.push(`Transitioned ${issueKey} to "${transitionName}"`);
+              } else {
+                const errText = await doTransRes.text();
+                results.push(`Failed to transition: ${errText.slice(0, 200)}`);
+              }
+            } else {
+              const available = transData.transitions?.map((t: { name: string }) => t.name).join(", ") || "none";
+              results.push(`Transition "${transitionName}" not found. Available: ${available}`);
+            }
+          } else {
+            results.push(`Failed to fetch transitions for ${issueKey}`);
+          }
+        }
+
+        // Add comment if requested
+        if (comment) {
+          const commentRes = await fetch(`https://${creds.domain}.atlassian.net/rest/api/3/issue/${issueKey}/comment`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              body: {
+                type: "doc",
+                version: 1,
+                content: [{
+                  type: "paragraph",
+                  content: [{ type: "text", text: comment }],
+                }],
+              },
+            }),
+          });
+          if (commentRes.ok) {
+            results.push(`Added comment to ${issueKey}`);
+          } else {
+            const errText = await commentRes.text();
+            results.push(`Failed to add comment: ${errText.slice(0, 200)}`);
+          }
+        }
+
+        return {
+          content: [{ type: "text", text: results.join("\n") || "No action taken (provide transitionName or comment)" }],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text", text: `Error updating JIRA issue: ${error}` }],
           isError: true,
         };
       }

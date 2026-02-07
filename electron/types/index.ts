@@ -49,6 +49,10 @@ export interface AppSettings {
   slackAppToken: string;
   slackSigningSecret: string;
   slackChannelId: string;
+  jiraEnabled: boolean;
+  jiraDomain: string;
+  jiraEmail: string;
+  jiraApiToken: string;
   verboseModeEnabled: boolean;
   cliPaths: CLIPaths;
 }

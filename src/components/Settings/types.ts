@@ -47,8 +47,12 @@ export interface AppSettings {
   slackAppToken: string;
   slackSigningSecret: string;
   slackChannelId: string;
+  jiraEnabled: boolean;
+  jiraDomain: string;
+  jiraEmail: string;
+  jiraApiToken: string;
   verboseModeEnabled: boolean;
   cliPaths: CLIPaths;
 }
 
-export type SettingsSection = 'general' | 'memory' | 'git' | 'notifications' | 'telegram' | 'slack' | 'permissions' | 'skills' | 'cli' | 'system';
+export type SettingsSection = 'general' | 'memory' | 'git' | 'notifications' | 'telegram' | 'slack' | 'jira' | 'permissions' | 'skills' | 'cli' | 'system';

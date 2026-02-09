@@ -14,6 +14,7 @@ import {
   CalendarClock,
   Zap,
   Columns,
+  Gamepad2,
 } from 'lucide-react';
 import { useStore } from '@/store';
 import Link from 'next/link';
@@ -29,6 +30,7 @@ const navItems = [
   { href: '/recurring-tasks', icon: CalendarClock, label: 'Scheduled Tasks', shortcut: '7' },
   { href: '/automations', icon: Zap, label: 'Automations', shortcut: '8' },
   { href: '/usage', icon: BarChart2, label: 'Usage', shortcut: '9' },
+  { href: '/pallet-town', icon: Gamepad2, label: 'Pallet Town', shortcut: '0' },
 ];
 
 interface SidebarProps {

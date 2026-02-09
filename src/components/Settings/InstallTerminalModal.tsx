@@ -92,6 +92,11 @@ export const InstallTerminalModal = ({ show, command, onClose, onComplete }: Ins
     initTerminal();
 
     return () => {
+      // Kill PTY process to prevent zombie processes
+      if (ptyIdRef.current && window.electronAPI?.plugin?.installKill) {
+        window.electronAPI.plugin.installKill({ id: ptyIdRef.current });
+        ptyIdRef.current = null;
+      }
       if (xtermRef.current) {
         xtermRef.current.dispose();
         xtermRef.current = null;

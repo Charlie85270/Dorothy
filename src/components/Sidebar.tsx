@@ -15,6 +15,11 @@ import {
   Zap,
   Columns,
 } from 'lucide-react';
+
+// Custom icon component for Pallet Town using the pokemon logo
+const PalletTownIcon = ({ className }: { className?: string }) => (
+  <img src="/pokemon/p.png" alt="" className={className} style={{ imageRendering: 'pixelated', objectFit: 'contain' }} />
+);
 import { useStore } from '@/store';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -29,6 +34,7 @@ const navItems = [
   { href: '/recurring-tasks', icon: CalendarClock, label: 'Scheduled Tasks', shortcut: '7' },
   { href: '/automations', icon: Zap, label: 'Automations', shortcut: '8' },
   { href: '/usage', icon: BarChart2, label: 'Usage', shortcut: '9' },
+  { href: '/pallet-town', icon: PalletTownIcon, label: 'ClaudeMon', shortcut: '0' },
 ];
 
 interface SidebarProps {

@@ -31,25 +31,14 @@ export default function TitleScreen({ titleImage, onStart }: TitleScreenProps) {
       onClick={onStart}
     >
       {/* Title Logo */}
-      <div className="mb-12">
-        {titleImage ? (
-          <img
-            src={titleImage.src}
-            alt="Pokemon"
-            className="w-[400px] h-auto pixelated"
-            style={{ imageRendering: 'pixelated' }}
-          />
-        ) : (
-          <h1 className="text-6xl font-bold text-yellow-400" style={{ fontFamily: 'monospace', textShadow: '4px 4px 0 #1a1a8a' }}>
-            PALLET TOWN
-          </h1>
-        )}
+      <div className="mb-16">
+        <img
+          src="/pokemon/claudemon.png"
+          alt="Claudemon"
+          className="w-[480px] max-w-[90vw] h-auto"
+          style={{ imageRendering: 'pixelated' }}
+        />
       </div>
-
-      {/* Subtitle */}
-      <h2 className="text-2xl text-white mb-16 tracking-widest" style={{ fontFamily: 'monospace' }}>
-        CLAUDE MANAGER
-      </h2>
 
       {/* Press Start */}
       <p

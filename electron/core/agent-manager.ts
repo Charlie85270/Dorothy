@@ -230,18 +230,43 @@ export async function initAgentPty(
 
   console.log(`Initializing PTY for restored agent ${agent.id} in ${cwd}`);
 
-  // Build PATH that includes nvm and other common locations for claude
+  // Build PATH that includes user-configured paths, nvm, and other common locations for claude
   const homeDir = process.env.HOME || os.homedir();
   const existingPath = process.env.PATH || '';
+  const additionalPaths: string[] = [];
 
-  // Add nvm paths and other common locations
-  const additionalPaths = [
+  // Load user-configured CLI paths from app settings
+  try {
+    const settingsFile = path.join(os.homedir(), '.claude-manager', 'app-settings.json');
+    if (fs.existsSync(settingsFile)) {
+      const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'));
+      if (settings.cliPaths) {
+        if (settings.cliPaths.claude) {
+          additionalPaths.push(path.dirname(settings.cliPaths.claude));
+        }
+        if (settings.cliPaths.gh) {
+          additionalPaths.push(path.dirname(settings.cliPaths.gh));
+        }
+        if (settings.cliPaths.node) {
+          additionalPaths.push(path.dirname(settings.cliPaths.node));
+        }
+        if (settings.cliPaths.additionalPaths) {
+          additionalPaths.push(...settings.cliPaths.additionalPaths.filter(Boolean));
+        }
+      }
+    }
+  } catch {
+    // Ignore settings load errors
+  }
+
+  // Add common fallback locations
+  additionalPaths.push(
     path.join(homeDir, '.nvm/versions/node/v20.11.1/bin'),
     path.join(homeDir, '.nvm/versions/node/v22.0.0/bin'),
     '/usr/local/bin',
     '/opt/homebrew/bin',
     path.join(homeDir, '.local/bin'),
-  ];
+  );
 
   // Find any nvm node version directories
   const nvmDir = path.join(homeDir, '.nvm/versions/node');

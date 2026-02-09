@@ -47,6 +47,16 @@ export default function GameCanvas({
   // Track if we already triggered a door interaction to avoid re-triggering
   const doorTriggeredRef = useRef(false);
 
+  // Cooldown after returning from battle/overlay to prevent immediate re-interaction
+  const interactionCooldownRef = useRef(0);
+  const prevScreenRef = useRef(screen);
+  useEffect(() => {
+    if (prevScreenRef.current !== 'game' && screen === 'game') {
+      interactionCooldownRef.current = Date.now() + 300; // 300ms cooldown
+    }
+    prevScreenRef.current = screen;
+  }, [screen]);
+
   // Sync agent NPCs into game state
   useEffect(() => {
     setNPCs(agentNPCs);
@@ -157,12 +167,14 @@ export default function GameCanvas({
 
     // Handle Space/Enter interactions (NPCs and facing doors)
     if (isGameActive && consumeAction()) {
-      const interactable = checkInteraction(getState().player, state.npcs);
-      if (interactable) {
-        if ('route' in interactable) {
-          onInteractBuilding(interactable as Building);
-        } else {
-          onInteractNPC(interactable as NPC);
+      if (Date.now() > interactionCooldownRef.current) {
+        const interactable = checkInteraction(getState().player, state.npcs);
+        if (interactable) {
+          if ('route' in interactable) {
+            onInteractBuilding(interactable as Building);
+          } else {
+            onInteractNPC(interactable as NPC);
+          }
         }
       }
     }

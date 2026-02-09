@@ -27,7 +27,7 @@ export const MAP_HEIGHT = 36;
 export const MOVE_DURATION = 180;
 
 // ── Player Start Position ───────────────────────────────────────────────────
-export const PLAYER_START: Position = { x: 18, y: 24 };
+export const PLAYER_START: Position = { x: 16, y: 7 };
 
 // ── Professor Chen Position ─────────────────────────────────────────────────
 export const PROFESSOR_CHEN_POS: Position = { x: 20, y: 24 };
@@ -275,17 +275,17 @@ export const INTERIOR_ROOM_CONFIGS: Record<string, InteriorRoomConfig> = {
     height: 10,
     tilemap: [
       [1,1,1,1,1,1,1,1,1,1,1,1], // top wall
-      [1,2,2,2,0,0,0,0,2,2,2,1], // back shelves, plant
-      [1,2,0,0,0,0,0,0,0,2,0,1], // behind counter area
-      [1,2,0,0,2,0,0,0,0,0,0,1], // behind counter, register col 4
-      [1,2,2,0,2,0,0,0,0,0,0,1], // COUNTER row - vendor NPC at (3,4), furniture around
-      [1,0,0,0,0,0,0,0,2,0,2,1], // walkable - player faces up from (3,5)
-      [1,0,0,0,0,0,0,0,2,0,2,1], // walkable, display shelves right
-      [1,2,0,0,0,0,0,0,0,0,0,1], // shelf bottom left
-      [1,0,0,0,0,0,0,0,0,0,0,1], // near exit
-      [1,1,1,1,1,3,3,1,1,1,1,1], // exit
+      [1,2,2,2,2,2,2,2,2,2,2,1], // back wall items, shelves
+      [1,2,2,2,0,0,0,0,0,0,0,0], // plant, register area
+      [1,2,2,2,0,0,0,0,0,0,0,0], // counter left, vendor at (5,3) on blue floor
+      [1,2,2,2,0,0,0,0,2,2,0,1], // counter row continues
+      [0,0,0,0,0,0,0,0,2,2,0,1], // walkable, vending machines right
+      [0,0,0,0,0,0,0,0,2,2,0,1], // walkable, vending machines right
+      [0,2,2,0,0,0,0,0,0,0,0,1], // lower display left
+      [0,0,0,0,0,0,0,0,0,0,0,1], // near exit
+      [0,1,1,1,1,3,3,1,1,1,1,0], // exit
     ],
-    npcPosition: { x: 1, y: 3 },   // vendor at counter edge, player faces up from (3,5)
+    npcPosition: { x: 1, y: 3 },   // vendor on blue floor in front of counter papers
     playerStart: { x: 5, y: 8 },    // near entrance
   },
   'claude-lab': {

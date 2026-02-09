@@ -8,6 +8,7 @@ import GameCanvas from './GameCanvas';
 import TitleScreen from './overlays/TitleScreen';
 import DialogueBox from './overlays/DialogueBox';
 import BattleOverlay from './overlays/BattleOverlay';
+import AgentInfoCard from './overlays/AgentInfoCard';
 import GameMenu from './overlays/GameMenu';
 import BuildingInterior from './overlays/BuildingInterior';
 import { renderLoadingScreen } from './renderer/uiRenderer';
@@ -79,6 +80,7 @@ export default function PokemonGame() {
   const [dialogueQueue, setDialogueQueue] = useState<string[]>([]);
   const [dialogueSpeaker, setDialogueSpeaker] = useState<string | undefined>();
   const [battleNPC, setBattleNPC] = useState<NPC | null>(null);
+  const [showAgentInfo, setShowAgentInfo] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [activeInterior, setActiveInterior] = useState<string | null>(null);
 
@@ -135,17 +137,10 @@ export default function PokemonGame() {
       return;
     }
 
-    // Otherwise, show dialogue then navigate
+    // No interior — show "closed" message
     setDialogueSpeaker(undefined);
-    setDialogueText(building.description);
+    setDialogueText(`The ${building.label} is closed for now, but will open soon!`);
     setDialogueQueue([]);
-    // Navigate after dialogue is dismissed
-    const route = building.route;
-    setTimeout(() => {
-      // We'll navigate when dialogue closes
-    }, 0);
-    // Store the route to navigate to
-    (window as any).__pendingRoute = route;
   }, []);
 
   // Exit interior
@@ -187,25 +182,45 @@ export default function PokemonGame() {
     }
   }, [dialogueQueue, router]);
 
+  // ── Talk to agent — same as agents/page.tsx handleSelectAgent + setEditAgentId ──
+  const handleTalkToAgent = useCallback((agentId: string) => {
+    setEditAgentId(agentId);
+    // Auto-start idle agents — same as agents/page.tsx handleSelectAgent
+    if (electronAgents) {
+      const agent = electronAgents.agents.find((a: any) => a.id === agentId);
+      if (agent && (agent.status === 'idle' || agent.status === 'completed' || agent.status === 'error') && !agent.pathMissing) {
+        setTimeout(() => {
+          electronAgents.startAgent(agentId, '');
+        }, 100);
+      }
+    }
+  }, [electronAgents]);
+
   // Battle actions
-  const handleBattleAction = useCallback((action: 'talk' | 'info' | 'run') => {
-    if (action === 'run') {
+  const handleBattleAction = useCallback((action: 'talk' | 'info' | 'cancel' | 'delete') => {
+    if (action === 'cancel') {
       setBattleNPC(null);
+      setShowAgentInfo(false);
       setScreen('game');
     } else if (action === 'talk' && battleNPC) {
-      // Show agent dialogue
+      // Open agent terminal (same as Claude Lab)
       setBattleNPC(null);
+      setShowAgentInfo(false);
       setScreen('game');
-      setDialogueSpeaker(battleNPC.name);
-      setDialogueText(battleNPC.dialogue[0] || 'Hello!');
-      setDialogueQueue(battleNPC.dialogue.slice(1));
+      handleTalkToAgent(battleNPC.id);
     } else if (action === 'info' && battleNPC) {
-      // Navigate to agent detail page
+      // Show agent info card overlay
+      setShowAgentInfo(true);
+    } else if (action === 'delete' && battleNPC) {
+      // Delete agent
+      if (window.electronAPI?.agent?.remove) {
+        window.electronAPI.agent.remove(battleNPC.id).catch(() => {});
+      }
       setBattleNPC(null);
+      setShowAgentInfo(false);
       setScreen('game');
-      router.push('/agents');
     }
-  }, [battleNPC, router]);
+  }, [battleNPC, handleTalkToAgent]);
 
   // Menu toggle
   const handleMenuToggle = useCallback(() => {
@@ -220,20 +235,6 @@ export default function PokemonGame() {
       setScreen('game');
     }
   }, [screen, dialogueText]);
-
-  // ── Talk to agent — same as agents/page.tsx handleSelectAgent + setEditAgentId ──
-  const handleTalkToAgent = useCallback((agentId: string) => {
-    setEditAgentId(agentId);
-    // Auto-start idle agents — same as agents/page.tsx handleSelectAgent
-    if (electronAgents) {
-      const agent = electronAgents.agents.find((a: any) => a.id === agentId);
-      if (agent && (agent.status === 'idle' || agent.status === 'completed' || agent.status === 'error') && !agent.pathMissing) {
-        setTimeout(() => {
-          electronAgents.startAgent(agentId, '');
-        }, 100);
-      }
-    }
-  }, [electronAgents]);
 
   // ── Same as agents/page.tsx handleStartAgent ──
   const handleStartAgent = useCallback(async (agentId: string, prompt: string) => {
@@ -315,11 +316,20 @@ export default function PokemonGame() {
 
       {/* Battle Overlay */}
       {screen === 'battle' && battleNPC && (
-        <BattleOverlay
-          npc={battleNPC}
-          assets={assets}
-          onAction={handleBattleAction}
-        />
+        <>
+          <BattleOverlay
+            npc={battleNPC}
+            assets={assets}
+            onAction={handleBattleAction}
+          />
+          {showAgentInfo && (
+            <AgentInfoCard
+              npc={battleNPC}
+              skills={electronAgents?.agents.find((a: any) => a.id === battleNPC.id)?.skills}
+              onClose={() => setShowAgentInfo(false)}
+            />
+          )}
+        </>
       )}
 
       {/* Game Menu */}

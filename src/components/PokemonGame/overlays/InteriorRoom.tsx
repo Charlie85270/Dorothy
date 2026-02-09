@@ -158,13 +158,25 @@ export default function InteriorRoom({
   }, [roomConfig]);
 
   // Check if player is facing the static NPC (legacy)
+  // Supports interaction across furniture tiles (e.g. counter between player and vendor)
   const isFacingStaticNPC = useCallback((player: PlayerState) => {
     if (roomConfig.dynamicNPCs) return false; // skip static NPC check for dynamic rooms
     const dx: Record<Direction, number> = { left: -1, right: 1, up: 0, down: 0 };
     const dy: Record<Direction, number> = { left: 0, right: 0, up: -1, down: 1 };
-    const fx = Math.round(player.x) + dx[player.direction];
-    const fy = Math.round(player.y) + dy[player.direction];
-    return fx === roomConfig.npcPosition.x && fy === roomConfig.npcPosition.y;
+    const stepX = dx[player.direction];
+    const stepY = dy[player.direction];
+    // Check up to 3 tiles ahead, passing through furniture
+    for (let dist = 1; dist <= 3; dist++) {
+      const fx = Math.round(player.x) + stepX * dist;
+      const fy = Math.round(player.y) + stepY * dist;
+      if (fx === roomConfig.npcPosition.x && fy === roomConfig.npcPosition.y) return true;
+      // Stop scanning if we hit a non-furniture blocking tile (wall)
+      const tile = roomConfig.tilemap[fy]?.[fx];
+      if (tile === undefined || tile === INTERIOR_TILE.WALL) break;
+      // Continue through furniture tiles
+      if (tile !== INTERIOR_TILE.FURNITURE) break;
+    }
+    return false;
   }, [roomConfig]);
 
   // Check which dynamic NPC the player is facing (returns id or null)

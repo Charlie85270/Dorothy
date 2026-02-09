@@ -9,7 +9,7 @@ function createInitialPlayer(): PlayerState {
     y: PLAYER_START.y,
     targetX: PLAYER_START.x,
     targetY: PLAYER_START.y,
-    direction: 'up' as Direction,
+    direction: 'down' as Direction,
     isMoving: false,
     moveProgress: 0,
     animFrame: 0,

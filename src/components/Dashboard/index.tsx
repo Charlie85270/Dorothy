@@ -17,6 +17,7 @@ import {
   History,
   AlertTriangle,
   LayoutGrid,
+  TerminalSquare,
 } from 'lucide-react';
 import { useClaude } from '@/hooks/useClaude';
 import { useElectronAgents } from '@/hooks/useElectron';
@@ -84,10 +85,23 @@ const AgentWorld = dynamic(() => import('@/components/AgentWorld'), {
   ),
 });
 
+// Dynamically import TerminalsView to avoid SSR issues with xterm
+const TerminalsView = dynamic(() => import('@/components/TerminalsView'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-full min-h-[600px] bg-card border border-border">
+      <div className="text-center">
+        <Loader2 className="w-8 h-8 animate-spin text-foreground mx-auto mb-4" />
+        <p className="text-muted-foreground">Loading Terminals...</p>
+      </div>
+    </div>
+  ),
+});
+
 export default function Dashboard() {
   const { data, loading, error } = useClaude();
   const { agents } = useElectronAgents();
-  const [viewMode, setViewMode] = useState<'world' | 'canvas' | 'stats'>('canvas');
+  const [viewMode, setViewMode] = useState<'world' | 'canvas' | 'terminals' | 'stats'>('terminals');
 
   // Calculate stats
   const stats = data?.stats;
@@ -244,19 +258,20 @@ export default function Dashboard() {
           {/* View Mode Toggle */}
           <div className="flex items-center gap-1 p-1 bg-secondary border border-border">
             <button
-              onClick={() => setViewMode('world')}
+              onClick={() => setViewMode('terminals')}
               className={`
                 flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1.5 text-xs lg:text-sm font-medium transition-all
-                ${viewMode === 'world'
+                ${viewMode === 'terminals'
                   ? 'bg-white text-black'
                   : 'text-muted-foreground hover:text-foreground'
                 }
               `}
             >
-              <Globe className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
-              <span className="hidden sm:inline">3D View</span>
-              <span className="sm:hidden">3D</span>
+              <TerminalSquare className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
+              <span className="hidden sm:inline">Terminals</span>
+              <span className="sm:hidden">Term</span>
             </button>
+
             <button
               onClick={() => setViewMode('canvas')}
               className={`
@@ -271,18 +286,20 @@ export default function Dashboard() {
               Board
             </button>
             <button
-              onClick={() => setViewMode('stats')}
+              onClick={() => setViewMode('world')}
               className={`
                 flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1.5 text-xs lg:text-sm font-medium transition-all
-                ${viewMode === 'stats'
+                ${viewMode === 'world'
                   ? 'bg-white text-black'
                   : 'text-muted-foreground hover:text-foreground'
                 }
               `}
             >
-              <BarChart3 className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
-              Stats
+              <Globe className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
+              <span className="hidden sm:inline">3D View</span>
+              <span className="sm:hidden">3D</span>
             </button>
+
           </div>
 
           <div className="text-right text-xs text-muted-foreground hidden sm:block">
@@ -324,6 +341,16 @@ export default function Dashboard() {
           style={{ height: 'calc(100vh - 200px)', minHeight: '400px' }}
         >
           <CanvasView />
+        </div>
+      )}
+
+      {/* Terminals View */}
+      {viewMode === 'terminals' && (
+        <div
+          className="border border-border bg-card overflow-hidden"
+          style={{ height: 'calc(100vh - 130px)', minHeight: '400px' }}
+        >
+          <TerminalsView />
         </div>
       )}
 

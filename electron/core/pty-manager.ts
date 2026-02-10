@@ -19,6 +19,24 @@ export function killPty(ptyId: string, isQuick = false): boolean {
   return false;
 }
 
+/** Kill all PTY processes across all maps. Called on app quit. */
+export function killAllPty(): void {
+  const allMaps = [ptyProcesses, quickPtyProcesses, skillPtyProcesses, pluginPtyProcesses];
+  let killed = 0;
+  for (const map of allMaps) {
+    for (const [id, proc] of map) {
+      try {
+        proc.kill();
+        killed++;
+      } catch (err) {
+        console.warn(`Failed to kill PTY ${id}:`, err);
+      }
+    }
+    map.clear();
+  }
+  console.log(`Killed ${killed} PTY process(es) on shutdown`);
+}
+
 export function writeToPty(ptyId: string, data: string, isQuick = false): boolean {
   const processes = isQuick ? quickPtyProcesses : ptyProcesses;
   const ptyProcess = processes.get(ptyId);

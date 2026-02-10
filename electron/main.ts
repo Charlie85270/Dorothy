@@ -47,6 +47,7 @@ import {
   skillPtyProcesses,
   pluginPtyProcesses,
   createQuickPty,
+  killAllPty,
 } from './core/pty-manager';
 
 // Services
@@ -442,8 +443,17 @@ app.whenReady().then(async () => {
       agent.lastActivity = new Date().toISOString();
 
       const workingPath = (agent.worktreePath || agent.projectPath).replace(/'/g, "'\\''");
-      ptyProcess.write(`cd '${workingPath}' && ${command}`);
-      ptyProcess.write('\r');
+      const fullCommand = `cd '${workingPath}' && ${command}`;
+
+      // For long commands, write to a temp script to avoid PTY line-wrapping mangling
+      if (fullCommand.length > 100) {
+        const tmpScript = path.join(os.tmpdir(), `claude-agent-${agentId}.sh`);
+        fs.writeFileSync(tmpScript, `#!/bin/bash\n${fullCommand}\n`, { mode: 0o755 });
+        ptyProcess.write(`bash '${tmpScript}'\r`);
+      } else {
+        ptyProcess.write(fullCommand);
+        ptyProcess.write('\r');
+      }
 
       saveAgents();
     },
@@ -530,10 +540,11 @@ app.on('activate', () => {
   }
 });
 
-// Save agents before quitting
+// Save agents and kill all PTY processes before quitting
 app.on('before-quit', () => {
-  console.log('App quitting, saving agents...');
+  console.log('App quitting, saving agents and killing all PTY processes...');
   saveAgents();
+  killAllPty();
 });
 
 // Handle certificate errors in development

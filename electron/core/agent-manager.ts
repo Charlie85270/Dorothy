@@ -224,7 +224,6 @@ export async function initAgentPty(
   handleStatusChangeNotificationCallback: (agent: AgentStatus, newStatus: string) => void,
   saveAgentsCallback: () => void
 ): Promise<string> {
-  // Use bash for more reliable PATH handling with nvm
   const shell = '/bin/bash';
   const cwd = agent.worktreePath || agent.projectPath;
 

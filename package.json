@@ -114,6 +114,7 @@
     "prism-react-renderer": "^2.4.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-grid-layout": "^2.2.2",
     "set-function-length": "^1.2.2",
     "three": "^0.182.0",
     "uuid": "^9.0.1",

@@ -43,11 +43,6 @@ class AgentManager extends EventEmitter {
       args.push('--model', options.model);
     }
 
-    // Add resume flag
-    if (options?.resume) {
-      args.push('--resume');
-    }
-
     // Add print mode for easier parsing
     args.push('--print');
 

@@ -158,7 +158,6 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     skipPermissions?: boolean;
   }) => {
     const id = uuidv4();
-    // Use bash for more reliable PATH handling (matches initAgentPty)
     const shell = '/bin/bash';
 
     // Validate project path exists
@@ -197,11 +196,11 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
             execSync(`git rev-parse --verify ${branchName}`, { cwd, stdio: 'pipe' });
             // Branch exists, create worktree using existing branch
             execSync(`git worktree add "${worktreePath}" ${branchName}`, { cwd, stdio: 'pipe' });
-            console.log(`Created worktree using existing branch ${branchName}`);
+          
           } catch {
             // Branch doesn't exist, create worktree with new branch
             execSync(`git worktree add -b ${branchName} "${worktreePath}"`, { cwd, stdio: 'pipe' });
-            console.log(`Created worktree with new branch ${branchName}`);
+          
           }
         }
 
@@ -420,23 +419,19 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       const { app } = await import('electron');
       const mcpConfigPath = path.join(app.getPath('home'), '.claude', 'mcp.json');
       if (fs.existsSync(mcpConfigPath)) {
-        command += ` --mcp-config '${mcpConfigPath}'`;
+        command += ` --mcp-config ${mcpConfigPath}`;
       }
       // Add super agent instructions (read via Node.js, not cat - asar compatibility)
-      const { getSuperAgentInstructions } = await import('../utils');
-      const superAgentInstructions = getSuperAgentInstructions();
-      if (superAgentInstructions) {
-        const escapedInstructions = superAgentInstructions.replace(/'/g, "'\\''").replace(/"/g, '\\"').replace(/\n/g, ' ');
-        command += ` --append-system-prompt "${escapedInstructions}"`;
+      const { getSuperAgentInstructionsPath } = await import('../utils');
+      const superAgentInstructionsPath = getSuperAgentInstructionsPath();
+      if (fs.existsSync(superAgentInstructionsPath)) {
+      
+        command += ` --append-system-prompt-file ${superAgentInstructionsPath}`;
       }
     }
 
     if (options?.model) {
       command += ` --model ${options.model}`;
-    }
-
-    if (options?.resume) {
-      command += ' --resume';
     }
 
     // Add verbose flag if enabled in app settings
@@ -465,7 +460,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
 
     // Add the prompt (escape single quotes)
     const escapedPrompt = finalPrompt.replace(/'/g, "'\\''");
-    command += ` '${escapedPrompt}'`;
+    command += finalPrompt ? ` '${escapedPrompt}'` : '';
 
     // Update status
     agent.status = 'running';
@@ -474,9 +469,11 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
 
     // First cd to the appropriate directory (worktree if exists, otherwise project), then run claude
     const workingPath = (agent.worktreePath || agent.projectPath).replace(/'/g, "'\\''");
-    ptyProcess.write(`cd '${workingPath}' && ${command}`);
-    ptyProcess.write('\r');
+    const fullCommand = `cd '${workingPath}' && ${command}`;
 
+    ptyProcess.write(fullCommand);
+    ptyProcess.write('\r');
+    
     // Save updated status
     saveAgents();
 
@@ -552,9 +549,10 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     if (agent?.ptyId) {
       const ptyProcess = ptyProcesses.get(agent.ptyId);
       if (ptyProcess) {
-        // Send Ctrl+C to interrupt
-        ptyProcess.write('\x03');
+        ptyProcess.kill();
+        ptyProcesses.delete(agent.ptyId);
       }
+      agent.ptyId = undefined;
       agent.status = 'idle';
       agent.currentTask = undefined;
       agent.lastActivity = new Date().toISOString();

@@ -436,3 +436,41 @@ input::placeholder, textarea::placeholder {
 button, a, input, textarea, select {
   transition: all 0.15s ease;
 }
+
+/* ============================================
+   REACT-GRID-LAYOUT OVERRIDES
+   ============================================ */
+.react-grid-item.react-grid-placeholder {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 0 !important;
+  opacity: 1 !important;
+}
+
+.react-grid-item > .react-resizable-handle::after {
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+.react-grid-item > .react-resizable-handle:hover::after {
+  border-color: rgba(255, 255, 255, 0.6) !important;
+}
+
+.terminal-drag-handle {
+  cursor: grab;
+}
+
+.terminal-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* ============================================
+   XTERM TERMINAL SIZING
+   ============================================ */
+/* Let xterm + FitAddon manage their own dimensions.
+   Only ensure the viewport scrollbar matches our theme. */
+.xterm-viewport::-webkit-scrollbar {
+  width: 6px;
+}
+.xterm-viewport::-webkit-scrollbar-thumb {
+  background: #525252;
+}

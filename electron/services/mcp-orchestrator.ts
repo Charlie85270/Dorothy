@@ -161,17 +161,7 @@ export function setupOrchestratorStatusHandler(): void {
       const orchestratorPath = getMcpOrchestratorPath();
       const orchestratorExists = fs.existsSync(orchestratorPath);
 
-      // Check using claude mcp list
-      let isConfigured = false;
-      try {
-        const listOutput = execSync('claude mcp list 2>&1', { encoding: 'utf-8' });
-        isConfigured = listOutput.includes('claude-mgr-orchestrator');
-      } catch {
-        // claude mcp list might fail if no servers configured
-        isConfigured = false;
-      }
-
-      // Also check mcp.json as fallback
+      // Check mcp.json directly — fast, no child process spawn
       const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
       let mcpJsonConfigured = false;
       if (fs.existsSync(mcpConfigPath)) {
@@ -183,12 +173,29 @@ export function setupOrchestratorStatusHandler(): void {
         }
       }
 
+      // Only run the slow `claude mcp list` if mcp.json check didn't find it
+      let mcpListConfigured = false;
+      if (!mcpJsonConfigured) {
+        try {
+          const { execFile: execFileAsync } = await import('child_process');
+          const { promisify } = await import('util');
+          const execFilePromise = promisify(execFileAsync);
+          const { stdout } = await execFilePromise('claude', ['mcp', 'list'], {
+            encoding: 'utf-8',
+            timeout: 5000,
+          });
+          mcpListConfigured = stdout.includes('claude-mgr-orchestrator');
+        } catch {
+          mcpListConfigured = false;
+        }
+      }
+
       return {
-        configured: isConfigured || mcpJsonConfigured,
+        configured: mcpJsonConfigured || mcpListConfigured,
         orchestratorPath,
         orchestratorExists,
-        mcpListConfigured: isConfigured,
-        mcpJsonConfigured
+        mcpListConfigured,
+        mcpJsonConfigured,
       };
     } catch (err) {
       console.error('Failed to get orchestrator status:', err);

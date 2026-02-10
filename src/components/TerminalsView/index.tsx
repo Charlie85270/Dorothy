@@ -118,7 +118,7 @@ export default function TerminalsView() {
     },
     onToggleFullscreen: () => grid.toggleFullscreen(focusedPanelId || undefined),
     onToggleBroadcast: broadcast.toggleBroadcast,
-    onToggleSidebar: () => {},
+    onToggleSidebar: () => { },
     onNewAgent: () => setShowNewChatModal(true),
     onExitFullscreen: grid.exitFullscreen,
     isFullscreen: !!grid.fullscreenPanelId,
@@ -182,7 +182,7 @@ export default function TerminalsView() {
   const handleCopyOutput = useCallback((agentId: string) => {
     const agent = agents.find(a => a.id === agentId);
     if (agent) {
-      navigator.clipboard.writeText(agent.output.join('')).catch(() => {});
+      navigator.clipboard.writeText(agent.output.join('')).catch(() => { });
     }
   }, [agents]);
 
@@ -229,7 +229,7 @@ export default function TerminalsView() {
     autoStartedRef.current = true;
     const idle = agents.filter(a => a.status === 'idle' || a.status === 'completed');
     for (const agent of idle) {
-      startAgent(agent.id, '', { resume: true }).catch(() => {});
+      startAgent(agent.id, '', { resume: true }).catch(() => { });
     }
   }, [isLoading, agents, startAgent]);
 
@@ -263,8 +263,6 @@ export default function TerminalsView() {
           onLayoutChange={handleLayoutChange}
           broadcastMode={broadcast.broadcastMode}
           onToggleBroadcast={broadcast.toggleBroadcast}
-          searchQuery={search.searchQuery}
-          onSearchChange={search.setSearchQuery}
           onStartAll={handleStartAll}
           onStopAll={handleStopAll}
           onNewAgent={() => setShowNewChatModal(true)}
@@ -303,7 +301,7 @@ export default function TerminalsView() {
             rglLayout={grid.rglLayout}
             cols={grid.cols}
             rows={grid.gridDefinition.rows}
-            onLayoutChange={grid.onLayoutChange}
+            onDragStop={grid.onDragStop}
             broadcastMode={broadcast.broadcastMode}
             focusedPanelId={focusedPanelId}
             fullscreenPanelId={grid.fullscreenPanelId}

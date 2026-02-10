@@ -3,9 +3,10 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import type { CustomTab, ActiveTab, LayoutPreset } from '../types';
 import { LAYOUT_PRESETS, getAutoLayout } from '../constants';
+import { deleteTabLayouts } from './useGridLayoutStorage';
 
 const STORAGE_KEY = 'terminals-tab-manager';
-const MAX_TABS = 5;
+const MAX_TABS = 6;
 
 interface TabManagerState {
   customTabs: CustomTab[];
@@ -101,6 +102,7 @@ export function useTabManager({ existingAgentIds, isLoading }: UseTabManagerOpti
   }, []);
 
   const deleteTab = useCallback((tabId: string) => {
+    deleteTabLayouts(tabId);
     setState(prev => {
       const idx = prev.customTabs.findIndex(t => t.id === tabId);
       if (idx === -1) return prev;

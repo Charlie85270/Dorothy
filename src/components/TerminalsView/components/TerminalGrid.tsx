@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import ReactGridLayout, { verticalCompactor } from 'react-grid-layout';
-import type { Layout } from 'react-grid-layout';
+import type { Layout, GridLayoutProps } from 'react-grid-layout';
 import { Loader2 } from 'lucide-react';
 import type { AgentStatus } from '@/types/electron';
 import type { TerminalPanelState } from '../types';
@@ -14,7 +14,7 @@ interface TerminalGridProps {
   rglLayout: Layout;
   cols: number;
   rows: number;
-  onLayoutChange: (layout: Layout) => void;
+  onDragStop: GridLayoutProps['onDragStop'];
   broadcastMode: boolean;
   focusedPanelId: string | null;
   fullscreenPanelId: string | null;
@@ -39,7 +39,7 @@ export default function TerminalGrid({
   rglLayout,
   cols,
   rows,
-  onLayoutChange,
+  onDragStop,
   broadcastMode,
   focusedPanelId,
   fullscreenPanelId,
@@ -106,12 +106,22 @@ export default function TerminalGrid({
     enabled: false,
   }), []);
 
-  // Debounced fit after layout changes
-  const handleLayoutChange = useCallback((newLayout: Layout) => {
-    onLayoutChange(newLayout);
+  // Debounced fit after any RGL layout change (mount, drag, resize cascade).
+  // This is the ONLY thing onLayoutChange does — no state updates.
+  const handleLayoutChange = useCallback((_newLayout: Layout) => {
     if (fitTimerRef.current) clearTimeout(fitTimerRef.current);
     fitTimerRef.current = setTimeout(onFitAll, 150);
-  }, [onLayoutChange, onFitAll]);
+  }, [onFitAll]);
+
+  // Wrap onDragStop to also trigger fitAll after drag
+  const handleDragStop: GridLayoutProps['onDragStop'] = useCallback(
+    (...args: Parameters<NonNullable<GridLayoutProps['onDragStop']>>) => {
+      onDragStop?.(...args);
+      if (fitTimerRef.current) clearTimeout(fitTimerRef.current);
+      fitTimerRef.current = setTimeout(onFitAll, 150);
+    },
+    [onDragStop, onFitAll],
+  );
 
   // Re-fit on visible panels change
   useEffect(() => {
@@ -195,6 +205,7 @@ export default function TerminalGrid({
         resizeConfig={resizeConfig}
         compactor={verticalCompactor}
         onLayoutChange={handleLayoutChange}
+        onDragStop={handleDragStop}
         autoSize={false}
         style={{ height: containerHeight }}
       >

@@ -21,8 +21,6 @@ interface GlobalToolbarProps {
   onLayoutChange: (preset: LayoutPreset) => void;
   broadcastMode: boolean;
   onToggleBroadcast: () => void;
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
   onStartAll: () => void;
   onStopAll: () => void;
   onNewAgent: () => void;
@@ -46,8 +44,6 @@ export default function GlobalToolbar({
   onLayoutChange,
   broadcastMode,
   onToggleBroadcast,
-  searchQuery,
-  onSearchChange,
   onStartAll,
   onStopAll,
   onNewAgent,
@@ -135,17 +131,6 @@ export default function GlobalToolbar({
 
       {/* Right section */}
       <div className="flex items-center gap-2">
-        {/* Search */}
-        <div className="relative hidden md:block">
-          <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => onSearchChange(e.target.value)}
-            placeholder="Search output..."
-            className="pl-7 pr-2 py-1 bg-secondary border border-border text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-white/30 w-[180px]"
-          />
-        </div>
 
         {/* Broadcast toggle */}
         <button

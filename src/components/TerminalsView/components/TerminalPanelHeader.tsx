@@ -133,7 +133,7 @@ export default function TerminalPanelHeader({
         </button>
 
         {/* Remove button — custom tabs only */}
-        {showRemoveButton && (
+        {showRemoveButton && !isFullscreen && (
           <button
             onClick={onRemove}
             className="p-1 hover:bg-white/10 transition-colors text-muted-foreground hover:text-red-400"

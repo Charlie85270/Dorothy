@@ -320,22 +320,26 @@ export async function initAgentPty(
         if (newStatus !== agentData.status) {
           agentData.status = newStatus;
           handleStatusChangeNotificationCallback(agentData, newStatus);
-          mainWindow?.webContents.send('agent:status', {
-            type: 'status',
-            agentId: agent.id,
-            status: newStatus,
-            timestamp: new Date().toISOString(),
-          });
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('agent:status', {
+              type: 'status',
+              agentId: agent.id,
+              status: newStatus,
+              timestamp: new Date().toISOString(),
+            });
+          }
         }
       }
     }
-    mainWindow?.webContents.send('agent:output', {
-      type: 'output',
-      agentId: agent.id,
-      ptyId,
-      data,
-      timestamp: new Date().toISOString(),
-    });
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('agent:output', {
+        type: 'output',
+        agentId: agent.id,
+        ptyId,
+        data,
+        timestamp: new Date().toISOString(),
+      });
+    }
   });
 
   ptyProcess.onExit(({ exitCode }) => {
@@ -349,13 +353,15 @@ export async function initAgentPty(
       saveAgentsCallback();
     }
     ptyProcesses.delete(ptyId);
-    mainWindow?.webContents.send('agent:complete', {
-      type: 'complete',
-      agentId: agent.id,
-      ptyId,
-      exitCode,
-      timestamp: new Date().toISOString(),
-    });
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('agent:complete', {
+        type: 'complete',
+        agentId: agent.id,
+        ptyId,
+        exitCode,
+        timestamp: new Date().toISOString(),
+      });
+    }
   });
 
   return ptyId;

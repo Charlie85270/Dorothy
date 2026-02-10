@@ -163,23 +163,24 @@ export default function GlobalToolbar({
           {isViewFullscreen ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
         </button>
 
-        {/* Add agent to tab dropdown — custom tabs only */}
+        {/* New Agent button — always visible */}
+        <button
+          onClick={onNewAgent}
+          className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+        >
+          <Plus className="w-3 h-3" />
+          <span className="hidden sm:inline">New Agent</span>
+        </button>
+
+        {/* Add agent to board dropdown — custom tabs only */}
         {isCustomTabActive && (
           <AddAgentDropdown
             allAgents={allAgents}
             currentTabAgentIds={currentTabAgentIds}
             onAddAgent={onAddAgentToTab}
+            onCreateAgent={onNewAgent}
           />
         )}
-
-        {/* New Agent button — always visible */}
-        <button
-          onClick={onNewAgent}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white text-black text-xs font-medium hover:bg-white/90 transition-colors"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">New Agent</span>
-        </button>
       </div>
     </div>
   );

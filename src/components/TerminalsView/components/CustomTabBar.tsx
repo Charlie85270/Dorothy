@@ -131,8 +131,7 @@ export default function CustomTabBar({
     activeTab.type === 'custom' && activeTab.tabId === tabId;
 
   return (
-    <div className="flex items-center gap-0.5 px-3 py-1 bg-[#0e0e1a] border-b border-white/10">
-      <div className="flex items-center gap-0.5 flex-1 overflow-x-auto scrollbar-none">
+    <div className="flex items-center gap-0.5 py-1 bg-[#0e0e1a] border-b border-white/10 overflow-x-auto scrollbar-none">
         {tabs.map((tab, idx) => (
           <div
             key={tab.id}
@@ -180,11 +179,10 @@ export default function CustomTabBar({
             </button>
           </div>
         ))}
-      </div>
 
       {/* Create tab button + dialog */}
       {canCreateTab && (
-        <div className="relative ml-1 shrink-0">
+        <div className="relative shrink-0">
           <button
             onClick={() => { setShowCreateDialog(true); setCreateName(''); }}
             className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
@@ -196,7 +194,7 @@ export default function CustomTabBar({
           {showCreateDialog && (
             <div
               ref={createDialogRef}
-              className="absolute top-full right-0 mt-1 bg-card border border-border shadow-xl z-50 p-3 min-w-[220px]"
+              className="absolute top-full left-0 mt-1 bg-card border border-border shadow-xl z-50 p-3 min-w-[220px]"
             >
               <p className="text-xs text-muted-foreground mb-2">Board name</p>
               <input

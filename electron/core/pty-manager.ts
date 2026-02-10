@@ -77,11 +77,15 @@ export function createQuickPty(
   quickPtyProcesses.set(id, ptyProcess);
 
   ptyProcess.onData((data) => {
-    mainWindow?.webContents.send('shell:ptyOutput', { ptyId: id, data });
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('shell:ptyOutput', { ptyId: id, data });
+    }
   });
 
   ptyProcess.onExit(({ exitCode }) => {
-    mainWindow?.webContents.send('shell:ptyExit', { ptyId: id, exitCode });
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('shell:ptyExit', { ptyId: id, exitCode });
+    }
     quickPtyProcesses.delete(id);
   });
 

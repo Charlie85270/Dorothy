@@ -21,7 +21,7 @@ export const GeneralSection = ({ info }: GeneralSectionProps) => {
           </div>
           <div>
             <h3 className="font-medium">Claude Manager</h3>
-            <p className="text-sm text-muted-foreground">Version 0.0.8</p>
+            <p className="text-sm text-muted-foreground">Version 0.0.17</p>
           </div>
         </div>
 
@@ -31,7 +31,7 @@ export const GeneralSection = ({ info }: GeneralSectionProps) => {
               <p className="text-sm font-medium">Auto-refresh Dashboard</p>
               <p className="text-xs text-muted-foreground">Automatically refresh agent status every 5 seconds</p>
             </div>
-            <Toggle enabled={true} onChange={() => {}} />
+            <Toggle enabled={true} onChange={() => { }} />
           </div>
         </div>
       </div>

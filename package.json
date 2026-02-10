@@ -9,6 +9,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "electron:dev": "concurrently \"npm run dev\" \"npm run electron:start\"",
     "electron:start": "wait-on http://localhost:3000 && tsc -p electron/tsconfig.json && NODE_ENV=development electron .",
     "electron:build": "mv src/app/api src/app/_api_backup && mv src/app/icon.tsx src/app/_icon_backup.tsx 2>/dev/null; ELECTRON_BUILD=1 next build; mv src/app/_api_backup src/app/api && mv src/app/_icon_backup.tsx src/app/icon.tsx 2>/dev/null; tsc -p electron/tsconfig.json && cd mcp-orchestrator && npm install && npm run build && cd .. && cd mcp-telegram && npm install && npm run build && cd .. && cd mcp-kanban && npm install && npm run build && cd .. && electron-builder --mac",
@@ -136,6 +139,7 @@
     "sharp": "^0.34.5",
     "tailwindcss": "^4",
     "typescript": "^5",
+    "vitest": "^4.0.18",
     "wait-on": "^8.0.1"
   }
 }

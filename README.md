@@ -202,6 +202,8 @@ JIRA automations also create Kanban tasks automatically in the backlog, allowing
 
 A task board integrated with the agent system. Tasks flow through columns and can be automatically assigned to agents based on skill matching.
 
+![Kanban Board](screenshots/kanban.png)
+
 ### Workflow
 
 ```

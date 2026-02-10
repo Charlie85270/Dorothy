@@ -528,6 +528,12 @@ function FeaturesSection() {
       gradient: "from-[#f472b6] to-[#ec4899]",
     },
     {
+      icon: FolderKanban,
+      title: "Kanban Task Management",
+      description: "Visual task board with Backlog, Planned, Ongoing, and Done columns. Auto-assigns tasks to agents based on skill matching.",
+      gradient: "from-[#f472b6] to-[#a78bfa]",
+    },
+    {
       icon: GitBranch,
       title: "GitHub & JIRA Automations",
       description: "Poll GitHub PRs/issues and JIRA tickets automatically. Agents process items, post comments, and transition statuses.",
@@ -700,6 +706,15 @@ const screenshots = [
     gradient: 'from-[#a78bfa] to-[#f472b6]',
     icon: Bot,
     tags: ['Multi-agent', 'Terminal', 'Git Worktree'],
+  },
+  {
+    id: 'kanban',
+    src: '/kanban.png',
+    title: 'Kanban Task Management',
+    description: 'Visual task board with drag-and-drop columns. Create tasks, set priorities, track progress, and let agents auto-pick work from the backlog based on skill matching.',
+    gradient: 'from-[#f472b6] to-[#a78bfa]',
+    icon: FolderKanban,
+    tags: ['Drag & Drop', 'Auto-assign', 'Skill Matching', 'Progress Tracking'],
   },
   {
     id: 'stats',

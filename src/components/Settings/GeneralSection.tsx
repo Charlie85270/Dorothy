@@ -21,7 +21,7 @@ export const GeneralSection = ({ info }: GeneralSectionProps) => {
           </div>
           <div>
             <h3 className="font-medium">Claude Manager</h3>
-            <p className="text-sm text-muted-foreground">Version 1.0.0</p>
+            <p className="text-sm text-muted-foreground">Version 1.0.1</p>
           </div>
         </div>
 

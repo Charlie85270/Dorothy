@@ -100,21 +100,29 @@ export function formatSlackAgentStatus(a: AgentStatus): string {
 }
 
 /**
+ * Get the real filesystem path for asar-unpacked resources.
+ * External processes (like claude CLI) can't read inside .asar archives,
+ * so these files are unpacked to app.asar.unpacked/ on disk.
+ */
+function getResourcePath(filename: string): string {
+  const appPath = app.getAppPath();
+  const resourcePath = path.join(appPath, 'electron', 'resources', filename);
+  // In production, replace app.asar with app.asar.unpacked for external process access
+  return resourcePath.replace('app.asar', 'app.asar.unpacked');
+}
+
+/**
  * Get the path to the super agent instructions file
  */
 export function getSuperAgentInstructionsPath(): string {
-  const appPath = app.getAppPath();
-  // In development, appPath is the project root
-  // In production (asar), appPath is inside the asar archive
-  return path.join(appPath, 'electron', 'resources', 'super-agent-instructions.md');
+  return getResourcePath('super-agent-instructions.md');
 }
 
 /**
  * Get the path to the Telegram-specific instructions file
  */
 export function getTelegramInstructionsPath(): string {
-  const appPath = app.getAppPath();
-  return path.join(appPath, 'electron', 'resources', 'telegram-instructions.md');
+  return getResourcePath('telegram-instructions.md');
 }
 
 /**

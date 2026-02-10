@@ -1,6 +1,6 @@
 {
   "name": "claude-mgr",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "main": "electron/dist/main.js",
   "scripts": {
@@ -43,6 +43,7 @@
     "asarUnpack": [
       "out/**/*",
       "hooks/**/*",
+      "electron/resources/**/*",
       "node_modules/better-sqlite3/**/*",
       "node_modules/node-pty/**/*"
     ],

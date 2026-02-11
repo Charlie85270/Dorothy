@@ -41,6 +41,30 @@ export function getPokemonFrame(row: number, col: number): SpriteFrame {
   };
 }
 
+// NPC sprite sheets (pnj/*.png) are 128x192, 4 columns x 4 rows = 32x48 per frame
+// Row order: down, left, right, up
+// Column order: stand, walk1, stand, walk2
+const NPC_SPRITE_FRAME_W = 32;
+const NPC_SPRITE_FRAME_H = 48;
+const NPC_DIRECTION_ROW: Record<Direction, number> = {
+  down: 0,
+  left: 1,
+  right: 2,
+  up: 3,
+};
+
+export function getNPCWandererFrame(direction: Direction, animFrame: number = 0): SpriteFrame {
+  const row = NPC_DIRECTION_ROW[direction];
+  // Walk cycle columns: 0=stand, 1=walk1, 2=stand, 3=walk2
+  const col = animFrame;
+  return {
+    sx: col * NPC_SPRITE_FRAME_W,
+    sy: row * NPC_SPRITE_FRAME_H,
+    sw: NPC_SPRITE_FRAME_W,
+    sh: NPC_SPRITE_FRAME_H,
+  };
+}
+
 // Grass tile sprite (grass.png) - the visible grass tiles are in upper right
 // The tile pattern is at approximately x=256, y=0, each tile 16x16
 export const GRASS_TILE_FRAME: SpriteFrame = {

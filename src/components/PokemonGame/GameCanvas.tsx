@@ -1,12 +1,12 @@
 'use client';
 import { useRef, useEffect, useCallback } from 'react';
 import { GameAssets, NPC, Building, Direction } from './types';
-import { SCALED_TILE, MOVE_DURATION } from './constants';
+import { SCALED_TILE, MOVE_DURATION, TILE } from './constants';
 import { useGameLoop } from './hooks/useGameLoop';
 import { useKeyboard } from './hooks/useKeyboard';
 import { useGameState } from './hooks/useGameState';
 import { calculateCamera } from './engine/camera';
-import { canMoveTo } from './engine/collision';
+import { canMoveTo, getTileAt } from './engine/collision';
 import { checkInteraction, hasNearbyInteractable, checkStandingOnDoor } from './engine/interaction';
 import { renderMap, renderTreeOverlay, renderBuildingLabels, renderTallGrassOverlay } from './renderer/mapRenderer';
 import { renderPlayer, getPlayerPixelPosition } from './renderer/playerRenderer';
@@ -20,6 +20,7 @@ interface GameCanvasProps {
   onInteractNPC: (npc: NPC) => void;
   onDialogueAdvance: () => void;
   onMenuToggle: () => void;
+  onEnterRoute: (routeId: string) => void;
   screen: 'game' | 'battle' | 'menu' | 'interior';
   dialogueText: string | null;
 }
@@ -31,6 +32,7 @@ export default function GameCanvas({
   onInteractNPC,
   onDialogueAdvance,
   onMenuToggle,
+  onEnterRoute,
   screen,
   dialogueText,
 }: GameCanvasProps) {
@@ -44,8 +46,9 @@ export default function GameCanvas({
     setNPCs,
   } = useGameState();
 
-  // Track if we already triggered a door interaction to avoid re-triggering
+  // Track if we already triggered a door/route interaction to avoid re-triggering
   const doorTriggeredRef = useRef(false);
+  const routeTriggeredRef = useRef(false);
 
   // Cooldown after returning from battle/overlay to prevent immediate re-interaction
   const interactionCooldownRef = useRef(0);
@@ -57,10 +60,27 @@ export default function GameCanvas({
     prevScreenRef.current = screen;
   }, [screen]);
 
-  // Sync agent NPCs into game state
+  // Cooldown after dialogue closes to prevent immediate re-interaction
+  const prevDialogueRef = useRef(dialogueText);
   useEffect(() => {
-    setNPCs(agentNPCs);
-  }, [agentNPCs, getState, setNPCs]);
+    if (prevDialogueRef.current && !dialogueText) {
+      interactionCooldownRef.current = Date.now() + 400;
+    }
+    prevDialogueRef.current = dialogueText;
+  }, [dialogueText]);
+
+  // Wanderer NPC definitions (persisted via ref so positions survive re-renders)
+  const wandererNPCsRef = useRef<NPC[]>([
+    { id: 'wanderer-prof', name: 'Professor', type: 'wanderer', x: 18, y: 13, direction: 'down' as Direction, spritePath: '/pokemon/pnj/prof.png', dialogue: ['Don\'t go on the road to the north, I\'ve heard that strange things happen there.'] },
+    { id: 'wanderer-girl', name: 'Lass', type: 'wanderer', x: 24, y: 20, direction: 'left' as Direction, spritePath: '/pokemon/pnj/girld.png', dialogue: ['My brother went to Apple in the north to buy a Mac mini, he never came back, I\'m starting to worry.'] },
+    { id: 'wanderer-brian', name: 'Brian', type: 'wanderer', x: 15, y: 28, direction: 'right' as Direction, spritePath: '/pokemon/pnj/coinbase-brian.png', dialogue: ['Hey Bro, I\'m Brian from Coinbase!', 'Did you see my video at halftime during the Super Bowl? It\'s awesome, right?'] },
+  ]);
+  const wandererMovementRef = useRef<Map<string, { tileX: number; tileY: number; targetX: number; targetY: number; isMoving: boolean; moveProgress: number; nextMoveTime: number }>>(new Map());
+
+  // Sync agent NPCs + wanderers into game state
+  useEffect(() => {
+    setNPCs([...agentNPCs, ...wandererNPCsRef.current]);
+  }, [agentNPCs, setNPCs]);
 
   // Handle canvas resizing
   useEffect(() => {
@@ -118,6 +138,13 @@ export default function GameCanvas({
           doorTriggeredRef.current = true;
           onInteractBuilding(doorBuilding);
         }
+
+        // Check if player walked onto a route exit tile
+        const targetTile = getTileAt(player.targetX, player.targetY);
+        if (targetTile === TILE.ROUTE_EXIT && !routeTriggeredRef.current) {
+          routeTriggeredRef.current = true;
+          onEnterRoute('route1');
+        }
       } else {
         // Animate walk cycle
         const walkFrame = newProgress < 0.33 ? 0 : newProgress < 0.66 ? 1 : 2;
@@ -131,6 +158,12 @@ export default function GameCanvas({
       const currentDoor = checkStandingOnDoor(player);
       if (!currentDoor) {
         doorTriggeredRef.current = false;
+      }
+
+      // Reset route trigger when not on a route exit
+      const currentTile = getTileAt(player.x, player.y);
+      if (currentTile !== TILE.ROUTE_EXIT) {
+        routeTriggeredRef.current = false;
       }
 
       // Check for new movement input
@@ -147,7 +180,7 @@ export default function GameCanvas({
         const targetY = player.y + dy[dir];
 
         // Check if NPC is at target position
-        const npcAtTarget = state.npcs.find(n => n.x === targetX && n.y === targetY);
+        const npcAtTarget = state.npcs.find(n => Math.round(n.x) === targetX && Math.round(n.y) === targetY);
 
         if (canMoveTo(targetX, targetY) && !npcAtTarget) {
           updatePlayer(() => ({
@@ -165,6 +198,57 @@ export default function GameCanvas({
       }
     }
 
+    // === WANDERER NPC MOVEMENT ===
+    for (const npc of state.npcs) {
+      if (npc.type !== 'wanderer') continue;
+      const wStates = wandererMovementRef.current;
+      if (!wStates.has(npc.id)) {
+        wStates.set(npc.id, {
+          tileX: npc.x, tileY: npc.y, targetX: npc.x, targetY: npc.y,
+          isMoving: false, moveProgress: 0,
+          nextMoveTime: Date.now() + 2000 + Math.random() * 3000,
+        });
+      }
+      const ws = wStates.get(npc.id)!;
+      if (ws.isMoving) {
+        ws.moveProgress += delta / MOVE_DURATION;
+        if (ws.moveProgress >= 1) {
+          ws.tileX = ws.targetX;
+          ws.tileY = ws.targetY;
+          ws.isMoving = false;
+          ws.moveProgress = 0;
+          ws.nextMoveTime = Date.now() + 1500 + Math.random() * 3000;
+          npc.x = ws.tileX;
+          npc.y = ws.tileY;
+          npc.animFrame = 0;
+        } else {
+          npc.x = ws.tileX + (ws.targetX - ws.tileX) * ws.moveProgress;
+          npc.y = ws.tileY + (ws.targetY - ws.tileY) * ws.moveProgress;
+          // Walk cycle: columns 1→0→3 mapped from progress
+          npc.animFrame = ws.moveProgress < 0.33 ? 1 : ws.moveProgress < 0.66 ? 0 : 3;
+        }
+      } else if (isGameActive && Date.now() >= ws.nextMoveTime) {
+        const dirs: Direction[] = ['up', 'down', 'left', 'right'];
+        const dir = dirs[Math.floor(Math.random() * dirs.length)];
+        const dxMap: Record<Direction, number> = { left: -1, right: 1, up: 0, down: 0 };
+        const dyMap: Record<Direction, number> = { left: 0, right: 0, up: -1, down: 1 };
+        const tx = ws.tileX + dxMap[dir];
+        const ty = ws.tileY + dyMap[dir];
+        npc.direction = dir;
+        const pTileX = Math.round(player.x);
+        const pTileY = Math.round(player.y);
+        const blocked = state.npcs.some(n => n.id !== npc.id && Math.round(n.x) === tx && Math.round(n.y) === ty);
+        if (canMoveTo(tx, ty) && !blocked && !(pTileX === tx && pTileY === ty)) {
+          ws.targetX = tx;
+          ws.targetY = ty;
+          ws.isMoving = true;
+          ws.moveProgress = 0;
+        } else {
+          ws.nextMoveTime = Date.now() + 1000 + Math.random() * 2000;
+        }
+      }
+    }
+
     // Handle Space/Enter interactions (NPCs and facing doors)
     if (isGameActive && consumeAction()) {
       if (Date.now() > interactionCooldownRef.current) {
@@ -173,15 +257,31 @@ export default function GameCanvas({
           if ('route' in interactable) {
             onInteractBuilding(interactable as Building);
           } else {
-            onInteractNPC(interactable as NPC);
+            const npc = interactable as NPC;
+            // Make wanderer face the player and pause movement
+            if (npc.type === 'wanderer') {
+              const opposite: Record<Direction, Direction> = { up: 'down', down: 'up', left: 'right', right: 'left' };
+              npc.direction = opposite[player.direction];
+              npc.animFrame = 0;
+              const ws = wandererMovementRef.current.get(npc.id);
+              if (ws) {
+                // Snap back to current tile and stop movement
+                npc.x = ws.tileX;
+                npc.y = ws.tileY;
+                ws.isMoving = false;
+                ws.moveProgress = 0;
+                ws.nextMoveTime = Date.now() + 3000;
+              }
+            }
+            onInteractNPC(npc);
           }
         }
       }
     }
 
-    // Handle dialogue advancement
-    if (dialogueText && consumeAction()) {
-      onDialogueAdvance();
+    // Consume stale action presses during dialogue (DialogueBox handles advancement)
+    if (dialogueText) {
+      consumeAction();
     }
 
     // Handle menu toggle
@@ -229,7 +329,7 @@ export default function GameCanvas({
   }, [
     assets, screen, dialogueText, getKeys, getState,
     updatePlayer, setState, consumeAction, consumeCancel,
-    onInteractBuilding, onInteractNPC, onDialogueAdvance, onMenuToggle,
+    onInteractBuilding, onInteractNPC, onMenuToggle, onEnterRoute,
   ]);
 
   useGameLoop(gameLoop, true);

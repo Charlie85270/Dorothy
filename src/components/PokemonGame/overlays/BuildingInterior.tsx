@@ -12,12 +12,16 @@ import SkillDojoContent from '../interiors/SkillDojoContent';
 import SettingsContent from '../interiors/SettingsContent';
 import ClaudeLabContent from '../interiors/ClaudeLabContent';
 import PluginShopContent from '../interiors/PluginShopContent';
+import KanbanCenterContent from '../interiors/KanbanCenterContent';
+import SchedulerContent from '../interiors/SchedulerContent';
 
 const INTERIOR_CONTENT_REGISTRY: Record<string, React.ComponentType<InteriorContentProps>> = {
   skills: SkillDojoContent,
   settings: SettingsContent,
   'claude-lab': ClaudeLabContent,
   'plugin-shop': PluginShopContent,
+  kanban: KanbanCenterContent,
+  scheduler: SchedulerContent,
 };
 
 // ── Agent data interface (matches what index.tsx provides) ─────────────────

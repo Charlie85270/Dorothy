@@ -11,6 +11,7 @@ import BattleOverlay from './overlays/BattleOverlay';
 import AgentInfoCard from './overlays/AgentInfoCard';
 import GameMenu from './overlays/GameMenu';
 import BuildingInterior from './overlays/BuildingInterior';
+import RouteOverlay from './overlays/RouteOverlay';
 import { renderLoadingScreen } from './renderer/uiRenderer';
 import AgentTerminalDialog from '@/components/AgentWorld/AgentTerminalDialog';
 import SkillInstallDialog from '@/components/SkillInstallDialog';
@@ -83,6 +84,7 @@ export default function PokemonGame() {
   const [showAgentInfo, setShowAgentInfo] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [activeInterior, setActiveInterior] = useState<string | null>(null);
+  const [activeRoute, setActiveRoute] = useState<string | null>(null);
 
   // ── Same pattern as agents/page.tsx ──
   // Get real agents from Electron
@@ -146,6 +148,18 @@ export default function PokemonGame() {
   // Exit interior
   const handleExitInterior = useCallback(() => {
     setActiveInterior(null);
+    setScreen('game');
+  }, []);
+
+  // Enter route (e.g. Route 1)
+  const handleEnterRoute = useCallback((routeId: string) => {
+    setActiveRoute(routeId);
+    setScreen('route');
+  }, []);
+
+  // Exit route
+  const handleExitRoute = useCallback(() => {
+    setActiveRoute(null);
     setScreen('game');
   }, []);
 
@@ -300,7 +314,8 @@ export default function PokemonGame() {
           onInteractNPC={handleInteractNPC}
           onDialogueAdvance={handleDialogueAdvance}
           onMenuToggle={handleMenuToggle}
-          screen={screen === 'menu' ? 'menu' : screen === 'battle' ? 'battle' : screen === 'interior' ? 'interior' : 'game'}
+          onEnterRoute={handleEnterRoute}
+          screen={screen === 'menu' ? 'menu' : screen === 'battle' ? 'battle' : screen === 'interior' || screen === 'route' ? 'interior' : 'game'}
           dialogueText={dialogueText}
         />
       )}
@@ -351,6 +366,15 @@ export default function PokemonGame() {
           onTalkToAgent={handleTalkToAgent}
           onInstallSkill={handleInstallSkill}
           onInstallPlugin={handleInstallPlugin}
+        />
+      )}
+
+      {/* Route Overlay */}
+      {screen === 'route' && activeRoute && (
+        <RouteOverlay
+          assets={assets}
+          onExit={handleExitRoute}
+          onInstallSkill={handleInstallSkill}
         />
       )}
 

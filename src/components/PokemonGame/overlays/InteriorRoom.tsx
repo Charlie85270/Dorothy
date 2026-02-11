@@ -169,7 +169,10 @@ export default function InteriorRoom({
     for (let dist = 1; dist <= 3; dist++) {
       const fx = Math.round(player.x) + stepX * dist;
       const fy = Math.round(player.y) + stepY * dist;
-      if (fx === roomConfig.npcPosition.x && fy === roomConfig.npcPosition.y) return true;
+      const npcW = roomConfig.npcWidth || 1;
+      if (fy === roomConfig.npcPosition.y &&
+          fx >= roomConfig.npcPosition.x &&
+          fx < roomConfig.npcPosition.x + npcW) return true;
       // Stop scanning if we hit a non-furniture blocking tile (wall)
       const tile = roomConfig.tilemap[fy]?.[fx];
       if (tile === undefined || tile === INTERIOR_TILE.WALL) break;

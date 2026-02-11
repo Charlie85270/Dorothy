@@ -15,7 +15,7 @@ function getFacingTile(player: PlayerState): { x: number; y: number } {
 export function getInteractableNPC(player: PlayerState, npcs: NPC[]): NPC | null {
   if (player.isMoving) return null;
   const facing = getFacingTile(player);
-  return npcs.find(npc => npc.x === facing.x && npc.y === facing.y) ?? null;
+  return npcs.find(npc => Math.round(npc.x) === facing.x && Math.round(npc.y) === facing.y) ?? null;
 }
 
 export function getInteractableBuilding(player: PlayerState): Building | null {

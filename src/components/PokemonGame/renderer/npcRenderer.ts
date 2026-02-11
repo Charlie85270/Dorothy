@@ -1,6 +1,7 @@
 import { NPC, GameAssets } from '../types';
-import { SCALED_TILE } from '../constants';
+import { SCALED_TILE, SCALE } from '../constants';
 import { Camera } from '../engine/camera';
+import { getNPCWandererFrame } from '../sprites';
 
 // Cache for individually-loaded pokemon sprite images
 const spriteImageCache: Record<string, HTMLImageElement> = {};
@@ -26,12 +27,16 @@ export function renderNPCs(
 
     if (npc.type === 'professor') {
       renderProfessorChen(ctx, screenX, screenY, assets);
+    } else if (npc.type === 'wanderer') {
+      renderWandererNPC(ctx, screenX, screenY, npc);
     } else {
       renderAgentPokemon(ctx, screenX, screenY, npc, assets);
     }
 
-    // Draw name label above NPC
-    renderNPCLabel(ctx, screenX + SCALED_TILE / 2, screenY - 8, npc.name);
+    // Draw name label above NPC (skip for wanderers)
+    if (npc.type !== 'wanderer') {
+      renderNPCLabel(ctx, screenX + SCALED_TILE / 2, screenY - 8, npc.name);
+    }
   }
 }
 
@@ -116,6 +121,46 @@ function renderAgentPokemon(
     ctx.lineWidth = 1;
     ctx.stroke();
   }
+}
+
+function renderWandererNPC(
+  ctx: CanvasRenderingContext2D,
+  screenX: number,
+  screenY: number,
+  npc: NPC,
+) {
+  const spritePath = npc.spritePath;
+  if (!spritePath) {
+    renderSpritePlaceholder(ctx, screenX, screenY, npc.name);
+    return;
+  }
+
+  if (!spriteImageCache[spritePath]) {
+    const img = new Image();
+    img.src = spritePath;
+    spriteImageCache[spritePath] = img;
+  }
+
+  const img = spriteImageCache[spritePath];
+  if (!img.complete || img.naturalWidth === 0) {
+    renderSpritePlaceholder(ctx, screenX, screenY, npc.name);
+    return;
+  }
+
+  const frame = getNPCWandererFrame(npc.direction, npc.animFrame || 0);
+  ctx.imageSmoothingEnabled = false;
+  // Scale to fit nicely — frame is 32x48, use SCALE*0.5 to match tile proportions
+  const drawScale = SCALE * 0.5;
+  const drawWidth = frame.sw * drawScale;
+  const drawHeight = frame.sh * drawScale;
+  // Center horizontally on tile, align bottom to tile bottom
+  const offsetX = (SCALED_TILE - drawWidth) / 2;
+  const offsetY = SCALED_TILE - drawHeight;
+  ctx.drawImage(
+    img,
+    frame.sx, frame.sy, frame.sw, frame.sh,
+    screenX + offsetX, screenY + offsetY, drawWidth, drawHeight
+  );
 }
 
 function renderSpritePlaceholder(ctx: CanvasRenderingContext2D, screenX: number, screenY: number, name: string) {

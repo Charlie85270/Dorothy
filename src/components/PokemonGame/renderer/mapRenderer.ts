@@ -72,30 +72,18 @@ function drawTree(
 }
 
 // ── Flower rendering ────────────────────────────────────────────────────────
-function drawFlower(ctx: CanvasRenderingContext2D, px: number, py: number, tileX: number, tileY: number) {
-  const flowerColors = ['#F85858', '#F8A8F8', '#F8F858'];
-  const colorIdx = (tileX * 3 + tileY * 7) % 3;
+let flowerImage: HTMLImageElement | null = null;
 
-  const positions = [
-    [12, 12], [32, 8], [20, 28], [36, 32], [8, 36]
-  ];
-
-  for (let i = 0; i < positions.length; i++) {
-    const [fx, fy] = positions[i];
-    // Petals
-    ctx.fillStyle = flowerColors[(colorIdx + i) % 3];
-    ctx.fillRect(px + fx - 3, py + fy, 3, 3);
-    ctx.fillRect(px + fx + 3, py + fy, 3, 3);
-    ctx.fillRect(px + fx, py + fy - 3, 3, 3);
-    ctx.fillRect(px + fx, py + fy + 3, 3, 3);
-    // Center
-    ctx.fillStyle = '#F8D830';
-    ctx.fillRect(px + fx, py + fy, 3, 3);
+function drawFlower(ctx: CanvasRenderingContext2D, px: number, py: number) {
+  if (!flowerImage) {
+    flowerImage = new Image();
+    flowerImage.src = '/pokemon/grass/flower.png';
   }
-  // Stems
-  ctx.fillStyle = '#48A048';
-  ctx.fillRect(px + 13, py + 20, 2, 8);
-  ctx.fillRect(px + 33, py + 16, 2, 8);
+
+  if (flowerImage.complete && flowerImage.naturalWidth > 0) {
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(flowerImage, px, py, SCALED_TILE, SCALED_TILE);
+  }
 }
 
 // ── Door rendering ──────────────────────────────────────────────────────────
@@ -186,7 +174,7 @@ export function renderMap(
           break;
 
         case TILE.FLOWER:
-          drawFlower(ctx, px, py, x, y);
+          drawFlower(ctx, px, py);
           break;
 
         case TILE.WATER:

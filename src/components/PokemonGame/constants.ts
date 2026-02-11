@@ -13,6 +13,7 @@ export const TILE = {
   SIGN: 8,
   WATER: 9,
   ROUTE_EXIT: 10,
+  GRAVE: 11,
 } as const;
 
 // ── Rendering Constants ─────────────────────────────────────────────────────
@@ -245,6 +246,11 @@ export const INTERIOR_CONFIGS: Record<string, InteriorConfig> = {
     npcDialogue: ['Accessing the Schedule Board...'],
     title: 'SCHEDULER',
   },
+  'vercel-hq': {
+    backgroundImage: '/pokemon/vercel/interior.png',
+    npcDialogue: ['Accessing Vercel Best Practices Board...'],
+    title: 'VERCEL HQ',
+  },
 };
 
 // ── Interior Room Configs (walkable room layouts) ─────────────────────────
@@ -339,6 +345,71 @@ export const INTERIOR_ROOM_CONFIGS: Record<string, InteriorRoomConfig> = {
     npcWidth: 1,                     // only the PC column
     playerStart: { x: 4, y: 6 },    // near entrance
   },
+  'vercel-hq': {
+    width: 12,
+    height: 12,
+    tilemap: [
+      [1,1,1,1,1,1,1,1,1,1,1,1], // row 0: top wall (machines, awards)
+      [1,2,2,2,2,0,0,0,2,2,2,1], // row 1: back wall (counter, shelves, frames)
+      [1,0,0,0,0,0,0,0,0,0,0,0], // row 2: robot left, chalkboard right
+      [1,2,2,0,0,0,0,1,1,1,0,0], // row 3: walkable
+      [0,2,2,0,0,0,0,0,0,0,0,0], // row 4: walkable
+      [0,0,0,0,0,0,0,0,0,0,0,0], // row 5: walkable
+      [1,1,1,1,1,0,0,1,1,1,1,1], // row 6: walkable
+      [1,1,1,1,1,0,0,1,1,1,1,1], // row 7: walkable
+      [0,0,0,0,0,0,0,0,0,0,0,0], // row 8: walkable
+      [0,0,0,0,0,0,0,0,0,0,0,0], // row 9: walkable
+      [1,0,0,0,0,0,0,0,0,0,0,1], // row 10: plants on sides
+      [1,1,1,1,1,3,3,1,1,1,1,1], // row 11: exit
+    ],
+    npcPosition: { x: 6, y: 0 },   // two framed papers on the top wall
+    npcWidth: 1,                     // papers span x=5-6
+    playerStart: { x: 5, y: 10 },   // near entrance
+    interactables: [
+      {
+        id: 'vercel-pc',
+        x: 2, y: 1, width: 1,
+        speaker: 'VERCEL PC',
+        dialogue: [
+          'Booting Cloud Functions and Analytics....',
+          'Tunununu.....',
+          'Image optimization activated .....',
+          'Tunununu.....',
+          'Printing the bill.......',
+          '4,678$. Uch.',
+        ],
+      },
+      {
+        id: 'rocker',
+        x: 8, y: 9,
+        speaker: 'Young CEO',
+        spritePath: '/pokemon/pnj/rocker.png',
+        direction: 'down',
+        dialogue: [
+          'Man Vercel is so fucking cool. I can deploy my SaaS in seconds, it even compress images without coding.',
+          'I can rollback anytime I want, use AI Gateway, Core Platform, CI/CD,Fluid Compute... Fuck you Developer, I\'m the boss now.',
+          'And you\'ll not believe it, but I only pay 14,657$ per month.',
+          'Can\'t wait to scale my SaaS to 100,000 users. Only 99 876 left.',
+        ],
+      },
+      {
+        id: 'leader',
+        x: 3, y: 5,
+        speaker: 'Guillaume',
+        spritePath: '/pokemon/pnj/leader.png',
+        direction: 'left',
+        exitAfterDialogue: true,
+        dialogue: [
+          'Every Monday I get a deep AI analysis of our metrics across every product area to enjoy with my coffee.',
+          'Anomalies, growth, trends, recommendations. AI spots patterns human analysts easily miss. I can @ the agent for further questions.',
+          'AI will soon be running every company.',
+          'No point in building things if you don’t ship them.',
+          'There’s never been a better time to start a company.',
+          'Oh shit the time flew by, already 3 min without pushing to prod, I need to go ser(verless lol), sorry, euuh bye.',
+        ],
+      },
+    ],
+  },
   'claude-lab': {
     width: 14,
     height: 12,
@@ -366,14 +437,7 @@ export const INTERIOR_ROOM_CONFIGS: Record<string, InteriorRoomConfig> = {
 
 // Available individual pokemon sprite numbers (excluding 1 = Charizard reserved for super agents)
 export const AVAILABLE_POKEMON_SPRITES: number[] = [
-  2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,
-  21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,
-  41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,
-  61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,
-  81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,
-  101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,
-  121,122,123,124,125,126,127,128,129,130,131,132,133,134,135,136,137,138,139,140,
-  141,142,143,144,145,146,147,148,149,150,
+  2,3,4,5,6,7,8,9,10,11,12,13,14,
 ];
 
 // Agent grid positions inside claude-lab (up to 12 agents)
@@ -397,16 +461,21 @@ function hashString(str: string): number {
 export function getAgentSpritePath(agentId: string, agentName?: string): string {
   const name = (agentName || '').toLowerCase();
   if (name.includes('super agent') || name.includes('orchestrator')) {
-    return '/pokemon/poke/sprite_1.png';
+    return '/pokemon/poke/1.png';
   }
   const idx = hashString(agentId) % AVAILABLE_POKEMON_SPRITES.length;
-  return `/pokemon/poke/sprite_${AVAILABLE_POKEMON_SPRITES[idx]}.png`;
+  return `/pokemon/poke/${AVAILABLE_POKEMON_SPRITES[idx]}.png`;
 }
 
 // ── Route 1 Map ──────────────────────────────────────────────────────────────
 export const ROUTE1_WIDTH = 30;
 export const ROUTE1_HEIGHT = 40;
 export const ROUTE1_PLAYER_START: Position = { x: 14, y: 37 };
+
+// ── Route 1 Buildings ──────────────────────────────────────────────────────
+export const ROUTE1_BUILDINGS: { id: string; label: string; x: number; y: number; width: number; height: number; doorX: number; doorY: number; spriteFile: string; interiorId?: string }[] = [
+  { id: 'vercel-party', label: 'VERCEL HQ', x: 4, y: 19, width: 4, height: 3, doorX: 5, doorY: 21, spriteFile: '/pokemon/house/vercel.png', interiorId: 'vercel-hq' },
+];
 
 function generateRoute1Map(): number[][] {
   const w = ROUTE1_WIDTH;
@@ -456,6 +525,10 @@ function generateRoute1Map(): number[][] {
   // Wider clearing at the top
   carve(5, 3, 15, 7);
 
+  // ── North path (toward ferry / next map) ──
+  // Carve a 5-tile wide path going north from the top clearing to the map edge
+  carve(9, 0, 11, 3);
+
   // ── South exit (3-tile gap in tree wall) ──
   // Narrow the very bottom to a 3-tile exit
   for (let col = 0; col < w; col++) {
@@ -494,14 +567,6 @@ function generateRoute1Map(): number[][] {
           map[row][col] = TILE.TALL_GRASS;
         }
       }
-    }
-  }
-
-  // ── Water pond (in the lower horizontal corridor) ──
-  for (let dy = 0; dy < 2; dy++) {
-    for (let dx = 0; dx < 3; dx++) {
-      const wx = 16 + dx, wy = 23 + dy;
-      if (wx < w && wy < h && map[wy][wx] === TILE.GRASS) map[wy][wx] = TILE.WATER;
     }
   }
 
@@ -548,6 +613,46 @@ function generateRoute1Map(): number[][] {
   for (const [x, y] of innerTrees) {
     if (y >= 0 && y < h && x >= 0 && x < w && map[y][x] === TILE.GRASS) {
       map[y][x] = TILE.TREE;
+    }
+  }
+
+  // ── Graveyard (bottom-right of the horizontal corridor) ──
+  // Carve extra rows south for the graveyard
+  carve(19, 26, 25, 27);
+
+  // Fence border
+  const gyT = 21, gyB = 27, gyL = 19, gyR = 25;
+  const gyEntryY = 24; // entry on left side
+  for (let x = gyL; x <= gyR; x++) {
+    map[gyT][x] = TILE.FENCE;
+    map[gyB][x] = TILE.FENCE;
+  }
+  for (let y = gyT; y <= gyB; y++) {
+    if (y !== gyEntryY) map[y][gyL] = TILE.FENCE;
+    map[y][gyR] = TILE.FENCE;
+  }
+
+  // Gravestones (3 columns x 3 rows, every other tile)
+  const gravePositions: [number, number][] = [
+    [20, 22], [22, 22], [24, 22],
+    [22, 24], [24, 24],
+    [20, 26], [22, 26], [24, 26],
+  ];
+  for (const [gx, gy] of gravePositions) {
+    map[gy][gx] = TILE.GRAVE;
+  }
+
+  // ── Route 1 buildings ──
+  for (const b of ROUTE1_BUILDINGS) {
+    for (let row = b.y; row < b.y + b.height; row++) {
+      for (let col = b.x; col < b.x + b.width; col++) {
+        if (row >= 0 && row < h && col >= 0 && col < w) {
+          map[row][col] = TILE.BUILDING;
+        }
+      }
+    }
+    if (b.doorY >= 0 && b.doorY < h && b.doorX >= 0 && b.doorX < w) {
+      map[b.doorY][b.doorX] = TILE.DOOR;
     }
   }
 

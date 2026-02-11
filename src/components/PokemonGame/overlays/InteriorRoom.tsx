@@ -1,6 +1,6 @@
 'use client';
 import { useRef, useEffect, useCallback } from 'react';
-import { InteriorConfig, InteriorRoomConfig, InteriorNPC, GameAssets, Direction, PlayerState } from '../types';
+import { InteriorConfig, InteriorRoomConfig, InteriorNPC, InteriorInteractable, GameAssets, Direction, PlayerState } from '../types';
 import { TILE_SIZE, MOVE_DURATION } from '../constants';
 import { useGameLoop } from '../hooks/useGameLoop';
 import { getPlayerFrame } from '../sprites';
@@ -12,6 +12,46 @@ const INTERIOR_TILE = {
   EXIT: 3,
 };
 
+// Simple BFS pathfinding to find shortest path to an exit tile
+// blocked: optional set of "x,y" strings to treat as impassable (e.g. player position)
+function findPathToExit(
+  tilemap: number[][],
+  width: number,
+  height: number,
+  startX: number,
+  startY: number,
+  blocked?: Set<string>,
+): { x: number; y: number }[] | null {
+  const visited = new Set<string>();
+  const queue: { x: number; y: number; path: { x: number; y: number }[] }[] = [
+    { x: startX, y: startY, path: [] },
+  ];
+  visited.add(`${startX},${startY}`);
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    const { x, y, path } = current;
+
+    if (tilemap[y][x] === 3) { // EXIT tile
+      return [...path, { x, y }];
+    }
+
+    for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+      const key = `${nx},${ny}`;
+      if (visited.has(key)) continue;
+      if (blocked?.has(key)) continue;
+      visited.add(key);
+      const tile = tilemap[ny][nx];
+      if (tile !== 0 && tile !== 3) continue; // only floor + exit walkable
+      queue.push({ x: nx, y: ny, path: [...path, { x, y }] });
+    }
+  }
+  return null;
+}
+
 interface InteriorRoomProps {
   config: InteriorConfig;
   roomConfig: InteriorRoomConfig;
@@ -20,6 +60,7 @@ interface InteriorRoomProps {
   onInteractNPC: (npcId?: string) => void;
   onExit: () => void;
   interiorNPCs?: InteriorNPC[];
+  exitingInteractableId?: string | null;
 }
 
 export default function InteriorRoom({
@@ -30,6 +71,7 @@ export default function InteriorRoom({
   onInteractNPC,
   onExit,
   interiorNPCs,
+  exitingInteractableId,
 }: InteriorRoomProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -56,6 +98,29 @@ export default function InteriorRoom({
   // Cache loaded NPC sprite images
   const npcImageCacheRef = useRef<Record<string, HTMLImageElement>>({});
 
+  // Mutable directions for interactable NPCs (updated when player talks to them)
+  const interactableDirsRef = useRef<Record<string, Direction>>({});
+
+  // Mutable positions for interactable NPCs (for walk animations)
+  const interactablePosRef = useRef<Record<string, { x: number; y: number }>>({});
+
+  // Walking-to-exit state
+  interface WalkState {
+    id: string;
+    path: { x: number; y: number }[];
+    x: number;
+    y: number;
+    targetX: number;
+    targetY: number;
+    direction: Direction;
+    moving: boolean;
+    progress: number;
+    animFrame: number;
+    gone: boolean; // reached exit, no longer rendered
+  }
+  const walkingNpcRef = useRef<WalkState | null>(null);
+  const exitTriggeredIdsRef = useRef<Set<string>>(new Set());
+
   // Load NPC sprite images on demand
   useEffect(() => {
     if (!interiorNPCs) return;
@@ -67,6 +132,19 @@ export default function InteriorRoom({
       }
     }
   }, [interiorNPCs]);
+
+  // Load interactable NPC sprites on demand
+  useEffect(() => {
+    const objs = roomConfig.interactables;
+    if (!objs) return;
+    for (const obj of objs) {
+      if (obj.spritePath && !npcImageCacheRef.current[obj.spritePath]) {
+        const img = new Image();
+        img.src = obj.spritePath;
+        npcImageCacheRef.current[obj.spritePath] = img;
+      }
+    }
+  }, [roomConfig.interactables]);
 
   // Keyboard handlers - only registered when room is active
   useEffect(() => {
@@ -150,11 +228,55 @@ export default function InteriorRoom({
     return () => observer.disconnect();
   }, []);
 
+  // ── Start walk-to-exit when triggered ──
+  useEffect(() => {
+    if (!exitingInteractableId) return;
+    if (exitTriggeredIdsRef.current.has(exitingInteractableId)) return;
+    exitTriggeredIdsRef.current.add(exitingInteractableId);
+
+    const obj = roomConfig.interactables?.find(o => o.id === exitingInteractableId);
+    if (!obj) return;
+
+    const startX = interactablePosRef.current[obj.id]?.x ?? obj.x;
+    const startY = interactablePosRef.current[obj.id]?.y ?? obj.y;
+
+    const path = findPathToExit(roomConfig.tilemap, roomConfig.width, roomConfig.height, startX, startY);
+    if (!path || path.length === 0) return;
+
+    // Remove the starting position from path
+    const steps = (path[0].x === startX && path[0].y === startY) ? path.slice(1) : path;
+
+    walkingNpcRef.current = {
+      id: exitingInteractableId,
+      path: steps,
+      x: startX,
+      y: startY,
+      targetX: startX,
+      targetY: startY,
+      direction: obj.direction || 'down',
+      moving: false,
+      progress: 0,
+      animFrame: 0,
+      gone: false,
+    };
+  }, [exitingInteractableId, roomConfig]);
+
   // Can the player move to this tile?
   const canMoveToTile = useCallback((x: number, y: number) => {
     if (x < 0 || x >= roomConfig.width || y < 0 || y >= roomConfig.height) return false;
     const tile = roomConfig.tilemap[y][x];
-    return tile === INTERIOR_TILE.FLOOR || tile === INTERIOR_TILE.EXIT;
+    if (tile !== INTERIOR_TILE.FLOOR && tile !== INTERIOR_TILE.EXIT) return false;
+    // Block tiles occupied by interactable NPCs (using mutable positions)
+    if (roomConfig.interactables) {
+      for (const obj of roomConfig.interactables) {
+        if (!obj.spritePath) continue;
+        const wn = walkingNpcRef.current;
+        if (wn && wn.id === obj.id && wn.gone) continue;
+        const pos = interactablePosRef.current[obj.id] || { x: obj.x, y: obj.y };
+        if (Math.round(pos.x) === x && Math.round(pos.y) === y) return false;
+      }
+    }
+    return true;
   }, [roomConfig]);
 
   // Check if player is facing the static NPC (legacy)
@@ -193,6 +315,31 @@ export default function InteriorRoom({
     }
     return null;
   }, []);
+
+  // Check if player is facing an interactable object (returns id or null)
+  const getFacingInteractable = useCallback((player: PlayerState): string | null => {
+    const objs = roomConfig.interactables;
+    if (!objs || objs.length === 0) return null;
+    const dx: Record<Direction, number> = { left: -1, right: 1, up: 0, down: 0 };
+    const dy: Record<Direction, number> = { left: 0, right: 0, up: -1, down: 1 };
+    const stepX = dx[player.direction];
+    const stepY = dy[player.direction];
+    for (let dist = 1; dist <= 3; dist++) {
+      const fx = Math.round(player.x) + stepX * dist;
+      const fy = Math.round(player.y) + stepY * dist;
+      for (const obj of objs) {
+        // Skip gone or currently walking NPCs
+        const wn = walkingNpcRef.current;
+        if (wn && wn.id === obj.id) continue;
+        const w = obj.width || 1;
+        if (fy === obj.y && fx >= obj.x && fx < obj.x + w) return obj.id;
+      }
+      const tile = roomConfig.tilemap[fy]?.[fx];
+      if (tile === undefined || tile === INTERIOR_TILE.WALL) break;
+      if (tile !== INTERIOR_TILE.FURNITURE) break;
+    }
+    return null;
+  }, [roomConfig]);
 
   // ── Game Loop ──────────────────────────────────────────────────────────────
   const gameLoop = useCallback((delta: number) => {
@@ -267,25 +414,89 @@ export default function InteriorRoom({
       if (actionJustPressedRef.current) {
         actionJustPressedRef.current = false;
         if (!player.isMoving) {
-          if (dynNPCs.length > 0) {
-            const facingId = getFacingDynamicNPC(player, dynNPCs);
-            if (facingId) {
-              onInteractNPC(facingId);
+          let handled = false;
+          // Check interactable objects first
+          const objId = getFacingInteractable(player);
+          if (objId) {
+            // Turn NPC to face the player
+            const opposite: Record<Direction, Direction> = { up: 'down', down: 'up', left: 'right', right: 'left' };
+            interactableDirsRef.current[objId] = opposite[player.direction];
+            onInteractNPC(objId);
+            handled = true;
+          }
+          if (!handled) {
+            if (dynNPCs.length > 0) {
+              const facingId = getFacingDynamicNPC(player, dynNPCs);
+              if (facingId) {
+                onInteractNPC(facingId);
+              }
+            } else if (isFacingStaticNPC(player)) {
+              onInteractNPC();
             }
-          } else if (isFacingStaticNPC(player)) {
-            onInteractNPC();
           }
         }
       }
 
       // Update facing prompt
-      if (dynNPCs.length > 0) {
+      const facingObj = !player.isMoving ? getFacingInteractable(player) : null;
+      if (facingObj) {
+        showPromptRef.current = true;
+        facingNpcIdRef.current = facingObj;
+      } else if (dynNPCs.length > 0) {
         const facingId = !player.isMoving ? getFacingDynamicNPC(player, dynNPCs) : null;
         showPromptRef.current = facingId !== null;
         facingNpcIdRef.current = facingId;
       } else {
-        showPromptRef.current = !player.isMoving && isFacingStaticNPC(player);
+        showPromptRef.current = !player.isMoving && (isFacingStaticNPC(player));
         facingNpcIdRef.current = null;
+      }
+    }
+
+    // ═══ UPDATE WALKING NPC ═══
+    const walkNpc = walkingNpcRef.current;
+    if (walkNpc && !walkNpc.gone) {
+      if (walkNpc.moving) {
+        const wp = walkNpc.progress + delta / MOVE_DURATION;
+        if (wp >= 1) {
+          walkNpc.x = walkNpc.targetX;
+          walkNpc.y = walkNpc.targetY;
+          walkNpc.moving = false;
+          walkNpc.progress = 0;
+          walkNpc.animFrame = 0;
+          interactablePosRef.current[walkNpc.id] = { x: walkNpc.x, y: walkNpc.y };
+          if (roomConfig.tilemap[walkNpc.y]?.[walkNpc.x] === INTERIOR_TILE.EXIT) {
+            walkNpc.gone = true;
+          }
+        } else {
+          walkNpc.progress = wp;
+          walkNpc.animFrame = wp < 0.33 ? 0 : wp < 0.66 ? 1 : 2;
+        }
+      }
+      if (!walkNpc.moving && !walkNpc.gone && walkNpc.path.length > 0) {
+        const next = walkNpc.path[0]; // peek first
+        const px = Math.round(player.isMoving ? player.targetX : player.x);
+        const py = Math.round(player.isMoving ? player.targetY : player.y);
+        if (next.x === px && next.y === py) {
+          // Player is blocking — reroute around them
+          const blocked = new Set<string>([`${px},${py}`]);
+          const newPath = findPathToExit(roomConfig.tilemap, roomConfig.width, roomConfig.height, walkNpc.x, walkNpc.y, blocked);
+          if (newPath && newPath.length > 0) {
+            const steps = (newPath[0].x === walkNpc.x && newPath[0].y === walkNpc.y) ? newPath.slice(1) : newPath;
+            walkNpc.path = steps;
+          }
+          // If no alternative path, just wait one frame and retry next tick
+        } else {
+          walkNpc.path.shift(); // consume the step
+          const ddx = next.x - walkNpc.x;
+          const ddy = next.y - walkNpc.y;
+          walkNpc.targetX = next.x;
+          walkNpc.targetY = next.y;
+          walkNpc.direction = ddy > 0 ? 'down' : ddy < 0 ? 'up' : ddx > 0 ? 'right' : 'left';
+          walkNpc.moving = true;
+          walkNpc.progress = 0;
+          walkNpc.animFrame = 1;
+          interactableDirsRef.current[walkNpc.id] = walkNpc.direction;
+        }
       }
     }
 
@@ -456,6 +667,59 @@ export default function InteriorRoom({
       });
     }
 
+    // Interactable NPC sprites
+    const interactObjs = roomConfig.interactables || [];
+    for (const obj of interactObjs) {
+      if (!obj.spritePath) continue;
+      // Skip gone NPCs
+      const wn = walkingNpcRef.current;
+      if (wn && wn.id === obj.id && wn.gone) continue;
+
+      // Use mutable position for walking NPCs
+      let drawObjX = obj.x;
+      let drawObjY = obj.y;
+      let walkFrame = 0;
+      if (wn && wn.id === obj.id) {
+        if (wn.moving) {
+          drawObjX = wn.x + (wn.targetX - wn.x) * wn.progress;
+          drawObjY = wn.y + (wn.targetY - wn.y) * wn.progress;
+        } else {
+          drawObjX = wn.x;
+          drawObjY = wn.y;
+        }
+        walkFrame = wn.animFrame;
+      }
+
+      entities.push({
+        y: drawObjY,
+        draw: () => {
+          const spriteImg = npcImageCacheRef.current[obj.spritePath!];
+          const screenX = offsetX + drawObjX * tileW;
+          const screenY = offsetY + drawObjY * tileH;
+
+          if (spriteImg && spriteImg.complete && spriteImg.naturalWidth > 0) {
+            // Sprite sheet: 4 cols (anim) x 4 rows (down/left/right/up)
+            const dirRow: Record<string, number> = { down: 0, left: 1, right: 2, up: 3 };
+            const currentDir = interactableDirsRef.current[obj.id] || obj.direction || 'down';
+            const row = dirRow[currentDir] || 0;
+            const frameW = spriteImg.naturalWidth / 4;
+            const frameH = spriteImg.naturalHeight / 4;
+            const drawW = tileW * 1.0;
+            const drawH = tileW * 1.5;
+            const offX = (tileW - drawW) / 2;
+            const offY = tileH - drawH;
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(
+              spriteImg,
+              walkFrame * frameW, row * frameH, frameW, frameH,
+              screenX + offX, screenY + offY, drawW, drawH,
+            );
+          }
+
+        },
+      });
+    }
+
     // Player entity
     const playerVisualY = player.isMoving
       ? player.y + (player.targetY - player.y) * player.moveProgress
@@ -539,7 +803,7 @@ export default function InteriorRoom({
     ctx.fillRect(vw / 2 - bannerW / 2, 8, bannerW, 30);
     ctx.fillStyle = '#fff';
     ctx.fillText(config.title, vw / 2, 14);
-  }, [active, assets, config, roomConfig, interiorNPCs, canMoveToTile, isFacingStaticNPC, getFacingDynamicNPC, onInteractNPC, onExit]);
+  }, [active, assets, config, roomConfig, interiorNPCs, canMoveToTile, isFacingStaticNPC, getFacingDynamicNPC, getFacingInteractable, onInteractNPC, onExit]);
 
   useGameLoop(gameLoop, true);
 

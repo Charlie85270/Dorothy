@@ -1,7 +1,7 @@
 'use client';
 import { useRef, useEffect, useCallback, useMemo } from 'react';
 import { GameAssets, Direction, PlayerState } from '../types';
-import { TILE, SCALED_TILE, MOVE_DURATION, ROUTE1_MAP_DATA, ROUTE1_WIDTH, ROUTE1_HEIGHT, ROUTE1_PLAYER_START } from '../constants';
+import { TILE, SCALED_TILE, SCALE, MOVE_DURATION, ROUTE1_MAP_DATA, ROUTE1_WIDTH, ROUTE1_HEIGHT, ROUTE1_PLAYER_START, ROUTE1_BUILDINGS } from '../constants';
 import { useGameLoop } from '../hooks/useGameLoop';
 import { useKeyboard } from '../hooks/useKeyboard';
 import { renderPlayer, getPlayerPixelPosition } from '../renderer/playerRenderer';
@@ -9,11 +9,26 @@ import { useClaude } from '@/hooks/useClaude';
 import { useElectronSkills } from '@/hooks/useElectron';
 import { SKILLS_DATABASE } from '@/lib/skills-database';
 
-const SOLID_TILES = new Set<number>([TILE.TREE, TILE.BUILDING, TILE.FENCE, TILE.WATER, TILE.SIGN]);
+const SOLID_TILES = new Set<number>([TILE.TREE, TILE.BUILDING, TILE.FENCE, TILE.WATER, TILE.SIGN, TILE.GRAVE]);
+
+// Persists across RouteOverlay mounts (survives interior transitions)
+let officerMovedState: { x: number; y: number; direction: Direction } | null = null;
 
 // Sign dialogue data: "x,y" → lines of text
 const ROUTE1_SIGNS: Record<string, string[]> = {
   '16,36': ['ROUTE 1', 'Northern Route'],
+};
+
+// Gravestone dialogue data: "x,y" → lines of text
+const ROUTE1_GRAVES: Record<string, string[]> = {
+  '20,22': ['Simple Claw', '2026 - 2026'],
+  '22,22': ['ClawClick', '2026 - 2026'],
+  '24,22': ['OneClickClaw', '2026 - 2026'],
+  '22,24': ['ClawFast', '2026 - 2026'],
+  '24,24': ['Motlbot', '2026 - 2026'],
+  '20,26': ['Jeffrey Epstein', '1953 - Still alive', 'WTF ?'],
+  '22,26': ['OneShotClaw', '2026 - 2026'],
+  '24,26': ['LeftClickClaw', '2026 - 2026'],
 };
 
 // ── Conversation tree system ─────────────────────────────────────────────────
@@ -44,6 +59,21 @@ interface RouteNPC {
   sightRange?: number;
   battleSprite?: string;
   conversation?: ConversationNode; // battle conversation tree
+  patrol?: Direction[]; // repeating walk pattern (one step per direction entry)
+  spritePerDirection?: Record<Direction, string>; // separate sprite images per direction
+}
+
+// Mutable patrol NPC walk state
+interface PatrolState {
+  x: number;
+  y: number;
+  targetX: number;
+  targetY: number;
+  direction: Direction;
+  isMoving: boolean;
+  moveProgress: number;
+  patrolStep: number;
+  waitTimer: number; // ms to wait before next step
 }
 
 const ROUTE1_NPCS: RouteNPC[] = [
@@ -67,7 +97,7 @@ const ROUTE1_NPCS: RouteNPC[] = [
           id: 'more',
           label: 'TELL ME MORE',
           next: {
-            text: 'My ClawBot is an automation tool that allows agents to manage tasks in parallel and interact with macOS applications. I control it using my wife\'s sex toy.',
+            text: 'Look Bro, I forked ClawBot to use it with Codex 6 Kernel 2.65, I manage 84 parallel agents on the same screen and I changed the color of the logo on the top bar. All without coding, developer are so dead. Oh...And I control it using my wife\'s sex toy.',
             choices: [
               {
                 id: 'key',
@@ -104,6 +134,102 @@ const ROUTE1_NPCS: RouteNPC[] = [
       ],
     },
   },
+  {
+    id: 'graveyard-twin',
+    name: 'MCP',
+    x: 18,
+    y: 23,
+    direction: 'left',
+    spritePath: '/pokemon/pnj/twin.png',
+    dialogue: [
+      'Look at all these "one click deploy clawbot" projects...',
+      'It\'s a disaster, we\'re running out of space in the graveyard...',
+    ],
+  },
+  {
+    id: 'sailor-1',
+    name: 'Sailor',
+    x: 9,
+    y: 1,
+    direction: 'down',
+    spritePath: '/pokemon/pnj/sailor.png',
+    dialogue: [
+      'The ferry hasn\'t arrived yet. Please come back later.',
+    ],
+  },
+  {
+    id: 'sailor-2',
+    name: 'Sailor',
+    x: 10,
+    y: 1,
+    direction: 'down',
+    spritePath: '/pokemon/pnj/sailor.png',
+    dialogue: [
+      'The ferry hasn\'t arrived yet. Please come back later.',
+    ],
+  },
+  {
+    id: 'sailor-3',
+    name: 'Sailor',
+    x: 11,
+    y: 1,
+    direction: 'down',
+    spritePath: '/pokemon/pnj/sailor.png',
+    dialogue: [
+      'The ferry hasn\'t arrived yet. Please come back later.',
+    ],
+  },
+  {
+    id: 'officer',
+    name: 'Officer',
+    x: 5,
+    y: 22,
+    direction: 'down',
+    spritePath: '/pokemon/pnj/officier.png',
+    dialogue: [
+      'Sorry my boy, it\'s a private Vercel HQ.',
+    ],
+  },
+  {
+    id: 'explorer',
+    name: 'Explorer',
+    x: 10,
+    y: 13,
+    direction: 'left',
+    spritePath: '/pokemon/pnj/explorer.png',
+    dialogue: [
+      'Please help me, I beg you!',
+      'I taught my agent the "Crypto Marketing Expert" skill, and now he\'s gone crazy and is talking nonsense!',
+    ],
+  },
+  {
+    id: 'patrol-pokemon',
+    name: 'Wild Agent',
+    x: 6,
+    y: 12,
+    direction: 'right',
+    spritePath: '/pokemon/agent/face.png', // fallback, uses spritePerDirection
+    dialogue: [
+      'SOL at 1200$ in 2 months.',
+      'My Polymarket bot went from $50 to $29,800 in 18 minutes. Coded.',
+      'Alt season is coming.',
+      'My contact at Blackrock told me they are secretly buying $DIDICK token on Base. Here is the contract : 0x454e44..',
+      'I copy trade this guy and make 1000$ in 1 hour. He is a genius.',
+      'Cobie is CZ',
+    ],
+    spritePerDirection: {
+      down: '/pokemon/agent/face.png',
+      up: '/pokemon/agent/back.png',
+      left: '/pokemon/agent/left.png',
+      right: '/pokemon/agent/right.png',
+    },
+    patrol: [
+      'right', 'right', 'right',
+      'down', 'down',
+      'left', 'left', 'left',
+      'up', 'up',
+    ],
+  },
 ];
 
 // Encounter state machine
@@ -134,9 +260,11 @@ interface RouteOverlayProps {
   assets: GameAssets;
   onExit: () => void;
   onInstallSkill?: (repo: string, title: string) => void;
+  onEnterInterior?: (interiorId: string) => void;
+  playerStart?: { x: number; y: number };
 }
 
-export default function RouteOverlay({ assets, onExit, onInstallSkill }: RouteOverlayProps) {
+export default function RouteOverlay({ assets, onExit, onInstallSkill, onEnterInterior, playerStart }: RouteOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { getKeys, consumeAction, consumeCancel } = useKeyboard();
@@ -151,11 +279,13 @@ export default function RouteOverlay({ assets, onExit, onInstallSkill }: RouteOv
   const interactionCooldownRef = useRef(0);
 
   // Player state ref (mutable for game loop performance)
+  const startX = playerStart?.x ?? ROUTE1_PLAYER_START.x;
+  const startY = playerStart?.y ?? ROUTE1_PLAYER_START.y;
   const playerRef = useRef<PlayerState>({
-    x: ROUTE1_PLAYER_START.x,
-    y: ROUTE1_PLAYER_START.y,
-    targetX: ROUTE1_PLAYER_START.x,
-    targetY: ROUTE1_PLAYER_START.y,
+    x: startX,
+    y: startY,
+    targetX: startX,
+    targetY: startY,
     direction: 'up' as Direction,
     isMoving: false,
     moveProgress: 0,
@@ -168,6 +298,47 @@ export default function RouteOverlay({ assets, onExit, onInstallSkill }: RouteOv
 
   // NPC sprite cache
   const npcSpritesRef = useRef<Map<string, HTMLImageElement>>(new Map());
+
+  // Building sprite cache
+  const buildingSpritesRef = useRef<Map<string, HTMLImageElement>>(new Map());
+
+  // Door interaction tracking
+  const doorTriggeredRef = useRef(false);
+
+  // NPC facing override (makes NPC face player during dialogue)
+  const npcFacingOverrideRef = useRef<Map<string, Direction>>(new Map());
+
+  // Patrol NPC mutable state (keyed by npc id)
+  const patrolStatesRef = useRef<Map<string, PatrolState>>(new Map());
+  // Initialize patrol states + preload direction sprites
+  if (patrolStatesRef.current.size === 0) {
+    for (const npc of ROUTE1_NPCS) {
+      // Preload per-direction sprites
+      if (npc.spritePerDirection) {
+        for (const dir of ['down', 'up', 'left', 'right'] as Direction[]) {
+          const key = `${npc.id}-${dir}`;
+          if (!npcSpritesRef.current.has(key)) {
+            const img = new Image();
+            img.src = npc.spritePerDirection[dir];
+            npcSpritesRef.current.set(key, img);
+          }
+        }
+      }
+      if (npc.patrol) {
+        patrolStatesRef.current.set(npc.id, {
+          x: npc.x,
+          y: npc.y,
+          targetX: npc.x,
+          targetY: npc.y,
+          direction: npc.direction,
+          isMoving: false,
+          moveProgress: 0,
+          patrolStep: 0,
+          waitTimer: 500, // initial pause before starting
+        });
+      }
+    }
+  }
 
   // Trainer encounter state
   const encounterRef = useRef<EncounterState | null>(null);
@@ -188,6 +359,19 @@ export default function RouteOverlay({ assets, onExit, onInstallSkill }: RouteOv
     const installed = new Set([...fromPlugins, ...fromClaudeSkills, ...fromElectron]);
     return SKILLS_DATABASE.filter(s => !installed.has(s.name.toLowerCase()));
   }, [claudeData?.plugins, claudeData?.skills, electronSkills]);
+
+  // Check if player has the Vercel Best Practices skill (ref so game loop always reads latest)
+  const hasVercelSkillRef = useRef(false);
+  useMemo(() => {
+    const fromPlugins = (claudeData?.plugins || []).map(p => p.name.toLowerCase());
+    const fromClaudeSkills = (claudeData?.skills || []).map(s => s.name.toLowerCase());
+    const fromElectron = electronSkills.map(s => s.toLowerCase());
+    const installed = new Set([...fromPlugins, ...fromClaudeSkills, ...fromElectron]);
+    hasVercelSkillRef.current = installed.has('vercel-react-best-practices');
+  }, [claudeData?.plugins, claudeData?.skills, electronSkills]);
+
+  // Officer NPC state uses module-level variable (survives unmount during interior visits)
+  const officerPendingMoveRef = useRef(false);
 
   // Pick a random uninstalled skill per pokeball (stable across renders)
   const pokeballSkillsRef = useRef<Map<string, { name: string; repo: string }>>(new Map());
@@ -215,8 +399,19 @@ export default function RouteOverlay({ assets, onExit, onInstallSkill }: RouteOv
     // Block NPC positions (use encounter position if active)
     const enc = encounterRef.current;
     for (const npc of ROUTE1_NPCS) {
-      const nx = enc && enc.npcId === npc.id ? Math.round(enc.npcX) : npc.x;
-      const ny = enc && enc.npcId === npc.id ? Math.round(enc.npcY) : npc.y;
+      let nx: number, ny: number;
+      const patrol = patrolStatesRef.current.get(npc.id);
+      if (patrol) {
+        // Use patrol NPC's current mutable position
+        nx = patrol.isMoving ? patrol.targetX : patrol.x;
+        ny = patrol.isMoving ? patrol.targetY : patrol.y;
+      } else if (npc.id === 'officer' && officerMovedState) {
+        nx = officerMovedState.x;
+        ny = officerMovedState.y;
+      } else {
+        nx = enc && enc.npcId === npc.id ? Math.round(enc.npcX) : npc.x;
+        ny = enc && enc.npcId === npc.id ? Math.round(enc.npcY) : npc.y;
+      }
       if (nx === x && ny === y) return false;
     }
     // Block uncollected pokeball positions
@@ -335,7 +530,31 @@ export default function RouteOverlay({ assets, onExit, onInstallSkill }: RouteOv
         } else {
           dialogueRef.current = null;
           dialogueSpeakerRef.current = undefined;
+          npcFacingOverrideRef.current.clear();
           interactionCooldownRef.current = Date.now() + 400;
+          // Officer steps aside after granting access
+          if (officerPendingMoveRef.current) {
+            officerPendingMoveRef.current = false;
+            const officer = ROUTE1_NPCS.find(n => n.id === 'officer')!;
+            const px = playerRef.current.x;
+            const py = playerRef.current.y;
+            // Move officer to the opposite side of the player (left or right)
+            const moveDir = px <= officer.x ? 1 : -1;
+            // Face toward the player after moving
+            const dx = px - (officer.x + moveDir);
+            const dy = py - officer.y;
+            let faceDir: Direction;
+            if (Math.abs(dx) >= Math.abs(dy)) {
+              faceDir = dx > 0 ? 'right' : 'left';
+            } else {
+              faceDir = dy > 0 ? 'down' : 'up';
+            }
+            officerMovedState = {
+              x: officer.x + moveDir,
+              y: officer.y,
+              direction: faceDir,
+            };
+          }
           if (enc) {
             if (enc.phase === 'dialogue') {
               // After walk-up dialogue, enter battle conversation if NPC has one
@@ -507,6 +726,23 @@ export default function RouteOverlay({ assets, onExit, onInstallSkill }: RouteOv
           return;
         }
 
+        // Check if player walked onto a door tile
+        if (ROUTE1_MAP_DATA[player.y]?.[player.x] === TILE.DOOR && !doorTriggeredRef.current) {
+          const building = ROUTE1_BUILDINGS.find(b => b.doorX === player.x && b.doorY === player.y);
+          if (building) {
+            doorTriggeredRef.current = true;
+            if (building.interiorId && onEnterInterior) {
+              onEnterInterior(building.interiorId);
+              return;
+            }
+            dialogueRef.current = `The ${building.label} is closed for now, but will open soon!`;
+            dialogueQueueRef.current = [];
+            dialogueSpeakerRef.current = undefined;
+          }
+        } else if (ROUTE1_MAP_DATA[player.y]?.[player.x] !== TILE.DOOR) {
+          doorTriggeredRef.current = false;
+        }
+
         // Check if player walked into NPC sight line
         for (const npc of ROUTE1_NPCS) {
           if (!npc.sightRange) continue;
@@ -566,15 +802,49 @@ export default function RouteOverlay({ assets, onExit, onInstallSkill }: RouteOv
         // Check NPC interaction (use encounter position if available)
         const encState = encounterRef.current;
         const npc = ROUTE1_NPCS.find(n => {
-          const nx = encState && encState.npcId === n.id ? encState.npcX : n.x;
-          const ny = encState && encState.npcId === n.id ? encState.npcY : n.y;
+          let nx: number, ny: number;
+          const ps = patrolStatesRef.current.get(n.id);
+          if (ps) {
+            nx = ps.x;
+            ny = ps.y;
+          } else if (n.id === 'officer' && officerMovedState) {
+            nx = officerMovedState.x;
+            ny = officerMovedState.y;
+          } else {
+            nx = encState && encState.npcId === n.id ? encState.npcX : n.x;
+            ny = encState && encState.npcId === n.id ? encState.npcY : n.y;
+          }
           return nx === facingX && ny === facingY;
         });
-        if (npc && npc.dialogue.length > 0) {
-          dialogueRef.current = npc.dialogue[0];
-          dialogueQueueRef.current = [...npc.dialogue.slice(1)];
-          dialogueSpeakerRef.current = npc.name;
-          interacted = true;
+        if (npc) {
+          if (npc.id === 'officer') {
+            // Officer checks for Vercel Best Practices skill
+            dialogueRef.current = 'Sorry my boy, this is a Vercel private party.';
+            if (hasVercelSkillRef.current) {
+              dialogueQueueRef.current = ['Oh I see that you\'ve got the Vercel Best Practices Skill, sorry! You can enter.'];
+              officerPendingMoveRef.current = true;
+            } else {
+              dialogueQueueRef.current = ['You need to install the Vercel Best Practices Skill to enter.'];
+            }
+            dialogueSpeakerRef.current = npc.name;
+            interacted = true;
+          } else if (npc.dialogue.length > 0) {
+            // Face the player
+            const opposite: Record<Direction, Direction> = { up: 'down', down: 'up', left: 'right', right: 'left' };
+            const faceDir = opposite[player.direction];
+            // Pause patrol NPC
+            const ps = patrolStatesRef.current.get(npc.id);
+            if (ps && !ps.isMoving) {
+              ps.direction = faceDir;
+              ps.waitTimer = 0;
+            }
+            // Set facing override for static NPCs
+            npcFacingOverrideRef.current.set(npc.id, faceDir);
+            dialogueRef.current = npc.dialogue[0];
+            dialogueQueueRef.current = [...npc.dialogue.slice(1)];
+            dialogueSpeakerRef.current = npc.name;
+            interacted = true;
+          }
         }
 
         // Check pokeball interaction (player standing on or facing the tile)
@@ -601,11 +871,20 @@ export default function RouteOverlay({ assets, onExit, onInstallSkill }: RouteOv
           }
         }
 
-        // Check sign interaction
+        // Check sign / gravestone interaction
         if (!interacted && facingX >= 0 && facingX < ROUTE1_WIDTH && facingY >= 0 && facingY < ROUTE1_HEIGHT) {
-          if (ROUTE1_MAP_DATA[facingY][facingX] === TILE.SIGN) {
+          const facingTile = ROUTE1_MAP_DATA[facingY][facingX];
+          if (facingTile === TILE.SIGN) {
             const key = `${facingX},${facingY}`;
             const text = ROUTE1_SIGNS[key];
+            if (text && text.length > 0) {
+              dialogueRef.current = text[0];
+              dialogueQueueRef.current = [...text.slice(1)];
+              dialogueSpeakerRef.current = undefined;
+            }
+          } else if (facingTile === TILE.GRAVE) {
+            const key = `${facingX},${facingY}`;
+            const text = ROUTE1_GRAVES[key];
             if (text && text.length > 0) {
               dialogueRef.current = text[0];
               dialogueQueueRef.current = [...text.slice(1)];
@@ -637,6 +916,55 @@ export default function RouteOverlay({ assets, onExit, onInstallSkill }: RouteOv
           player.animFrame = 1;
         } else {
           player.direction = dir;
+        }
+      }
+    }
+
+    // === UPDATE PATROL NPCs ===
+    const isInDialogue = !!dialogueRef.current;
+    for (const npc of ROUTE1_NPCS) {
+      if (!npc.patrol) continue;
+      const ps = patrolStatesRef.current.get(npc.id);
+      if (!ps) continue;
+
+      // Pause while player is in dialogue
+      if (isInDialogue) continue;
+
+      const PATROL_SPEED = MOVE_DURATION * 1.8; // slower than player for smooth feel
+      if (ps.isMoving) {
+        // Advance movement
+        ps.moveProgress += delta / PATROL_SPEED;
+        if (ps.moveProgress >= 1) {
+          ps.x = ps.targetX;
+          ps.y = ps.targetY;
+          ps.isMoving = false;
+          ps.moveProgress = 0;
+          ps.patrolStep = (ps.patrolStep + 1) % npc.patrol.length;
+          // Immediately start next step for fluid motion
+          ps.waitTimer = 0;
+        }
+      }
+      if (!ps.isMoving) {
+        ps.waitTimer -= delta;
+        if (ps.waitTimer <= 0) {
+          const dir = npc.patrol[ps.patrolStep];
+          const dxMap: Record<Direction, number> = { left: -1, right: 1, up: 0, down: 0 };
+          const dyMap: Record<Direction, number> = { left: 0, right: 0, up: -1, down: 1 };
+          const nx = ps.x + dxMap[dir];
+          const ny = ps.y + dyMap[dir];
+          ps.direction = dir;
+
+          // Check if player blocks the target tile
+          const px = player.x, py = player.y;
+          const ptx = player.targetX, pty = player.targetY;
+          if ((nx === px && ny === py) || (nx === ptx && ny === pty)) {
+            ps.waitTimer = 100;
+          } else {
+            ps.targetX = nx;
+            ps.targetY = ny;
+            ps.isMoving = true;
+            ps.moveProgress = 0;
+          }
         }
       }
     }
@@ -701,7 +1029,51 @@ export default function RouteOverlay({ assets, onExit, onInstallSkill }: RouteOv
           case TILE.SIGN:
             drawSign(ctx, px, py);
             break;
+          case TILE.GRAVE:
+            drawGrave(ctx, px, py);
+            break;
         }
+      }
+    }
+
+    // Buildings
+    for (const building of ROUTE1_BUILDINGS) {
+      const bpx = building.x * SCALED_TILE - camera.x;
+      const bpy = building.y * SCALED_TILE - camera.y;
+      const bw = building.width * SCALED_TILE;
+      const bh = building.height * SCALED_TILE;
+
+      if (bpx + bw < -40 || bpx > vw + 40 || bpy + bh < -60 || bpy > vh + 40) continue;
+
+      // Load sprite if needed
+      if (!buildingSpritesRef.current.has(building.spriteFile)) {
+        const img = new Image();
+        img.src = building.spriteFile;
+        buildingSpritesRef.current.set(building.spriteFile, img);
+      }
+      const spriteImg = buildingSpritesRef.current.get(building.spriteFile);
+      if (spriteImg?.complete && spriteImg.naturalWidth > 0) {
+        ctx.imageSmoothingEnabled = false;
+        const spriteAspect = spriteImg.width / spriteImg.height;
+        const tileAspect = bw / bh;
+        let drawW: number, drawH: number;
+        if (spriteAspect > tileAspect) {
+          drawW = bw;
+          drawH = bw / spriteAspect;
+        } else {
+          drawH = bh;
+          drawW = bh * spriteAspect;
+        }
+        const drawX = bpx + (bw - drawW) / 2;
+        const drawY = bpy + bh - drawH;
+        ctx.drawImage(spriteImg, drawX, drawY, drawW, drawH);
+      } else {
+        // Fallback: simple colored building
+        const roofH = Math.floor(bh * 0.35);
+        ctx.fillStyle = '#B83020';
+        ctx.fillRect(bpx - 4, bpy, bw + 8, roofH);
+        ctx.fillStyle = '#E8D8A8';
+        ctx.fillRect(bpx, bpy + roofH, bw, bh - roofH);
       }
     }
 
@@ -720,8 +1092,27 @@ export default function RouteOverlay({ assets, onExit, onInstallSkill }: RouteOv
     for (const npc of ROUTE1_NPCS) {
       // Use encounter position if this NPC is in an encounter
       const isEncNpc = encState && encState.npcId === npc.id;
+      const ps = patrolStatesRef.current.get(npc.id);
       let npcDrawX: number, npcDrawY: number, npcDir: Direction, npcAnim: number;
-      if (isEncNpc) {
+      if (ps) {
+        // Patrol NPC — interpolate position during movement
+        const interpX = ps.isMoving
+          ? ps.x + (ps.targetX - ps.x) * ps.moveProgress
+          : ps.x;
+        const interpY = ps.isMoving
+          ? ps.y + (ps.targetY - ps.y) * ps.moveProgress
+          : ps.y;
+        npcDrawX = interpX * SCALED_TILE - camera.x;
+        npcDrawY = interpY * SCALED_TILE - camera.y;
+        npcDir = ps.direction;
+        npcAnim = ps.isMoving ? Math.floor(ps.moveProgress * 4) % 2 : 0;
+      } else if (npc.id === 'officer' && officerMovedState) {
+        // Officer moved aside
+        npcDrawX = officerMovedState.x * SCALED_TILE - camera.x;
+        npcDrawY = officerMovedState.y * SCALED_TILE - camera.y;
+        npcDir = officerMovedState.direction;
+        npcAnim = 0;
+      } else if (isEncNpc) {
         // Interpolate position during movement
         const baseX = encState.npcX;
         const baseY = encState.npcY;
@@ -742,42 +1133,73 @@ export default function RouteOverlay({ assets, onExit, onInstallSkill }: RouteOv
         npcAnim = 0;
       }
 
+      // Apply facing override (NPC turns to face player during dialogue)
+      const facingOverride = npcFacingOverrideRef.current.get(npc.id);
+      if (facingOverride) npcDir = facingOverride;
+
       // Skip if off-screen
       if (npcDrawX + SCALED_TILE < 0 || npcDrawX > vw || npcDrawY + SCALED_TILE < 0 || npcDrawY > vh) continue;
 
-      // Load sprite if needed
-      if (!npcSpritesRef.current.has(npc.id)) {
-        const img = new Image();
-        img.src = npc.spritePath;
-        npcSpritesRef.current.set(npc.id, img);
-      }
-      const sprite = npcSpritesRef.current.get(npc.id)!;
-      if (sprite.complete && sprite.naturalWidth > 0) {
-        const dirRow: Record<Direction, number> = { down: 0, left: 1, right: 2, up: 3 };
-        const row = dirRow[npcDir];
-        const col = npcAnim % 4;
-        const frameW = sprite.naturalWidth / 4;
-        const frameH = sprite.naturalHeight / 4;
-        const drawW = SCALED_TILE * 1.0;
-        const drawH = SCALED_TILE * 1.5;
-        const offsetX = (SCALED_TILE - drawW) / 2;
-        const offsetY = SCALED_TILE - drawH;
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(
-          sprite,
-          col * frameW, row * frameH, frameW, frameH,
-          npcDrawX + offsetX, npcDrawY + offsetY, drawW, drawH,
-        );
+      ctx.imageSmoothingEnabled = false;
+
+      // Per-direction sprites (separate image files)
+      if (npc.spritePerDirection) {
+        const spriteKey = `${npc.id}-${npcDir}`;
+        if (!npcSpritesRef.current.has(spriteKey)) {
+          const img = new Image();
+          img.src = npc.spritePerDirection[npcDir];
+          npcSpritesRef.current.set(spriteKey, img);
+        }
+        const sprite = npcSpritesRef.current.get(spriteKey)!;
+        if (sprite.complete && sprite.naturalWidth > 0) {
+          const drawW = SCALED_TILE * 0.9;
+          const drawH = SCALED_TILE * 0.9;
+          const offsetX = (SCALED_TILE - drawW) / 2;
+          const offsetY = (SCALED_TILE - drawH);
+          // Bob animation when walking
+          const bobY = ps?.isMoving ? Math.sin(ps.moveProgress * Math.PI * 2) * 2 : 0;
+          ctx.drawImage(
+            sprite,
+            0, 0, sprite.naturalWidth, sprite.naturalHeight,
+            npcDrawX + offsetX, npcDrawY + offsetY + bobY, drawW, drawH,
+          );
+        }
+      } else {
+        // Sprite sheet NPC (4x4 grid)
+        if (!npcSpritesRef.current.has(npc.id)) {
+          const img = new Image();
+          img.src = npc.spritePath;
+          npcSpritesRef.current.set(npc.id, img);
+        }
+        const sprite = npcSpritesRef.current.get(npc.id)!;
+        if (sprite.complete && sprite.naturalWidth > 0) {
+          const dirRow: Record<Direction, number> = { down: 0, left: 1, right: 2, up: 3 };
+          const row = dirRow[npcDir];
+          const col = npcAnim % 4;
+          const frameW = sprite.naturalWidth / 4;
+          const frameH = sprite.naturalHeight / 4;
+          const drawW = SCALED_TILE * 1.0;
+          const drawH = SCALED_TILE * 1.5;
+          const offsetX = (SCALED_TILE - drawW) / 2;
+          const offsetY = SCALED_TILE - drawH;
+          ctx.drawImage(
+            sprite,
+            col * frameW, row * frameH, frameW, frameH,
+            npcDrawX + offsetX, npcDrawY + offsetY, drawW, drawH,
+          );
+        }
       }
 
       // Draw "!" exclamation bubble during alert phase
       if (isEncNpc && encState.phase === 'alert') {
         const bubbleX = npcDrawX + SCALED_TILE / 2;
         const bubbleY = npcDrawY - SCALED_TILE * 0.9;
-        // White bubble
+        const bw = 26;
+        const bh = 34;
+        // White rounded-rect bubble
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
-        ctx.ellipse(bubbleX, bubbleY, 14, 18, 0, 0, Math.PI * 2);
+        ctx.roundRect(bubbleX - bw / 2, bubbleY - bh / 2, bw, bh, 6);
         ctx.fill();
         ctx.strokeStyle = '#000000';
         ctx.lineWidth = 2;
@@ -804,6 +1226,16 @@ export default function RouteOverlay({ assets, onExit, onInstallSkill }: RouteOv
       }
     }
 
+    // Building labels (after tree overlay so always visible)
+    for (const building of ROUTE1_BUILDINGS) {
+      const bpx = building.x * SCALED_TILE - camera.x;
+      const bpy = building.y * SCALED_TILE - camera.y;
+      const bw = building.width * SCALED_TILE;
+      const bh = building.height * SCALED_TILE;
+      if (bpx + bw < -40 || bpx > vw + 40 || bpy + bh < -60 || bpy > vh + 40) continue;
+      drawBuildingLabel(ctx, bpx + bw / 2, bpy - 8, building.label);
+    }
+
     // Route name banner (fades after 3 seconds)
     if (routeNameTimerRef.current > 0) {
       const alpha = Math.min(1, routeNameTimerRef.current / 1000);
@@ -828,8 +1260,8 @@ export default function RouteOverlay({ assets, onExit, onInstallSkill }: RouteOv
     if (dialogueRef.current) {
       const speaker = dialogueSpeakerRef.current;
       const hasPbChoice = !!pokeballChoiceRef.current;
-      const boxH = hasPbChoice ? 120 : 90;
-      const boxW = Math.min(vw - 32, 560);
+      const boxH = hasPbChoice ? 140 : 110;
+      const boxW = Math.min(vw - 32, 640);
       const boxX = (vw - boxW) / 2;
       const boxY = vh - boxH - 16;
 
@@ -935,7 +1367,7 @@ export default function RouteOverlay({ assets, onExit, onInstallSkill }: RouteOv
       ctx.fillStyle = `rgba(0,0,0,${fadeRef.current})`;
       ctx.fillRect(0, 0, vw, vh);
     }
-  }, [assets, getKeys, consumeAction, consumeCancel, onExit, canMoveTo, calculateCamera, ensureGrassCache, ensureWaterCache]);
+  }, [assets, getKeys, consumeAction, consumeCancel, onExit, onEnterInterior, canMoveTo, calculateCamera, ensureGrassCache, ensureWaterCache]);
 
   useGameLoop(gameLoop, true);
 
@@ -1039,6 +1471,43 @@ function drawSign(ctx: CanvasRenderingContext2D, px: number, py: number) {
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(signImage, px, py, SCALED_TILE, SCALED_TILE);
   }
+}
+
+// Cached gravestone sprite
+let graveImage: HTMLImageElement | null = null;
+
+function drawGrave(ctx: CanvasRenderingContext2D, px: number, py: number) {
+  if (!graveImage) {
+    graveImage = new Image();
+    graveImage.src = '/pokemon/graveyard/stone.png';
+  }
+
+  if (graveImage.complete && graveImage.naturalWidth > 0) {
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(graveImage, px, py, SCALED_TILE, SCALED_TILE);
+  }
+}
+
+// ── Building label ───────────────────────────────────────────────────────
+function drawBuildingLabel(ctx: CanvasRenderingContext2D, cx: number, cy: number, label: string) {
+  ctx.font = `bold ${10 * SCALE}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+
+  const metrics = ctx.measureText(label);
+  const padding = 6;
+  const bgX = cx - metrics.width / 2 - padding;
+  const bgY = cy - 10 * SCALE - padding;
+  const bgW = metrics.width + padding * 2;
+  const bgH = 10 * SCALE + padding * 2;
+
+  ctx.fillStyle = 'rgba(0,0,0,0.75)';
+  ctx.beginPath();
+  ctx.roundRect(bgX, bgY, bgW, bgH, 4);
+  ctx.fill();
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(label, cx, cy);
 }
 
 // ── Word wrap helper ─────────────────────────────────────────────────────

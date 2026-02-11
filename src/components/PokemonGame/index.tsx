@@ -1,8 +1,8 @@
 'use client';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { NPC, Building, Screen } from './types';
-import { CHARACTER_POKEMON_MAP, POKEMON_SPRITE_COLS, INTERIOR_CONFIGS, getAgentSpritePath } from './constants';
+import { CHARACTER_POKEMON_MAP, POKEMON_SPRITE_COLS, INTERIOR_CONFIGS, ROUTE1_BUILDINGS, getAgentSpritePath } from './constants';
 import { useAssetLoader } from './hooks/useAssetLoader';
 import GameCanvas from './GameCanvas';
 import TitleScreen from './overlays/TitleScreen';
@@ -85,6 +85,8 @@ export default function PokemonGame() {
   const [showMenu, setShowMenu] = useState(false);
   const [activeInterior, setActiveInterior] = useState<string | null>(null);
   const [activeRoute, setActiveRoute] = useState<string | null>(null);
+  const [routeReturnPos, setRouteReturnPos] = useState<{ x: number; y: number } | null>(null);
+  const pendingRouteRef = useRef<string | null>(null);
 
   // ── Same pattern as agents/page.tsx ──
   // Get real agents from Electron
@@ -148,19 +150,50 @@ export default function PokemonGame() {
   // Exit interior
   const handleExitInterior = useCallback(() => {
     setActiveInterior(null);
-    setScreen('game');
+    if (activeRoute) {
+      setScreen('route');
+    } else {
+      setScreen('game');
+    }
+  }, [activeRoute]);
+
+  // Enter route (e.g. Route 1) — with transition screen
+  const handleEnterRoute = useCallback((routeId: string) => {
+    pendingRouteRef.current = routeId;
+    setScreen('transition');
   }, []);
 
-  // Enter route (e.g. Route 1)
-  const handleEnterRoute = useCallback((routeId: string) => {
-    setActiveRoute(routeId);
-    setScreen('route');
-  }, []);
+  // Transition: after 2.5s total animation, switch to route
+  useEffect(() => {
+    if (screen !== 'transition') return;
+    const timer = setTimeout(() => {
+      if (pendingRouteRef.current) {
+        setActiveRoute(pendingRouteRef.current);
+        pendingRouteRef.current = null;
+      }
+      setScreen('route');
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [screen]);
 
   // Exit route
   const handleExitRoute = useCallback(() => {
     setActiveRoute(null);
+    setRouteReturnPos(null);
     setScreen('game');
+  }, []);
+
+  // Enter interior from route (e.g. Vercel HQ on Route 1)
+  const handleRouteEnterInterior = useCallback((interiorId: string) => {
+    if (INTERIOR_CONFIGS[interiorId]) {
+      // Find the building to know return position (one tile below door)
+      const building = ROUTE1_BUILDINGS.find(b => b.interiorId === interiorId);
+      if (building) {
+        setRouteReturnPos({ x: building.doorX, y: building.doorY + 1 });
+      }
+      setActiveInterior(interiorId);
+      setScreen('interior');
+    }
   }, []);
 
   // NPC interaction
@@ -228,7 +261,7 @@ export default function PokemonGame() {
     } else if (action === 'delete' && battleNPC) {
       // Delete agent
       if (window.electronAPI?.agent?.remove) {
-        window.electronAPI.agent.remove(battleNPC.id).catch(() => {});
+        window.electronAPI.agent.remove(battleNPC.id).catch(() => { });
       }
       setBattleNPC(null);
       setShowAgentInfo(false);
@@ -369,12 +402,71 @@ export default function PokemonGame() {
         />
       )}
 
+      {/* Route Transition */}
+      {screen === 'transition' && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 50,
+            backgroundColor: '#000',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <style>{`
+            @keyframes route-transition {
+              0%   { opacity: 0; }
+              20%  { opacity: 1; }
+              80%  { opacity: 1; }
+              100% { opacity: 0; }
+            }
+            @keyframes route-text-appear {
+              0%   { opacity: 0; }
+              30%  { opacity: 0; }
+              50%  { opacity: 1; }
+              80%  { opacity: 1; }
+              100% { opacity: 0; }
+            }
+          `}</style>
+          <div style={{ position: 'relative', width: '85%', maxHeight: '85%', animation: 'route-transition 2.5s ease-in-out forwards' }}>
+            <img
+              src="/pokemon/transition/vibe-coder-valley.png"
+              alt="Route transition"
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                imageRendering: 'pixelated',
+              }}
+            />
+            <span
+              style={{
+                position: 'absolute',
+                top: '5%',
+                left: '2%',
+                fontFamily: '"Press Start 2P", monospace',
+                fontSize: 'clamp(10px, 1.8vw, 22px)',
+                fontWeight: 'bolder',
+                color: '#333',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Vibe Coder Valley
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Route Overlay */}
       {screen === 'route' && activeRoute && (
         <RouteOverlay
           assets={assets}
           onExit={handleExitRoute}
           onInstallSkill={handleInstallSkill}
+          onEnterInterior={handleRouteEnterInterior}
+          playerStart={routeReturnPos ?? undefined}
         />
       )}
 

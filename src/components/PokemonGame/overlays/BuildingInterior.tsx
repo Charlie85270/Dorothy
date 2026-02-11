@@ -14,6 +14,7 @@ import ClaudeLabContent from '../interiors/ClaudeLabContent';
 import PluginShopContent from '../interiors/PluginShopContent';
 import KanbanCenterContent from '../interiors/KanbanCenterContent';
 import SchedulerContent from '../interiors/SchedulerContent';
+import VercelHQContent from '../interiors/VercelHQContent';
 
 const INTERIOR_CONTENT_REGISTRY: Record<string, React.ComponentType<InteriorContentProps>> = {
   skills: SkillDojoContent,
@@ -22,6 +23,7 @@ const INTERIOR_CONTENT_REGISTRY: Record<string, React.ComponentType<InteriorCont
   'plugin-shop': PluginShopContent,
   kanban: KanbanCenterContent,
   scheduler: SchedulerContent,
+  'vercel-hq': VercelHQContent,
 };
 
 // ── Agent data interface (matches what index.tsx provides) ─────────────────
@@ -90,29 +92,54 @@ export default function BuildingInterior({ interiorId, config, assets, onExit, a
 
   const dialogue = config.npcDialogue || [];
 
+  // Track active interactable object dialogue (separate from NPC dialogue)
+  const [activeInteractable, setActiveInteractable] = useState<{ id: string; dialogue: string[]; speaker?: string } | null>(null);
+  const [exitingInteractableId, setExitingInteractableId] = useState<string | null>(null);
+
   // Player presses Space facing interaction point → start dialogue or go straight to content
   const handleNPCInteract = useCallback((npcId?: string) => {
     if (npcId) {
+      // Check if it's an interactable object
+      const obj = roomConfig?.interactables?.find(o => o.id === npcId);
+      if (obj) {
+        setActiveInteractable({ id: obj.id, dialogue: obj.dialogue, speaker: obj.speaker });
+        setDialogueIndex(0);
+        setPhase('dialogue');
+        return;
+      }
       // Dynamic NPC interaction (claude-lab agents)
       setSelectedNpcId(npcId);
       setPhase('content');
     } else if (dialogue.length > 0) {
+      setActiveInteractable(null);
       setDialogueIndex(0);
       setPhase('dialogue');
     } else {
       setPhase('content');
     }
-  }, [dialogue.length]);
+  }, [dialogue.length, roomConfig]);
+
+  // Get the current dialogue array (interactable or NPC)
+  const activeDialogue = activeInteractable ? activeInteractable.dialogue : dialogue;
+  const activeSpeaker = activeInteractable ? activeInteractable.speaker : config.npcName;
 
   // Dialogue advancement
   const handleDialogueAdvance = useCallback(() => {
     const nextIndex = dialogueIndex + 1;
-    if (nextIndex < dialogue.length) {
+    if (nextIndex < activeDialogue.length) {
       setDialogueIndex(nextIndex);
+    } else if (activeInteractable) {
+      // Check if this interactable should walk to exit after dialogue
+      const obj = roomConfig?.interactables?.find(o => o.id === activeInteractable.id);
+      if (obj?.exitAfterDialogue) {
+        setExitingInteractableId(activeInteractable.id);
+      }
+      setActiveInteractable(null);
+      setPhase('room');
     } else {
       setPhase('content');
     }
-  }, [dialogueIndex, dialogue.length]);
+  }, [dialogueIndex, activeDialogue.length, activeInteractable, roomConfig]);
 
   // Content exit → back to room (player can walk around again or leave)
   const handleContentExit = useCallback(() => {
@@ -144,14 +171,15 @@ export default function BuildingInterior({ interiorId, config, assets, onExit, a
           onInteractNPC={handleNPCInteract}
           onExit={onExit}
           interiorNPCs={interiorNPCs}
+          exitingInteractableId={exitingInteractableId}
         />
       )}
 
       {/* Dialogue box (renders on top of room) */}
-      {phase === 'dialogue' && dialogue.length > 0 && (
+      {phase === 'dialogue' && activeDialogue.length > 0 && (
         <DialogueBox
-          text={dialogue[dialogueIndex]}
-          speakerName={config.npcName || ''}
+          text={activeDialogue[dialogueIndex]}
+          speakerName={activeSpeaker || ''}
           onAdvance={handleDialogueAdvance}
         />
       )}

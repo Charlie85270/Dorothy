@@ -79,7 +79,7 @@ export default function Sidebar({
             <span className="text-xs font-medium text-foreground">Panel</span>
             <button
               onClick={onClose}
-              className="p-1 text-muted-foreground hover:text-foreground hover:bg-white/10 transition-colors"
+              className="p-1 text-muted-foreground hover:text-foreground hover:bg-primary/10 transition-colors"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -98,7 +98,7 @@ export default function Sidebar({
                 className={`
                   flex-1 flex items-center justify-center gap-1.5 px-2 py-2 text-[10px] font-medium transition-colors
                   ${tab === t.id
-                    ? 'text-foreground border-b-2 border-white'
+                    ? 'text-foreground border-b-2 border-primary'
                     : 'text-muted-foreground hover:text-foreground'
                   }
                 `}

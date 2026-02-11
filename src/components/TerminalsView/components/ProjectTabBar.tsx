@@ -41,7 +41,7 @@ export default function ProjectTabBar({
     activeTab.type === 'project' && activeTab.projectPath === path;
 
   return (
-    <div className="flex items-center gap-0.5 px-3 py-1.5 bg-[#12121e] border-t border-white/10">
+    <div className="flex items-center gap-0.5 px-3 py-1.5 bg-secondary border-t border-border !rounded-none">
       <div className="flex items-center gap-0.5 flex-1 overflow-x-auto scrollbar-none">
         {projects.map(project => (
           <button
@@ -50,8 +50,8 @@ export default function ProjectTabBar({
             className={`
               flex items-center gap-1.5 px-3 py-1 text-xs font-medium whitespace-nowrap transition-colors shrink-0
               ${isActive(project.path)
-                ? 'bg-blue-500/15 text-blue-300 border-t-2 border-blue-400'
-                : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+                ? 'bg-primary/15 text-primary border-t-2 border-primary font-semibold'
+                : 'text-muted-foreground hover:text-foreground hover:bg-primary/5'
               }
             `}
           >
@@ -77,8 +77,8 @@ export default function ProjectTabBar({
         className={`
           flex items-center gap-1.5 px-2.5 py-1 ml-2 shrink-0 text-xs font-medium transition-all
           ${panelOpen
-            ? 'bg-white text-black'
-            : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+            ? 'bg-foreground text-background'
+            : 'text-muted-foreground hover:text-foreground hover:bg-primary/5'
           }
         `}
         title="Agents, skills & projects"

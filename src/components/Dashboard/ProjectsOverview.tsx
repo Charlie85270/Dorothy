@@ -12,7 +12,7 @@ interface ProjectsOverviewProps {
 // Generate consistent colors for projects based on name
 const getProjectColor = (name: string) => {
   const colors = [
-    '#22d3ee', '#a78bfa', '#4ade80', '#fbbf24', '#f87171', '#60a5fa', '#f472b6', '#34d399',
+    '#3D9B94', '#a78bfa', '#4ade80', '#fbbf24', '#f87171', '#60a5fa', '#f472b6', '#34d399',
   ];
   const hash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
   return colors[hash % colors.length];

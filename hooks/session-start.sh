@@ -1,5 +1,5 @@
 #!/bin/bash
-# Session start hook for claude-manager
+# Session start hook for dorothy
 # Sets agent status to "running" and injects memory context
 
 # Read JSON input from stdin

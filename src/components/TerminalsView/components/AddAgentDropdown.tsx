@@ -58,7 +58,8 @@ export default function AddAgentDropdown({
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(prev => !prev)}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white text-black text-xs font-medium hover:bg-white/90 transition-colors"
+        className="flex items-center gap-1.5 px-2.5 py-1.5 bg-foreground text-background text-xs font-medium hover:bg-foreground/90 transition-colors"
+        style={{ borderRadius: 7 }}
         title="Add existing agent to this board"
       >
         <Plus className="w-3.5 h-3.5" />
@@ -76,7 +77,7 @@ export default function AddAgentDropdown({
             groups.map(group => (
               <div key={group.projectPath}>
                 {/* Project header */}
-                <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground bg-white/5 font-medium">
+                <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground bg-primary/5 font-medium">
                   {group.projectName}
                 </div>
 
@@ -92,7 +93,7 @@ export default function AddAgentDropdown({
                     <button
                       key={agent.id}
                       onClick={() => { onAddAgent(agent.id); setOpen(false); }}
-                      className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-muted-foreground hover:bg-white/5 hover:text-foreground transition-colors"
+                      className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-muted-foreground hover:bg-primary/5 hover:text-foreground transition-colors"
                     >
                       <span>{emoji}</span>
                       <span className="truncate flex-1 text-left">{name}</span>
@@ -108,7 +109,7 @@ export default function AddAgentDropdown({
           <div className="border-t border-border">
             <button
               onClick={() => { setOpen(false); onCreateAgent(); }}
-              className="flex items-center gap-2 w-full px-3 py-2 text-xs text-muted-foreground hover:bg-white/5 hover:text-foreground transition-colors"
+              className="flex items-center gap-2 w-full px-3 py-2 text-xs text-muted-foreground hover:bg-primary/5 hover:text-foreground transition-colors"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Create a new agent</span>

@@ -3,7 +3,8 @@ import * as os from 'os';
 
 export const API_PORT = 31415;
 
-export const DATA_DIR = path.join(os.homedir(), '.claude-manager');
+export const OLD_DATA_DIR = path.join(os.homedir(), '.claude-manager');
+export const DATA_DIR = path.join(os.homedir(), '.dorothy');
 export const AGENTS_FILE = path.join(DATA_DIR, 'agents.json');
 export const APP_SETTINGS_FILE = path.join(DATA_DIR, 'app-settings.json');
 export const KANBAN_FILE = path.join(DATA_DIR, 'kanban-tasks.json');

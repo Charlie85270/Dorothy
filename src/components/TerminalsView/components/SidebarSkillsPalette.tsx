@@ -17,7 +17,7 @@ function DraggableSkillItem({ skillName }: { skillName: string }) {
       {...listeners}
       className={`
         flex items-center gap-2 px-2.5 py-2 cursor-grab active:cursor-grabbing transition-all
-        hover:bg-white/5
+        hover:bg-primary/5
         ${isDragging ? 'opacity-50' : ''}
       `}
     >
@@ -51,7 +51,7 @@ export default function SidebarSkillsPalette({ installedSkills }: SidebarSkillsP
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder="Search installed skills..."
-            className="w-full pl-7 pr-2 py-1.5 bg-secondary border border-border text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-white/30"
+            className="w-full pl-7 pr-2 py-1.5 bg-secondary border border-border text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-border"
           />
         </div>
       </div>

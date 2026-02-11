@@ -20,8 +20,8 @@ export const GeneralSection = ({ info }: GeneralSectionProps) => {
             <Settings className="w-6 h-6 text-muted-foreground" />
           </div>
           <div>
-            <h3 className="font-medium">Claude Manager</h3>
-            <p className="text-sm text-muted-foreground">Version 1.0.1</p>
+            <h3 className="font-medium">Dorothy</h3>
+            <p className="text-sm text-muted-foreground">Version 1.0.2</p>
           </div>
         </div>
 

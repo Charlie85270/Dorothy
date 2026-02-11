@@ -73,7 +73,7 @@ export default function TerminalPanel({
     <div
       ref={setDropRef}
       className={`
-        flex flex-col overflow-hidden border h-full
+        flex flex-col overflow-hidden h-full
         ${isOver ? 'border-purple-500/70 shadow-[0_0_15px_rgba(168,85,247,0.2)]' : isFocused ? 'border-cyan-500/50 shadow-[0_0_10px_rgba(34,211,238,0.1)]' : 'border-white/10'}
         ${isFullscreen ? 'fixed inset-0 z-50' : ''}
       `}

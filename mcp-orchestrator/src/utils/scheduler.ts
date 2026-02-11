@@ -135,7 +135,7 @@ export async function createLaunchdJob(
     fs.mkdirSync(logsDir, { recursive: true });
   }
 
-  const scriptPath = path.join(os.homedir(), ".claude-manager", "scripts", `${taskId}.sh`);
+  const scriptPath = path.join(os.homedir(), ".dorothy", "scripts", `${taskId}.sh`);
   const scriptsDir = path.dirname(scriptPath);
   if (!fs.existsSync(scriptsDir)) {
     fs.mkdirSync(scriptsDir, { recursive: true });
@@ -162,7 +162,7 @@ echo "=== Task completed at $(date) ===" >> "${logPath}"
   if (dayOfMonth !== "*") calendarInterval.Day = parseInt(dayOfMonth, 10);
   if (dayOfWeek !== "*") calendarInterval.Weekday = parseInt(dayOfWeek, 10);
 
-  const label = `com.claude-manager.scheduler.${taskId}`;
+  const label = `com.dorothy.scheduler.${taskId}`;
   const plistPath = path.join(os.homedir(), "Library", "LaunchAgents", `${label}.plist`);
   const launchAgentsDir = path.dirname(plistPath);
   if (!fs.existsSync(launchAgentsDir)) {
@@ -218,7 +218,7 @@ export async function createCronJob(
   const claudePath = await getClaudePath();
   const claudeDir = path.dirname(claudePath);
 
-  const scriptPath = path.join(os.homedir(), ".claude-manager", "scripts", `${taskId}.sh`);
+  const scriptPath = path.join(os.homedir(), ".dorothy", "scripts", `${taskId}.sh`);
   const scriptsDir = path.dirname(scriptPath);
   if (!fs.existsSync(scriptsDir)) {
     fs.mkdirSync(scriptsDir, { recursive: true });
@@ -245,7 +245,7 @@ echo "=== Task completed at $(date) ===" >> "${logPath}"
   fs.writeFileSync(scriptPath, scriptContent);
   fs.chmodSync(scriptPath, "755");
 
-  const cronLine = `${schedule} ${scriptPath} # claude-manager-${taskId}`;
+  const cronLine = `${schedule} ${scriptPath} # dorothy-${taskId}`;
 
   await new Promise<void>((resolve, reject) => {
     const getCron = spawn("crontab", ["-l"]);
@@ -281,7 +281,7 @@ echo "=== Task completed at $(date) ===" >> "${logPath}"
  * Delete a launchd job (macOS)
  */
 export async function deleteLaunchdJob(taskId: string): Promise<void> {
-  const label = `com.claude-manager.scheduler.${taskId}`;
+  const label = `com.dorothy.scheduler.${taskId}`;
   const plistPath = path.join(os.homedir(), "Library", "LaunchAgents", `${label}.plist`);
   const uid = process.getuid?.() || 501;
 
@@ -313,7 +313,7 @@ export async function deleteCronJob(taskId: string): Promise<void> {
     getCron.on("close", () => {
       const newCron = existingCron
         .split("\n")
-        .filter((line) => !line.includes(`claude-manager-${taskId}`))
+        .filter((line) => !line.includes(`dorothy-${taskId}`))
         .join("\n");
 
       const setCron = spawn("crontab", ["-"]);

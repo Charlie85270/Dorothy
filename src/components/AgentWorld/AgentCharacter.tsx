@@ -14,7 +14,7 @@ const CHARACTER_COLORS: Record<CharacterType, {
   accent: string;
   hair: string;
 }> = {
-  robot: { skin: '#C0C0C0', primary: '#22d3ee', secondary: '#1a1a2e', accent: '#FF6B6B', hair: '#4A5568' },
+  robot: { skin: '#C0C0C0', primary: '#3D9B94', secondary: '#1a1a2e', accent: '#FF6B6B', hair: '#4A5568' },
   ninja: { skin: '#FFD7B5', primary: '#1a1a2e', secondary: '#4A5568', accent: '#FF4444', hair: '#1a1a2e' },
   wizard: { skin: '#FFE4C9', primary: '#8B5CF6', secondary: '#312E81', accent: '#FFD700', hair: '#E5E5E5' },
   astronaut: { skin: '#FFD7B5', primary: '#FFFFFF', secondary: '#4A90D9', accent: '#FF6B35', hair: '#8B4513' },

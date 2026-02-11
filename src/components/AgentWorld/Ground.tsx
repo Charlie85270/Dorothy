@@ -26,7 +26,7 @@ export default function Ground() {
         cellColor="#1a1a2e"
         sectionSize={5}
         sectionThickness={1}
-        sectionColor="#22d3ee"
+        sectionColor="#3D9B94"
         fadeDistance={30}
         fadeStrength={1}
         followCamera={false}
@@ -47,7 +47,7 @@ export default function Ground() {
       <mesh position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[1.8, 2, 64]} />
         <meshBasicMaterial
-          color="#22d3ee"
+          color="#3D9B94"
           transparent
           opacity={0.3}
         />

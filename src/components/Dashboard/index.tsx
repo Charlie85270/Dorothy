@@ -60,7 +60,7 @@ class WorldErrorBoundary extends Component<{ children: ReactNode }, { hasError: 
             </p>
             <button
               onClick={() => this.setState({ hasError: false })}
-              className="px-4 py-2 bg-white text-black hover:bg-white/80"
+              className="px-4 py-2 bg-foreground text-background hover:bg-foreground/80"
             >
               Try Again
             </button>
@@ -256,16 +256,17 @@ export default function Dashboard() {
         </div>
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
           {/* View Mode Toggle */}
-          <div className="flex items-center gap-1 p-1 bg-secondary border border-border">
+          <div className="flex items-center gap-1 p-1 bg-secondary border border-border" style={{ borderRadius: 10 }}>
             <button
               onClick={() => setViewMode('terminals')}
               className={`
                 flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1.5 text-xs lg:text-sm font-medium transition-all
                 ${viewMode === 'terminals'
-                  ? 'bg-white text-black'
+                  ? 'bg-foreground text-background'
                   : 'text-muted-foreground hover:text-foreground'
                 }
               `}
+              style={{ borderRadius: 7 }}
             >
               <TerminalSquare className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
               <span className="hidden sm:inline">Terminals</span>
@@ -277,10 +278,11 @@ export default function Dashboard() {
               className={`
                 flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1.5 text-xs lg:text-sm font-medium transition-all
                 ${viewMode === 'canvas'
-                  ? 'bg-white text-black'
+                  ? 'bg-foreground text-background'
                   : 'text-muted-foreground hover:text-foreground'
                 }
               `}
+              style={{ borderRadius: 7 }}
             >
               <LayoutGrid className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
               Board
@@ -290,10 +292,11 @@ export default function Dashboard() {
               className={`
                 flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1.5 text-xs lg:text-sm font-medium transition-all
                 ${viewMode === 'world'
-                  ? 'bg-white text-black'
+                  ? 'bg-foreground text-background'
                   : 'text-muted-foreground hover:text-foreground'
                 }
               `}
+              style={{ borderRadius: 7 }}
             >
               <Globe className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
               <span className="hidden sm:inline">3D View</span>

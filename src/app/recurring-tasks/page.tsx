@@ -821,7 +821,7 @@ export default function RecurringTasksPage() {
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              <div className="flex-1 overflow-auto p-4 bg-[#0a0a0f]">
+              <div className="flex-1 overflow-auto p-4 bg-[#0D0B08]">
                 <pre className="text-xs font-mono whitespace-pre-wrap text-muted-foreground">
                   {selectedLogs.logs || 'No logs available'}
                 </pre>

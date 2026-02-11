@@ -1,5 +1,5 @@
 #!/bin/bash
-# Post-tool-use hook for claude-manager memory system
+# Post-tool-use hook for dorothy memory system
 # Captures file edits, writes, and commands
 
 # Read JSON input from stdin

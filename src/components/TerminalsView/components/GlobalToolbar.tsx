@@ -62,7 +62,7 @@ export default function GlobalToolbar({
   disabledPresets,
 }: GlobalToolbarProps) {
   return (
-    <div className="flex items-center gap-2 px-3 py-2 bg-card border-b border-border">
+    <div className="flex items-center gap-2 px-3 py-2 bg-card border-b border-border !rounded-b-none">
       {/* Left section */}
       <div className="flex items-center gap-2">
         {/* Layout selector — only for custom tabs */}
@@ -81,7 +81,7 @@ export default function GlobalToolbar({
         <button
           onClick={onStartAll}
           disabled={runningCount === totalCount || totalCount === 0}
-          className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-green-400 hover:bg-green-500/10 transition-colors disabled:opacity-30"
+          className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-green-600 hover:text-green-800 hover:bg-green-500/40 transition-colors disabled:opacity-30"
           title="Start all idle agents"
         >
           <Play className="w-3 h-3" />
@@ -104,21 +104,21 @@ export default function GlobalToolbar({
         <div className="flex items-center gap-0.5">
           <button
             onClick={onZoomOut}
-            className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+            className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-primary/5 transition-colors"
             title="Zoom out (smaller text)"
           >
             <ZoomOut className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={onZoomReset}
-            className="px-1.5 py-1 text-[10px] text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors min-w-[32px] text-center"
+            className="px-1.5 py-1 text-[10px] text-muted-foreground hover:text-foreground hover:bg-primary/5 transition-colors min-w-[32px] text-center"
             title="Reset zoom"
           >
             {fontSize}px
           </button>
           <button
             onClick={onZoomIn}
-            className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+            className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-primary/5 transition-colors"
             title="Zoom in (larger text)"
           >
             <ZoomIn className="w-3.5 h-3.5" />
@@ -139,7 +139,7 @@ export default function GlobalToolbar({
             flex items-center gap-1.5 px-2 py-1.5 text-xs transition-colors
             ${broadcastMode
               ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-              : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+              : 'text-muted-foreground hover:text-foreground hover:bg-primary/5'
             }
           `}
           title="Toggle broadcast mode — send input to all terminals"
@@ -154,8 +154,8 @@ export default function GlobalToolbar({
           className={`
             flex items-center gap-1.5 px-2 py-1.5 text-xs transition-colors
             ${isViewFullscreen
-              ? 'bg-white/10 text-foreground'
-              : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+              ? 'bg-primary/15 text-primary'
+              : 'text-muted-foreground hover:text-foreground hover:bg-primary/5'
             }
           `}
           title={isViewFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen'}
@@ -166,7 +166,7 @@ export default function GlobalToolbar({
         {/* New Agent button — always visible */}
         <button
           onClick={onNewAgent}
-          className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+          className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-primary/5 transition-colors"
         >
           <Plus className="w-3 h-3" />
           <span className="hidden sm:inline">New Agent</span>

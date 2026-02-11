@@ -3,13 +3,13 @@ import "./globals.css";
 import ClientLayout from "@/components/ClientLayout";
 
 export const metadata: Metadata = {
-  title: "claude.mgr | Agent Control Center",
+  title: "Dorothy | Agent Control Center",
   description: "Manage and monitor your Claude Code agents, projects, and tasks in real-time",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Claude.MGR",
+    title: "Dorothy",
   },
   formatDetection: {
     telephone: false,
@@ -21,7 +21,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#22d3ee",
+  themeColor: "#3D9B94",
   viewportFit: "cover",
 };
 

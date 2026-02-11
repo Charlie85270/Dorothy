@@ -20,11 +20,10 @@ export const SettingsSidebar = ({ activeSection, onSectionChange }: SettingsSide
               <button
                 key={section.id}
                 onClick={() => onSectionChange(section.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 text-left text-sm transition-colors ${
-                  isActive
-                    ? 'bg-secondary text-foreground border-l-2 border-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
-                }`}
+                className={`w-full flex items-center gap-3 px-3 !rounded py-2.5 text-left text-sm transition-colors ${isActive
+                  ? 'bg-secondary text-foreground border-l-2 border-primary'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+                  }`}
               >
                 <Icon className="w-4 h-4" />
                 <span>{section.label}</span>

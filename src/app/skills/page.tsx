@@ -193,7 +193,7 @@ export default function SkillsPage() {
           </div>
           <button
             onClick={() => setShowCustomInstall(true)}
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-white text-black font-medium hover:bg-white/90 transition-colors text-sm shrink-0"
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-foreground text-background font-medium hover:bg-foreground/90 transition-colors text-sm shrink-0"
           >
             <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">Custom Install</span>
@@ -225,7 +225,7 @@ export default function SkillsPage() {
             exit={{ opacity: 0, y: -20 }}
             className={`p-4 border flex items-center justify-between ${
               showToast.type === 'success'
-                ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                ? 'bg-primary/10 border-primary/30 text-primary'
                 : showToast.type === 'error'
                 ? 'bg-red-500/10 border-red-500/30 text-red-400'
                 : 'bg-white/10 border-white/30 text-white'
@@ -306,7 +306,7 @@ export default function SkillsPage() {
                 <button
                   onClick={handleCustomInstall}
                   disabled={!customRepo || installingSkill === 'custom'}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white text-black font-medium rounded-none hover:bg-white/90 transition-colors disabled:opacity-50"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-foreground text-background font-medium rounded-none hover:bg-foreground/90 transition-colors disabled:opacity-50"
                 >
                   {installingSkill === 'custom' ? (
                     <>
@@ -366,7 +366,7 @@ export default function SkillsPage() {
                 initial={{ opacity: 0, y: 5 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 5 }}
-                className="absolute top-full mt-2 right-0 w-48 bg-card border border-border rounded-none shadow-lg z-10 py-2 max-h-80 overflow-y-auto"
+                className="absolute top-full mt-2 right-0 w-48 bg-card border border-border rounded-none shadow-lg z-30 py-2 max-h-80 overflow-y-auto"
               >
                 <button
                   onClick={() => {
@@ -432,10 +432,10 @@ export default function SkillsPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div className={`w-8 h-8 flex items-center justify-center shrink-0 ${
-                          installed ? 'bg-green-500/20' : 'bg-secondary'
+                          installed ? 'bg-primary/10' : 'bg-secondary'
                         }`}>
                           {installed ? (
-                            <CheckCircle className="w-4 h-4 text-green-400" />
+                            <CheckCircle className="w-4 h-4 text-primary" />
                           ) : (
                             <Package className="w-4 h-4 text-muted-foreground" />
                           )}
@@ -456,7 +456,7 @@ export default function SkillsPage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       {installed ? (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-500/20 text-green-400 text-xs font-medium">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary text-xs font-medium" style={{ borderRadius: 5 }}>
                           <Check className="w-3 h-3" />
                           Installed
                         </span>
@@ -468,9 +468,10 @@ export default function SkillsPage() {
                             isInstalling
                               ? 'bg-secondary text-muted-foreground'
                               : justCopied
-                              ? 'bg-green-500/20 text-green-400'
-                              : 'bg-white text-black hover:bg-white/90'
+                              ? 'bg-primary/10 text-primary'
+                              : 'bg-foreground text-background hover:bg-foreground/90'
                           }`}
+                          style={{ borderRadius: 5 }}
                         >
                           {isInstalling ? (
                             <>

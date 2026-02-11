@@ -159,7 +159,7 @@ export default function SettingsPage() {
         <div>
           <h1 className="text-xl lg:text-2xl font-bold tracking-tight">Settings</h1>
           <p className="text-muted-foreground text-xs lg:text-sm mt-1 hidden sm:block">
-            Configure Claude Manager preferences
+            Configure Dorothy preferences
           </p>
         </div>
         <div className="flex gap-2 sm:gap-3">
@@ -175,7 +175,7 @@ export default function SettingsPage() {
             disabled={saving || !hasChanges}
             className={`px-3 lg:px-4 py-2 flex items-center gap-2 transition-all text-sm ${
               hasChanges
-                ? 'bg-white text-black hover:bg-white/90'
+                ? 'bg-foreground text-background hover:bg-foreground/90'
                 : 'bg-secondary text-muted-foreground cursor-not-allowed'
             }`}
           >

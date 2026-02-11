@@ -58,8 +58,8 @@ export function AgentCard({ agent, isSelected, onSelect, onEdit }: AgentCardProp
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
-            <h4 className={`font-medium text-sm truncate flex items-center gap-1.5 ${isSuper ? 'text-amber-200' : ''}`}>
-              {isSuper && <Crown className="w-3.5 h-3.5 text-amber-400" />}
+            <h4 className={`font-medium text-sm truncate flex items-center gap-1.5 ${isSuper ? 'text-foreground' : ''}`}>
+              {isSuper && <Crown className="w-3.5 h-3.5 text-amber-600" />}
               {agent.name || 'Unnamed Agent'}
             </h4>
             <div className="flex items-center gap-1.5 shrink-0">

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Stop hook for claude-manager
+# Stop hook for dorothy
 # Sets agent status to "waiting" and captures summary
 
 # Read JSON input from stdin

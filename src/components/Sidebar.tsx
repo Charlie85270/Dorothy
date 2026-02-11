@@ -63,23 +63,18 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
         initial={false}
         animate={{ width: sidebarWidth }}
         transition={{ duration: 0.2, ease: 'easeInOut' }}
-        className="fixed left-0 top-0 h-screen bg-card border-r border-border flex-col z-50 hidden lg:flex"
+        className="fixed left-0 top-0 h-screen bg-card border-r-2 border-r-primary/30 flex-col z-50 hidden lg:flex"
       >
         {/* Logo - mt-7 accounts for macOS window controls */}
         <div className="h-16 flex items-center px-4 border-b border-border mt-7">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white flex items-center justify-center">
-              <Bot className="w-5 h-5 text-black" />
+            <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0">
+              <img src="/dorothy-without-text.png" alt="Dorothy" className="w-full h-full object-cover scale-150" />
             </div>
             {showLabels && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-              >
-                <span className="font-semibold text-sm tracking-wide text-foreground">Claude</span>
-                <span className="text-muted-foreground font-semibold text-sm"> Manager</span>
-              </motion.div>
+              <div>
+                <img src="/text.png" alt="Dorothy" className="h-6 w-auto object-contain" />
+              </div>
             )}
           </div>
         </div>
@@ -97,7 +92,7 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
                 className={`
                   group flex items-center gap-3 px-3 py-2.5 transition-all duration-150
                   ${isActive
-                    ? 'bg-white text-black font-medium'
+                    ? 'bg-primary/20 text-primary font-medium border-l-2 border-primary'
                     : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
                   }
                 `}
@@ -106,13 +101,9 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
                   <item.icon className="w-5 h-5" />
                 </div>
                 {showLabels && (
-                  <motion.span
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="text-sm flex-1"
-                  >
+                  <span className="text-sm flex-1">
                     {item.label}
-                  </motion.span>
+                  </span>
                 )}
               </Link>
             );
@@ -127,7 +118,7 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
               </span>
-              <span>Claude Code Connected</span>
+              <span>Connected</span>
             </div>
           </div>
         )}
@@ -139,7 +130,7 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
             className={`
               flex items-center gap-3 px-5 py-3 transition-colors
               ${pathname === '/settings' || pathname.startsWith('/settings/')
-                ? 'bg-white text-black'
+                ? 'bg-primary/20 text-primary border-l-2 border-primary'
                 : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
               }
             `}
@@ -180,13 +171,10 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
           {/* Logo */}
           <div className="h-14 flex items-center px-4 border-b border-border">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white flex items-center justify-center">
-                <Bot className="w-5 h-5 text-black" />
+              <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0">
+                <img src="/dorothy-without-text.png" alt="Dorothy" className="w-full h-full object-cover scale-150" />
               </div>
-              <div>
-                <span className="font-semibold text-sm tracking-wide text-foreground">Claude</span>
-                <span className="text-muted-foreground font-semibold text-sm"> Manager</span>
-              </div>
+              <img src="/text.png" alt="Dorothy" className="h-6 w-auto object-contain" />
             </div>
           </div>
 
@@ -204,7 +192,7 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
                   className={`
                     group flex items-center gap-3 px-3 py-2.5 transition-all duration-150
                     ${isActive
-                      ? 'bg-white text-black font-medium'
+                      ? 'bg-primary/20 text-primary font-medium border-l-2 border-primary'
                       : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
                     }
                   `}
@@ -227,7 +215,7 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
               </span>
-              <span>Claude Code Connected</span>
+              <span>Connected</span>
             </div>
           </div>
 
@@ -239,7 +227,7 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
               className={`
                 flex items-center gap-3 px-5 py-3 transition-colors
                 ${pathname === '/settings' || pathname.startsWith('/settings/')
-                  ? 'bg-white text-black'
+                  ? 'bg-primary/20 text-primary border-l-2 border-primary'
                   : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
                 }
               `}

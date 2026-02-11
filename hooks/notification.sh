@@ -1,5 +1,5 @@
 #!/bin/bash
-# Notification hook for claude-manager
+# Notification hook for dorothy
 # Captures and forwards Claude Code notifications
 
 # Read JSON input from stdin

@@ -82,7 +82,7 @@ export default function SkillInstallTerminal({
               </p>
               <div
                 ref={terminalRef}
-                className="bg-[#0a0a0f] rounded-none overflow-hidden"
+                className="bg-[#0D0B08] rounded-none overflow-hidden"
                 style={{ height: '350px' }}
               />
             </div>

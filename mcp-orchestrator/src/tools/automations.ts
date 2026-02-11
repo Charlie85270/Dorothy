@@ -42,7 +42,7 @@ import { apiRequest } from "../utils/api.js";
 const execAsyncRaw = promisify(exec);
 
 // Shared config file path that the Electron app writes to
-const CLI_PATHS_CONFIG_FILE = path.join(os.homedir(), ".claude-manager", "cli-paths.json");
+const CLI_PATHS_CONFIG_FILE = path.join(os.homedir(), ".dorothy", "cli-paths.json");
 
 // Load CLI paths config from the shared config file
 function loadCLIPathsConfig(): { fullPath?: string; claude?: string; gh?: string; node?: string; additionalPaths?: string[] } | null {
@@ -220,8 +220,8 @@ async function pollGitHub(config: GitHubSourceConfig, automation: Automation): P
 // JIRA HELPERS
 // ============================================================================
 
-const APP_SETTINGS_FILE = path.join(os.homedir(), ".claude-manager", "app-settings.json");
-const KANBAN_FILE = path.join(os.homedir(), ".claude-manager", "kanban-tasks.json");
+const APP_SETTINGS_FILE = path.join(os.homedir(), ".dorothy", "app-settings.json");
+const KANBAN_FILE = path.join(os.homedir(), ".dorothy", "kanban-tasks.json");
 
 // Kanban task creation helper for JIRA items
 function createKanbanTaskFromJiraItem(

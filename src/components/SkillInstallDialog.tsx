@@ -39,18 +39,18 @@ export default function SkillInstallDialog({ open, repo, title, onClose }: Skill
 
       const term = new Terminal({
         theme: {
-          background: '#0a0a0f',
+          background: '#0D0B08',
           foreground: '#e4e4e7',
-          cursor: '#22d3ee',
-          cursorAccent: '#0a0a0f',
-          selectionBackground: '#22d3ee33',
+          cursor: '#3D9B94',
+          cursorAccent: '#0D0B08',
+          selectionBackground: '#3D9B9433',
           black: '#18181b',
           red: '#ef4444',
           green: '#22c55e',
           yellow: '#eab308',
           blue: '#3b82f6',
           magenta: '#a855f7',
-          cyan: '#22d3ee',
+          cyan: '#3D9B94',
           white: '#e4e4e7',
           brightBlack: '#52525b',
           brightRed: '#f87171',
@@ -234,7 +234,7 @@ export default function SkillInstallDialog({ open, repo, title, onClose }: Skill
               </p>
               <div
                 ref={terminalRef}
-                className="bg-[#0a0a0f] rounded-none overflow-hidden"
+                className="bg-[#0D0B08] rounded-none overflow-hidden"
                 style={{ height: '400px' }}
               />
             </div>
@@ -249,7 +249,7 @@ export default function SkillInstallDialog({ open, repo, title, onClose }: Skill
                 onClick={handleClose}
                 className={`px-4 py-2 rounded-none font-medium ${
                   installComplete
-                    ? 'bg-white text-black hover:bg-white/90'
+                    ? 'bg-foreground text-background hover:bg-foreground/90'
                     : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
                 }`}
               >

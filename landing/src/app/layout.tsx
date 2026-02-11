@@ -1,40 +1,28 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
 import "./globals.css";
 
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-});
-
 export const metadata: Metadata = {
-  title: "Claude Manager - Your AI Agent Command Center",
-  description: "Manage, monitor, and orchestrate your Claude Code agents from a beautiful 3D interface. Track usage, manage skills, and boost your productivity.",
-  keywords: ["Claude", "AI", "Agent", "Manager", "Claude Code", "Productivity", "Developer Tools"],
-  authors: [{ name: "Claude Manager Team" }],
-  icons: {
-    icon: "/bot-icon.png",
-    apple: "/bot-icon.png",
-  },
+  title: "Dorothy - Your Dearest Claude, Perfectly Managed",
+  description: "A beautiful desktop app to manage, monitor, and orchestrate your Claude Code agents. Free, open source, and delightfully retro.",
+  keywords: ["Dorothy", "Claude", "AI", "Agent", "Manager", "Claude Code"],
+  icons: { icon: "/dorothy/favicon-32.png", apple: "/dorothy/icon-192.png" },
   openGraph: {
-    title: "Claude Manager - Your AI Agent Command Center",
-    description: "Manage, monitor, and orchestrate your Claude Code agents from a beautiful 3D interface.",
+    title: "Dorothy - Your Dearest Claude, Perfectly Managed",
+    description: "A beautiful desktop app to manage and orchestrate your Claude Code agents.",
     type: "website",
   },
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className="dark">
-      <body className={`${inter.variable} font-sans antialiased`}>
-        {children}
-        <Analytics />
-      </body>
+    <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+      </head>
+      <body className="antialiased">{children}<Analytics /></body>
     </html>
   );
 }

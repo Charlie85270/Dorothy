@@ -52,12 +52,12 @@ export const PRIORITY_CONFIG: Record<string, {
 };
 
 export const LABEL_COLORS = [
-  { bg: 'bg-purple-100 dark:bg-purple-900/40', text: 'text-purple-700 dark:text-purple-300' },
-  { bg: 'bg-blue-100 dark:bg-blue-900/40', text: 'text-blue-700 dark:text-blue-300' },
-  { bg: 'bg-green-100 dark:bg-green-900/40', text: 'text-green-700 dark:text-green-300' },
-  { bg: 'bg-orange-100 dark:bg-orange-900/40', text: 'text-orange-700 dark:text-orange-300' },
-  { bg: 'bg-pink-100 dark:bg-pink-900/40', text: 'text-pink-700 dark:text-pink-300' },
-  { bg: 'bg-cyan-100 dark:bg-cyan-900/40', text: 'text-cyan-700 dark:text-cyan-300' },
+  { bg: 'bg-purple-600/15', text: 'text-purple-700' },
+  { bg: 'bg-blue-600/15', text: 'text-blue-700' },
+  { bg: 'bg-primary/15', text: 'text-primary' },
+  { bg: 'bg-orange-600/15', text: 'text-orange-700' },
+  { bg: 'bg-rose-600/15', text: 'text-rose-700' },
+  { bg: 'bg-cyan-600/15', text: 'text-cyan-700' },
 ];
 
 export function getLabelColor(label: string) {

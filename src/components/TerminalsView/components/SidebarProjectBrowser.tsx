@@ -61,7 +61,7 @@ export default function SidebarProjectBrowser({ agents, onFocusPanel }: SidebarP
                 <button
                   key={agent.id}
                   onClick={() => onFocusPanel(agent.id)}
-                  className="flex items-center gap-2 w-full px-2 py-1 hover:bg-white/5 transition-colors text-left"
+                  className="flex items-center gap-2 w-full px-2 py-1 hover:bg-primary/5 transition-colors text-left"
                 >
                   <span className="text-xs">{emoji}</span>
                   <span className="text-[11px] text-foreground truncate flex-1">{name}</span>

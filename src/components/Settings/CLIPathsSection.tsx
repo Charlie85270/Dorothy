@@ -236,7 +236,7 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings }: CLIPathsSect
         <div className="flex justify-end">
           <button
             onClick={handleSave}
-            className="px-4 py-2 bg-white text-black hover:bg-white/90 transition-colors text-sm flex items-center gap-2"
+            className="px-4 py-2 bg-foreground text-background hover:bg-foreground/90 transition-colors text-sm flex items-center gap-2"
           >
             <Check className="w-4 h-4" />
             Save CLI Paths

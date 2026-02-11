@@ -74,100 +74,50 @@ export async function configureStatusHooks(): Promise<void> {
 
     let updated = false;
 
-    // Configure PostToolUse hook
-    if (hasPostToolUse) {
-      const hookConfig = {
-        matcher: '*',
-        hooks: [{ type: 'command', command: postToolUseHook, timeout: 30 }]
-      };
+    // Helper: ensure a hook entry exists with the correct command path.
+    // If a stale entry exists (matching filename but wrong path), update it in place.
+    const ensureHook = (
+      hookType: string,
+      filename: string,
+      commandPath: string,
+      matcher?: string,
+    ) => {
+      if (!fs.existsSync(commandPath)) return;
 
-      // Check if already configured
-      const existing = settings.hooks.PostToolUse || [];
-      const alreadyConfigured = existing.some((h) =>
-        h.hooks?.some((hh) => hh.command?.includes('post-tool-use.sh'))
+      const existing = settings.hooks![hookType] || [];
+      const entryIndex = existing.findIndex((h) =>
+        h.hooks?.some((hh) => hh.command?.includes(filename))
       );
 
-      if (!alreadyConfigured) {
-        settings.hooks.PostToolUse = [...existing, hookConfig];
+      if (entryIndex >= 0) {
+        // Entry exists — check if the path needs updating
+        const entry = existing[entryIndex];
+        const hookIndex = entry.hooks.findIndex((hh) => hh.command?.includes(filename));
+        if (hookIndex >= 0 && entry.hooks[hookIndex].command !== commandPath) {
+          entry.hooks[hookIndex].command = commandPath;
+          updated = true;
+        }
+      } else {
+        // No entry — add a new one
+        const hookConfig: { matcher?: string; hooks: Array<{ type: string; command: string; timeout: number }> } = {
+          hooks: [{ type: 'command', command: commandPath, timeout: 30 }]
+        };
+        if (matcher) hookConfig.matcher = matcher;
+        settings.hooks![hookType] = [...existing, hookConfig];
         updated = true;
       }
-    }
+    };
 
-    // Configure Stop hook
-    if (hasStop) {
-      const hookConfig = {
-        hooks: [{ type: 'command', command: stopHook, timeout: 30 }]
-      };
-
-      const existing = settings.hooks.Stop || [];
-      const alreadyConfigured = existing.some((h) =>
-        h.hooks?.some((hh) => hh.command?.includes('on-stop.sh'))
-      );
-
-      if (!alreadyConfigured) {
-        settings.hooks.Stop = [...existing, hookConfig];
-        updated = true;
-      }
-    }
-
-    // Configure SessionStart hook
-    if (hasSessionStart) {
-      const hookConfig = {
-        matcher: '*',
-        hooks: [{ type: 'command', command: sessionStartHook, timeout: 30 }]
-      };
-
-      const existing = settings.hooks.SessionStart || [];
-      const alreadyConfigured = existing.some((h) =>
-        h.hooks?.some((hh) => hh.command?.includes('session-start.sh'))
-      );
-
-      if (!alreadyConfigured) {
-        settings.hooks.SessionStart = [...existing, hookConfig];
-        updated = true;
-      }
-    }
-
-    // Configure SessionEnd hook
-    if (hasSessionEnd) {
-      const hookConfig = {
-        matcher: '*',
-        hooks: [{ type: 'command', command: sessionEndHook, timeout: 30 }]
-      };
-
-      const existing = settings.hooks.SessionEnd || [];
-      const alreadyConfigured = existing.some((h) =>
-        h.hooks?.some((hh) => hh.command?.includes('session-end.sh'))
-      );
-
-      if (!alreadyConfigured) {
-        settings.hooks.SessionEnd = [...existing, hookConfig];
-        updated = true;
-      }
-    }
-
-    // Configure Notification hook
-    if (hasNotification) {
-      const hookConfig = {
-        matcher: '*',
-        hooks: [{ type: 'command', command: notificationHook, timeout: 30 }]
-      };
-
-      const existing = settings.hooks.Notification || [];
-      const alreadyConfigured = existing.some((h) =>
-        h.hooks?.some((hh) => hh.command?.includes('notification.sh'))
-      );
-
-      if (!alreadyConfigured) {
-        settings.hooks.Notification = [...existing, hookConfig];
-        updated = true;
-      }
-    }
+    ensureHook('PostToolUse', 'post-tool-use.sh', postToolUseHook, '*');
+    ensureHook('Stop', 'on-stop.sh', stopHook);
+    ensureHook('SessionStart', 'session-start.sh', sessionStartHook, '*');
+    ensureHook('SessionEnd', 'session-end.sh', sessionEndHook, '*');
+    ensureHook('Notification', 'notification.sh', notificationHook, '*');
 
     // Write updated settings
     if (updated) {
       fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
-      console.log('Status hooks configured in', settingsPath);
+      console.log('Status hooks configured/updated in', settingsPath);
     } else {
       console.log('Status hooks already configured');
     }

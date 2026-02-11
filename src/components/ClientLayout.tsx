@@ -44,8 +44,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
         <div className="flex items-center gap-2 ml-2">
-          <span className="font-semibold text-sm tracking-wide">Claude</span>
-          <span className="text-accent-blue font-semibold text-sm"> Manager</span>
+          <div className="w-8 h-8 rounded-lg overflow-hidden shrink-0">
+            <img src="/dorothy-without-text.png" alt="Dorothy" className="w-full h-full object-cover scale-150" />
+          </div>
+          <span className="text-base font-semibold tracking-wide text-foreground" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>Dorothy</span>
         </div>
       </div>
 

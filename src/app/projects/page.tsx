@@ -47,8 +47,8 @@ const getProjectColor = (name: string) => {
 };
 
 // Storage keys
-const FAVORITES_KEY = 'claude-manager-favorite-projects';
-const CUSTOM_PROJECTS_KEY = 'claude-manager-custom-projects';
+const FAVORITES_KEY = 'dorothy-favorite-projects';
+const CUSTOM_PROJECTS_KEY = 'dorothy-custom-projects';
 
 interface CustomProject {
   path: string;
@@ -414,7 +414,7 @@ export default function ProjectsPage() {
           {hasElectron && (
             <button
               onClick={handleAddProject}
-              className="flex items-center gap-2 px-4 py-2 bg-white text-black text-sm font-medium hover:bg-white/90 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors"
             >
               <FolderPlus className="w-4 h-4" />
               Add Project
@@ -430,16 +430,15 @@ export default function ProjectsPage() {
               className={`
                 flex items-center gap-2 px-3 py-2 text-sm font-medium transition-all
                 ${activeTab === 'all'
-                  ? 'bg-white text-black'
+                  ? 'bg-foreground text-background'
                   : 'bg-secondary text-muted-foreground hover:text-foreground border border-border'
                 }
               `}
             >
               <Layers className="w-4 h-4" />
               All
-              <span className={`px-1.5 py-0.5 text-xs ${
-                activeTab === 'all' ? 'bg-black/10' : 'bg-white/10'
-              }`}>
+              <span className={`px-1.5 py-0.5 text-xs ${activeTab === 'all' ? 'bg-black/10' : 'bg-white/10'
+                }`}>
                 {allProjects.length}
               </span>
             </button>
@@ -448,16 +447,15 @@ export default function ProjectsPage() {
               className={`
                 flex items-center gap-2 px-3 py-2 text-sm font-medium transition-all
                 ${activeTab === 'favorites'
-                  ? 'bg-white text-black'
+                  ? 'bg-foreground text-background'
                   : 'bg-secondary text-muted-foreground hover:text-foreground border border-border'
                 }
               `}
             >
               <Star className="w-4 h-4" />
               Favorites
-              <span className={`px-1.5 py-0.5 text-xs ${
-                activeTab === 'favorites' ? 'bg-black/10' : 'bg-white/10'
-              }`}>
+              <span className={`px-1.5 py-0.5 text-xs ${activeTab === 'favorites' ? 'bg-black/10' : 'bg-white/10'
+                }`}>
                 {favoritesCount}
               </span>
             </button>
@@ -703,7 +701,7 @@ export default function ProjectsPage() {
                   {hasElectron && (
                     <button
                       onClick={() => setShowAgentDialog(true)}
-                      className="flex-1 px-4 py-2.5 bg-white text-black text-sm font-medium flex items-center justify-center gap-2 hover:bg-white/90 transition-colors"
+                      className="flex-1 px-4 py-2.5 bg-foreground text-background text-sm font-medium flex items-center justify-center gap-2 hover:bg-foreground/90 transition-colors"
                     >
                       <Plus className="w-4 h-4" />
                       Launch Agent
@@ -812,9 +810,8 @@ export default function ProjectsPage() {
                             <p className="text-xs font-mono text-muted-foreground truncate">
                               {session.id.slice(0, 12)}...
                             </p>
-                            <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${
-                              selectedSession === session.id ? 'rotate-180' : ''
-                            }`} />
+                            <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${selectedSession === session.id ? 'rotate-180' : ''
+                              }`} />
                           </div>
                           <p className="text-xs text-muted-foreground mt-1">
                             {formatDate(session.lastActivity)}
@@ -853,11 +850,10 @@ export default function ProjectsPage() {
                           {messages.slice(0, 10).map((message) => (
                             <div
                               key={message.uuid}
-                              className={`p-3 ${
-                                message.type === 'user'
+                              className={`p-3 ${message.type === 'user'
                                   ? 'bg-white/10 border-l-2 border-white'
                                   : 'bg-secondary'
-                              }`}
+                                }`}
                             >
                               <p className="text-[10px] text-muted-foreground mb-1">
                                 {message.type === 'user' ? 'You' : 'Claude'}

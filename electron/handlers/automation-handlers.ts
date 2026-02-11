@@ -9,7 +9,7 @@ import { spawn } from 'child_process';
 // Interacts with the same storage as MCP tools
 // ============================================
 
-const AUTOMATIONS_DIR = path.join(os.homedir(), '.claude-manager');
+const AUTOMATIONS_DIR = path.join(os.homedir(), '.dorothy');
 const AUTOMATIONS_FILE = path.join(AUTOMATIONS_DIR, 'automations.json');
 const RUNS_FILE = path.join(AUTOMATIONS_DIR, 'automations-runs.json');
 
@@ -193,15 +193,15 @@ async function createAutomationLaunchdJob(automation: Automation): Promise<void>
 
   const [minute, hour, dayOfMonth, , dayOfWeek] = cronSchedule.split(' ');
 
-  const logPath = path.join(os.homedir(), '.claude-manager', 'logs', `automation-${automation.id}.log`);
-  const errorLogPath = path.join(os.homedir(), '.claude-manager', 'logs', `automation-${automation.id}.error.log`);
+  const logPath = path.join(os.homedir(), '.dorothy', 'logs', `automation-${automation.id}.log`);
+  const errorLogPath = path.join(os.homedir(), '.dorothy', 'logs', `automation-${automation.id}.error.log`);
   const logsDir = path.dirname(logPath);
   if (!fs.existsSync(logsDir)) {
     fs.mkdirSync(logsDir, { recursive: true });
   }
 
   // Create script to run
-  const scriptPath = path.join(os.homedir(), '.claude-manager', 'scripts', `automation-${automation.id}.sh`);
+  const scriptPath = path.join(os.homedir(), '.dorothy', 'scripts', `automation-${automation.id}.sh`);
   const scriptsDir = path.dirname(scriptPath);
   if (!fs.existsSync(scriptsDir)) {
     fs.mkdirSync(scriptsDir, { recursive: true });
@@ -245,7 +245,7 @@ echo "=== Automation completed at $(date) ===" >> "${logPath}"
   fs.chmodSync(scriptPath, '755');
 
   // Build StartCalendarInterval or StartInterval
-  const label = `com.claude-manager.automation.${automation.id}`;
+  const label = `com.dorothy.automation.${automation.id}`;
   const plistPath = path.join(os.homedir(), 'Library', 'LaunchAgents', `${label}.plist`);
   const launchAgentsDir = path.dirname(plistPath);
   if (!fs.existsSync(launchAgentsDir)) {
@@ -307,9 +307,9 @@ ${scheduleXml}
 
 // Remove launchd job for automation (macOS)
 async function removeAutomationLaunchdJob(automationId: string): Promise<void> {
-  const label = `com.claude-manager.automation.${automationId}`;
+  const label = `com.dorothy.automation.${automationId}`;
   const plistPath = path.join(os.homedir(), 'Library', 'LaunchAgents', `${label}.plist`);
-  const scriptPath = path.join(os.homedir(), '.claude-manager', 'scripts', `automation-${automationId}.sh`);
+  const scriptPath = path.join(os.homedir(), '.dorothy', 'scripts', `automation-${automationId}.sh`);
 
   // Unload from launchd
   const uid = process.getuid?.() || 501;
@@ -514,7 +514,7 @@ export function registerAutomationHandlers(): void {
       }
 
       // Run the script directly
-      const scriptPath = path.join(os.homedir(), '.claude-manager', 'scripts', `automation-${id}.sh`);
+      const scriptPath = path.join(os.homedir(), '.dorothy', 'scripts', `automation-${id}.sh`);
       if (fs.existsSync(scriptPath)) {
         spawn('bash', [scriptPath], {
           detached: true,
@@ -533,7 +533,7 @@ export function registerAutomationHandlers(): void {
   // Get automation logs - parsed into individual runs
   ipcMain.handle('automation:getLogs', async (_event, id: string) => {
     try {
-      const logPath = path.join(os.homedir(), '.claude-manager', 'logs', `automation-${id}.log`);
+      const logPath = path.join(os.homedir(), '.dorothy', 'logs', `automation-${id}.log`);
 
       if (!fs.existsSync(logPath)) {
         return { runs: [], logs: 'No logs available yet. The automation has not run.' };

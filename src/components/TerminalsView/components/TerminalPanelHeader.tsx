@@ -52,7 +52,7 @@ export default function TerminalPanelHeader({
 
   return (
     <div
-      className={`${showDragHandle ? 'terminal-drag-handle' : ''} flex items-center gap-2 px-3 py-1.5 bg-[#12121e] border-b border-white/10 select-none`}
+      className={`${showDragHandle ? 'terminal-drag-handle' : ''} flex items-center gap-2 px-3 py-1.5 !rounded-none bg-secondary border-b border-border select-none`}
       onContextMenu={onContextMenu}
     >
       {/* Drag handle grip — custom tabs only */}
@@ -101,7 +101,7 @@ export default function TerminalPanelHeader({
         {agent.status === 'running' || agent.status === 'waiting' ? (
           <button
             onClick={onStop}
-            className="p-1 hover:bg-white/10 transition-colors text-red-400 hover:text-red-300"
+            className="p-1 hover:bg-primary/10 transition-colors text-red-400 hover:text-red-300"
             title="Stop agent"
           >
             <Square className="w-3 h-3" />
@@ -109,7 +109,7 @@ export default function TerminalPanelHeader({
         ) : (
           <button
             onClick={onStart}
-            className="p-1 hover:bg-white/10 transition-colors text-green-400 hover:text-green-300"
+            className="p-1 hover:bg-primary/10 transition-colors text-green-400 hover:text-green-300"
             title="Start agent"
           >
             <Play className="w-3 h-3" />
@@ -118,7 +118,7 @@ export default function TerminalPanelHeader({
 
         <button
           onClick={onClear}
-          className="p-1 hover:bg-white/10 transition-colors text-muted-foreground hover:text-foreground"
+          className="p-1 hover:bg-primary/10 transition-colors text-muted-foreground hover:text-foreground"
           title="Clear terminal"
         >
           <RotateCcw className="w-3 h-3" />
@@ -126,7 +126,7 @@ export default function TerminalPanelHeader({
 
         <button
           onClick={isFullscreen ? onExitFullscreen : onFullscreen}
-          className="p-1 hover:bg-white/10 transition-colors text-muted-foreground hover:text-foreground"
+          className="p-1 hover:bg-primary/10 transition-colors text-muted-foreground hover:text-foreground"
           title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
         >
           {isFullscreen ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
@@ -136,7 +136,7 @@ export default function TerminalPanelHeader({
         {showRemoveButton && !isFullscreen && (
           <button
             onClick={onRemove}
-            className="p-1 hover:bg-white/10 transition-colors text-muted-foreground hover:text-red-400"
+            className="p-1 hover:bg-primary/10 transition-colors text-muted-foreground hover:text-red-400"
             title="Remove from tab"
           >
             <X className="w-3 h-3" />

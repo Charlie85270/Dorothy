@@ -1,5 +1,5 @@
 /**
- * claude.mgr - Main Electron Entry Point
+ * Dorothy - Main Electron Entry Point
  *
  * This file initializes and wires together all the modular components:
  * - Window management and protocol handling
@@ -96,6 +96,7 @@ import {
   getSuperAgent,
   detectAgentStatus,
   ensureDataDir,
+  migrateFromClaudeManager,
 } from './utils';
 
 // ============== App Settings Management ==============
@@ -276,6 +277,9 @@ app.whenReady().then(async () => {
 
   // Ensure data directory exists
   ensureDataDir();
+
+  // Migrate data from ~/.claude-manager if it exists (rebrand migration)
+  migrateFromClaudeManager();
 
   // Load agents from disk
   loadAgents();

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * MCP server that exposes Telegram tools for sending messages, photos, videos, and documents.
- * Works independently - reads config from ~/.claude-manager/settings.json and sends directly to Telegram.
+ * Works independently - reads config from ~/.dorothy/settings.json and sends directly to Telegram.
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -13,7 +13,7 @@ import * as os from "os";
 import * as https from "https";
 
 // Settings file path
-const SETTINGS_FILE = path.join(os.homedir(), ".claude-manager", "app-settings.json");
+const SETTINGS_FILE = path.join(os.homedir(), ".dorothy", "app-settings.json");
 
 interface AppSettings {
   telegramBotToken?: string;

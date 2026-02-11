@@ -1,14 +1,14 @@
-# claude.mgr
+# Dorothy
 
-A desktop orchestration platform for running multiple [Claude Code](https://claude.ai/code) agents in parallel. Spawn simultaneous agents across projects, automate workflows with external triggers, manage tasks via Kanban, and control everything remotely through Telegram or Slack.
+![Dorothy](screenshots/background-2.png)
 
-Built to maximize developer productivity by turning Claude Code into a parallelized, automated workforce.
+A beautiful desktop app to orchestrate your [Claude Code](https://claude.ai/code) agents. Deploy, monitor, and debug — all from one delightful interface. Free and open source.
 
-![claude.mgr Dashboard](screenshots/0.png)
+![Dorothy Dashboard](screenshots/0.png)
 
 ## Table of Contents
 
-- [Why claude.mgr](#why-claudemgr)
+- [Why Dorothy](#why-dorothy)
 - [Core Features](#core-features)
 - [Automations](#automations)
 - [Kanban Task Management](#kanban-task-management)
@@ -26,9 +26,9 @@ Built to maximize developer productivity by turning Claude Code into a paralleli
 
 ---
 
-## Why claude.mgr
+## Why Dorothy
 
-Claude Code is powerful — but it runs one agent at a time, in one terminal. claude.mgr removes that limitation:
+Claude Code is powerful — but it runs one agent at a time, in one terminal. Dorothy removes that limitation:
 
 - **Run 10+ agents simultaneously** across different projects and codebases
 - **Automate agent workflows** — trigger agents on GitHub PRs, issues, and external events
@@ -95,7 +95,7 @@ Powered by [claude-mem](https://github.com/thedotmack/claude-mem), agents retain
 - Automatic memory capture of tool uses, decisions, and learnings
 - Cross-session context persistence — agents build on previous work
 - AI-powered summarization for efficient storage
-- Works across all Claude Code sessions, not just claude.mgr
+- Works across all Claude Code sessions, not just Dorothy
 
 ### Settings Management
 
@@ -262,7 +262,7 @@ Run Claude Code autonomously on a cron schedule. Useful for recurring maintenanc
 ### Storage
 
 - Task definitions: `~/.claude/schedules.json`
-- Generated scripts: `~/.claude-manager/scripts/`
+- Generated scripts: `~/.dorothy/scripts/`
 - Execution logs: `~/.claude/logs/`
 
 ---
@@ -312,7 +312,7 @@ Same capabilities as Telegram, accessible via @mentions or direct messages.
 
 **Setup:**
 1. Go to [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → **From scratch**
-2. Name it "Claude Manager" and select your workspace
+2. Name it "Dorothy" and select your workspace
 3. **Socket Mode** → Enable → Generate App Token with scope `connections:write` (`xapp-...`)
 4. **OAuth & Permissions** → Add scopes: `app_mentions:read`, `chat:write`, `im:history`, `im:read`, `im:write`
 5. **Install to Workspace** → Copy Bot Token (`xoxb-...`)
@@ -324,7 +324,7 @@ Same capabilities as Telegram, accessible via @mentions or direct messages.
 
 ## MCP Servers & Tools
 
-claude.mgr exposes **three MCP (Model Context Protocol) servers** with **30+ tools** for programmatic agent control. These are used internally by the Super Agent and can be registered in any Claude Code session via `~/.claude/settings.json`.
+Dorothy exposes **three MCP (Model Context Protocol) servers** with **30+ tools** for programmatic agent control. These are used internally by the Super Agent and can be registered in any Claude Code session via `~/.claude/settings.json`.
 
 ### mcp-orchestrator
 
@@ -444,16 +444,17 @@ MCP server for programmatic Kanban task management.
 - **Claude Code CLI**: `npm install -g @anthropic-ai/claude-code`
 - **GitHub CLI** (`gh`) — required for GitHub automations
 
-### Clone
+### Download
+
+Download the latest release from [GitHub Releases](https://github.com/Charlie85270/Dorothy/releases).
+
+> **macOS:** If "app is damaged", run `xattr -cr /Applications/Dorothy.app`
+
+### Build from Source
 
 ```bash
-git clone https://github.com/your-username/claude-manager.git
-cd claude-manager/app/claude-manager
-```
-
-### Option 1: Electron App (Recommended)
-
-```bash
+git clone https://github.com/Charlie85270/Dorothy.git
+cd Dorothy/app/dorothy
 npm install
 npx @electron/rebuild        # Rebuild native modules for Electron
 npm run electron:dev          # Development mode
@@ -461,10 +462,10 @@ npm run electron:build        # Production build (DMG)
 ```
 
 Output in `release/`:
-- **macOS**: `release/mac-arm64/claude.mgr.app` (Apple Silicon) or `release/mac/claude.mgr.app` (Intel)
+- **macOS**: `release/mac-arm64/Dorothy.app` (Apple Silicon) or `release/mac/Dorothy.app` (Intel)
 - DMG installer included
 
-### Option 2: Web Browser (Development)
+### Web Browser (Development)
 
 ```bash
 npm install
@@ -517,7 +518,7 @@ Open [http://localhost:3000](http://localhost:3000). Agent management and termin
 4. Output streamed in real-time to the renderer via IPC
 5. Status detected by parsing output patterns (running/waiting/completed/error)
 6. Services notified (Telegram, Slack, Kanban) on status changes
-7. Agent state persisted to `~/.claude-manager/agents.json`
+7. Agent state persisted to `~/.dorothy/agents.json`
 
 ### Data Flow: Automation Pipeline
 
@@ -546,7 +547,7 @@ Claude Code ←→ stdio ←→ MCP Server
 ## Project Structure
 
 ```
-claude-manager/app/claude-manager/
+dorothy/
 ├── src/                           # Next.js frontend (React)
 │   ├── app/                       # Page routes
 │   │   ├── agents/                # Agent management UI
@@ -621,25 +622,25 @@ claude-manager/app/claude-manager/
 
 | File | Description |
 |------|-------------|
-| `~/.claude-manager/app-settings.json` | App settings (Telegram token, Slack tokens, preferences) |
-| `~/.claude-manager/cli-paths.json` | CLI tool paths for automations |
+| `~/.dorothy/app-settings.json` | App settings (Telegram token, Slack tokens, preferences) |
+| `~/.dorothy/cli-paths.json` | CLI tool paths for automations |
 | `~/.claude/settings.json` | Claude Code user settings |
 
 ### Data Files
 
 | File | Description |
 |------|-------------|
-| `~/.claude-manager/agents.json` | Persisted agent state (all agents, all sessions) |
-| `~/.claude-manager/kanban-tasks.json` | Kanban board tasks |
-| `~/.claude-manager/automations.json` | Automation definitions and state |
-| `~/.claude-manager/processed-items.json` | Automation deduplication tracking |
+| `~/.dorothy/agents.json` | Persisted agent state (all agents, all sessions) |
+| `~/.dorothy/kanban-tasks.json` | Kanban board tasks |
+| `~/.dorothy/automations.json` | Automation definitions and state |
+| `~/.dorothy/processed-items.json` | Automation deduplication tracking |
 | `~/.claude/schedules.json` | Scheduled task definitions |
 
 ### Generated Files
 
 | Location | Description |
 |----------|-------------|
-| `~/.claude-manager/scripts/` | Generated task runner scripts |
+| `~/.dorothy/scripts/` | Generated task runner scripts |
 | `~/.claude/logs/` | Task execution logs |
 
 ---

@@ -1,6 +1,6 @@
 {
-  "name": "claude-mgr",
-  "version": "1.0.1",
+  "name": "dorothy",
+  "version": "1.0.2",
   "private": true,
   "main": "electron/dist/main.js",
   "scripts": {
@@ -18,8 +18,8 @@
     "electron:pack": "tsc -p electron/tsconfig.json && cd mcp-orchestrator && npm install && npm run build && cd .. && cd mcp-telegram && npm install && npm run build && cd .. && cd mcp-kanban && npm install && npm run build && cd .. && electron-builder --dir --mac"
   },
   "build": {
-    "appId": "com.octav.claudemgr",
-    "productName": "claude.mgr",
+    "appId": "com.octav.dorothy",
+    "productName": "Dorothy",
     "directories": {
       "output": "release"
     },
@@ -79,7 +79,7 @@
       ]
     },
     "dmg": {
-      "title": "claude.mgr",
+      "title": "Dorothy",
       "contents": [
         {
           "x": 130,

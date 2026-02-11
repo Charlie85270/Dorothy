@@ -19,9 +19,9 @@ export function AgentListHeader({
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 lg:mb-6">
       <div>
-        <h1 className="text-xl lg:text-2xl font-bold tracking-tight text-foreground">Agent Control Center</h1>
+        <h1 className="text-xl lg:text-2xl font-bold tracking-tight text-foreground">Claude Control Center</h1>
         <p className="text-muted-foreground text-xs lg:text-sm mt-1 hidden sm:block">
-          Manage and monitor your Claude Code agents in real-time
+          Dorothy is watching you Claude.
         </p>
       </div>
       <div className="flex items-center gap-2">
@@ -33,27 +33,26 @@ export function AgentListHeader({
             flex items-center justify-center gap-2 px-3 lg:px-4 py-2 font-medium rounded-none transition-all text-sm lg:text-base
             ${superAgent
               ? superAgent.status === 'running' || superAgent.status === 'waiting'
-                ? 'bg-purple-500/20 border border-purple-500/50 text-purple-300 hover:bg-purple-500/30 shadow-lg shadow-purple-500/20'
-                : 'bg-bg-tertiary border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 hover:border-purple-500/50'
-              : 'bg-bg-tertiary border border-border-primary text-text-secondary hover:bg-bg-secondary hover:border-purple-500/50 hover:text-purple-400'
+                ? 'bg-green-500/20 border border-green-500/50 text-green-700 hover:bg-green-500/30 shadow-lg shadow-green-500/20'
+                : 'bg-bg-tertiary border border-green-500/30 text-green-600 hover:bg-green-500/10 hover:border-green-500/50'
+              : 'bg-bg-tertiary border border-border-primary text-text-secondary hover:bg-bg-secondary hover:border-green-500/50 hover:text-green-600'
             }
             disabled:opacity-50 disabled:cursor-not-allowed
           `}
           title={superAgent ? `Super Agent (${superAgent.status})` : 'Create Super Agent'}
         >
           {isCreatingSuperAgent ? (
-            <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+            <Loader2 className="w-4 h-4 animate-spin text-green-500" />
           ) : (
             <div className="relative">
               <Crown className={`w-4 h-4 ${superAgent ? 'text-amber-400' : ''}`} />
               {superAgent && (
-                <span className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-bg-tertiary ${
-                  superAgent.status === 'running' ? 'bg-green-400 animate-pulse' :
-                  superAgent.status === 'waiting' ? 'bg-amber-400 animate-pulse' :
-                  superAgent.status === 'error' ? 'bg-red-400' :
-                  superAgent.status === 'completed' ? 'bg-cyan-400' :
-                  'bg-zinc-500'
-                }`} />
+                <span className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-bg-tertiary ${superAgent.status === 'running' ? 'bg-green-400 animate-pulse' :
+                    superAgent.status === 'waiting' ? 'bg-amber-400 animate-pulse' :
+                      superAgent.status === 'error' ? 'bg-red-400' :
+                        superAgent.status === 'completed' ? 'bg-cyan-400' :
+                          'bg-zinc-500'
+                  }`} />
               )}
             </div>
           )}
@@ -65,7 +64,7 @@ export function AgentListHeader({
         {/* New Agent Button */}
         <button
           onClick={onNewAgentClick}
-          className="flex items-center justify-center gap-2 px-4 py-2 bg-white text-black font-medium hover:bg-white/90 transition-colors text-sm lg:text-base"
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-foreground text-background font-medium hover:bg-foreground/90 transition-colors text-sm lg:text-base"
         >
           <Plus className="w-4 h-4" />
           <span className="hidden sm:inline">New Agent</span>

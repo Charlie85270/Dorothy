@@ -332,13 +332,13 @@ function Scene({
           <mesh rotation={[0, Date.now() * 0.001, 0]}>
             <octahedronGeometry args={[0.25, 0]} />
             <meshStandardMaterial
-              color="#22d3ee"
-              emissive="#22d3ee"
+              color="#3D9B94"
+              emissive="#3D9B94"
               emissiveIntensity={0.5}
               flatShading
             />
           </mesh>
-          <pointLight color="#22d3ee" intensity={0.5} distance={3} />
+          <pointLight color="#3D9B94" intensity={0.5} distance={3} />
         </group>
       )}
     </>

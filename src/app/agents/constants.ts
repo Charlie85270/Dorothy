@@ -9,7 +9,7 @@ import type { AgentStatus } from '@/types/electron';
 
 export const STATUS_COLORS: Record<AgentStatus['status'], { bg: string; text: string; icon: typeof Circle }> = {
   idle: { bg: 'bg-white/10', text: 'text-muted-foreground', icon: Circle },
-  running: { bg: 'bg-green-500/20', text: 'text-green-400', icon: Activity },
+  running: { bg: 'bg-primary/10', text: 'text-primary', icon: Activity },
   completed: { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: CheckCircle },
   error: { bg: 'bg-red-500/20', text: 'text-red-400', icon: AlertCircle },
   waiting: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', icon: Pause },
@@ -29,14 +29,14 @@ export const CHARACTER_FACES: Record<string, string> = {
 
 export const getProjectColor = (name: string) => {
   const colors = [
-    { bg: 'bg-white/10', text: 'text-white/80', border: 'border-white/20' },
-    { bg: 'bg-white/15', text: 'text-white/90', border: 'border-white/25' },
-    { bg: 'bg-white/8', text: 'text-white/70', border: 'border-white/15' },
-    { bg: 'bg-white/12', text: 'text-white/85', border: 'border-white/22' },
-    { bg: 'bg-white/10', text: 'text-white/80', border: 'border-white/20' },
-    { bg: 'bg-white/15', text: 'text-white/90', border: 'border-white/25' },
-    { bg: 'bg-white/8', text: 'text-white/70', border: 'border-white/15' },
-    { bg: 'bg-white/12', text: 'text-white/85', border: 'border-white/22' },
+    { bg: 'bg-primary/10', text: 'text-primary', border: 'border-primary/20' },
+    { bg: 'bg-amber-600/10', text: 'text-amber-700', border: 'border-amber-600/20' },
+    { bg: 'bg-blue-600/10', text: 'text-blue-700', border: 'border-blue-600/20' },
+    { bg: 'bg-purple-600/10', text: 'text-purple-700', border: 'border-purple-600/20' },
+    { bg: 'bg-rose-600/10', text: 'text-rose-700', border: 'border-rose-600/20' },
+    { bg: 'bg-cyan-600/10', text: 'text-cyan-700', border: 'border-cyan-600/20' },
+    { bg: 'bg-orange-600/10', text: 'text-orange-700', border: 'border-orange-600/20' },
+    { bg: 'bg-indigo-600/10', text: 'text-indigo-700', border: 'border-indigo-600/20' },
   ];
   const hash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
   return colors[hash % colors.length];

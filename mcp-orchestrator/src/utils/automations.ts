@@ -144,7 +144,7 @@ export interface AutomationState {
 // STORAGE
 // ============================================================================
 
-const AUTOMATIONS_DIR = path.join(os.homedir(), ".claude-manager");
+const AUTOMATIONS_DIR = path.join(os.homedir(), ".dorothy");
 const AUTOMATIONS_FILE = path.join(AUTOMATIONS_DIR, "automations.json");
 const PROCESSED_ITEMS_FILE = path.join(AUTOMATIONS_DIR, "automations-processed.json");
 const RUNS_FILE = path.join(AUTOMATIONS_DIR, "automations-runs.json");

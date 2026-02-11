@@ -19,7 +19,7 @@ Add to your Claude Code MCP settings (`~/.claude/mcp.json`):
   "mcpServers": {
     "claude-mgr-orchestrator": {
       "command": "node",
-      "args": ["/path/to/claude-manager/mcp-orchestrator/dist/index.js"]
+      "args": ["/path/to/dorothy/mcp-orchestrator/dist/index.js"]
     }
   }
 }
@@ -32,7 +32,7 @@ Or for development:
   "mcpServers": {
     "claude-mgr-orchestrator": {
       "command": "npx",
-      "args": ["tsx", "/path/to/claude-manager/mcp-orchestrator/src/index.ts"]
+      "args": ["tsx", "/path/to/dorothy/mcp-orchestrator/src/index.ts"]
     }
   }
 }

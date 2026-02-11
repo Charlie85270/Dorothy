@@ -16,7 +16,7 @@ export function ConnectionLine({ from, to, isActive }: ConnectionLineProps) {
     <svg className="absolute inset-0 pointer-events-none overflow-visible" style={{ zIndex: 1 }}>
       <defs>
         <linearGradient id={`gradient-${from.x.toFixed(0)}-${to.x.toFixed(0)}`} x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor={isActive ? '#22d3ee' : '#3f3f46'} />
+          <stop offset="0%" stopColor={isActive ? '#3D9B94' : '#3f3f46'} />
           <stop offset="100%" stopColor={isActive ? '#a78bfa' : '#27272a'} />
         </linearGradient>
       </defs>
@@ -32,10 +32,10 @@ export function ConnectionLine({ from, to, isActive }: ConnectionLineProps) {
       />
       {isActive && (
         <>
-          <circle r="3" fill="#22d3ee">
+          <circle r="3" fill="#3D9B94">
             <animateMotion dur="2s" repeatCount="indefinite" path={path} />
           </circle>
-          <circle r="6" fill="#22d3ee" opacity="0.3">
+          <circle r="6" fill="#3D9B94" opacity="0.3">
             <animateMotion dur="2s" repeatCount="indefinite" path={path} />
           </circle>
         </>

@@ -265,22 +265,20 @@ export function NewTaskModal({ onClose, onCreate }: NewTaskModalProps) {
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setActiveTab('quick')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  activeTab === 'quick'
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${activeTab === 'quick'
                     ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
-                }`}
+                  }`}
               >
                 <Wand2 className="w-4 h-4" />
                 Quick
               </button>
               <button
                 onClick={() => setActiveTab('manual')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  activeTab === 'manual'
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${activeTab === 'manual'
                     ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
-                }`}
+                  }`}
               >
                 <ListTodo className="w-4 h-4" />
                 Manual
@@ -304,7 +302,7 @@ export function NewTaskModal({ onClose, onCreate }: NewTaskModalProps) {
                 <textarea
                   value={quickPrompt}
                   onChange={(e) => setQuickPrompt(e.target.value)}
-                  placeholder="Describe your task in natural language...&#10;&#10;e.g., Fix the login bug on the claude-manager project where users can't sign in with Google"
+                  placeholder="Describe your task in natural language...&#10;&#10;e.g., Fix the login bug on the dorothy project where users can't sign in with Google"
                   rows={5}
                   className="w-full px-3 py-2 bg-secondary border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-primary resize-none"
                   autoFocus
@@ -423,15 +421,14 @@ export function NewTaskModal({ onClose, onCreate }: NewTaskModalProps) {
                           key={p}
                           type="button"
                           onClick={() => setGeneratedTask({ ...generatedTask, priority: p })}
-                          className={`flex-1 px-2 py-1 text-xs rounded transition-colors ${
-                            generatedTask.priority === p
+                          className={`flex-1 px-2 py-1 text-xs rounded transition-colors ${generatedTask.priority === p
                               ? p === 'high'
                                 ? 'bg-red-900/50 text-red-400'
                                 : p === 'medium'
-                                ? 'bg-yellow-900/50 text-yellow-400'
-                                : 'bg-zinc-700 text-zinc-300'
+                                  ? 'bg-yellow-900/50 text-yellow-400'
+                                  : 'bg-zinc-700 text-zinc-300'
                               : 'bg-background text-muted-foreground hover:bg-secondary'
-                          }`}
+                            }`}
                         >
                           {p}
                         </button>
@@ -555,8 +552,8 @@ export function NewTaskModal({ onClose, onCreate }: NewTaskModalProps) {
                           ? p === 'high'
                             ? 'bg-red-900/30 border-red-500/50 text-red-400'
                             : p === 'medium'
-                            ? 'bg-yellow-900/30 border-yellow-500/50 text-yellow-400'
-                            : 'bg-zinc-700/50 border-zinc-500/50 text-zinc-400'
+                              ? 'bg-yellow-900/30 border-yellow-500/50 text-yellow-400'
+                              : 'bg-zinc-700/50 border-zinc-500/50 text-zinc-400'
                           : 'bg-secondary border-border text-muted-foreground hover:bg-secondary/80'
                         }
                       `}

@@ -74,7 +74,8 @@ export default function LayoutPresetSelector({ current, onChange, disabledPreset
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(prev => !prev)}
-        className="flex items-center gap-2 px-2.5 py-1.5 bg-secondary border border-border hover:border-white/30 transition-colors text-xs"
+        className="flex items-center gap-2 px-2.5 py-1.5 bg-secondary border border-border hover:border-border transition-colors text-xs"
+        style={{ borderRadius: 7 }}
       >
         <GridIcon preset={current} size={16} />
         <span className="text-foreground">{LAYOUT_PRESETS[current].label}</span>
@@ -94,8 +95,8 @@ export default function LayoutPresetSelector({ current, onChange, disabledPreset
                   ${isDisabled
                     ? 'opacity-30 cursor-not-allowed'
                     : preset === current
-                      ? 'bg-white/10 text-foreground'
-                      : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
+                      ? 'bg-primary/10 text-foreground'
+                      : 'text-muted-foreground hover:bg-primary/5 hover:text-foreground'
                   }
                 `}
                 title={isDisabled ? `Too few panels for current agents (max ${LAYOUT_PRESETS[preset].maxPanels})` : undefined}

@@ -131,61 +131,61 @@ export default function CustomTabBar({
     activeTab.type === 'custom' && activeTab.tabId === tabId;
 
   return (
-    <div className="flex items-center gap-0.5 py-1 bg-[#0e0e1a] border-b border-white/10 overflow-x-auto scrollbar-none">
-        {tabs.map((tab, idx) => (
-          <div
-            key={tab.id}
-            draggable={editingId !== tab.id}
-            onDragStart={e => handleDragStart(e, idx)}
-            onDragOver={e => handleDragOver(e, idx)}
-            onDrop={e => handleDrop(e, idx)}
-            onDragEnd={handleDragEnd}
-            className={`
+    <div className="flex items-center gap-0.5 py-1 !rounded-none bg-secondary border-b border-border overflow-x-auto scrollbar-none">
+      {tabs.map((tab, idx) => (
+        <div
+          key={tab.id}
+          draggable={editingId !== tab.id}
+          onDragStart={e => handleDragStart(e, idx)}
+          onDragOver={e => handleDragOver(e, idx)}
+          onDrop={e => handleDrop(e, idx)}
+          onDragEnd={handleDragEnd}
+          className={`
               flex items-center gap-1.5 px-3 py-1 text-xs font-medium whitespace-nowrap transition-colors shrink-0 cursor-pointer group
               ${isActive(tab.id)
-                ? 'bg-white/10 text-foreground border-b-2 border-white'
-                : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
-              }
-              ${dragOverIdx === idx && dragIdx !== idx ? 'border-l-2 border-l-blue-400' : ''}
+              ? 'bg-primary/15 text-primary border-b-2 border-primary font-semibold'
+              : 'text-muted-foreground hover:text-foreground hover:bg-primary/5'
+            }
+              ${dragOverIdx === idx && dragIdx !== idx ? 'border-l-2 border-l-primary' : ''}
             `}
-            onClick={() => onSelectTab(tab.id)}
-            onDoubleClick={e => { e.stopPropagation(); startEditing(tab); }}
+          onClick={() => onSelectTab(tab.id)}
+          onDoubleClick={e => { e.stopPropagation(); startEditing(tab); }}
+        >
+          {editingId === tab.id ? (
+            <input
+              ref={inputRef}
+              value={editValue}
+              onChange={e => setEditValue(e.target.value)}
+              onBlur={commitEdit}
+              onKeyDown={handleKeyDown}
+              onClick={e => e.stopPropagation()}
+              className="bg-transparent text-xs text-foreground outline-none border-b border-border w-[80px]"
+              maxLength={20}
+            />
+          ) : (
+            <span>{tab.name}</span>
+          )}
+
+          {/* Agent count badge */}
+          <span className="text-[10px] opacity-50">{tab.agentIds.length}</span>
+
+          {/* Delete button */}
+          <button
+            onClick={e => { e.stopPropagation(); onDeleteTab(tab.id); }}
+            className="p-0.5 opacity-0 group-hover:opacity-100 hover:bg-destructive/10 transition-all text-muted-foreground hover:text-destructive"
+            title="Delete board"
           >
-            {editingId === tab.id ? (
-              <input
-                ref={inputRef}
-                value={editValue}
-                onChange={e => setEditValue(e.target.value)}
-                onBlur={commitEdit}
-                onKeyDown={handleKeyDown}
-                onClick={e => e.stopPropagation()}
-                className="bg-transparent text-xs text-foreground outline-none border-b border-white/30 w-[80px]"
-                maxLength={20}
-              />
-            ) : (
-              <span>{tab.name}</span>
-            )}
-
-            {/* Agent count badge */}
-            <span className="text-[10px] opacity-50">{tab.agentIds.length}</span>
-
-            {/* Delete button */}
-            <button
-              onClick={e => { e.stopPropagation(); onDeleteTab(tab.id); }}
-              className="p-0.5 opacity-0 group-hover:opacity-100 hover:bg-white/10 transition-all text-muted-foreground hover:text-red-400"
-              title="Delete board"
-            >
-              <X className="w-3 h-3" />
-            </button>
-          </div>
-        ))}
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      ))}
 
       {/* Create tab button + dialog */}
       {canCreateTab && (
         <div className="relative shrink-0">
           <button
             onClick={() => { setShowCreateDialog(true); setCreateName(''); }}
-            className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+            className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-primary/5 transition-colors"
             title="Create new board (max 5)"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -209,14 +209,14 @@ export default function CustomTabBar({
               <div className="flex gap-2 justify-end">
                 <button
                   onClick={() => { setShowCreateDialog(false); setCreateName(''); }}
-                  className="px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+                  className="px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleCreateSubmit}
                   disabled={!createName.trim()}
-                  className="px-2.5 py-1 text-xs bg-white text-black font-medium hover:bg-white/90 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="px-2.5 py-1 text-xs bg-foreground text-background font-medium hover:bg-foreground/90 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                   Create
                 </button>

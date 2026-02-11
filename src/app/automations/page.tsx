@@ -1176,7 +1176,7 @@ Post the tweet as a comment.`}
                 </div>
               )}
 
-              <div className="flex-1 overflow-auto p-4 bg-[#0a0a0f]">
+              <div className="flex-1 overflow-auto p-4 bg-[#0D0B08]">
                 {selectedLogs.runs.length === 0 ? (
                   <p className="text-muted-foreground text-sm">No runs recorded yet. Run the automation to see logs.</p>
                 ) : (

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Session end hook for claude-manager
+# Session end hook for dorothy
 # Sets agent status to "idle" when session terminates
 
 # Read JSON input from stdin

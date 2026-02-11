@@ -73,6 +73,130 @@ function mapAgentsToNPCs(agents: AgentData[]): NPC[] {
   });
 }
 
+function MusicPlayer({ screen, inBattle }: { screen: Screen; inBattle: boolean }) {
+  const mainRef = useRef<HTMLAudioElement | null>(null);
+  const battleRef = useRef<HTMLAudioElement | null>(null);
+  const [muted, setMuted] = useState(false);
+  const [volume, setVolume] = useState(0.3);
+  const [showVolume, setShowVolume] = useState(false);
+  const userPausedRef = useRef(false);
+
+  // Create audio elements once
+  useEffect(() => {
+    const main = new Audio('/song/song.mp3');
+    main.loop = true;
+    main.volume = volume;
+    mainRef.current = main;
+
+    const battle = new Audio('/song/battle.mp3');
+    battle.loop = true;
+    battle.volume = volume;
+    battleRef.current = battle;
+
+    return () => {
+      main.pause(); main.src = '';
+      battle.pause(); battle.src = '';
+    };
+  }, []);
+
+  // Sync volume to both tracks
+  useEffect(() => {
+    if (mainRef.current) mainRef.current.volume = volume;
+    if (battleRef.current) battleRef.current.volume = volume;
+  }, [volume]);
+
+  // Track switching logic
+  useEffect(() => {
+    if (muted || userPausedRef.current) return;
+    const main = mainRef.current;
+    const battle = battleRef.current;
+    if (!main || !battle) return;
+
+    if (screen === 'title') {
+      main.pause();
+      battle.pause();
+    } else if (inBattle) {
+      // In battle on route: stop main, play battle
+      main.pause();
+      battle.play().catch(() => {});
+    } else if (screen === 'game' || screen === 'interior' || screen === 'menu' || screen === 'battle') {
+      // On first map: play main, stop battle
+      battle.pause();
+      main.play().catch(() => {});
+    } else if (screen === 'transition' || screen === 'route') {
+      // On route (no battle): stop both
+      main.pause();
+      battle.pause();
+    }
+  }, [screen, inBattle, muted]);
+
+  const toggleMute = useCallback(() => {
+    const main = mainRef.current;
+    const battle = battleRef.current;
+    if (!main || !battle) return;
+    if (muted) {
+      userPausedRef.current = false;
+      setMuted(false);
+      // The effect above will restart the right track
+    } else {
+      userPausedRef.current = true;
+      main.pause();
+      battle.pause();
+      setMuted(true);
+    }
+  }, [muted]);
+
+  // Don't show on title screen
+  if (screen === 'title') return null;
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        bottom: 12,
+        right: 12,
+        zIndex: 60,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        background: 'rgba(0,0,0,0.7)',
+        borderRadius: 8,
+        padding: '6px 10px',
+        fontFamily: '"Press Start 2P", monospace',
+        fontSize: 10,
+        color: '#fff',
+        userSelect: 'none',
+      }}
+    >
+      {showVolume && (
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={volume}
+          onChange={(e) => setVolume(parseFloat(e.target.value))}
+          style={{ width: 60, accentColor: '#4ade80', cursor: 'pointer' }}
+        />
+      )}
+      <button
+        onClick={() => setShowVolume(v => !v)}
+        style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 14, padding: '2px 4px' }}
+        title="Volume"
+      >
+        {volume === 0 ? '🔇' : '🔊'}
+      </button>
+      <button
+        onClick={toggleMute}
+        style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 14, padding: '2px 4px' }}
+        title={muted ? 'Play' : 'Pause'}
+      >
+        {muted ? '▶️' : '⏸'}
+      </button>
+    </div>
+  );
+}
+
 export default function PokemonGame() {
   const router = useRouter();
   const { assets, loaded, progress } = useAssetLoader();
@@ -87,6 +211,7 @@ export default function PokemonGame() {
   const [activeRoute, setActiveRoute] = useState<string | null>(null);
   const [routeReturnPos, setRouteReturnPos] = useState<{ x: number; y: number } | null>(null);
   const pendingRouteRef = useRef<string | null>(null);
+  const [inBattle, setInBattle] = useState(false);
 
   // ── Same pattern as agents/page.tsx ──
   // Get real agents from Electron
@@ -180,6 +305,7 @@ export default function PokemonGame() {
   const handleExitRoute = useCallback(() => {
     setActiveRoute(null);
     setRouteReturnPos(null);
+    setInBattle(false);
     setScreen('game');
   }, []);
 
@@ -467,6 +593,8 @@ export default function PokemonGame() {
           onInstallSkill={handleInstallSkill}
           onEnterInterior={handleRouteEnterInterior}
           playerStart={routeReturnPos ?? undefined}
+          onBattleStart={() => setInBattle(true)}
+          onBattleEnd={() => setInBattle(false)}
         />
       )}
 
@@ -503,6 +631,9 @@ export default function PokemonGame() {
           setPluginInstallTitle('');
         }}
       />
+
+      {/* Music Player */}
+      <MusicPlayer screen={screen} inBattle={inBattle} />
     </div>
   );
 }

@@ -17,7 +17,7 @@ export default function StatusBar({ agents }: StatusBarProps) {
   const totalOutputLines = agents.reduce((sum, a) => sum + a.output.length, 0);
 
   return (
-    <div className="flex items-center gap-4 px-3 py-1 bg-[#12121e] border-t border-white/10 text-[10px] text-muted-foreground">
+    <div className="flex items-center gap-4 px-3 py-1 bg-secondary border-t border-border !rounded-none text-[10px] text-muted-foreground">
       {/* Agent counts */}
       <div className="flex items-center gap-1.5">
         <Terminal className="w-3 h-3" />

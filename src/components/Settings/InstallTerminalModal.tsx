@@ -30,18 +30,18 @@ export const InstallTerminalModal = ({ show, command, onClose, onComplete }: Ins
 
       const term = new Terminal({
         theme: {
-          background: '#0a0a0f',
+          background: '#0D0B08',
           foreground: '#e4e4e7',
-          cursor: '#22d3ee',
-          cursorAccent: '#0a0a0f',
-          selectionBackground: '#22d3ee33',
+          cursor: '#3D9B94',
+          cursorAccent: '#0D0B08',
+          selectionBackground: '#3D9B9433',
           black: '#18181b',
           red: '#ef4444',
           green: '#22c55e',
           yellow: '#eab308',
           blue: '#3b82f6',
           magenta: '#a855f7',
-          cyan: '#22d3ee',
+          cyan: '#3D9B94',
           white: '#e4e4e7',
           brightBlack: '#52525b',
           brightRed: '#f87171',
@@ -176,7 +176,7 @@ export const InstallTerminalModal = ({ show, command, onClose, onComplete }: Ins
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.95, opacity: 0 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-4xl bg-[#0a0a0f] border border-border rounded-none overflow-hidden"
+        className="w-full max-w-4xl bg-[#0D0B08] border border-border rounded-none overflow-hidden"
       >
         {/* Terminal Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">
@@ -216,7 +216,7 @@ export const InstallTerminalModal = ({ show, command, onClose, onComplete }: Ins
         <div
           ref={terminalRef}
           className="h-[400px] p-2"
-          style={{ backgroundColor: '#0a0a0f' }}
+          style={{ backgroundColor: '#0D0B08' }}
         />
 
         {/* Terminal Footer */}

@@ -1,11 +1,11 @@
 {
-  "name": "Claude Manager",
-  "short_name": "Claude.MGR",
+  "name": "Dorothy",
+  "short_name": "Dorothy",
   "description": "Manage and monitor your Claude Code agents in real-time",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0a0a0f",
-  "theme_color": "#22d3ee",
+  "background_color": "#F0E8D5",
+  "theme_color": "#3D9B94",
   "orientation": "any",
   "icons": [
     {

@@ -41,13 +41,13 @@ export const KEYBOARD_SHORTCUTS: KeyboardShortcut[] = [
   { key: 'Escape', description: 'Exit fullscreen', action: 'exit-fullscreen' },
 ];
 
-// Status colors
+// Status colors (light theme compatible)
 export const STATUS_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
-  running: { bg: 'bg-green-500/20', text: 'text-green-400', dot: 'bg-green-500' },
-  waiting: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', dot: 'bg-yellow-500' },
-  idle: { bg: 'bg-gray-500/20', text: 'text-gray-400', dot: 'bg-gray-400' },
-  error: { bg: 'bg-red-500/20', text: 'text-red-400', dot: 'bg-red-500' },
-  completed: { bg: 'bg-white/10', text: 'text-white', dot: 'bg-white' },
+  running: { bg: 'bg-green-600/15', text: 'text-green-700', dot: 'bg-green-600' },
+  waiting: { bg: 'bg-amber-500/15', text: 'text-amber-700', dot: 'bg-amber-500' },
+  idle: { bg: 'bg-gray-500/15', text: 'text-gray-600', dot: 'bg-gray-400' },
+  error: { bg: 'bg-red-500/15', text: 'text-red-700', dot: 'bg-red-500' },
+  completed: { bg: 'bg-primary/15', text: 'text-primary', dot: 'bg-primary' },
 };
 
 // Local storage key for persisting sidebar state

@@ -144,11 +144,11 @@ export function AgentDetailPanel({
       <div className="flex-1 min-h-0 relative overflow-hidden">
         <div
           ref={terminalRef}
-          className="absolute inset-0 bg-[#0a0a0f] p-2"
+          className="absolute inset-0 bg-[#0D0B08] p-2"
           style={{ cursor: 'text' }}
         />
         {!terminalReady && (
-          <div className="absolute inset-0 flex items-center justify-center bg-[#0a0a0f]">
+          <div className="absolute inset-0 flex items-center justify-center bg-[#0D0B08]">
             <div className="flex items-center gap-2 text-text-muted">
               <Loader2 className="w-4 h-4 animate-spin" />
               <span>Initializing terminal...</span>

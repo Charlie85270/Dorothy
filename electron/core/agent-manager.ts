@@ -225,7 +225,12 @@ export async function initAgentPty(
   saveAgentsCallback: () => void
 ): Promise<string> {
   const shell = '/bin/bash';
-  const cwd = agent.worktreePath || agent.projectPath;
+  let cwd = agent.worktreePath || agent.projectPath;
+
+  if (!fs.existsSync(cwd)) {
+    console.warn(`Agent ${agent.id} cwd does not exist: ${cwd} — falling back to home directory`);
+    cwd = os.homedir();
+  }
 
   console.log(`Initializing PTY for restored agent ${agent.id} in ${cwd}`);
 
@@ -236,7 +241,7 @@ export async function initAgentPty(
 
   // Load user-configured CLI paths from app settings
   try {
-    const settingsFile = path.join(os.homedir(), '.claude-manager', 'app-settings.json');
+    const settingsFile = path.join(os.homedir(), '.dorothy', 'app-settings.json');
     if (fs.existsSync(settingsFile)) {
       const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'));
       if (settings.cliPaths) {

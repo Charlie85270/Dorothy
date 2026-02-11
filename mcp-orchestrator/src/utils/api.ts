@@ -1,5 +1,5 @@
 /**
- * API utilities for communicating with claude-manager API server
+ * API utilities for communicating with dorothy API server
  */
 
 const API_URL = process.env.CLAUDE_MGR_API_URL || "http://127.0.0.1:31415";

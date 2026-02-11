@@ -2,7 +2,7 @@ import { app, Notification, BrowserWindow } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { AgentStatus } from '../types';
-import { CLAUDE_PATTERNS, TG_CHARACTER_FACES, SLACK_CHARACTER_FACES, DATA_DIR } from '../constants';
+import { CLAUDE_PATTERNS, TG_CHARACTER_FACES, SLACK_CHARACTER_FACES, DATA_DIR, OLD_DATA_DIR } from '../constants';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -21,6 +21,52 @@ export function getAppBasePath(): string {
 export function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+}
+
+/**
+ * Migrate data from ~/.claude-manager to ~/.dorothy on first launch after rebrand.
+ * Only copies files that don't already exist in the new location to avoid overwriting newer data.
+ * Removes the old directory after successful migration.
+ */
+export function migrateFromClaudeManager() {
+  if (!fs.existsSync(OLD_DATA_DIR)) return;
+
+  console.log('Migrating data from ~/.claude-manager to ~/.dorothy...');
+
+  const items = [
+    'agents.json',
+    'agents.backup.json',
+    'app-settings.json',
+    'kanban-tasks.json',
+    'scheduler-metadata.json',
+    'telegram-downloads',
+    'scripts',
+  ];
+
+  for (const item of items) {
+    const src = path.join(OLD_DATA_DIR, item);
+    const dest = path.join(DATA_DIR, item);
+
+    if (!fs.existsSync(src)) continue;
+    if (fs.existsSync(dest)) {
+      console.log(`  Skipping ${item} (already exists in ~/.dorothy)`);
+      continue;
+    }
+
+    try {
+      fs.cpSync(src, dest, { recursive: true });
+      console.log(`  Migrated ${item}`);
+    } catch (err) {
+      console.error(`  Failed to migrate ${item}:`, err);
+    }
+  }
+
+  try {
+    fs.rmSync(OLD_DATA_DIR, { recursive: true, force: true });
+    console.log('Removed ~/.claude-manager');
+  } catch (err) {
+    console.error('Failed to remove ~/.claude-manager:', err);
   }
 }
 

@@ -158,7 +158,7 @@ export default function AgentsPage() {
       <div className="flex-1 flex flex-col lg:flex-row gap-4 lg:gap-6 min-h-0">
         {/* Agent List */}
         <div className="w-full lg:w-96 flex flex-col border border-border bg-card overflow-hidden lg:shrink-0 h-48 lg:h-auto">
-          <div className="px-4 py-3 border-b border-border bg-secondary flex items-center justify-between">
+          <div className="px-4 py-3 border-b border-border bg-secondary flex items-center !rounded-none justify-between">
             <span className="text-sm font-medium flex items-center gap-2 text-foreground">
               <Bot className="w-4 h-4 text-muted-foreground" />
               Active Agents

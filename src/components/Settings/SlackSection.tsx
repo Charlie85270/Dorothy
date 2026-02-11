@@ -180,7 +180,7 @@ export const SlackSection = ({ appSettings, onSaveAppSettings, onUpdateLocalSett
             <button
               onClick={handleSendTest}
               disabled={!appSettings.slackChannelId || testingSlack}
-              className="px-4 py-2 bg-white text-black hover:bg-white/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm flex items-center gap-2"
+              className="px-4 py-2 bg-foreground text-background hover:bg-foreground/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm flex items-center gap-2"
             >
               <SlackIcon className="w-4 h-4" />
               Send Test
@@ -204,7 +204,7 @@ export const SlackSection = ({ appSettings, onSaveAppSettings, onUpdateLocalSett
         <h3 className="font-medium mb-4">Setup Guide</h3>
         <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
           <li>Go to <a href="https://api.slack.com/apps" target="_blank" rel="noopener noreferrer" className="text-foreground hover:underline">api.slack.com/apps</a> and click &quot;Create New App&quot;</li>
-          <li>Choose &quot;From scratch&quot;, name it &quot;Claude Manager&quot;, select workspace</li>
+          <li>Choose &quot;From scratch&quot;, name it &quot;Dorothy&quot;, select workspace</li>
           <li>Go to &quot;Socket Mode&quot; → Enable → Generate App Token with scope &quot;connections:write&quot; (xapp-...)</li>
           <li>Go to &quot;OAuth & Permissions&quot; → Add Bot Token Scopes:
             <ul className="ml-4 mt-1 space-y-0.5">
@@ -220,7 +220,7 @@ export const SlackSection = ({ appSettings, onSaveAppSettings, onUpdateLocalSett
             </ul>
           </li>
           <li>Paste both tokens above and enable the integration</li>
-          <li>Mention @Claude Manager in any channel or DM the bot to start!</li>
+          <li>Mention @Dorothy in any channel or DM the bot to start!</li>
         </ol>
       </div>
     </div>

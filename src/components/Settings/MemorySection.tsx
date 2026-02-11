@@ -29,7 +29,7 @@ export const MemorySection = ({ settings, hasChanges, onToggleClaudeMem, onInsta
             <div className="text-sm">
               <p className="font-medium mb-1">Restart Required</p>
               <p className="text-yellow-400/80">
-                Save changes and restart Claude Manager and all running Claude Code instances for this change to take effect.
+                Save changes and restart Dorothy and all running Claude Code instances for this change to take effect.
               </p>
             </div>
           </div>
@@ -96,7 +96,7 @@ export const MemorySection = ({ settings, hasChanges, onToggleClaudeMem, onInsta
             <div className="flex items-center gap-3">
               <button
                 onClick={onInstallClaudeMem}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-white text-black hover:bg-white/90 transition-colors text-sm font-medium"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-foreground text-background hover:bg-foreground/90 transition-colors text-sm font-medium"
               >
                 <Brain className="w-4 h-4" />
                 Activate Memory

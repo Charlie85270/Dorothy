@@ -102,7 +102,7 @@ export default function Workstation({
         <boxGeometry args={[0.58, 0.35, 0.01]} />
         <meshStandardMaterial
           color={agentWorking ? '#1a1a2e' : '#0f0f1a'}
-          emissive={agentWorking ? '#22d3ee' : '#333333'}
+          emissive={agentWorking ? '#3D9B94' : '#333333'}
           emissiveIntensity={agentWorking ? 0.6 : 0.1}
           flatShading
         />
@@ -123,7 +123,7 @@ export default function Workstation({
             pointerEvents: 'none',
           }}
         >
-          <div className="w-full h-full bg-[#0a0a0f] p-1 font-mono text-[5px] text-cyan-400 overflow-hidden rounded">
+          <div className="w-full h-full bg-[#0D0B08] p-1 font-mono text-[5px] text-cyan-400 overflow-hidden rounded">
             <div className="animate-pulse space-y-0.5">
               <div className="text-green-400">$ claude working...</div>
               <div className="text-gray-400">Reading files...</div>
@@ -223,7 +223,7 @@ export default function Workstation({
       {agentWorking && (
         <pointLight
           position={[0, 0.7, 0.3]}
-          color="#22d3ee"
+          color="#3D9B94"
           intensity={0.5}
           distance={2}
         />

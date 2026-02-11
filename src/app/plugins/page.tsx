@@ -41,7 +41,7 @@ const CATEGORY_ICONS: Record<string, typeof Code2> = {
 
 const CATEGORY_COLORS: Record<string, string> = {
   'Code Intelligence': 'text-blue-400 bg-blue-500/20',
-  'External Integrations': 'text-green-400 bg-green-500/20',
+  'External Integrations': 'text-primary bg-primary/20',
   'Development Workflows': 'text-orange-400 bg-orange-500/20',
   'Output Styles': 'text-purple-400 bg-purple-500/20',
   'Security': 'text-red-400 bg-red-500/20',
@@ -87,18 +87,18 @@ export default function PluginsPage() {
 
       const term = new Terminal({
         theme: {
-          background: '#0a0a0f',
+          background: '#0D0B08',
           foreground: '#e4e4e7',
-          cursor: '#22d3ee',
-          cursorAccent: '#0a0a0f',
-          selectionBackground: '#22d3ee33',
+          cursor: '#3D9B94',
+          cursorAccent: '#0D0B08',
+          selectionBackground: '#3D9B9433',
           black: '#18181b',
           red: '#ef4444',
           green: '#22c55e',
           yellow: '#eab308',
           blue: '#3b82f6',
           magenta: '#a855f7',
-          cyan: '#22d3ee',
+          cyan: '#3D9B94',
           white: '#e4e4e7',
           brightBlack: '#52525b',
           brightRed: '#f87171',
@@ -406,7 +406,7 @@ export default function PluginsPage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             className={`p-4 border flex items-center justify-between mt-4 ${showToast.type === 'success'
-                ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                ? 'bg-primary/10 border-primary/30 text-primary'
                 : showToast.type === 'error'
                   ? 'bg-red-500/10 border-red-500/30 text-red-400'
                   : 'bg-white/10 border-white/30 text-white'
@@ -567,10 +567,10 @@ export default function PluginsPage() {
                 className="border border-border bg-card p-4 hover:border-foreground/30 transition-colors"
               >
                 <div className="flex items-start gap-3 mb-3">
-                  <div className={`w-10 h-10 flex items-center justify-center shrink-0 ${installed ? 'bg-green-500/20' : colorClass.split(' ')[1]
+                  <div className={`w-10 h-10 flex items-center justify-center shrink-0 ${installed ? 'bg-primary/10' : colorClass.split(' ')[1]
                     }`}>
                     {installed ? (
-                      <CheckCircle className="w-5 h-5 text-green-400" />
+                      <CheckCircle className="w-5 h-5 text-primary" />
                     ) : (
                       <Icon className={`w-5 h-5 ${colorClass.split(' ')[0]}`} />
                     )}
@@ -584,7 +584,7 @@ export default function PluginsPage() {
                         </span>
                       )}
                       {installed && (
-                        <span className="text-[10px] px-1.5 py-0.5 bg-green-500/20 text-green-400">
+                        <span className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary" style={{ borderRadius: 5 }}>
                           Installed
                         </span>
                       )}
@@ -600,9 +600,9 @@ export default function PluginsPage() {
                 </p>
 
                 {plugin.binaryRequired && (
-                  <div className="flex items-center gap-1.5 text-[10px] text-yellow-400 mb-3">
+                  <div className="flex items-center gap-1.5 text-[10px] text-amber-700 mb-3">
                     <Info className="w-3 h-3" />
-                    <span>Requires: <code className="bg-secondary px-1 py-0.5">{plugin.binaryRequired}</code></span>
+                    <span>Requires: <code className="bg-amber-500/15 text-amber-800 px-1 py-0.5">{plugin.binaryRequired}</code></span>
                   </div>
                 )}
 
@@ -622,7 +622,7 @@ export default function PluginsPage() {
 
                 <div className="flex items-center gap-2 mt-auto pt-2 border-t border-border">
                   {installed ? (
-                    <span className="flex-1 text-center text-xs text-green-400 py-1.5">
+                    <span className="flex-1 text-center text-xs text-primary py-1.5">
                       Already installed
                     </span>
                   ) : (
@@ -632,8 +632,9 @@ export default function PluginsPage() {
                         disabled={isInstalling}
                         className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${isInstalling
                             ? 'bg-secondary text-muted-foreground'
-                            : 'bg-white text-black hover:bg-white/90'
+                            : 'bg-foreground text-background hover:bg-foreground/90'
                           }`}
+                        style={{ borderRadius: 7 }}
                       >
                         {isInstalling ? (
                           <>
@@ -649,9 +650,10 @@ export default function PluginsPage() {
                       <button
                         onClick={() => copyInstallCommand(plugin)}
                         className={`p-1.5 transition-colors ${justCopied
-                            ? 'bg-green-500/20 text-green-400'
+                            ? 'bg-primary/10 text-primary'
                             : 'bg-secondary text-muted-foreground hover:text-foreground'
                           }`}
+                        style={{ borderRadius: 7 }}
                         title="Copy install command"
                       >
                         {justCopied ? (
@@ -718,7 +720,7 @@ export default function PluginsPage() {
                   handleInstall(selectedPlugin);
                   setSelectedPlugin(null);
                 }}
-                className="w-full py-2.5 bg-white text-black font-medium hover:bg-white/90 transition-colors"
+                className="w-full py-2.5 bg-foreground text-background font-medium hover:bg-foreground/90 transition-colors"
               >
                 {hasElectron ? 'Install Plugin' : 'Copy Install Command'}
               </button>
@@ -742,7 +744,7 @@ export default function PluginsPage() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-4xl bg-[#0a0a0f] border border-border rounded-none overflow-hidden"
+              className="w-full max-w-4xl bg-[#0D0B08] border border-border rounded-none overflow-hidden"
             >
               {/* Terminal Header */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">
@@ -756,7 +758,7 @@ export default function PluginsPage() {
                 <div className="flex items-center gap-2">
                   {installComplete && (
                     <span className={`text-xs px-2 py-1 ${installExitCode === 0
-                        ? 'bg-green-500/20 text-green-400'
+                        ? 'bg-primary/10 text-primary'
                         : 'bg-red-500/20 text-red-400'
                       }`}>
                       {installExitCode === 0 ? 'Completed' : `Failed (${installExitCode})`}
@@ -781,7 +783,7 @@ export default function PluginsPage() {
               <div
                 ref={terminalRef}
                 className="h-[400px] p-2"
-                style={{ backgroundColor: '#0a0a0f' }}
+                style={{ backgroundColor: '#0D0B08' }}
               />
 
               {/* Terminal Footer */}

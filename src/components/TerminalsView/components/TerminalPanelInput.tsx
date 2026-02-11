@@ -65,7 +65,7 @@ export default function TerminalPanelInput({
   const isDisabled = agentStatus !== 'running' && agentStatus !== 'waiting';
 
   return (
-    <div className={`flex items-center gap-2 px-3 py-1.5 bg-[#12121e] border-t border-white/10 ${isBroadcasting ? 'ring-1 ring-cyan-500/50' : ''}`}>
+    <div className={`flex items-center gap-2 px-3 py-1.5 bg-secondary border-t border-border ${isBroadcasting ? 'ring-1 ring-primary/50' : ''}`}>
       <span className={`text-xs font-mono ${isBroadcasting ? 'text-cyan-400' : 'text-muted-foreground'}`}>
         {isBroadcasting ? '>' : '>'}
       </span>
@@ -88,7 +88,7 @@ export default function TerminalPanelInput({
       <button
         onClick={handleSubmit}
         disabled={isDisabled || !input.trim()}
-        className="p-1 hover:bg-white/10 transition-colors text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
+        className="p-1 hover:bg-primary/10 transition-colors text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
       >
         <SendHorizontal className="w-3 h-3" />
       </button>

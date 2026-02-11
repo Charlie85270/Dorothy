@@ -274,7 +274,7 @@ export default function NewChatModal({
                 <button
                   onClick={() => setStep(step + 1)}
                   disabled={step === 1 && !projectPath}
-                  className="flex items-center gap-2 px-4 py-2 bg-white text-black font-medium hover:bg-white/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-4 py-2 bg-foreground text-background font-medium hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Continue
                   <ChevronRight className="w-4 h-4" />
@@ -283,7 +283,7 @@ export default function NewChatModal({
                 <button
                   onClick={handleSubmit}
                   disabled={(!prompt.trim() && selectedSkills.length === 0) || (useWorktree && !branchName.trim())}
-                  className="flex items-center gap-2 px-4 py-2 bg-white text-black font-medium hover:bg-white/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-4 py-2 bg-foreground text-background font-medium hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Play className="w-4 h-4" />
                   Start Agent

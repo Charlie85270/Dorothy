@@ -147,7 +147,7 @@ export default function CanvasView() {
   return (
     <div
       ref={canvasRef}
-      className={`relative w-full h-full bg-[#0a0a0f] overflow-hidden touch-none ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
+      className={`relative w-full h-full bg-[#0D0B08] overflow-hidden touch-none ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
       {...gestureHandlers}
     >
       <DotGrid />

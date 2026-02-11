@@ -9,7 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 // Scheduler IPC handlers (native implementation)
 // ============================================
 
-const SCHEDULER_METADATA_PATH = path.join(os.homedir(), '.claude-manager', 'scheduler-metadata.json');
+const SCHEDULER_METADATA_PATH = path.join(os.homedir(), '.dorothy', 'scheduler-metadata.json');
 
 interface SchedulerTaskMetadata {
   agentId?: string;
@@ -220,7 +220,7 @@ async function createLaunchdJob(
   }
 
   // Create script to run
-  const scriptPath = path.join(os.homedir(), '.claude-manager', 'scripts', `${taskId}.sh`);
+  const scriptPath = path.join(os.homedir(), '.dorothy', 'scripts', `${taskId}.sh`);
   const scriptsDir = path.dirname(scriptPath);
   if (!fs.existsSync(scriptsDir)) {
     fs.mkdirSync(scriptsDir, { recursive: true });
@@ -248,7 +248,7 @@ echo "=== Task completed at $(date) ===" >> "${logPath}"
   if (dayOfMonth !== '*') calendarInterval.Day = parseInt(dayOfMonth, 10);
   if (dayOfWeek !== '*') calendarInterval.Weekday = parseInt(dayOfWeek, 10);
 
-  const label = `com.claude-manager.scheduler.${taskId}`;
+  const label = `com.dorothy.scheduler.${taskId}`;
   const plistPath = path.join(os.homedir(), 'Library', 'LaunchAgents', `${label}.plist`);
   const launchAgentsDir = path.dirname(plistPath);
   if (!fs.existsSync(launchAgentsDir)) {
@@ -301,7 +301,7 @@ async function createCronJob(
   const claudePath = await getClaudePath();
   const claudeDir = path.dirname(claudePath);
 
-  const scriptPath = path.join(os.homedir(), '.claude-manager', 'scripts', `${taskId}.sh`);
+  const scriptPath = path.join(os.homedir(), '.dorothy', 'scripts', `${taskId}.sh`);
   const scriptsDir = path.dirname(scriptPath);
   if (!fs.existsSync(scriptsDir)) {
     fs.mkdirSync(scriptsDir, { recursive: true });
@@ -328,7 +328,7 @@ echo "=== Task completed at $(date) ===" >> "${logPath}"
   fs.writeFileSync(scriptPath, scriptContent);
   fs.chmodSync(scriptPath, '755');
 
-  const cronLine = `${schedule} ${scriptPath} # claude-manager-${taskId}`;
+  const cronLine = `${schedule} ${scriptPath} # dorothy-${taskId}`;
 
   await new Promise<void>((resolve, reject) => {
     const getCron = spawn('crontab', ['-l']);
@@ -518,14 +518,14 @@ export function registerSchedulerHandlers(): void {
           try {
             const files = fs.readdirSync(launchAgentsDir);
             for (const file of files) {
-              if (!file.startsWith('com.claude.schedule.') && !file.startsWith('com.claude-manager.scheduler.')) continue;
+              if (!file.startsWith('com.claude.schedule.') && !file.startsWith('com.dorothy.scheduler.')) continue;
               if (!file.endsWith('.plist')) continue;
 
               let taskId: string;
               if (file.startsWith('com.claude.schedule.')) {
                 taskId = file.replace('com.claude.schedule.', '').replace('.plist', '');
               } else {
-                taskId = file.replace('com.claude-manager.scheduler.', '').replace('.plist', '');
+                taskId = file.replace('com.dorothy.scheduler.', '').replace('.plist', '');
               }
 
               if (addedTaskIds.has(taskId)) continue;
@@ -719,7 +719,7 @@ export function registerSchedulerHandlers(): void {
       // Remove launchd job (macOS)
       if (os.platform() === 'darwin') {
         const labels = [
-          `com.claude-manager.scheduler.${taskId}`,
+          `com.dorothy.scheduler.${taskId}`,
           `com.claude.schedule.${taskId}`,
         ];
 
@@ -751,7 +751,7 @@ export function registerSchedulerHandlers(): void {
           getCron.on('close', () => {
             const newCron = existingCron
               .split('\n')
-              .filter(line => !line.includes(`claude-manager-${taskId}`))
+              .filter(line => !line.includes(`dorothy-${taskId}`))
               .join('\n');
 
             const setCron = spawn('crontab', ['-']);
@@ -765,7 +765,7 @@ export function registerSchedulerHandlers(): void {
       }
 
       // Remove script file
-      const scriptPath = path.join(os.homedir(), '.claude-manager', 'scripts', `${taskId}.sh`);
+      const scriptPath = path.join(os.homedir(), '.dorothy', 'scripts', `${taskId}.sh`);
       if (fs.existsSync(scriptPath)) {
         fs.unlinkSync(scriptPath);
       }
@@ -794,7 +794,7 @@ export function registerSchedulerHandlers(): void {
         return { success: false, error: 'Task not found' };
       }
 
-      const scriptPath = path.join(os.homedir(), '.claude-manager', 'scripts', `${taskId}.sh`);
+      const scriptPath = path.join(os.homedir(), '.dorothy', 'scripts', `${taskId}.sh`);
       if (fs.existsSync(scriptPath)) {
         spawn('bash', [scriptPath], {
           detached: true,

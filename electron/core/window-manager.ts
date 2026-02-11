@@ -30,9 +30,9 @@ export function createWindow() {
     height: 1000,
     minWidth: 1200,
     minHeight: 800,
-    title: 'claude.mgr',
+    title: 'Dorothy',
     titleBarStyle: 'hiddenInset',
-    backgroundColor: '#0a0a0f',
+    backgroundColor: '#F0E8D5',
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload.js'),
       contextIsolation: true,

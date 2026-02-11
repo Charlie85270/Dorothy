@@ -262,9 +262,11 @@ interface RouteOverlayProps {
   onInstallSkill?: (repo: string, title: string) => void;
   onEnterInterior?: (interiorId: string) => void;
   playerStart?: { x: number; y: number };
+  onBattleStart?: () => void;
+  onBattleEnd?: () => void;
 }
 
-export default function RouteOverlay({ assets, onExit, onInstallSkill, onEnterInterior, playerStart }: RouteOverlayProps) {
+export default function RouteOverlay({ assets, onExit, onInstallSkill, onEnterInterior, playerStart, onBattleStart, onBattleEnd }: RouteOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { getKeys, consumeAction, consumeCancel } = useKeyboard();
@@ -344,6 +346,7 @@ export default function RouteOverlay({ assets, onExit, onInstallSkill, onEnterIn
   const encounterRef = useRef<EncounterState | null>(null);
   const battleSelectedRef = useRef(0);
   const battleNavCooldownRef = useRef(0);
+  const inBattleRef = useRef(false);
 
   // Pokeball state
   const collectedPokeballsRef = useRef<Set<string>>(new Set());
@@ -582,6 +585,10 @@ export default function RouteOverlay({ assets, onExit, onInstallSkill, onEnterIn
                 enc.conversationNode = null;
                 if (npc) { enc.npcX = npc.x; enc.npcY = npc.y; enc.npcDirection = npc.direction; }
                 interactionCooldownRef.current = Date.now() + 800;
+                if (inBattleRef.current) {
+                  inBattleRef.current = false;
+                  onBattleEnd?.();
+                }
               }
             }
           }
@@ -641,6 +648,10 @@ export default function RouteOverlay({ assets, onExit, onInstallSkill, onEnterIn
               dialogueQueueRef.current = [...npc.dialogue.slice(1)];
               dialogueSpeakerRef.current = npc.name;
             }
+            if (!inBattleRef.current && npc?.conversation) {
+              inBattleRef.current = true;
+              onBattleStart?.();
+            }
           } else {
             // Move one step closer to the player
             const dxP = player.x - enc.npcX;
@@ -692,6 +703,10 @@ export default function RouteOverlay({ assets, onExit, onInstallSkill, onEnterIn
           enc.conversationNode = null;
           if (npc) { enc.npcX = npc.x; enc.npcY = npc.y; enc.npcDirection = npc.direction; }
           interactionCooldownRef.current = Date.now() + 800;
+          if (inBattleRef.current) {
+            inBattleRef.current = false;
+            onBattleEnd?.();
+          }
         }
         // Arrow key navigation with cooldown
         const now = Date.now();
@@ -1367,7 +1382,7 @@ export default function RouteOverlay({ assets, onExit, onInstallSkill, onEnterIn
       ctx.fillStyle = `rgba(0,0,0,${fadeRef.current})`;
       ctx.fillRect(0, 0, vw, vh);
     }
-  }, [assets, getKeys, consumeAction, consumeCancel, onExit, onEnterInterior, canMoveTo, calculateCamera, ensureGrassCache, ensureWaterCache]);
+  }, [assets, getKeys, consumeAction, consumeCancel, onExit, onEnterInterior, onBattleStart, onBattleEnd, canMoveTo, calculateCamera, ensureGrassCache, ensureWaterCache]);
 
   useGameLoop(gameLoop, true);
 

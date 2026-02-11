@@ -32,7 +32,7 @@ export function ProjectFilterTabs({
         className={`
           flex items-center gap-2 px-3 py-2 text-sm font-medium transition-all whitespace-nowrap
           ${projectFilter === null
-            ? 'bg-white text-black'
+            ? 'bg-foreground text-background'
             : 'bg-secondary text-muted-foreground hover:text-foreground border border-border'
           }
         `}
@@ -58,7 +58,7 @@ export function ProjectFilterTabs({
             className={`
               flex items-center gap-2 px-3 py-2 text-sm font-medium transition-all whitespace-nowrap
               ${isActive
-                ? 'bg-white text-black'
+                ? 'bg-foreground text-background'
                 : 'bg-secondary text-muted-foreground hover:text-foreground border border-border'
               }
             `}

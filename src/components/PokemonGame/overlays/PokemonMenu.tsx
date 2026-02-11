@@ -298,16 +298,13 @@ export default function PokemonMenu({
           border: `4px solid ${COLORS.borderOuter}`,
           borderRadius: '8px',
           background: COLORS.descBg,
-          minHeight: '80px',
-          display: 'flex',
-          alignItems: 'center',
+          height: '110px',
           padding: '12px 16px',
           gap: '12px',
+          overflow: 'hidden',
         }}>
-
-
           {/* Description text */}
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, height: '100%', overflowY: 'auto' }}>
             {isCancel ? (
               <span style={{
                 color: COLORS.descText,

@@ -1,6 +1,6 @@
 export type Direction = 'down' | 'up' | 'left' | 'right';
 
-export type Screen = 'title' | 'game' | 'battle' | 'menu' | 'interior';
+export type Screen = 'title' | 'game' | 'battle' | 'menu' | 'interior' | 'route' | 'transition';
 
 export type TileType =
   | 'grass'      // 0 - walkable ground
@@ -33,12 +33,13 @@ export interface PlayerState {
 export interface NPC {
   id: string;
   name: string;
-  type: 'professor' | 'agent';
+  type: 'professor' | 'agent' | 'wanderer';
   x: number;
   y: number;
   direction: Direction;
   spriteIndex?: number; // index into pokemon sprite sheet for agents
   spritePath?: string;  // path to individual pokemon sprite image
+  animFrame?: number;   // walk cycle frame for sprite sheet NPCs
   agentStatus?: string;
   agentProject?: string;
   dialogue: string[];
@@ -134,13 +135,27 @@ export interface TerminalConfig {
   repo: string;
 }
 
+export interface InteriorInteractable {
+  id: string;
+  x: number;
+  y: number;
+  width?: number;          // how many tiles wide (default 1)
+  dialogue: string[];
+  speaker?: string;
+  spritePath?: string;     // if set, renders as a visible NPC with sprite sheet (4x4 grid)
+  direction?: Direction;   // facing direction for sprite (default 'down')
+  exitAfterDialogue?: boolean; // if true, NPC walks to exit and disappears after dialogue
+}
+
 export interface InteriorRoomConfig {
   width: number;
   height: number;
   tilemap: number[][];
   npcPosition: Position;
+  npcWidth?: number;       // how many tiles wide the interaction zone is (default 1)
   playerStart: Position;
   dynamicNPCs?: boolean;
+  interactables?: InteriorInteractable[];
 }
 
 export interface PokemonMenuItem {

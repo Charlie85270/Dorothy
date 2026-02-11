@@ -1542,8 +1542,8 @@ function getBattleImage(src: string): HTMLImageElement {
   return battleImageCache.get(src)!;
 }
 
-const battleBg = getBattleImage('/pokemon/pokemon-battle.png');
-const playerBattleSprite = getBattleImage('/pokemon/battle/player.png');
+function getBattleBg() { return getBattleImage('/pokemon/pokemon-battle.png'); }
+function getPlayerBattleSprite() { return getBattleImage('/pokemon/battle/player.png'); }
 
 function drawBattleScreen(
   ctx: CanvasRenderingContext2D,
@@ -1566,6 +1566,7 @@ function drawBattleScreen(
   ctx.fillRect(0, 0, vw, vh);
 
   // Battle background image
+  const battleBg = getBattleBg();
   if (battleBg.complete && battleBg.naturalWidth > 0) {
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(battleBg, bx, by, battleW, battleH);
@@ -1590,6 +1591,7 @@ function drawBattleScreen(
   }
 
   // Player battle sprite (bottom-left)
+  const playerBattleSprite = getPlayerBattleSprite();
   if (playerBattleSprite.complete && playerBattleSprite.naturalWidth > 0) {
     const sprW = battleW * 0.24;
     const sprH = sprW * (playerBattleSprite.naturalHeight / playerBattleSprite.naturalWidth);

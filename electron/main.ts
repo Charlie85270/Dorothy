@@ -10,7 +10,7 @@
  * - Scheduler for automated tasks
  */
 
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, Notification, shell } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -86,6 +86,7 @@ import { registerSchedulerHandlers } from './handlers/scheduler-handlers';
 import { registerAutomationHandlers } from './handlers/automation-handlers';
 import { registerCLIPathsHandlers, getCLIPathsConfig } from './handlers/cli-paths-handlers';
 import { registerKanbanHandlers, KanbanHandlerDependencies } from './handlers/kanban-handlers';
+import { checkForUpdates } from './services/update-checker';
 import { initKanbanAutomation, findMatchingAgent, createAgentForTask, startAgentForTask } from './services/kanban-automation';
 
 // Utils
@@ -125,6 +126,7 @@ function loadAppSettings(): AppSettings {
     jiraEmail: '',
     jiraApiToken: '',
     verboseModeEnabled: false,
+    autoCheckUpdates: true,
     cliPaths: {
       claude: '',
       gh: '',
@@ -525,6 +527,27 @@ app.whenReady().then(async () => {
   // Setup MCP orchestrator and hooks
   await setupMcpOrchestrator();
   await configureStatusHooks();
+
+  // Auto-check for updates on startup
+  if (appSettings.autoCheckUpdates !== false) {
+    setTimeout(async () => {
+      try {
+        const updateInfo = await checkForUpdates();
+        if (updateInfo?.hasUpdate && Notification.isSupported()) {
+          const notification = new Notification({
+            title: 'Update Available',
+            body: `Dorothy ${updateInfo.latestVersion} is available (you have ${updateInfo.currentVersion})`,
+          });
+          notification.on('click', () => {
+            shell.openExternal(updateInfo.releaseUrl);
+          });
+          notification.show();
+        }
+      } catch (err) {
+        console.error('Auto-update check failed:', err);
+      }
+    }, 5000); // Delay 5s to let the app finish loading
+  }
 
   console.log('App initialization complete');
 });

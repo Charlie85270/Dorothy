@@ -52,6 +52,7 @@ export interface AppSettings {
   jiraEmail: string;
   jiraApiToken: string;
   verboseModeEnabled: boolean;
+  autoCheckUpdates: boolean;
   cliPaths: CLIPaths;
 }
 

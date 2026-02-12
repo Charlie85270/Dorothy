@@ -1,4 +1,5 @@
-import { ipcMain, dialog } from 'electron';
+import { ipcMain, dialog, shell } from 'electron';
+import { checkForUpdates } from '../services/update-checker';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -58,6 +59,7 @@ export function registerIpcHandlers(deps: IpcHandlerDependencies): void {
   registerClaudeDataHandlers(deps);
   registerSettingsHandlers(deps);
   registerAppSettingsHandlers(deps);
+  registerUpdateHandlers();
   // Orchestrator handlers are registered separately in services/mcp-orchestrator.ts
   registerFileSystemHandlers(deps);
   registerShellHandlers(deps);
@@ -1179,6 +1181,19 @@ function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
       console.error('JIRA test failed:', err);
       return { success: false, error: String(err) };
     }
+  });
+}
+
+// ============== Update Checker IPC Handlers ==============
+
+function registerUpdateHandlers(): void {
+  ipcMain.handle('app:checkForUpdates', async () => {
+    return checkForUpdates();
+  });
+
+  ipcMain.handle('app:openExternal', async (_event, url: string) => {
+    shell.openExternal(url);
+    return { success: true };
   });
 }
 

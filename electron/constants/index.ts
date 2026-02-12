@@ -10,6 +10,8 @@ export const APP_SETTINGS_FILE = path.join(DATA_DIR, 'app-settings.json');
 export const KANBAN_FILE = path.join(DATA_DIR, 'kanban-tasks.json');
 export const TELEGRAM_DOWNLOADS_DIR = path.join(DATA_DIR, 'telegram-downloads');
 
+export const GITHUB_REPO = 'Charlie85270/dorothy';
+
 export const MIME_TYPES: { [key: string]: string } = {
   '.html': 'text/html',
   '.js': 'application/javascript',

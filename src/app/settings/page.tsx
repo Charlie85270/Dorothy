@@ -62,7 +62,7 @@ export default function SettingsPage() {
   const renderContent = () => {
     switch (activeSection) {
       case 'general':
-        return <GeneralSection info={info} />;
+        return <GeneralSection info={info} appSettings={appSettings} onSaveAppSettings={handleSaveAppSettings} />;
       case 'memory':
         return (
           <MemorySection

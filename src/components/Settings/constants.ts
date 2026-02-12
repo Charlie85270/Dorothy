@@ -48,6 +48,7 @@ export const DEFAULT_APP_SETTINGS = {
   jiraEmail: '',
   jiraApiToken: '',
   verboseModeEnabled: false,
+  autoCheckUpdates: true,
   cliPaths: {
     claude: '',
     gh: '',

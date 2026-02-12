@@ -402,6 +402,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('cliPaths:save', paths),
   },
 
+  // Updates
+  updates: {
+    check: () => ipcRenderer.invoke('app:checkForUpdates'),
+    openExternal: (url: string) => ipcRenderer.invoke('app:openExternal', url),
+  },
+
   // Platform info
   platform: process.platform,
 });

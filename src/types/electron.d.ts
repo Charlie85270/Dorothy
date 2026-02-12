@@ -457,6 +457,19 @@ export interface ElectronAPI {
     onTaskDeleted: (callback: (event: { id: string }) => void) => () => void;
   };
 
+  // Updates
+  updates?: {
+    check: () => Promise<{
+      currentVersion: string;
+      latestVersion: string;
+      downloadUrl: string;
+      releaseUrl: string;
+      releaseNotes: string;
+      hasUpdate: boolean;
+    } | null>;
+    openExternal: (url: string) => Promise<{ success: boolean }>;
+  };
+
   // Get home path helper
   getHomePath?: () => string;
 

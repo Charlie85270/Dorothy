@@ -1,9 +1,8 @@
-const { notarize } = require('@electron/notarize');
-
 exports.default = async function notarizing(context) {
   const { electronPlatformName, appOutDir } = context;
   if (electronPlatformName !== 'darwin') return;
 
+  const { notarize } = await import('@electron/notarize');
   const appName = context.packager.appInfo.productFilename;
 
   // Use keychain profile if available, otherwise fall back to env vars
@@ -11,6 +10,7 @@ exports.default = async function notarizing(context) {
 
   console.log(`Notarizing ${appName}.app...`);
 
+  try {
   if (useKeychain) {
     await notarize({
       appPath: `${appOutDir}/${appName}.app`,
@@ -24,6 +24,9 @@ exports.default = async function notarizing(context) {
       teamId: process.env.APPLE_TEAM_ID,
     });
   }
-
+  } catch (error) {
+    console.error('Notarization failed:', error);
+    throw error;
+  }
   console.log('Notarization complete');
 };

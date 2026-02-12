@@ -25,8 +25,8 @@ import { SKILLS_DATABASE, SKILL_CATEGORIES, type Skill } from '@/lib/skills-data
 import SkillInstallDialog from '@/components/SkillInstallDialog';
 
 export default function SkillsPage() {
-  const { data, loading, error } = useClaude();
-  const { installedSkills, installSkill, isElectron: hasElectron } = useElectronSkills();
+  const { data, loading, error, refresh: refreshClaude } = useClaude();
+  const { installedSkills, installSkill, isElectron: hasElectron, refresh: refreshSkills } = useElectronSkills();
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
@@ -514,6 +514,9 @@ export default function SkillsPage() {
         onClose={(success) => {
           setShowInstallTerminal(false);
           setInstallingSkill(null);
+          // Always re-sync skills on close (install may have succeeded before terminal was closed)
+          refreshSkills();
+          refreshClaude();
           if (success) {
             setShowToast({
               message: `Successfully installed "${currentInstallRepo}"!`,

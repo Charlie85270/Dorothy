@@ -16,6 +16,8 @@ import { renderLoadingScreen } from './renderer/uiRenderer';
 import AgentTerminalDialog from '@/components/AgentWorld/AgentTerminalDialog';
 import SkillInstallDialog from '@/components/SkillInstallDialog';
 import PluginInstallDialog from '@/components/PluginInstallDialog';
+import { useClaude } from '@/hooks/useClaude';
+import { useElectronSkills } from '@/hooks/useElectron';
 import 'xterm/css/xterm.css';
 
 // Try to import electron hooks - gracefully handle if not available
@@ -200,6 +202,8 @@ function MusicPlayer({ screen, inBattle }: { screen: Screen; inBattle: boolean }
 export default function PokemonGame() {
   const router = useRouter();
   const { assets, loaded, progress } = useAssetLoader();
+  const { refresh: refreshClaude } = useClaude();
+  const { refresh: refreshSkills } = useElectronSkills();
   const [screen, setScreen] = useState<Screen>('title');
   const [dialogueText, setDialogueText] = useState<string | null>(null);
   const [dialogueQueue, setDialogueQueue] = useState<string[]>([]);
@@ -618,6 +622,8 @@ export default function PokemonGame() {
         onClose={() => {
           setSkillInstallRepo(null);
           setSkillInstallTitle('');
+          refreshSkills();
+          refreshClaude();
         }}
       />
 

@@ -28,8 +28,20 @@ interface UpdateInfo {
   hasUpdate: boolean;
 }
 
+const VAULT_READ_DOCS_KEY = 'vault-read-docs';
+
+function loadVaultReadDocs(): Set<string> {
+  try {
+    const stored = localStorage.getItem(VAULT_READ_DOCS_KEY);
+    if (stored) return new Set(JSON.parse(stored));
+    return new Set();
+  } catch {
+    return new Set();
+  }
+}
+
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
-  const { sidebarCollapsed, mobileMenuOpen, setMobileMenuOpen, darkMode, setDarkMode } = useStore();
+  const { sidebarCollapsed, mobileMenuOpen, setMobileMenuOpen, darkMode, setDarkMode, setVaultUnreadCount } = useStore();
   const isMobile = useIsMobile();
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [updateDismissed, setUpdateDismissed] = useState(false);
@@ -63,6 +75,35 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     document.documentElement.classList.toggle('dark', darkMode);
     localStorage.setItem('dorothy-dark-mode', String(darkMode));
   }, [darkMode]);
+
+  // Global vault unread badge: listen for new documents even when VaultView is not mounted
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.electronAPI?.vault) return;
+
+    // Compute initial unread count on app start
+    const initUnread = async () => {
+      try {
+        const result = await window.electronAPI!.vault!.listDocuments();
+        if (result?.documents) {
+          const readIds = loadVaultReadDocs();
+          // If localStorage key doesn't exist yet (first ever load), don't show badges
+          if (localStorage.getItem(VAULT_READ_DOCS_KEY) === null) return;
+          const unread = result.documents.filter((d: { id: string }) => !readIds.has(d.id)).length;
+          setVaultUnreadCount(unread);
+        }
+      } catch {
+        // Ignore
+      }
+    };
+    initUnread();
+
+    // Listen for real-time document creation — increment unread
+    const unsub = window.electronAPI!.vault!.onDocumentCreated(() => {
+      setVaultUnreadCount(useStore.getState().vaultUnreadCount + 1);
+    });
+
+    return unsub;
+  }, [setVaultUnreadCount]);
 
   // Close mobile menu on resize to desktop
   useEffect(() => {

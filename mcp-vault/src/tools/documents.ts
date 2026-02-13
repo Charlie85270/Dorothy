@@ -14,21 +14,49 @@ interface VaultDocument {
   updated_at: string;
 }
 
+interface VaultFolder {
+  id: string;
+  name: string;
+  parent_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Find an existing folder by name (case-insensitive) or create a new one.
+ */
+async function resolveFolder(folderName: string): Promise<string> {
+  const result = await apiRequest("GET", "/api/vault/folders") as { folders: VaultFolder[] };
+  const match = result.folders.find(
+    f => f.name.toLowerCase() === folderName.toLowerCase()
+  );
+  if (match) return match.id;
+
+  // No match — create a new folder at root level
+  const created = await apiRequest("POST", "/api/vault/folders", {
+    name: folderName,
+  }) as { success: boolean; folder: VaultFolder };
+  return created.folder.id;
+}
+
 export function registerDocumentTools(server: McpServer): void {
   // vault_create_document
   server.tool(
     "vault_create_document",
-    "Create a new document in the Vault. Use this to write reports, analyses, research findings, or any structured knowledge.",
+    "Create a new document in the Vault. Use this to write reports, analyses, research findings, or any structured knowledge. You MUST specify a folder name — the document will be placed in an existing folder with that name, or a new folder will be created automatically.",
     {
       title: z.string().describe("Document title"),
       content: z.string().describe("Document content (supports Markdown)"),
-      folder_id: z.string().optional().describe("Folder ID to place the document in"),
+      folder: z.string().describe("Folder name to organize the document into (e.g. 'Twitter Research', 'Weekly Reports', 'Competitor Analysis'). If a folder with this name exists it will be used, otherwise a new folder is created."),
       tags: z.array(z.string()).optional().describe("Tags for categorization (e.g. ['report', 'weekly', 'competitor'])"),
     },
-    async ({ title, content, folder_id, tags }) => {
+    async ({ title, content, folder, tags }) => {
       try {
         const author = process.env.CLAUDE_AGENT_NAME || process.env.CLAUDE_AGENT_ID || "agent";
         const agent_id = process.env.CLAUDE_AGENT_ID || undefined;
+
+        // Resolve folder name to ID (find existing or create new)
+        const folder_id = await resolveFolder(folder);
 
         const result = await apiRequest("POST", "/api/vault/documents", {
           title,
@@ -42,7 +70,7 @@ export function registerDocumentTools(server: McpServer): void {
         return {
           content: [{
             type: "text" as const,
-            text: `Document created successfully!\nID: ${result.document.id}\nTitle: ${result.document.title}\nFolder: ${result.document.folder_id || "Root"}\nTags: ${tags?.join(", ") || "None"}`,
+            text: `Document created successfully!\nID: ${result.document.id}\nTitle: ${result.document.title}\nFolder: ${folder}\nTags: ${tags?.join(", ") || "None"}`,
           }],
         };
       } catch (error) {

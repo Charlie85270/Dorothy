@@ -236,6 +236,10 @@ export default function FolderTree({ folders, documents, selectedFolderId, selec
   const [newFolderName, setNewFolderName] = useState('');
 
   const rootFolders = folders.filter(f => !f.parent_id);
+  const rootDocs = useMemo(
+    () => documents.filter(d => !d.folder_id),
+    [documents]
+  );
   const totalUnread = useMemo(
     () => documents.filter(d => !readDocIds.has(d.id)).length,
     [documents, readDocIds]
@@ -288,6 +292,44 @@ export default function FolderTree({ folders, documents, selectedFolderId, selec
             onDeleteFolder={onDeleteFolder}
             depth={0}
           />
+        );
+      })}
+
+      {/* Root-level documents (no folder) */}
+      {rootDocs.map(doc => {
+        const tags = parseTags(doc.tags);
+        const isUnread = !readDocIds.has(doc.id);
+        return (
+          <button
+            key={doc.id}
+            onClick={() => onSelectDocument(doc.id)}
+            className={`w-full flex items-center gap-1.5 px-3 py-1 text-left text-xs transition-colors ${
+              selectedDocId === doc.id
+                ? 'text-foreground font-medium'
+                : isUnread
+                  ? 'text-foreground font-medium'
+                  : 'text-muted-foreground hover:text-foreground'
+            }`}
+            title={doc.title}
+          >
+            {isUnread && (
+              <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
+            )}
+            <FileText className={`w-3 h-3 shrink-0 ${selectedDocId === doc.id ? 'text-primary' : ''}`} />
+            <span className="truncate">{doc.title}</span>
+            {tags.length > 0 && (
+              <span className="flex items-center gap-0.5 shrink-0">
+                {tags.slice(0, 2).map(tag => (
+                  <span key={tag} className="px-1 text-[9px] rounded bg-secondary text-muted-foreground">
+                    {tag}
+                  </span>
+                ))}
+                {tags.length > 2 && (
+                  <span className="text-[9px] text-muted-foreground">+{tags.length - 2}</span>
+                )}
+              </span>
+            )}
+          </button>
         );
       })}
 

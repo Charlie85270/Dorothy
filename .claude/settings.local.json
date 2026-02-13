@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "mcp__jetbrains__get_file_text_by_path",
-      "mcp__jetbrains__list_directory_tree"
-    ]
-  }
-}

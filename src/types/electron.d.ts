@@ -522,6 +522,22 @@ export interface ElectronAPI {
       taskIds: string[];
       column: 'backlog' | 'planned' | 'ongoing' | 'done';
     }) => Promise<{ success: boolean; error?: string }>;
+    generate: (params: {
+      prompt: string;
+      availableProjects: Array<{ path: string; name: string }>;
+    }) => Promise<{
+      success: boolean;
+      task?: {
+        title: string;
+        description: string;
+        projectPath: string;
+        projectId: string;
+        priority: 'low' | 'medium' | 'high';
+        labels: string[];
+        requiredSkills: string[];
+      };
+      error?: string;
+    }>;
     onTaskCreated: (callback: (task: KanbanTaskElectron) => void) => () => void;
     onTaskUpdated: (callback: (task: KanbanTaskElectron) => void) => () => void;
     onTaskDeleted: (callback: (event: { id: string }) => void) => () => void;

@@ -152,18 +152,13 @@ export function NewTaskModal({ onClose, onCreate }: NewTaskModalProps) {
     setGeneratedTask(null);
 
     try {
-      // Call the API to generate task details
-      const response = await fetch('http://127.0.0.1:31415/api/kanban/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: quickPrompt,
-          availableProjects: projects.map(p => ({ path: p.path, name: p.name })),
-        }),
+      // Call via IPC to generate task details
+      const data = await window.electronAPI!.kanban!.generate({
+        prompt: quickPrompt,
+        availableProjects: projects.map(p => ({ path: p.path, name: p.name })),
       });
 
-      if (response.ok) {
-        const data = await response.json();
+      if (data.success && data.task) {
         setGeneratedTask(data.task);
       } else {
         // Fallback: create basic task from prompt

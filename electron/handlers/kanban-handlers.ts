@@ -1,9 +1,9 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import { KANBAN_FILE, DATA_DIR } from '../constants';
+import { generateTaskFromPrompt } from '../utils/kanban-generate';
 
 // ============================================
 // Kanban Board IPC handlers
@@ -418,6 +418,18 @@ export function registerKanbanHandlers(dependencies: KanbanHandlerDependencies):
       console.error('Error reordering kanban tasks:', err);
       return { success: false, error: err instanceof Error ? err.message : 'Failed to reorder tasks' };
     }
+  });
+
+  // Generate task details from natural language prompt using Claude CLI
+  ipcMain.handle('kanban:generate', async (_event, params: { prompt: string; availableProjects: Array<{ path: string; name: string }> }) => {
+    const { prompt, availableProjects } = params;
+
+    if (!prompt) {
+      return { success: false, error: 'prompt is required' };
+    }
+
+    const task = await generateTaskFromPrompt(prompt, availableProjects);
+    return { success: true, task };
   });
 
   // Get a single task by ID

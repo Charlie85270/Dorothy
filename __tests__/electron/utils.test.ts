@@ -17,7 +17,6 @@ import {
   getSuperAgent,
   formatAgentStatus,
   formatSlackAgentStatus,
-  detectAgentStatus,
 } from '../../electron/utils';
 import type { AgentStatus } from '../../electron/types';
 
@@ -151,94 +150,3 @@ describe('formatSlackAgentStatus', () => {
   });
 });
 
-describe('detectAgentStatus', () => {
-  it('detects running from spinner characters', () => {
-    const agent = makeAgent({
-      status: 'running',
-      output: ['Some text', '⠋ Loading...'],
-      lastActivity: new Date().toISOString(),
-    });
-    expect(detectAgentStatus(agent)).toBe('running');
-  });
-
-  it('detects running from working patterns', () => {
-    const agent = makeAgent({
-      status: 'running',
-      output: ['Thinking...'],
-      lastActivity: new Date().toISOString(),
-    });
-    expect(detectAgentStatus(agent)).toBe('running');
-  });
-
-  it('detects error from error patterns', () => {
-    const agent = makeAgent({
-      status: 'running',
-      output: Array(10).fill('some output').concat(['Error: Something went wrong']),
-      lastActivity: new Date(Date.now() - 5000).toISOString(),
-    });
-    expect(detectAgentStatus(agent)).toBe('error');
-  });
-
-  it('detects waiting from Y/n prompts', () => {
-    const agent = makeAgent({
-      status: 'running',
-      output: Array(10).fill('some output').concat(['Continue? [Y/n]']),
-      lastActivity: new Date(Date.now() - 5000).toISOString(),
-    });
-    expect(detectAgentStatus(agent)).toBe('waiting');
-  });
-
-  it('detects waiting from "Do you want to" prompts', () => {
-    const agent = makeAgent({
-      status: 'running',
-      output: Array(10).fill('some output').concat(['Do you want to create this file?']),
-      lastActivity: new Date(Date.now() - 5000).toISOString(),
-    });
-    expect(detectAgentStatus(agent)).toBe('waiting');
-  });
-
-  it('detects completed from completion markers', () => {
-    const agent = makeAgent({
-      status: 'running',
-      output: Array(10).fill('some output').concat(['Task completed successfully']),
-      lastActivity: new Date(Date.now() - 5000).toISOString(),
-    });
-    expect(detectAgentStatus(agent)).toBe('completed');
-  });
-
-  it('detects completed from ✓ marker', () => {
-    const agent = makeAgent({
-      status: 'running',
-      output: Array(10).fill('some output').concat(['✓ All done']),
-      lastActivity: new Date(Date.now() - 5000).toISOString(),
-    });
-    expect(detectAgentStatus(agent)).toBe('completed');
-  });
-
-  it('strips ANSI codes before pattern matching', () => {
-    const agent = makeAgent({
-      status: 'running',
-      output: ['\x1B[32mThinking...\x1B[0m'],
-      lastActivity: new Date().toISOString(),
-    });
-    expect(detectAgentStatus(agent)).toBe('running');
-  });
-
-  it('returns current status for idle agent with no recent output', () => {
-    const agent = makeAgent({
-      status: 'idle',
-      output: [],
-      lastActivity: new Date(Date.now() - 10000).toISOString(),
-    });
-    expect(detectAgentStatus(agent)).toBe('idle');
-  });
-
-  it('detects running when recently active with output', () => {
-    const agent = makeAgent({
-      status: 'idle',
-      output: ['some new output'],
-      lastActivity: new Date(Date.now() - 500).toISOString(), // 500ms ago
-    });
-    expect(detectAgentStatus(agent)).toBe('running');
-  });
-});

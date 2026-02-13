@@ -1079,6 +1079,53 @@ function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
     return { success: true };
   });
 
+  // Test SocialData API key
+  ipcMain.handle('socialdata:test', async () => {
+    const appSettings = getAppSettings();
+    if (!appSettings.socialDataApiKey) {
+      return { success: false, error: 'No API key configured' };
+    }
+
+    try {
+      const https = require('https');
+      const result = await new Promise<{ success: boolean; error?: string }>((resolve, reject) => {
+        const req = https.request({
+          hostname: 'api.socialdata.tools',
+          port: 443,
+          path: '/twitter/user/elonmusk',
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${appSettings.socialDataApiKey}`,
+            'Accept': 'application/json',
+          },
+        }, (res: import('http').IncomingMessage) => {
+          let data = '';
+          res.on('data', (chunk: string) => { data += chunk; });
+          res.on('end', () => {
+            if (res.statusCode === 200) {
+              try {
+                const parsed = JSON.parse(data);
+                resolve({ success: true, error: undefined });
+              } catch {
+                resolve({ success: false, error: 'Invalid response from API' });
+              }
+            } else if (res.statusCode === 402) {
+              resolve({ success: false, error: 'Insufficient credits on your SocialData account' });
+            } else {
+              resolve({ success: false, error: `HTTP ${res.statusCode}: ${data.slice(0, 200)}` });
+            }
+          });
+        });
+        req.on('error', (err: Error) => resolve({ success: false, error: err.message }));
+        req.end();
+      });
+      return result;
+    } catch (err) {
+      console.error('SocialData test failed:', err);
+      return { success: false, error: String(err) };
+    }
+  });
+
   // Test Slack connection
   ipcMain.handle('slack:test', async () => {
     const appSettings = getAppSettings();

@@ -220,6 +220,7 @@ interface AppState {
   sidebarCollapsed: boolean;
   mobileMenuOpen: boolean;
   darkMode: boolean;
+  vaultUnreadCount: number;
 
   // Actions - Agents
   addAgent: (agent: Omit<Agent, 'id' | 'createdAt' | 'lastActive' | 'logs' | 'tokensUsed' | 'tasksCompleted'>) => void;
@@ -252,6 +253,7 @@ interface AppState {
   toggleMobileMenu: () => void;
   setDarkMode: (dark: boolean) => void;
   toggleDarkMode: () => void;
+  setVaultUnreadCount: (count: number) => void;
 
   // Computed
   getStats: () => DashboardStats;
@@ -276,6 +278,7 @@ export const useStore = create<AppState>((set, get) => ({
   sidebarCollapsed: false,
   mobileMenuOpen: false,
   darkMode: false,
+  vaultUnreadCount: 0,
 
   // Agent Actions
   addAgent: (agent) => set((state) => ({
@@ -405,6 +408,7 @@ export const useStore = create<AppState>((set, get) => ({
   toggleMobileMenu: () => set((state) => ({ mobileMenuOpen: !state.mobileMenuOpen })),
   setDarkMode: (dark) => set({ darkMode: dark }),
   toggleDarkMode: () => set((state) => ({ darkMode: !state.darkMode })),
+  setVaultUnreadCount: (count) => set({ vaultUnreadCount: count }),
 
   // Computed
   getStats: () => {

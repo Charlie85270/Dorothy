@@ -51,9 +51,11 @@ export interface AppSettings {
   jiraDomain: string;
   jiraEmail: string;
   jiraApiToken: string;
+  socialDataEnabled: boolean;
+  socialDataApiKey: string;
   verboseModeEnabled: boolean;
   autoCheckUpdates: boolean;
   cliPaths: CLIPaths;
 }
 
-export type SettingsSection = 'general' | 'memory' | 'git' | 'notifications' | 'telegram' | 'slack' | 'jira' | 'permissions' | 'skills' | 'cli' | 'system';
+export type SettingsSection = 'general' | 'memory' | 'git' | 'notifications' | 'telegram' | 'slack' | 'jira' | 'socialdata' | 'permissions' | 'skills' | 'cli' | 'system';

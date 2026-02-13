@@ -401,29 +401,28 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div className="min-h-screen p-6">
+    <div className="space-y-4 lg:space-y-6 pt-4 lg:pt-6">
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              {allProjects.length} project{allProjects.length !== 1 ? 's' : ''}
-            </p>
-          </div>
-          {hasElectron && (
-            <button
-              onClick={handleAddProject}
-              className="flex items-center gap-2 px-4 py-2 bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors"
-            >
-              <FolderPlus className="w-4 h-4" />
-              Add Project
-            </button>
-          )}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl lg:text-2xl font-bold tracking-tight">Projects</h1>
+          <p className="text-muted-foreground text-xs lg:text-sm mt-1 hidden sm:block">
+            {allProjects.length} project{allProjects.length !== 1 ? 's' : ''}
+          </p>
         </div>
+        {hasElectron && (
+          <button
+            onClick={handleAddProject}
+            className="flex items-center gap-2 px-4 py-2 bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors"
+          >
+            <FolderPlus className="w-4 h-4" />
+            Add Project
+          </button>
+        )}
+      </div>
 
-        {/* Tabs and Search */}
-        <div className="flex items-center justify-between gap-4">
+      {/* Tabs and Search */}
+      <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setActiveTab('all')}
@@ -481,7 +480,6 @@ export default function ProjectsPage() {
             )}
           </div>
         </div>
-      </div>
 
       {/* Projects Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">

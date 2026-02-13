@@ -86,6 +86,8 @@ import { registerSchedulerHandlers } from './handlers/scheduler-handlers';
 import { registerAutomationHandlers } from './handlers/automation-handlers';
 import { registerCLIPathsHandlers, getCLIPathsConfig } from './handlers/cli-paths-handlers';
 import { registerKanbanHandlers, KanbanHandlerDependencies } from './handlers/kanban-handlers';
+import { registerVaultHandlers } from './handlers/vault-handlers';
+import { initVaultDb, closeVaultDb } from './services/vault-db';
 import { checkForUpdates } from './services/update-checker';
 import { initKanbanAutomation, findMatchingAgent, createAgentForTask, startAgentForTask } from './services/kanban-automation';
 
@@ -124,6 +126,8 @@ function loadAppSettings(): AppSettings {
     jiraDomain: '',
     jiraEmail: '',
     jiraApiToken: '',
+    socialDataEnabled: false,
+    socialDataApiKey: '',
     verboseModeEnabled: false,
     autoCheckUpdates: true,
     cliPaths: {
@@ -304,6 +308,12 @@ app.whenReady().then(async () => {
     setAppSettings: (settings) => { appSettings = settings; },
     saveAppSettings: saveAppSettingsToFile,
   });
+
+  // Initialize vault database
+  initVaultDb();
+
+  // Register vault handlers
+  registerVaultHandlers({ getMainWindow });
 
   // Initialize kanban automation service
   initKanbanAutomation({
@@ -520,15 +530,24 @@ app.whenReady().then(async () => {
     setTimeout(async () => {
       try {
         const updateInfo = await checkForUpdates();
-        if (updateInfo?.hasUpdate && Notification.isSupported()) {
-          const notification = new Notification({
-            title: 'Update Available',
-            body: `Dorothy ${updateInfo.latestVersion} is available (you have ${updateInfo.currentVersion})`,
-          });
-          notification.on('click', () => {
-            shell.openExternal(updateInfo.releaseUrl);
-          });
-          notification.show();
+        if (updateInfo?.hasUpdate) {
+          // Notify the renderer so the UI can show an in-app update banner
+          const mainWin = getMainWindow();
+          if (mainWin && !mainWin.isDestroyed()) {
+            mainWin.webContents.send('app:update-available', updateInfo);
+          }
+
+          // Also show OS notification as a secondary signal
+          if (Notification.isSupported()) {
+            const notification = new Notification({
+              title: 'Update Available',
+              body: `Dorothy ${updateInfo.latestVersion} is available (you have ${updateInfo.currentVersion})`,
+            });
+            notification.on('click', () => {
+              shell.openExternal(updateInfo.releaseUrl);
+            });
+            notification.show();
+          }
         }
       } catch (err) {
         console.error('Auto-update check failed:', err);
@@ -559,6 +578,7 @@ app.on('before-quit', () => {
   console.log('App quitting, saving agents and killing all PTY processes...');
   saveAgents();
   killAllPty();
+  closeVaultDb();
 });
 
 // Handle certificate errors in development

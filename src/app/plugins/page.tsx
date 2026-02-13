@@ -390,10 +390,10 @@ export default function PluginsPage() {
         {/* Stats row */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="text-xs lg:text-sm text-muted-foreground">
-            <span className="text-white font-medium">{PLUGINS_DATABASE.length + customInstalledPlugins.length}</span> plugins
+            <span className="font-medium">{PLUGINS_DATABASE.length + customInstalledPlugins.length}</span> plugins
           </div>
           <div className="text-xs lg:text-sm text-muted-foreground">
-            <span className="text-white font-medium">{installedPlugins.length}</span> installed
+            <span className="font-medium">{installedPlugins.length}</span> installed
           </div>
         </div>
       </div>
@@ -406,10 +406,10 @@ export default function PluginsPage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             className={`p-4 border flex items-center justify-between mt-4 ${showToast.type === 'success'
-                ? 'bg-primary/10 border-primary/30 text-primary'
-                : showToast.type === 'error'
-                  ? 'bg-red-500/10 border-red-500/30 text-red-400'
-                  : 'bg-white/10 border-white/30 text-white'
+              ? 'bg-primary/10 border-primary/30 text-primary'
+              : showToast.type === 'error'
+                ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                : 'bg-white/10 border-white/30 text-white'
               }`}
           >
             <div className="flex items-center gap-3">
@@ -631,8 +631,8 @@ export default function PluginsPage() {
                         onClick={() => handleInstall(plugin)}
                         disabled={isInstalling}
                         className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${isInstalling
-                            ? 'bg-secondary text-muted-foreground'
-                            : 'bg-foreground text-background hover:bg-foreground/90'
+                          ? 'bg-secondary text-muted-foreground'
+                          : 'bg-foreground text-background hover:bg-foreground/90'
                           }`}
                         style={{ borderRadius: 7 }}
                       >
@@ -650,8 +650,8 @@ export default function PluginsPage() {
                       <button
                         onClick={() => copyInstallCommand(plugin)}
                         className={`p-1.5 transition-colors ${justCopied
-                            ? 'bg-primary/10 text-primary'
-                            : 'bg-secondary text-muted-foreground hover:text-foreground'
+                          ? 'bg-primary/10 text-primary'
+                          : 'bg-secondary text-muted-foreground hover:text-foreground'
                           }`}
                         style={{ borderRadius: 7 }}
                         title="Copy install command"
@@ -758,8 +758,8 @@ export default function PluginsPage() {
                 <div className="flex items-center gap-2">
                   {installComplete && (
                     <span className={`text-xs px-2 py-1 ${installExitCode === 0
-                        ? 'bg-primary/10 text-primary'
-                        : 'bg-red-500/20 text-red-400'
+                      ? 'bg-primary/10 text-primary'
+                      : 'bg-red-500/20 text-red-400'
                       }`}>
                       {installExitCode === 0 ? 'Completed' : `Failed (${installExitCode})`}
                     </span>

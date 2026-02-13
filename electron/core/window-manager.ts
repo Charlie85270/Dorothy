@@ -80,6 +80,15 @@ export function registerProtocolSchemes() {
         corsEnabled: true,
       },
     },
+    {
+      scheme: 'local-file',
+      privileges: {
+        standard: true,
+        secure: true,
+        supportFetchAPI: true,
+        corsEnabled: true,
+      },
+    },
   ]);
 }
 
@@ -88,6 +97,29 @@ export function registerProtocolSchemes() {
  * This should be called after app.whenReady() and before loading the window
  */
 export function setupProtocolHandler() {
+  // Serve local files via local-file:// protocol (for vault image previews etc.)
+  // URLs are encoded as: local-file://host/path where host is empty
+  // e.g. local-file:///Users/charlie/Desktop/photo.png
+  protocol.handle('local-file', (request) => {
+    try {
+      // Parse as URL to properly decode path components
+      const url = new URL(request.url);
+      const filePath = decodeURIComponent(url.pathname);
+
+      if (filePath && fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+        const ext = path.extname(filePath).toLowerCase();
+        const mimeType = MIME_TYPES[ext] || 'application/octet-stream';
+        return new Response(fs.readFileSync(filePath), {
+          headers: { 'Content-Type': mimeType },
+        });
+      }
+      console.error('local-file:// not found:', filePath);
+    } catch (err) {
+      console.error('local-file:// error:', err, request.url);
+    }
+    return new Response('Not Found', { status: 404 });
+  });
+
   const isDev = process.env.NODE_ENV === 'development';
   if (!isDev) {
     const basePath = getAppBasePath();

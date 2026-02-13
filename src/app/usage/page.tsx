@@ -367,12 +367,11 @@ export default function UsagePage() {
     <div className="space-y-4 lg:space-y-6 pt-4 lg:pt-6">
       {/* Header */}
       <div>
-        <h1 className="text-xl lg:text-2xl font-bold tracking-tight flex items-center gap-2 lg:gap-3">
-          <BarChart2 className="w-6 h-6 lg:w-7 lg:h-7 text-accent-purple" />
+        <h1 className="text-xl lg:text-2xl font-bold tracking-tight">
           <span className="hidden sm:inline">Usage & Cost Analytics</span>
           <span className="sm:hidden">Usage & Costs</span>
         </h1>
-        <p className="text-text-secondary text-xs lg:text-sm mt-1 hidden sm:block">
+        <p className="text-muted-foreground text-xs lg:text-sm mt-1 hidden sm:block">
           Monitor your Claude API usage and estimated costs
         </p>
       </div>

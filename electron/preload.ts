@@ -202,6 +202,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       slackAppToken?: string;
       slackSigningSecret?: string;
       slackChannelId?: string;
+      socialDataEnabled?: boolean;
+      socialDataApiKey?: string;
     }) =>
       ipcRenderer.invoke('app:saveSettings', settings),
     onUpdated: (callback: (settings: unknown) => void) => {
@@ -235,6 +237,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   jira: {
     test: () =>
       ipcRenderer.invoke('jira:test'),
+  },
+
+  // SocialData (Twitter/X)
+  socialData: {
+    test: () =>
+      ipcRenderer.invoke('socialdata:test'),
   },
 
   // Dialogs
@@ -392,6 +400,59 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
   },
 
+  // Vault
+  vault: {
+    listDocuments: (params?: { folder_id?: string; tags?: string[] }) =>
+      ipcRenderer.invoke('vault:listDocuments', params),
+    getDocument: (id: string) =>
+      ipcRenderer.invoke('vault:getDocument', id),
+    createDocument: (params: {
+      title: string;
+      content: string;
+      folder_id?: string;
+      author: string;
+      agent_id?: string;
+      tags?: string[];
+    }) =>
+      ipcRenderer.invoke('vault:createDocument', params),
+    updateDocument: (params: {
+      id: string;
+      title?: string;
+      content?: string;
+      tags?: string[];
+      folder_id?: string | null;
+    }) =>
+      ipcRenderer.invoke('vault:updateDocument', params),
+    deleteDocument: (id: string) =>
+      ipcRenderer.invoke('vault:deleteDocument', id),
+    search: (params: { query: string; limit?: number }) =>
+      ipcRenderer.invoke('vault:search', params),
+    listFolders: () =>
+      ipcRenderer.invoke('vault:listFolders'),
+    createFolder: (params: { name: string; parent_id?: string }) =>
+      ipcRenderer.invoke('vault:createFolder', params),
+    deleteFolder: (params: { id: string; recursive?: boolean }) =>
+      ipcRenderer.invoke('vault:deleteFolder', params),
+    attachFile: (params: { document_id: string; file_path: string }) =>
+      ipcRenderer.invoke('vault:attachFile', params),
+    // Event listeners
+    onDocumentCreated: (callback: (doc: unknown) => void) => {
+      const listener = (_: unknown, doc: unknown) => callback(doc);
+      ipcRenderer.on('vault:document-created', listener);
+      return () => ipcRenderer.removeListener('vault:document-created', listener);
+    },
+    onDocumentUpdated: (callback: (doc: unknown) => void) => {
+      const listener = (_: unknown, doc: unknown) => callback(doc);
+      ipcRenderer.on('vault:document-updated', listener);
+      return () => ipcRenderer.removeListener('vault:document-updated', listener);
+    },
+    onDocumentDeleted: (callback: (event: { id: string }) => void) => {
+      const listener = (_: unknown, event: { id: string }) => callback(event);
+      ipcRenderer.on('vault:document-deleted', listener);
+      return () => ipcRenderer.removeListener('vault:document-deleted', listener);
+    },
+  },
+
   // CLI Paths management
   cliPaths: {
     detect: () =>
@@ -406,6 +467,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updates: {
     check: () => ipcRenderer.invoke('app:checkForUpdates'),
     openExternal: (url: string) => ipcRenderer.invoke('app:openExternal', url),
+    onUpdateAvailable: (callback: (info: { currentVersion: string; latestVersion: string; downloadUrl: string; releaseUrl: string; releaseNotes: string; hasUpdate: boolean }) => void) => {
+      const listener = (_: unknown, info: Parameters<typeof callback>[0]) => callback(info);
+      ipcRenderer.on('app:update-available', listener);
+      return () => ipcRenderer.removeListener('app:update-available', listener);
+    },
   },
 
   // Platform info

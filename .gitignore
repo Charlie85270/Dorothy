@@ -49,4 +49,8 @@ mcp-telegram/node_modules
 mcp-telegram/dist
 mcp-kanban/node_modules
 mcp-kanban/dist
+mcp-vault/node_modules
+mcp-vault/dist
+mcp-socialdata/node_modules
+mcp-socialdata/dist
 electron/dist

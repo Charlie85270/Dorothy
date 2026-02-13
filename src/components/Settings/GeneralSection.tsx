@@ -105,7 +105,7 @@ export const GeneralSection = ({ info, appSettings, onSaveAppSettings }: General
         </div>
 
         {updateState === 'up-to-date' && (
-          <div className="flex items-center gap-3 p-3 bg-green-700/10 border border-green-700/20">
+          <div className="flex items-center rounded-md gap-3 p-3 bg-green-700/10 border border-green-700/20">
             <CheckCircle className="w-5 h-5 text-green-700 shrink-0" />
             <div>
               <p className="text-sm font-medium text-green-700">You&apos;re up to date!</p>
@@ -116,7 +116,7 @@ export const GeneralSection = ({ info, appSettings, onSaveAppSettings }: General
 
         {updateState === 'update-available' && updateInfo && (
           <div className="space-y-3">
-            <div className="p-4 bg-blue-500/10 border border-blue-500/20">
+            <div className="p-4 rounded-md bg-blue-500/10 border border-blue-500/20">
               <div className="flex items-start justify-between mb-2">
                 <div>
                   <p className="text-sm font-medium text-blue-400">

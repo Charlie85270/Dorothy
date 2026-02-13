@@ -14,8 +14,8 @@
     "test:coverage": "vitest run --coverage",
     "electron:dev": "concurrently \"npm run dev\" \"npm run electron:start\"",
     "electron:start": "wait-on http://localhost:3000 && tsc -p electron/tsconfig.json && NODE_ENV=development electron .",
-    "electron:build": "bash -c 'set -e; mv src/app/api src/app/_api_backup; mv src/app/icon.tsx src/app/_icon_backup.tsx 2>/dev/null || true; trap \"mv src/app/_api_backup src/app/api 2>/dev/null; mv src/app/_icon_backup.tsx src/app/icon.tsx 2>/dev/null\" EXIT; ELECTRON_BUILD=1 next build; tsc -p electron/tsconfig.json; cd mcp-orchestrator && npm install && npm run build && cd ..; cd mcp-telegram && npm install && npm run build && cd ..; cd mcp-kanban && npm install && npm run build && cd ..; electron-builder --mac'",
-    "electron:pack": "tsc -p electron/tsconfig.json && cd mcp-orchestrator && npm install && npm run build && cd .. && cd mcp-telegram && npm install && npm run build && cd .. && cd mcp-kanban && npm install && npm run build && cd .. && electron-builder --dir --mac"
+    "electron:build": "bash -c 'set -e; mv src/app/api src/app/_api_backup; mv src/app/icon.tsx src/app/_icon_backup.tsx 2>/dev/null || true; trap \"mv src/app/_api_backup src/app/api 2>/dev/null; mv src/app/_icon_backup.tsx src/app/icon.tsx 2>/dev/null\" EXIT; ELECTRON_BUILD=1 next build; tsc -p electron/tsconfig.json; cd mcp-orchestrator && npm install && npm run build && cd ..; cd mcp-telegram && npm install && npm run build && cd ..; cd mcp-kanban && npm install && npm run build && cd ..; cd mcp-vault && npm install && npm run build && cd ..; cd mcp-socialdata && npm install && npm run build && cd ..; electron-builder --mac'",
+    "electron:pack": "tsc -p electron/tsconfig.json && cd mcp-orchestrator && npm install && npm run build && cd .. && cd mcp-telegram && npm install && npm run build && cd .. && cd mcp-kanban && npm install && npm run build && cd .. && cd mcp-vault && npm install && npm run build && cd .. && cd mcp-socialdata && npm install && npm run build && cd .. && electron-builder --dir --mac"
   },
   "build": {
     "appId": "io.dorothy.app",
@@ -36,6 +36,12 @@
       "mcp-kanban/dist/**/*",
       "mcp-kanban/package.json",
       "mcp-kanban/node_modules/**/*",
+      "mcp-vault/dist/**/*",
+      "mcp-vault/package.json",
+      "mcp-vault/node_modules/**/*",
+      "mcp-socialdata/dist/**/*",
+      "mcp-socialdata/package.json",
+      "mcp-socialdata/node_modules/**/*",
       "node_modules/**/*",
       "skills/**/*",
       "hooks/**/*"
@@ -65,6 +71,20 @@
       {
         "from": "mcp-kanban",
         "to": "mcp-kanban",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "mcp-vault",
+        "to": "mcp-vault",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "mcp-socialdata",
+        "to": "mcp-socialdata",
         "filter": [
           "**/*"
         ]

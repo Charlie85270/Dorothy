@@ -1,6 +1,5 @@
+import { app } from 'electron';
 import { GITHUB_REPO } from '../constants';
-import * as fs from 'fs';
-import * as path from 'path';
 
 export interface UpdateInfo {
   currentVersion: string;
@@ -13,22 +12,10 @@ export interface UpdateInfo {
 
 function getCurrentVersion(): string {
   try {
-    // Try reading from package.json in the app directory
-    const packageJsonPath = path.join(__dirname, '..', '..', 'package.json');
-    if (fs.existsSync(packageJsonPath)) {
-      const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-      return pkg.version || '0.0.0';
-    }
-    // Fallback: try from app root
-    const rootPackageJsonPath = path.join(process.cwd(), 'package.json');
-    if (fs.existsSync(rootPackageJsonPath)) {
-      const pkg = JSON.parse(fs.readFileSync(rootPackageJsonPath, 'utf-8'));
-      return pkg.version || '0.0.0';
-    }
+    return app.getVersion();
   } catch {
-    // ignore
+    return '0.0.0';
   }
-  return '0.0.0';
 }
 
 function compareSemver(a: string, b: string): number {

@@ -9,6 +9,8 @@ export const AGENTS_FILE = path.join(DATA_DIR, 'agents.json');
 export const APP_SETTINGS_FILE = path.join(DATA_DIR, 'app-settings.json');
 export const KANBAN_FILE = path.join(DATA_DIR, 'kanban-tasks.json');
 export const TELEGRAM_DOWNLOADS_DIR = path.join(DATA_DIR, 'telegram-downloads');
+export const VAULT_DIR = path.join(DATA_DIR, 'vault');
+export const VAULT_DB_FILE = path.join(DATA_DIR, 'vault.db');
 
 export const GITHUB_REPO = 'Charlie85270/dorothy';
 
@@ -29,6 +31,12 @@ export const MIME_TYPES: { [key: string]: string } = {
   '.eot': 'application/vnd.ms-fontobject',
   '.otf': 'font/otf',
   '.webp': 'image/webp',
+  '.heic': 'image/heic',
+  '.heif': 'image/heif',
+  '.avif': 'image/avif',
+  '.tiff': 'image/tiff',
+  '.tif': 'image/tiff',
+  '.bmp': 'image/bmp',
   '.mp4': 'video/mp4',
   '.webm': 'video/webm',
   '.mp3': 'audio/mpeg',

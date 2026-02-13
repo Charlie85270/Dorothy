@@ -14,6 +14,7 @@ import {
   TelegramSection,
   SlackSection,
   JiraSection,
+  SocialDataSection,
   PermissionsSection,
   SkillsSection,
   CLIPathsSection,
@@ -105,6 +106,14 @@ export default function SettingsPage() {
             onUpdateLocalSettings={updateLocalAppSettings}
           />
         );
+      case 'socialdata':
+        return (
+          <SocialDataSection
+            appSettings={appSettings}
+            onSaveAppSettings={handleSaveAppSettings}
+            onUpdateLocalSettings={updateLocalAppSettings}
+          />
+        );
       case 'permissions':
         return <PermissionsSection settings={settings} />;
       case 'skills':
@@ -155,7 +164,7 @@ export default function SettingsPage() {
   return (
     <div className="flex flex-col h-[calc(100vh-7rem)] lg:h-[calc(100vh-3rem)] pt-4 lg:pt-6 overflow-hidden">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6 shrink-0">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 shrink-0">
         <div>
           <h1 className="text-xl lg:text-2xl font-bold tracking-tight">Settings</h1>
           <p className="text-muted-foreground text-xs lg:text-sm mt-1 hidden sm:block">

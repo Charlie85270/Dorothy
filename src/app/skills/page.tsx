@@ -211,7 +211,7 @@ export default function SkillsPage() {
             </div>
           )}
           <div className="text-xs lg:text-sm text-muted-foreground">
-            <span className="text-white font-medium">{SKILLS_DATABASE.length}</span> skills
+            <span className="font-medium">{SKILLS_DATABASE.length}</span> skills
           </div>
         </div>
       </div>
@@ -223,13 +223,12 @@ export default function SkillsPage() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className={`p-4 border flex items-center justify-between ${
-              showToast.type === 'success'
+            className={`p-4 border flex items-center justify-between ${showToast.type === 'success'
                 ? 'bg-primary/10 border-primary/30 text-primary'
                 : showToast.type === 'error'
-                ? 'bg-red-500/10 border-red-500/30 text-red-400'
-                : 'bg-white/10 border-white/30 text-white'
-            }`}
+                  ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                  : 'bg-white/10 border-white/30 text-white'
+              }`}
           >
             <div className="flex items-center gap-3">
               {showToast.type === 'error' ? (
@@ -373,9 +372,8 @@ export default function SkillsPage() {
                     setSelectedCategory(null);
                     setShowCategoryDropdown(false);
                   }}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-secondary ${
-                    !selectedCategory ? 'text-white' : 'text-muted-foreground'
-                  }`}
+                  className={`w-full text-left px-4 py-2 text-sm hover:bg-secondary ${!selectedCategory ? 'text-white' : 'text-muted-foreground'
+                    }`}
                 >
                   All Categories
                 </button>
@@ -386,9 +384,8 @@ export default function SkillsPage() {
                       setSelectedCategory(cat);
                       setShowCategoryDropdown(false);
                     }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-secondary ${
-                      selectedCategory === cat ? 'text-white' : 'text-muted-foreground'
-                    }`}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-secondary ${selectedCategory === cat ? 'text-white' : 'text-muted-foreground'
+                      }`}
                   >
                     {cat}
                   </button>
@@ -431,9 +428,8 @@ export default function SkillsPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 flex items-center justify-center shrink-0 ${
-                          installed ? 'bg-primary/10' : 'bg-secondary'
-                        }`}>
+                        <div className={`w-8 h-8 flex items-center justify-center shrink-0 ${installed ? 'bg-primary/10' : 'bg-secondary'
+                          }`}>
                           {installed ? (
                             <CheckCircle className="w-4 h-4 text-primary" />
                           ) : (
@@ -464,13 +460,12 @@ export default function SkillsPage() {
                         <button
                           onClick={() => handleDirectInstall(skill.repo, skill.name)}
                           disabled={isInstalling}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
-                            isInstalling
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${isInstalling
                               ? 'bg-secondary text-muted-foreground'
                               : justCopied
-                              ? 'bg-primary/10 text-primary'
-                              : 'bg-foreground text-background hover:bg-foreground/90'
-                          }`}
+                                ? 'bg-primary/10 text-primary'
+                                : 'bg-foreground text-background hover:bg-foreground/90'
+                            }`}
                           style={{ borderRadius: 5 }}
                         >
                           {isInstalling ? (

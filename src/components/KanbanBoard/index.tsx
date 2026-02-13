@@ -296,10 +296,10 @@ export default function KanbanBoard() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 lg:pt-6 mb-4">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Task Board</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
+          <h1 className="text-xl lg:text-2xl font-bold tracking-tight text-foreground">Task Board</h1>
+          <p className="text-muted-foreground text-xs lg:text-sm mt-1 hidden sm:block">
             Drag to Planned to auto-assign agents
           </p>
         </div>

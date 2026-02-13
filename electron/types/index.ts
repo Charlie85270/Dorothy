@@ -53,6 +53,8 @@ export interface AppSettings {
   jiraDomain: string;
   jiraEmail: string;
   jiraApiToken: string;
+  socialDataEnabled: boolean;
+  socialDataApiKey: string;
   verboseModeEnabled: boolean;
   autoCheckUpdates: boolean;
   cliPaths: CLIPaths;

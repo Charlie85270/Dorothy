@@ -14,6 +14,9 @@ import {
   CalendarClock,
   Zap,
   Columns,
+  Moon,
+  Sun,
+  Archive,
 } from 'lucide-react';
 
 // Custom icon component for Pallet Town using the pokemon logo
@@ -28,13 +31,14 @@ const navItems = [
   { href: '/', icon: LayoutDashboard, label: 'Dashboard', shortcut: '1' },
   { href: '/agents', icon: Bot, label: 'Agents', shortcut: '2' },
   { href: '/kanban', icon: Columns, label: 'Kanban', shortcut: '3' },
-  { href: '/projects', icon: FolderKanban, label: 'Projects', shortcut: '4' },
-  { href: '/skills', icon: Sparkles, label: 'Skills', shortcut: '5' },
-  { href: '/plugins', icon: Puzzle, label: 'Plugins', shortcut: '6' },
-  { href: '/recurring-tasks', icon: CalendarClock, label: 'Scheduled Tasks', shortcut: '7' },
-  { href: '/automations', icon: Zap, label: 'Automations', shortcut: '8' },
-  { href: '/usage', icon: BarChart2, label: 'Usage', shortcut: '9' },
-  { href: '/pallet-town', icon: PalletTownIcon, label: 'ClaudeMon', shortcut: '0' },
+  { href: '/vault', icon: Archive, label: 'Vault', shortcut: '4' },
+  { href: '/projects', icon: FolderKanban, label: 'Projects', shortcut: '5' },
+  { href: '/skills', icon: Sparkles, label: 'Skills', shortcut: '6' },
+  { href: '/plugins', icon: Puzzle, label: 'Plugins', shortcut: '7' },
+  { href: '/recurring-tasks', icon: CalendarClock, label: 'Scheduled Tasks', shortcut: '8' },
+  { href: '/automations', icon: Zap, label: 'Automations', shortcut: '9' },
+  { href: '/usage', icon: BarChart2, label: 'Usage', shortcut: '0' },
+  { href: '/pallet-town', icon: PalletTownIcon, label: 'ClaudeMon' },
 ];
 
 interface SidebarProps {
@@ -43,7 +47,7 @@ interface SidebarProps {
 
 export default function Sidebar({ isMobile = false }: SidebarProps) {
   const pathname = usePathname();
-  const { sidebarCollapsed, toggleSidebar, mobileMenuOpen, setMobileMenuOpen } = useStore();
+  const { sidebarCollapsed, toggleSidebar, mobileMenuOpen, setMobileMenuOpen, darkMode, toggleDarkMode, vaultUnreadCount } = useStore();
 
   // For mobile, sidebar is always expanded (240px) when open
   const sidebarWidth = isMobile ? 240 : (sidebarCollapsed ? 72 : 240);
@@ -99,10 +103,20 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
               >
                 <div className="relative">
                   <item.icon className="w-5 h-5" />
+                  {item.href === '/vault' && vaultUnreadCount > 0 && !showLabels && (
+                    <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] flex items-center justify-center text-[8px] font-bold bg-primary text-primary-foreground rounded-full px-0.5">
+                      {vaultUnreadCount}
+                    </span>
+                  )}
                 </div>
                 {showLabels && (
                   <span className="text-sm flex-1">
                     {item.label}
+                  </span>
+                )}
+                {item.href === '/vault' && vaultUnreadCount > 0 && showLabels && (
+                  <span className="min-w-[20px] h-[20px] flex items-center justify-center text-[10px] font-medium bg-primary text-primary-foreground rounded-full px-1">
+                    {vaultUnreadCount}
                   </span>
                 )}
               </Link>
@@ -138,6 +152,13 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
             <Settings className="w-5 h-5" />
             {showLabels && <span className="text-sm">Settings</span>}
           </Link>
+          <button
+            onClick={toggleDarkMode}
+            className="w-full flex items-center gap-3 px-5 py-3 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+          >
+            {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            {showLabels && <span className="text-sm">{darkMode ? 'Light Mode' : 'Dark Mode'}</span>}
+          </button>
           <button
             onClick={toggleSidebar}
             className="w-full flex items-center gap-3 px-5 py-3 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
@@ -203,6 +224,11 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
                   <span className="text-sm flex-1">
                     {item.label}
                   </span>
+                  {item.href === '/vault' && vaultUnreadCount > 0 && (
+                    <span className="min-w-[20px] h-[20px] flex items-center justify-center text-[10px] font-medium bg-primary text-primary-foreground rounded-full px-1">
+                      {vaultUnreadCount}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -219,7 +245,7 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
             </div>
           </div>
 
-          {/* Settings */}
+          {/* Settings & Theme Toggle */}
           <div className="border-t border-border">
             <Link
               href="/settings"
@@ -235,6 +261,13 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
               <Settings className="w-5 h-5" />
               <span className="text-sm">Settings</span>
             </Link>
+            <button
+              onClick={toggleDarkMode}
+              className="w-full flex items-center gap-3 px-5 py-3 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            >
+              {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              <span className="text-sm">{darkMode ? 'Light Mode' : 'Dark Mode'}</span>
+            </button>
           </div>
         </motion.aside>
       )}

@@ -28,7 +28,6 @@ export interface IpcHandlerDependencies {
   saveAppSettings: (settings: AppSettings) => void;
   saveAgents: () => void;
   initAgentPty: (agent: AgentStatus) => Promise<string>;
-  detectAgentStatus: (agent: AgentStatus) => 'running' | 'waiting' | 'completed' | 'error' | 'idle';
   handleStatusChangeNotification: (agent: AgentStatus, newStatus: string) => void;
   isSuperAgent: (agent: AgentStatus) => boolean;
   getMcpOrchestratorPath: () => string;
@@ -142,7 +141,6 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     getAppSettings,
     saveAgents,
     initAgentPty,
-    detectAgentStatus,
     handleStatusChangeNotification,
     isSuperAgent,
     getSuperAgentTelegramTask,
@@ -308,28 +306,6 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
           // Keep buffer reasonable
           if (buffer.length > 200) {
             setSuperAgentOutputBuffer(buffer.slice(-100));
-          }
-        }
-
-        // Check if agent was manually stopped recently (within 3 seconds)
-        // If so, don't override the status with detection
-        const manuallyStoppedAt = (agent as AgentStatus & { _manuallyStoppedAt?: number })._manuallyStoppedAt;
-        const wasRecentlyStopped = manuallyStoppedAt && (Date.now() - manuallyStoppedAt) < 3000;
-
-        if (!wasRecentlyStopped) {
-          // Detect status changes when we receive output
-          const newStatus = detectAgentStatus(agent);
-          if (newStatus !== agent.status) {
-            agent.status = newStatus;
-            // Send notification
-            handleStatusChangeNotification(agent, newStatus);
-            // Send status change event
-            getMainWindow()?.webContents.send('agent:status', {
-              type: 'status',
-              agentId: id,
-              status: newStatus,
-              timestamp: new Date().toISOString(),
-            });
           }
         }
       }
@@ -1078,6 +1054,53 @@ function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
     mainWindow?.webContents.send('settings:updated', appSettings);
 
     return { success: true };
+  });
+
+  // Test SocialData API key
+  ipcMain.handle('socialdata:test', async () => {
+    const appSettings = getAppSettings();
+    if (!appSettings.socialDataApiKey) {
+      return { success: false, error: 'No API key configured' };
+    }
+
+    try {
+      const https = require('https');
+      const result = await new Promise<{ success: boolean; error?: string }>((resolve, reject) => {
+        const req = https.request({
+          hostname: 'api.socialdata.tools',
+          port: 443,
+          path: '/twitter/user/elonmusk',
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${appSettings.socialDataApiKey}`,
+            'Accept': 'application/json',
+          },
+        }, (res: import('http').IncomingMessage) => {
+          let data = '';
+          res.on('data', (chunk: string) => { data += chunk; });
+          res.on('end', () => {
+            if (res.statusCode === 200) {
+              try {
+                const parsed = JSON.parse(data);
+                resolve({ success: true, error: undefined });
+              } catch {
+                resolve({ success: false, error: 'Invalid response from API' });
+              }
+            } else if (res.statusCode === 402) {
+              resolve({ success: false, error: 'Insufficient credits on your SocialData account' });
+            } else {
+              resolve({ success: false, error: `HTTP ${res.statusCode}: ${data.slice(0, 200)}` });
+            }
+          });
+        });
+        req.on('error', (err: Error) => resolve({ success: false, error: err.message }));
+        req.end();
+      });
+      return result;
+    } catch (err) {
+      console.error('SocialData test failed:', err);
+      return { success: false, error: String(err) };
+    }
   });
 
   // Test Slack connection

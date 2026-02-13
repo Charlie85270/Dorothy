@@ -24,6 +24,37 @@ export interface KanbanTaskElectron {
   labels: string[];
 }
 
+export interface VaultDocumentElectron {
+  id: string;
+  title: string;
+  content: string;
+  folder_id: string | null;
+  author: string;
+  agent_id: string | null;
+  tags: string; // JSON array string
+  created_at: string;
+  updated_at: string;
+  snippet?: string; // From FTS search results
+}
+
+export interface VaultFolderElectron {
+  id: string;
+  name: string;
+  parent_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VaultAttachmentElectron {
+  id: string;
+  document_id: string;
+  filename: string;
+  filepath: string;
+  mimetype: string;
+  size: number;
+  created_at: string;
+}
+
 export interface WorktreeConfig {
   enabled: boolean;
   branchName: string;
@@ -200,6 +231,8 @@ export interface ElectronAPI {
       jiraDomain: string;
       jiraEmail: string;
       jiraApiToken: string;
+      socialDataEnabled: boolean;
+      socialDataApiKey: string;
       cliPaths?: {
         claude: string;
         gh: string;
@@ -227,6 +260,8 @@ export interface ElectronAPI {
       jiraDomain?: string;
       jiraEmail?: string;
       jiraApiToken?: string;
+      socialDataEnabled?: boolean;
+      socialDataApiKey?: string;
       cliPaths?: {
         claude: string;
         gh: string;
@@ -254,6 +289,11 @@ export interface ElectronAPI {
   // JIRA
   jira?: {
     test: () => Promise<{ success: boolean; displayName?: string; email?: string; error?: string }>;
+  };
+
+  // SocialData (Twitter/X)
+  socialData?: {
+    test: () => Promise<{ success: boolean; error?: string }>;
   };
 
   // Dialogs
@@ -413,6 +453,36 @@ export interface ElectronAPI {
     }) => Promise<{ success: boolean; error?: string }>;
   };
 
+  // Vault
+  vault?: {
+    listDocuments: (params?: { folder_id?: string; tags?: string[] }) => Promise<{ documents: VaultDocumentElectron[]; error?: string }>;
+    getDocument: (id: string) => Promise<{ document?: VaultDocumentElectron; attachments?: VaultAttachmentElectron[]; error?: string }>;
+    createDocument: (params: {
+      title: string;
+      content: string;
+      folder_id?: string;
+      author: string;
+      agent_id?: string;
+      tags?: string[];
+    }) => Promise<{ success: boolean; document?: VaultDocumentElectron; error?: string }>;
+    updateDocument: (params: {
+      id: string;
+      title?: string;
+      content?: string;
+      tags?: string[];
+      folder_id?: string | null;
+    }) => Promise<{ success: boolean; document?: VaultDocumentElectron; error?: string }>;
+    deleteDocument: (id: string) => Promise<{ success: boolean; error?: string }>;
+    search: (params: { query: string; limit?: number }) => Promise<{ results: VaultDocumentElectron[]; error?: string }>;
+    listFolders: () => Promise<{ folders: VaultFolderElectron[]; error?: string }>;
+    createFolder: (params: { name: string; parent_id?: string }) => Promise<{ success: boolean; folder?: VaultFolderElectron; error?: string }>;
+    deleteFolder: (params: { id: string; recursive?: boolean }) => Promise<{ success: boolean; error?: string }>;
+    attachFile: (params: { document_id: string; file_path: string }) => Promise<{ success: boolean; attachment?: VaultAttachmentElectron; error?: string }>;
+    onDocumentCreated: (callback: (doc: VaultDocumentElectron) => void) => () => void;
+    onDocumentUpdated: (callback: (doc: VaultDocumentElectron) => void) => () => void;
+    onDocumentDeleted: (callback: (event: { id: string }) => void) => () => void;
+  };
+
   // Kanban board
   kanban?: {
     list: () => Promise<{ tasks: KanbanTaskElectron[]; error?: string }>;
@@ -484,6 +554,14 @@ export interface ElectronAPI {
       hasUpdate: boolean;
     } | null>;
     openExternal: (url: string) => Promise<{ success: boolean }>;
+    onUpdateAvailable: (callback: (info: {
+      currentVersion: string;
+      latestVersion: string;
+      downloadUrl: string;
+      releaseUrl: string;
+      releaseNotes: string;
+      hasUpdate: boolean;
+    }) => void) => () => void;
   };
 
   // Get home path helper

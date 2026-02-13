@@ -86,6 +86,8 @@ import { registerSchedulerHandlers } from './handlers/scheduler-handlers';
 import { registerAutomationHandlers } from './handlers/automation-handlers';
 import { registerCLIPathsHandlers, getCLIPathsConfig } from './handlers/cli-paths-handlers';
 import { registerKanbanHandlers, KanbanHandlerDependencies } from './handlers/kanban-handlers';
+import { registerVaultHandlers } from './handlers/vault-handlers';
+import { initVaultDb, closeVaultDb } from './services/vault-db';
 import { checkForUpdates } from './services/update-checker';
 import { initKanbanAutomation, findMatchingAgent, createAgentForTask, startAgentForTask } from './services/kanban-automation';
 
@@ -95,7 +97,6 @@ import {
   sendNotification,
   isSuperAgent,
   getSuperAgent,
-  detectAgentStatus,
   ensureDataDir,
   migrateFromClaudeManager,
 } from './utils';
@@ -125,6 +126,8 @@ function loadAppSettings(): AppSettings {
     jiraDomain: '',
     jiraEmail: '',
     jiraApiToken: '',
+    socialDataEnabled: false,
+    socialDataApiKey: '',
     verboseModeEnabled: false,
     autoCheckUpdates: true,
     cliPaths: {
@@ -215,7 +218,6 @@ function createIpcDependencies(): IpcHandlerDependencies {
       handleStatusChangeNotificationWrapper,
       saveAgents
     ),
-    detectAgentStatus,
     handleStatusChangeNotification: handleStatusChangeNotificationWrapper,
     isSuperAgent,
     getMcpOrchestratorPath,
@@ -307,6 +309,12 @@ app.whenReady().then(async () => {
     saveAppSettings: saveAppSettingsToFile,
   });
 
+  // Initialize vault database
+  initVaultDb();
+
+  // Register vault handlers
+  registerVaultHandlers({ getMainWindow });
+
   // Initialize kanban automation service
   initKanbanAutomation({
     agents,
@@ -361,17 +369,6 @@ app.whenReady().then(async () => {
         if (agent) {
           agent.output.push(data);
           agent.lastActivity = new Date().toISOString();
-          const newStatus = detectAgentStatus(agent);
-          if (newStatus !== agent.status) {
-            agent.status = newStatus;
-            handleStatusChangeNotificationWrapper(agent, newStatus);
-            getMainWindow()?.webContents.send('agent:status', {
-              type: 'status',
-              agentId: id,
-              status: newStatus,
-              timestamp: new Date().toISOString(),
-            });
-          }
         }
         getMainWindow()?.webContents.send('agent:output', {
           type: 'output',
@@ -533,15 +530,24 @@ app.whenReady().then(async () => {
     setTimeout(async () => {
       try {
         const updateInfo = await checkForUpdates();
-        if (updateInfo?.hasUpdate && Notification.isSupported()) {
-          const notification = new Notification({
-            title: 'Update Available',
-            body: `Dorothy ${updateInfo.latestVersion} is available (you have ${updateInfo.currentVersion})`,
-          });
-          notification.on('click', () => {
-            shell.openExternal(updateInfo.releaseUrl);
-          });
-          notification.show();
+        if (updateInfo?.hasUpdate) {
+          // Notify the renderer so the UI can show an in-app update banner
+          const mainWin = getMainWindow();
+          if (mainWin && !mainWin.isDestroyed()) {
+            mainWin.webContents.send('app:update-available', updateInfo);
+          }
+
+          // Also show OS notification as a secondary signal
+          if (Notification.isSupported()) {
+            const notification = new Notification({
+              title: 'Update Available',
+              body: `Dorothy ${updateInfo.latestVersion} is available (you have ${updateInfo.currentVersion})`,
+            });
+            notification.on('click', () => {
+              shell.openExternal(updateInfo.releaseUrl);
+            });
+            notification.show();
+          }
         }
       } catch (err) {
         console.error('Auto-update check failed:', err);
@@ -572,6 +578,7 @@ app.on('before-quit', () => {
   console.log('App quitting, saving agents and killing all PTY processes...');
   saveAgents();
   killAllPty();
+  closeVaultDb();
 });
 
 // Handle certificate errors in development

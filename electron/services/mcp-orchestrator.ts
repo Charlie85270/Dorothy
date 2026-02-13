@@ -41,6 +41,22 @@ export function getMcpKanbanPath(): string {
 }
 
 /**
+ * Get the path to the bundled MCP vault server
+ * Always uses the packaged app path - MCP servers are bundled in extraResources
+ */
+export function getMcpVaultPath(): string {
+  return path.join(process.resourcesPath, 'mcp-vault', 'dist', 'index.js');
+}
+
+/**
+ * Get the path to the bundled MCP socialdata server
+ * Always uses the packaged app path - MCP servers are bundled in extraResources
+ */
+export function getMcpSocialDataPath(): string {
+  return path.join(process.resourcesPath, 'mcp-socialdata', 'dist', 'index.js');
+}
+
+/**
  * Auto-setup MCP orchestrator on app start using claude mcp add command
  * This function runs during app initialization to ensure the orchestrator is properly configured
  */
@@ -49,6 +65,8 @@ export async function setupMcpOrchestrator(): Promise<void> {
     const orchestratorPath = getMcpOrchestratorPath();
     const telegramPath = getMcpTelegramPath();
     const kanbanPath = getMcpKanbanPath();
+    const vaultPath = getMcpVaultPath();
+    const socialDataPath = getMcpSocialDataPath();
 
     const claudeDir = path.join(os.homedir(), '.claude');
     const mcpConfigPath = path.join(claudeDir, 'mcp.json');
@@ -72,6 +90,20 @@ export async function setupMcpOrchestrator(): Promise<void> {
       await setupMcpServer('claude-mgr-kanban', kanbanPath, claudeDir, mcpConfigPath);
     } else {
       console.log('MCP kanban not found at', kanbanPath);
+    }
+
+    // Setup vault MCP server if exists (makes document management available to all agents)
+    if (fs.existsSync(vaultPath)) {
+      await setupMcpServer('claude-mgr-vault', vaultPath, claudeDir, mcpConfigPath);
+    } else {
+      console.log('MCP vault not found at', vaultPath);
+    }
+
+    // Setup socialdata MCP server if exists (makes Twitter/X search available to all agents)
+    if (fs.existsSync(socialDataPath)) {
+      await setupMcpServer('dorothy-socialdata', socialDataPath, claudeDir, mcpConfigPath);
+    } else {
+      console.log('MCP socialdata not found at', socialDataPath);
     }
   } catch (err) {
     console.error('Failed to auto-setup MCP servers:', err);

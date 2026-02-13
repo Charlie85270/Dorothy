@@ -373,7 +373,7 @@ export default function AutomationsPage() {
 
   if (!isElectron()) {
     return (
-      <div className="p-6">
+      <div className="pt-4 lg:pt-6">
         <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4">
           <p className="text-yellow-500">This feature is only available in the desktop app.</p>
         </div>
@@ -382,32 +382,27 @@ export default function AutomationsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-4 lg:space-y-6 pt-4 lg:pt-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-            <Zap className="w-5 h-5 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold">Automations</h1>
-            <p className="text-sm text-muted-foreground">
-              Poll external sources and trigger Claude agents automatically
-            </p>
-          </div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl lg:text-2xl font-bold tracking-tight">Automations</h1>
+          <p className="text-muted-foreground text-xs lg:text-sm mt-1 hidden sm:block">
+            Poll external sources and trigger Claude agents automatically
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="flex items-center gap-2 px-3 py-2 text-sm bg-secondary hover:bg-secondary/80 rounded-lg transition-colors"
+            className="flex items-center gap-2 px-3 py-2 text-sm bg-secondary hover:bg-secondary/80 transition-colors"
           >
             <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             Refresh
           </button>
           <button
             onClick={() => setShowCreateForm(true)}
-            className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg transition-colors"
+            className="flex items-center gap-2 px-4 py-2 text-sm bg-foreground text-background hover:bg-foreground/90 transition-colors"
           >
             <Plus className="w-4 h-4" />
             New Automation

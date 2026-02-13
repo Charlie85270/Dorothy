@@ -10,6 +10,7 @@ import { App as SlackApp, LogLevel } from '@slack/bolt';
 
 // Import types
 import type { AgentStatus, WorktreeConfig, AgentCharacter, AppSettings } from '../types';
+import { buildFullPath } from '../utils/path-builder';
 
 // Dependencies interface for dependency injection
 export interface IpcHandlerDependencies {
@@ -220,46 +221,22 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
 
     // Build PATH that includes user-configured paths, nvm, and other common locations for claude
     const currentSettings = getAppSettings();
-    const homeDir = process.env.HOME || os.homedir();
-    const existingPath = process.env.PATH || '';
-    const additionalPaths: string[] = [];
-
-    // Add user-configured CLI paths from settings
+    const cliExtraPaths: string[] = [];
     if (currentSettings.cliPaths) {
       if (currentSettings.cliPaths.claude) {
-        additionalPaths.push(path.dirname(currentSettings.cliPaths.claude));
+        cliExtraPaths.push(path.dirname(currentSettings.cliPaths.claude));
       }
       if (currentSettings.cliPaths.gh) {
-        additionalPaths.push(path.dirname(currentSettings.cliPaths.gh));
+        cliExtraPaths.push(path.dirname(currentSettings.cliPaths.gh));
       }
       if (currentSettings.cliPaths.node) {
-        additionalPaths.push(path.dirname(currentSettings.cliPaths.node));
+        cliExtraPaths.push(path.dirname(currentSettings.cliPaths.node));
       }
       if (currentSettings.cliPaths.additionalPaths) {
-        additionalPaths.push(...currentSettings.cliPaths.additionalPaths.filter(Boolean));
+        cliExtraPaths.push(...currentSettings.cliPaths.additionalPaths.filter(Boolean));
       }
     }
-
-    // Add common fallback locations
-    additionalPaths.push(
-      path.join(homeDir, '.nvm/versions/node/v20.11.1/bin'),
-      path.join(homeDir, '.nvm/versions/node/v22.0.0/bin'),
-      '/usr/local/bin',
-      '/opt/homebrew/bin',
-      path.join(homeDir, '.local/bin'),
-    );
-    const nvmDir = path.join(homeDir, '.nvm/versions/node');
-    if (fs.existsSync(nvmDir)) {
-      try {
-        const versions = fs.readdirSync(nvmDir);
-        for (const version of versions) {
-          additionalPaths.push(path.join(nvmDir, version, 'bin'));
-        }
-      } catch {
-        // Ignore errors
-      }
-    }
-    const fullPath = [...new Set([...additionalPaths, ...existingPath.split(':')])].join(':');
+    const fullPath = buildFullPath(cliExtraPaths);
 
     // Create PTY for this agent
     let ptyProcess: pty.IPty;

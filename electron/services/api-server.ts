@@ -2,7 +2,6 @@ import * as http from 'http';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as pty from 'node-pty';
-import { exec } from 'child_process';
 import { app, BrowserWindow } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import TelegramBot from 'node-telegram-bot-api';
@@ -12,6 +11,8 @@ import { API_PORT, CLAUDE_PATTERNS } from '../constants';
 import { isSuperAgent } from '../utils';
 import { agents, saveAgents, initAgentPty } from '../core/agent-manager';
 import { ptyProcesses } from '../core/pty-manager';
+import { buildFullPath } from '../utils/path-builder';
+import { generateTaskFromPrompt } from '../utils/kanban-generate';
 
 let apiServer: http.Server | null = null;
 
@@ -29,7 +30,6 @@ export function startApiServer(
   if (apiServer) return;
 
   apiServer = http.createServer(async (req, res) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -203,33 +203,7 @@ export function startApiServer(
         // Use bash for more reliable PATH handling with nvm
         const shell = '/bin/bash';
 
-        // Build PATH that includes nvm and other common locations for claude
-        const homeDir = process.env.HOME || app.getPath('home');
-        const existingPath = process.env.PATH || '';
-
-        // Add nvm paths and other common locations
-        const additionalPaths = [
-          path.join(homeDir, '.nvm/versions/node/v20.11.1/bin'),
-          path.join(homeDir, '.nvm/versions/node/v22.0.0/bin'),
-          '/usr/local/bin',
-          '/opt/homebrew/bin',
-          path.join(homeDir, '.local/bin'),
-        ];
-
-        // Find any nvm node version directories
-        const nvmDir = path.join(homeDir, '.nvm/versions/node');
-        if (fs.existsSync(nvmDir)) {
-          try {
-            const versions = fs.readdirSync(nvmDir);
-            for (const version of versions) {
-              additionalPaths.push(path.join(nvmDir, version, 'bin'));
-            }
-          } catch {
-            // Ignore errors
-          }
-        }
-
-        const fullPath = [...new Set([...additionalPaths, ...existingPath.split(':')])].join(':');
+        const fullPath = buildFullPath();
 
         const ptyProcess = pty.spawn(shell, ['-l', '-c', command], {
           name: 'xterm-256color',
@@ -661,127 +635,9 @@ export function startApiServer(
           return;
         }
 
-        try {
-          // Build the prompt for Claude to generate task details
-          const projectList = availableProjects.map(p => `- "${p.name}" (${p.path})`).join('\n');
-
-          const claudePrompt = `You are a task parser. Analyze the user's request and generate structured task details.
-
-Available projects:
-${projectList}
-
-User's request:
-${prompt}
-
-Based on this request, generate a JSON object with these fields:
-- title: A concise task title (max 80 chars)
-- description: The full task description (keep the original request, improve clarity if needed)
-- projectPath: The most relevant project path from the list above (use exact path)
-- priority: "low", "medium", or "high" based on urgency indicators
-- labels: Array of relevant labels (e.g., "bug", "feature", "refactor", "ui", "api", "docs", "test", "security", "performance")
-- requiredSkills: Array of skills the agent might need (e.g., "commit", "test", "deploy")
-
-IMPORTANT: Respond with ONLY the JSON object, no markdown, no explanation, just valid JSON.`;
-
-          // Build PATH with nvm and common locations
-          const homeDir = process.env.HOME || app.getPath('home');
-          const existingPath = process.env.PATH || '';
-          const additionalPaths = [
-            path.join(homeDir, '.nvm/versions/node/v20.11.1/bin'),
-            path.join(homeDir, '.nvm/versions/node/v22.0.0/bin'),
-            '/usr/local/bin',
-            '/opt/homebrew/bin',
-            path.join(homeDir, '.local/bin'),
-          ];
-          const nvmDir = path.join(homeDir, '.nvm/versions/node');
-          if (fs.existsSync(nvmDir)) {
-            try {
-              const versions = fs.readdirSync(nvmDir);
-              for (const version of versions) {
-                additionalPaths.push(path.join(nvmDir, version, 'bin'));
-              }
-            } catch {
-              // Ignore errors
-            }
-          }
-          const fullPath = [...new Set([...additionalPaths, ...existingPath.split(':')])].join(':');
-
-          // Escape the prompt for shell
-          const escapedPrompt = claudePrompt.replace(/'/g, "'\\''");
-
-          // Call Claude CLI with -p flag for quick one-shot response using haiku for speed
-          const command = `claude -p --model haiku '${escapedPrompt}'`;
-
-          const claudeResult = await new Promise<string>((resolve, reject) => {
-            exec(command, {
-              env: { ...process.env, PATH: fullPath },
-              timeout: 30000, // 30 second timeout
-              maxBuffer: 1024 * 1024,
-            }, (error, stdout, stderr) => {
-              if (error) {
-                console.error('[Kanban] Claude CLI error:', stderr || error.message);
-                reject(error);
-              } else {
-                resolve(stdout.trim());
-              }
-            });
-          });
-
-          // Parse the JSON response
-          let parsedTask;
-          try {
-            // Try to extract JSON from the response (in case there's extra text)
-            const jsonMatch = claudeResult.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-              parsedTask = JSON.parse(jsonMatch[0]);
-            } else {
-              throw new Error('No JSON found in response');
-            }
-          } catch (parseErr) {
-            console.error('[Kanban] Failed to parse Claude response:', claudeResult);
-            // Fallback to simple extraction
-            const lines = prompt.split('\n').filter(l => l.trim());
-            parsedTask = {
-              title: (lines[0] || prompt).substring(0, 80),
-              description: prompt,
-              projectPath: availableProjects[0]?.path || '',
-              priority: 'medium',
-              labels: [],
-              requiredSkills: [],
-            };
-          }
-
-          // Validate and sanitize the response
-          const task = {
-            title: String(parsedTask.title || prompt.substring(0, 80)).substring(0, 80),
-            description: String(parsedTask.description || prompt),
-            projectPath: String(parsedTask.projectPath || availableProjects[0]?.path || ''),
-            projectId: String(parsedTask.projectPath || availableProjects[0]?.path || ''),
-            priority: ['low', 'medium', 'high'].includes(parsedTask.priority) ? parsedTask.priority : 'medium',
-            labels: Array.isArray(parsedTask.labels) ? parsedTask.labels.slice(0, 5) : [],
-            requiredSkills: Array.isArray(parsedTask.requiredSkills) ? parsedTask.requiredSkills.slice(0, 3) : [],
-          };
-
-          sendJson({ success: true, task });
-          return;
-        } catch (err) {
-          console.error('[Kanban] Failed to generate task:', err);
-          // Return a simple fallback task on error
-          const lines = prompt.split('\n').filter(l => l.trim());
-          sendJson({
-            success: true,
-            task: {
-              title: (lines[0] || prompt).substring(0, 80),
-              description: prompt,
-              projectPath: availableProjects[0]?.path || '',
-              projectId: availableProjects[0]?.path || '',
-              priority: 'medium',
-              labels: [],
-              requiredSkills: [],
-            },
-          });
-          return;
-        }
+        const task = await generateTaskFromPrompt(prompt, availableProjects);
+        sendJson({ success: true, task });
+        return;
       }
 
       // POST /api/kanban/complete - Mark a kanban task as complete (called by hooks)

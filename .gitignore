@@ -50,3 +50,5 @@ mcp-telegram/dist
 mcp-kanban/node_modules
 mcp-kanban/dist
 electron/dist
+
+.idea

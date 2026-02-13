@@ -374,6 +374,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('kanban:delete', id),
     reorder: (params: { taskIds: string[]; column: 'backlog' | 'planned' | 'ongoing' | 'done' }) =>
       ipcRenderer.invoke('kanban:reorder', params),
+    generate: (params: { prompt: string; availableProjects: Array<{ path: string; name: string }> }) =>
+      ipcRenderer.invoke('kanban:generate', params),
     // Event listeners
     onTaskCreated: (callback: (task: unknown) => void) => {
       const listener = (_: unknown, task: unknown) => callback(task);

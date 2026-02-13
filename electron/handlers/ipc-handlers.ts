@@ -27,7 +27,6 @@ export interface IpcHandlerDependencies {
   saveAppSettings: (settings: AppSettings) => void;
   saveAgents: () => void;
   initAgentPty: (agent: AgentStatus) => Promise<string>;
-  detectAgentStatus: (agent: AgentStatus) => 'running' | 'waiting' | 'completed' | 'error' | 'idle';
   handleStatusChangeNotification: (agent: AgentStatus, newStatus: string) => void;
   isSuperAgent: (agent: AgentStatus) => boolean;
   getMcpOrchestratorPath: () => string;
@@ -141,7 +140,6 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     getAppSettings,
     saveAgents,
     initAgentPty,
-    detectAgentStatus,
     handleStatusChangeNotification,
     isSuperAgent,
     getSuperAgentTelegramTask,
@@ -331,28 +329,6 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
           // Keep buffer reasonable
           if (buffer.length > 200) {
             setSuperAgentOutputBuffer(buffer.slice(-100));
-          }
-        }
-
-        // Check if agent was manually stopped recently (within 3 seconds)
-        // If so, don't override the status with detection
-        const manuallyStoppedAt = (agent as AgentStatus & { _manuallyStoppedAt?: number })._manuallyStoppedAt;
-        const wasRecentlyStopped = manuallyStoppedAt && (Date.now() - manuallyStoppedAt) < 3000;
-
-        if (!wasRecentlyStopped) {
-          // Detect status changes when we receive output
-          const newStatus = detectAgentStatus(agent);
-          if (newStatus !== agent.status) {
-            agent.status = newStatus;
-            // Send notification
-            handleStatusChangeNotification(agent, newStatus);
-            // Send status change event
-            getMainWindow()?.webContents.send('agent:status', {
-              type: 'status',
-              agentId: id,
-              status: newStatus,
-              timestamp: new Date().toISOString(),
-            });
           }
         }
       }

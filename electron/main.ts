@@ -95,7 +95,6 @@ import {
   sendNotification,
   isSuperAgent,
   getSuperAgent,
-  detectAgentStatus,
   ensureDataDir,
   migrateFromClaudeManager,
 } from './utils';
@@ -215,7 +214,6 @@ function createIpcDependencies(): IpcHandlerDependencies {
       handleStatusChangeNotificationWrapper,
       saveAgents
     ),
-    detectAgentStatus,
     handleStatusChangeNotification: handleStatusChangeNotificationWrapper,
     isSuperAgent,
     getMcpOrchestratorPath,
@@ -361,17 +359,6 @@ app.whenReady().then(async () => {
         if (agent) {
           agent.output.push(data);
           agent.lastActivity = new Date().toISOString();
-          const newStatus = detectAgentStatus(agent);
-          if (newStatus !== agent.status) {
-            agent.status = newStatus;
-            handleStatusChangeNotificationWrapper(agent, newStatus);
-            getMainWindow()?.webContents.send('agent:status', {
-              type: 'status',
-              agentId: id,
-              status: newStatus,
-              timestamp: new Date().toISOString(),
-            });
-          }
         }
         getMainWindow()?.webContents.send('agent:output', {
           type: 'output',

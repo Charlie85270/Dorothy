@@ -20,8 +20,22 @@ function useIsMobile() {
 }
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
-  const { sidebarCollapsed, mobileMenuOpen, setMobileMenuOpen } = useStore();
+  const { sidebarCollapsed, mobileMenuOpen, setMobileMenuOpen, darkMode, setDarkMode } = useStore();
   const isMobile = useIsMobile();
+
+  // Initialize dark mode from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('dorothy-dark-mode');
+    if (saved === 'true') {
+      setDarkMode(true);
+    }
+  }, [setDarkMode]);
+
+  // Sync dark class on <html> and persist to localStorage
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode);
+    localStorage.setItem('dorothy-dark-mode', String(darkMode));
+  }, [darkMode]);
 
   // Close mobile menu on resize to desktop
   useEffect(() => {

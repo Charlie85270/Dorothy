@@ -36,11 +36,16 @@ curl -s -X POST "$API_URL/api/hooks/notification" \
   -d "{\"agent_id\": \"$AGENT_ID\", \"session_id\": \"$SESSION_ID\", \"type\": \"$NOTIFICATION_TYPE\", \"title\": $(echo "$TITLE" | jq -Rs .), \"message\": $(echo "$MESSAGE" | jq -Rs .)}" \
   > /dev/null 2>&1 &
 
-# If it's a permission prompt, update status to indicate waiting for permission
+# If it's a permission prompt or idle prompt, update status to indicate waiting
 if [ "$NOTIFICATION_TYPE" = "permission_prompt" ]; then
   curl -s -X POST "$API_URL/api/hooks/status" \
     -H "Content-Type: application/json" \
     -d "{\"agent_id\": \"$AGENT_ID\", \"session_id\": \"$SESSION_ID\", \"status\": \"waiting\", \"waiting_reason\": \"permission\"}" \
+    > /dev/null 2>&1 &
+elif [ "$NOTIFICATION_TYPE" = "idle_prompt" ]; then
+  curl -s -X POST "$API_URL/api/hooks/status" \
+    -H "Content-Type: application/json" \
+    -d "{\"agent_id\": \"$AGENT_ID\", \"session_id\": \"$SESSION_ID\", \"status\": \"waiting\", \"waiting_reason\": \"idle\"}" \
     > /dev/null 2>&1 &
 fi
 

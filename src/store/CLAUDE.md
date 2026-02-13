@@ -7,6 +7,5 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
-| #3651 | 8:15 AM | 🔵 | ClientLayout Manages Sidebar State and Responsive Layout | ~349 |
-| #3645 | 8:14 AM | 🔵 | Main Sidebar Component Structure and Navigation System | ~384 |
+| #3657 | 8:17 AM | 🔵 | Zustand Store Structure and State Management Pattern | ~367 |
 </claude-mem-context>

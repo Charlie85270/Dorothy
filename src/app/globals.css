@@ -134,6 +134,105 @@
   --chart-5: #2C2418;
 }
 
+/* ============================================
+   DOROTHY — DARK THEME OVERRIDES
+   ============================================ */
+.dark {
+  /* Surfaces - Deep warm grays */
+  --background: #1A1714;
+  --foreground: #E8DEC8;
+  --card: #242019;
+  --card-foreground: #E8DEC8;
+  --popover: #242019;
+  --popover-foreground: #E8DEC8;
+
+  /* Primary - Teal stays vibrant, slightly brighter for dark bg */
+  --primary: #4DB8B0;
+  --primary-foreground: #1A1714;
+
+  /* Secondary - Darker warm tone */
+  --secondary: #2E2922;
+  --secondary-foreground: #E8DEC8;
+
+  /* Muted - Dark warm tone */
+  --muted: #2E2922;
+  --muted-foreground: #9A8E78;
+
+  /* Accent - Copper stays warm */
+  --accent: #CD7F4A;
+  --accent-foreground: #1A1714;
+
+  /* Destructive - Slightly brighter for dark bg */
+  --destructive: #D4634D;
+
+  /* Borders & inputs */
+  --border: #3A342B;
+  --input: #2E2922;
+  --ring: #4DB8B0;
+
+  /* Legacy variables */
+  --bg-primary: #1A1714;
+  --bg-secondary: #242019;
+  --bg-tertiary: #2E2922;
+  --bg-elevated: #302B23;
+  --border-primary: #3A342B;
+  --border-accent: #4A4237;
+  --text-primary: #E8DEC8;
+  --text-secondary: #9A8E78;
+  --text-muted: #7A6E58;
+
+  /* Status colors - Same hues, adjusted for dark bg */
+  --success: #5AAF62;
+  --success-muted: rgba(90, 175, 98, 0.15);
+  --warning: #CD7F4A;
+  --warning-muted: rgba(205, 127, 74, 0.15);
+  --danger: #D4634D;
+  --danger-muted: rgba(212, 99, 77, 0.15);
+  --info: #4DB8B0;
+  --info-muted: rgba(77, 184, 176, 0.15);
+
+  /* Accent colors */
+  --accent-blue: #4DB8B0;
+  --accent-blue-dim: #3D9B94;
+  --accent-green: #5AAF62;
+  --accent-green-dim: #4A8B50;
+  --accent-amber: #CD7F4A;
+  --accent-amber-dim: #B86E3C;
+  --accent-red: #D4634D;
+  --accent-red-dim: #B85440;
+  --accent-purple: #A080B2;
+  --accent-purple-dim: #8B6B9B;
+  --accent-cyan: #4DB8B0;
+  --accent-cyan-dim: #3D9B94;
+
+  /* Charts - Same spectrum (already vibrant) */
+  --chart-1: #4DB8B0;
+  --chart-2: #CD7F4A;
+  --chart-3: #5AAF62;
+  --chart-4: #D4634D;
+  --chart-5: #E8DEC8;
+}
+
+/* Dark mode scrollbar overrides */
+.dark * {
+  scrollbar-color: #4A4237 #2E2922;
+}
+.dark *::-webkit-scrollbar-track {
+  background: #2E2922;
+}
+.dark *::-webkit-scrollbar-thumb {
+  background: #4A4237;
+}
+.dark *::-webkit-scrollbar-thumb:hover {
+  background: #4DB8B0;
+}
+.dark *::-webkit-scrollbar-corner {
+  background: #2E2922;
+}
+.dark .xterm-viewport::-webkit-scrollbar-thumb {
+  background: #4A4237;
+}
+
 @theme inline {
   /* Radius - Generous retro rounding */
   --radius-sm: 6px;

@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { BrowserWindow, Notification } from 'electron';
 import { AgentStatus, AppSettings } from '../types';
 import { AGENTS_FILE, DATA_DIR } from '../constants';
-import { ensureDataDir, detectAgentStatus, isSuperAgent } from '../utils';
+import { ensureDataDir, isSuperAgent } from '../utils';
 import { ptyProcesses } from './pty-manager';
 
 export const agents: Map<string, AgentStatus> = new Map();
@@ -314,25 +314,6 @@ export async function initAgentPty(
         superAgentOutputBuffer.push(data);
         if (superAgentOutputBuffer.length > 200) {
           superAgentOutputBuffer = superAgentOutputBuffer.slice(-100);
-        }
-      }
-
-      const manuallyStoppedAt = (agentData as AgentStatus & { _manuallyStoppedAt?: number })._manuallyStoppedAt;
-      const wasRecentlyStopped = manuallyStoppedAt && (Date.now() - manuallyStoppedAt) < 3000;
-
-      if (!wasRecentlyStopped) {
-        const newStatus = detectAgentStatus(agentData);
-        if (newStatus !== agentData.status) {
-          agentData.status = newStatus;
-          handleStatusChangeNotificationCallback(agentData, newStatus);
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('agent:status', {
-              type: 'status',
-              agentId: agent.id,
-              status: newStatus,
-              timestamp: new Date().toISOString(),
-            });
-          }
         }
       }
     }

@@ -219,6 +219,7 @@ interface AppState {
   selectedChat: string | null;
   sidebarCollapsed: boolean;
   mobileMenuOpen: boolean;
+  darkMode: boolean;
 
   // Actions - Agents
   addAgent: (agent: Omit<Agent, 'id' | 'createdAt' | 'lastActive' | 'logs' | 'tokensUsed' | 'tasksCompleted'>) => void;
@@ -249,6 +250,8 @@ interface AppState {
   toggleSidebar: () => void;
   setMobileMenuOpen: (open: boolean) => void;
   toggleMobileMenu: () => void;
+  setDarkMode: (dark: boolean) => void;
+  toggleDarkMode: () => void;
 
   // Computed
   getStats: () => DashboardStats;
@@ -272,6 +275,7 @@ export const useStore = create<AppState>((set, get) => ({
   selectedChat: null,
   sidebarCollapsed: false,
   mobileMenuOpen: false,
+  darkMode: false,
 
   // Agent Actions
   addAgent: (agent) => set((state) => ({
@@ -399,6 +403,8 @@ export const useStore = create<AppState>((set, get) => ({
   toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
   setMobileMenuOpen: (open) => set({ mobileMenuOpen: open }),
   toggleMobileMenu: () => set((state) => ({ mobileMenuOpen: !state.mobileMenuOpen })),
+  setDarkMode: (dark) => set({ darkMode: dark }),
+  toggleDarkMode: () => set((state) => ({ darkMode: !state.darkMode })),
 
   // Computed
   getStats: () => {

@@ -67,7 +67,7 @@ export const GeneralSection = ({ info, appSettings, onSaveAppSettings }: General
           <div>
             <h3 className="font-medium">Dorothy</h3>
             <p className="text-sm text-muted-foreground">
-              Version {updateInfo?.currentVersion || '1.0.3'}
+              Version {updateInfo?.currentVersion || '1.0.4'}
             </p>
           </div>
         </div>
@@ -82,14 +82,6 @@ export const GeneralSection = ({ info, appSettings, onSaveAppSettings }: General
               enabled={appSettings.autoCheckUpdates !== false}
               onChange={() => onSaveAppSettings({ autoCheckUpdates: !appSettings.autoCheckUpdates })}
             />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">Auto-refresh Dashboard</p>
-              <p className="text-xs text-muted-foreground">Automatically refresh agent status every 5 seconds</p>
-            </div>
-            <Toggle enabled={true} onChange={() => { }} />
           </div>
         </div>
       </div>
@@ -113,10 +105,10 @@ export const GeneralSection = ({ info, appSettings, onSaveAppSettings }: General
         </div>
 
         {updateState === 'up-to-date' && (
-          <div className="flex items-center gap-3 p-3 bg-green-500/10 border border-green-500/20">
-            <CheckCircle className="w-5 h-5 text-green-400 shrink-0" />
+          <div className="flex items-center gap-3 p-3 bg-green-700/10 border border-green-700/20">
+            <CheckCircle className="w-5 h-5 text-green-700 shrink-0" />
             <div>
-              <p className="text-sm font-medium text-green-400">You&apos;re up to date!</p>
+              <p className="text-sm font-medium text-green-700">You&apos;re up to date!</p>
               <p className="text-xs text-muted-foreground">Dorothy {updateInfo?.currentVersion} is the latest version.</p>
             </div>
           </div>

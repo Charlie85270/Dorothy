@@ -8,7 +8,7 @@ import { v4 as uuidv4 } from 'uuid';
 import TelegramBot from 'node-telegram-bot-api';
 import { App as SlackApp } from '@slack/bolt';
 import { AgentStatus, AppSettings, AgentCharacter } from '../types';
-import { API_PORT, CLAUDE_PATTERNS } from '../constants';
+import { API_PORT } from '../constants';
 import { isSuperAgent } from '../utils';
 import { agents, saveAgents, initAgentPty } from '../core/agent-manager';
 import { ptyProcesses } from '../core/pty-manager';
@@ -263,11 +263,6 @@ export function startApiServer(
           }
           agent.lastActivity = new Date().toISOString();
 
-          const recentOutput = agent.output.slice(-20).join('');
-          const isWaiting = CLAUDE_PATTERNS.waitingForInput.some(p => p.test(recentOutput));
-          if (isWaiting && agent.status === 'running') {
-            agent.status = 'waiting';
-          }
           if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('agent:output', { agentId: agent.id, data });
           }
@@ -561,10 +556,10 @@ export function startApiServer(
 
         const oldStatus = agent.status;
 
-        if (status === 'running' && (agent.status === 'idle' || agent.status === 'waiting' || agent.status === 'completed')) {
+        if (status === 'running' && agent.status !== 'running') {
           agent.status = 'running';
           agent.currentSessionId = session_id;
-        } else if (status === 'waiting' && agent.status === 'running') {
+        } else if (status === 'waiting' && agent.status !== 'waiting') {
           agent.status = 'waiting';
         } else if (status === 'idle') {
           agent.status = 'idle';

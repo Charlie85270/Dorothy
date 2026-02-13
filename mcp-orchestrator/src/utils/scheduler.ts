@@ -8,11 +8,27 @@ import * as path from "path";
 import * as os from "os";
 
 /**
- * Get the path to the claude CLI by running `which claude`
+ * Get the path to the claude CLI — reads user-configured path from app-settings first
  */
 export async function getClaudePath(): Promise<string> {
+  // Check user-configured path in app-settings.json
+  try {
+    const settingsFile = path.join(os.homedir(), ".dorothy", "app-settings.json");
+    if (fs.existsSync(settingsFile)) {
+      const settings = JSON.parse(fs.readFileSync(settingsFile, "utf-8"));
+      if (settings.cliPaths?.claude && fs.existsSync(settings.cliPaths.claude)) {
+        return settings.cliPaths.claude;
+      }
+    }
+  } catch {
+    // Ignore settings read errors
+  }
+
+  // Fallback: try to detect via which
   return new Promise((resolve) => {
-    const proc = spawn("which", ["claude"]);
+    const proc = spawn("/bin/bash", ["-l", "-c", "which claude"], {
+      env: { ...process.env, HOME: os.homedir() },
+    });
     let output = "";
     proc.stdout.on("data", (data) => {
       output += data;
@@ -144,8 +160,25 @@ export async function createLaunchdJob(
   const escapedPrompt = prompt.replace(/'/g, "'\\''");
   const flags = autonomous ? "--dangerously-skip-permissions" : "";
   const mcpConfigPath = path.join(os.homedir(), ".claude", "mcp.json");
+  const homeDir = os.homedir();
 
   const scriptContent = `#!/bin/bash
+
+# Source shell profile for proper PATH (nvm, homebrew, etc.)
+export HOME="${homeDir}"
+
+if [ -s "${homeDir}/.nvm/nvm.sh" ]; then
+  source "${homeDir}/.nvm/nvm.sh" 2>/dev/null || true
+fi
+
+if [ -f "${homeDir}/.bashrc" ]; then
+  source "${homeDir}/.bashrc" 2>/dev/null || true
+elif [ -f "${homeDir}/.bash_profile" ]; then
+  source "${homeDir}/.bash_profile" 2>/dev/null || true
+elif [ -f "${homeDir}/.zshrc" ]; then
+  source "${homeDir}/.zshrc" 2>/dev/null || true
+fi
+
 export PATH="${claudeDir}:$PATH"
 cd "${projectPath}"
 echo "=== Task started at $(date) ===" >> "${logPath}"
@@ -233,8 +266,25 @@ export async function createCronJob(
   const escapedPrompt = prompt.replace(/'/g, "'\\''");
   const flags = autonomous ? "--dangerously-skip-permissions" : "";
   const mcpConfigPath = path.join(os.homedir(), ".claude", "mcp.json");
+  const homeDir = os.homedir();
 
   const scriptContent = `#!/bin/bash
+
+# Source shell profile for proper PATH (nvm, homebrew, etc.)
+export HOME="${homeDir}"
+
+if [ -s "${homeDir}/.nvm/nvm.sh" ]; then
+  source "${homeDir}/.nvm/nvm.sh" 2>/dev/null || true
+fi
+
+if [ -f "${homeDir}/.bashrc" ]; then
+  source "${homeDir}/.bashrc" 2>/dev/null || true
+elif [ -f "${homeDir}/.bash_profile" ]; then
+  source "${homeDir}/.bash_profile" 2>/dev/null || true
+elif [ -f "${homeDir}/.zshrc" ]; then
+  source "${homeDir}/.zshrc" 2>/dev/null || true
+fi
+
 export PATH="${claudeDir}:$PATH"
 cd "${projectPath}"
 echo "=== Task started at $(date) ===" >> "${logPath}"

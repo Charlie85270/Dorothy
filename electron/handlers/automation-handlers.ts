@@ -118,9 +118,20 @@ function intervalToCron(minutes: number): string {
   }
 }
 
-// Get path to claude CLI
+// Get path to claude CLI — reads user-configured path from app-settings first
 async function getClaudePath(): Promise<string> {
-  // Try multiple methods to find claude
+  // Check user-configured path in app-settings.json
+  try {
+    const settingsFile = path.join(os.homedir(), '.dorothy', 'app-settings.json');
+    if (fs.existsSync(settingsFile)) {
+      const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'));
+      if (settings.cliPaths?.claude && fs.existsSync(settings.cliPaths.claude)) {
+        return settings.cliPaths.claude;
+      }
+    }
+  } catch {
+    // Ignore settings read errors
+  }
 
   // Method 1: Run which with bash to get proper PATH (including nvm, etc.)
   const shellWhich = await new Promise<string | null>((resolve) => {
@@ -145,8 +156,6 @@ async function getClaudePath(): Promise<string> {
 
   // Method 2: Check common locations
   const commonPaths = [
-    path.join(os.homedir(), '.nvm/versions/node', 'v20.11.1', 'bin', 'claude'),
-    path.join(os.homedir(), '.nvm/versions/node', 'v22.0.0', 'bin', 'claude'),
     '/usr/local/bin/claude',
     '/opt/homebrew/bin/claude',
     path.join(os.homedir(), '.local/bin/claude'),

@@ -17,6 +17,29 @@ function parseTags(tagsStr: string): string[] {
   try { return JSON.parse(tagsStr || '[]'); } catch { return []; }
 }
 
+function DocTags({ tags }: { tags: string[] }) {
+  if (tags.length === 0) return null;
+  return (
+    <span className="relative flex items-center gap-0.5 shrink-0 group/tags">
+      <span className="px-1 text-[9px] rounded bg-secondary text-muted-foreground">
+        {tags[0]}
+      </span>
+      {tags.length > 1 && (
+        <span className="text-[9px] text-muted-foreground">+{tags.length - 1}</span>
+      )}
+      {tags.length > 1 && (
+        <span className="absolute right-0 top-full mt-1 z-50 hidden group-hover/tags:flex flex-col gap-0.5 p-1.5 bg-popover border border-border rounded shadow-lg min-w-max">
+          {tags.map(tag => (
+            <span key={tag} className="px-1.5 py-0.5 text-[9px] rounded bg-secondary text-muted-foreground whitespace-nowrap">
+              {tag}
+            </span>
+          ))}
+        </span>
+      )}
+    </span>
+  );
+}
+
 // Count unread docs in a folder and all its descendants
 function countUnreadInFolder(
   folderId: string,
@@ -184,19 +207,8 @@ function FolderNode({ folder, childFolders, allFolders, documents, selectedFolde
                     <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
                   )}
                   <FileText className={`w-3 h-3 shrink-0 ${selectedDocId === doc.id ? 'text-primary' : ''}`} />
-                  <span className="truncate">{doc.title}</span>
-                  {tags.length > 0 && (
-                    <span className="flex items-center gap-0.5 shrink-0">
-                      {tags.slice(0, 2).map(tag => (
-                        <span key={tag} className="px-1 text-[9px] rounded bg-secondary text-muted-foreground">
-                          {tag}
-                        </span>
-                      ))}
-                      {tags.length > 2 && (
-                        <span className="text-[9px] text-muted-foreground">+{tags.length - 2}</span>
-                      )}
-                    </span>
-                  )}
+                  <span className="truncate flex-1 min-w-0">{doc.title}</span>
+                  <DocTags tags={tags} />
                 </button>
               );
             })}
@@ -316,19 +328,8 @@ export default function FolderTree({ folders, documents, selectedFolderId, selec
               <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
             )}
             <FileText className={`w-3 h-3 shrink-0 ${selectedDocId === doc.id ? 'text-primary' : ''}`} />
-            <span className="truncate">{doc.title}</span>
-            {tags.length > 0 && (
-              <span className="flex items-center gap-0.5 shrink-0">
-                {tags.slice(0, 2).map(tag => (
-                  <span key={tag} className="px-1 text-[9px] rounded bg-secondary text-muted-foreground">
-                    {tag}
-                  </span>
-                ))}
-                {tags.length > 2 && (
-                  <span className="text-[9px] text-muted-foreground">+{tags.length - 2}</span>
-                )}
-              </span>
-            )}
+            <span className="truncate flex-1 min-w-0">{doc.title}</span>
+            <DocTags tags={tags} />
           </button>
         );
       })}

@@ -14,6 +14,8 @@ A beautiful desktop app to orchestrate your [Claude Code](https://claude.ai/code
 - [Kanban Task Management](#kanban-task-management)
 - [Scheduled Tasks](#scheduled-tasks)
 - [Remote Control](#remote-control)
+- [Vault](#vault)
+- [SocialData (Twitter/X)](#socialdata-twitterx)
 - [MCP Servers & Tools](#mcp-servers--tools)
 - [Installation](#installation)
 - [Architecture](#architecture)
@@ -322,9 +324,63 @@ Same capabilities as Telegram, accessible via @mentions or direct messages.
 
 ---
 
+## Vault
+
+A persistent document storage system that agents can read, write, and search across sessions. Use it as a shared knowledge base — agents store reports, analyses, research findings, and structured notes that any other agent can access later.
+
+![Vault](screenshots/vault.png)
+
+### Features
+
+- **Markdown documents** with title, content, tags, and file attachments
+- **Folder organization** with nested hierarchies (auto-created on document creation)
+- **Full-text search** powered by SQLite FTS5 — search across titles, content, and tags
+- **Cross-agent access** — any agent can read documents created by another
+- **File attachments** — attach files to documents for reference
+
+### MCP Tools
+
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `vault_create_document` | `title`, `content`, `folder`, `tags?` | Create a document (auto-creates folder if needed) |
+| `vault_update_document` | `document_id`, `title?`, `content?`, `tags?`, `folder_id?` | Update an existing document |
+| `vault_get_document` | `document_id` | Read a document with full content and metadata |
+| `vault_list_documents` | `folder_id?`, `tags?` | List documents, optionally filtered by folder or tags |
+| `vault_delete_document` | `document_id` | Delete a document |
+| `vault_attach_file` | `document_id`, `file_path` | Attach a file to a document |
+| `vault_search` | `query`, `limit?` | Full-text search (supports AND, OR, NOT, phrase matching) |
+| `vault_create_folder` | `name`, `parent_id?` | Create a folder (supports nesting) |
+| `vault_list_folders` | — | List all folders as a tree |
+| `vault_delete_folder` | `folder_id`, `recursive?` | Delete a folder (optionally with all contents) |
+
+---
+
+## SocialData (Twitter/X)
+
+Search tweets, get user profiles, and retrieve engagement data via the [SocialData API](https://socialdata.tools). Useful for social media research, monitoring, and analysis tasks.
+
+### Setup
+
+1. Get an API key from [socialdata.tools](https://socialdata.tools)
+2. Paste it in **Settings → SocialData API Key**
+
+### MCP Tools
+
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `twitter_search` | `query`, `type?`, `cursor?` | Search tweets with advanced operators (`from:`, `min_faves:`, `filter:images`, etc.) |
+| `twitter_get_tweet` | `tweet_id` | Get full tweet details with engagement metrics |
+| `twitter_get_tweet_comments` | `tweet_id`, `cursor?` | Get replies/comments on a tweet |
+| `twitter_get_user` | `username` | Get a user's profile (bio, followers, stats) |
+| `twitter_get_user_tweets` | `user_id`, `include_replies?`, `cursor?` | Get recent tweets from a user |
+
+All tools support cursor-based pagination for large result sets.
+
+---
+
 ## MCP Servers & Tools
 
-Dorothy exposes **three MCP (Model Context Protocol) servers** with **30+ tools** for programmatic agent control. These are used internally by the Super Agent and can be registered in any Claude Code session via `~/.claude/settings.json`.
+Dorothy exposes **five MCP (Model Context Protocol) servers** with **40+ tools** for programmatic agent control. These are used internally by the Super Agent and can be registered in any Claude Code session via `~/.claude/settings.json`.
 
 ### mcp-orchestrator
 
@@ -435,6 +491,18 @@ MCP server for programmatic Kanban task management.
 
 ---
 
+### mcp-vault
+
+MCP server for persistent document management. See [Vault](#vault) for full tool reference.
+
+---
+
+### mcp-socialdata
+
+MCP server for Twitter/X data via the SocialData API. See [SocialData (Twitter/X)](#socialdata-twitterx) for full tool reference.
+
+---
+
 ## Installation
 
 ### Prerequisites
@@ -504,10 +572,14 @@ Open [http://localhost:3000](http://localhost:3000). Agent management and termin
 │  └───────────────────┘  └──────────────────────────────┘ │
 └──────────────────────────────────────────────────────────┘
            ↕ stdio                     ↕ stdio
-┌───────────────────┐  ┌───────────────┐  ┌───────────────┐
-│  mcp-orchestrator  │  │  mcp-telegram  │  │   mcp-kanban   │
-│  (26+ tools)       │  │  (4 tools)     │  │   (8 tools)    │
-└───────────────────┘  └───────────────┘  └───────────────┘
+┌──────────────────┐ ┌──────────────┐ ┌──────────────┐
+│ mcp-orchestrator │ │ mcp-telegram │ │  mcp-kanban  │
+│   (26+ tools)    │ │  (4 tools)   │ │  (8 tools)   │
+└──────────────────┘ └──────────────┘ └──────────────┘
+┌──────────────────┐ ┌──────────────┐
+│    mcp-vault     │ │mcp-socialdata│
+│   (10 tools)     │ │  (5 tools)   │
+└──────────────────┘ └──────────────┘
 ```
 
 ### Data Flow: Parallel Agent Execution
@@ -591,6 +663,10 @@ dorothy/
 │   └── src/index.ts               # Text, photo, video, document (4)
 ├── mcp-kanban/                    # MCP server (task management)
 │   └── src/index.ts               # Kanban CRUD tools (8)
+├── mcp-vault/                     # MCP server (document management)
+│   └── src/index.ts               # Vault CRUD + search tools (10)
+├── mcp-socialdata/                # MCP server (Twitter/X data)
+│   └── src/index.ts               # Twitter search + user tools (5)
 └── landing/                       # Marketing landing page
 ```
 
@@ -634,6 +710,7 @@ dorothy/
 | `~/.dorothy/kanban-tasks.json` | Kanban board tasks |
 | `~/.dorothy/automations.json` | Automation definitions and state |
 | `~/.dorothy/processed-items.json` | Automation deduplication tracking |
+| `~/.dorothy/vault.db` | Vault documents, folders, and FTS index (SQLite) |
 | `~/.claude/schedules.json` | Scheduled task definitions |
 
 ### Generated Files

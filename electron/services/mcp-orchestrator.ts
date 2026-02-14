@@ -19,7 +19,7 @@ import { execSync } from 'child_process';
  */
 export function getMcpOrchestratorPath(): string {
   // Always use the packaged app path - works for all users
-  return path.join(process.resourcesPath, 'mcp-orchestrator', 'dist', 'index.js');
+  return path.join(process.resourcesPath, 'mcp-orchestrator', 'dist', 'bundle.js');
 }
 
 /**
@@ -28,7 +28,7 @@ export function getMcpOrchestratorPath(): string {
  */
 export function getMcpTelegramPath(): string {
   // Always use the packaged app path - works for all users
-  return path.join(process.resourcesPath, 'mcp-telegram', 'dist', 'index.js');
+  return path.join(process.resourcesPath, 'mcp-telegram', 'dist', 'bundle.js');
 }
 
 /**
@@ -37,7 +37,7 @@ export function getMcpTelegramPath(): string {
  */
 export function getMcpKanbanPath(): string {
   // Always use the packaged app path - works for all users
-  return path.join(process.resourcesPath, 'mcp-kanban', 'dist', 'index.js');
+  return path.join(process.resourcesPath, 'mcp-kanban', 'dist', 'bundle.js');
 }
 
 /**
@@ -45,7 +45,7 @@ export function getMcpKanbanPath(): string {
  * Always uses the packaged app path - MCP servers are bundled in extraResources
  */
 export function getMcpVaultPath(): string {
-  return path.join(process.resourcesPath, 'mcp-vault', 'dist', 'index.js');
+  return path.join(process.resourcesPath, 'mcp-vault', 'dist', 'bundle.js');
 }
 
 /**
@@ -53,7 +53,7 @@ export function getMcpVaultPath(): string {
  * Always uses the packaged app path - MCP servers are bundled in extraResources
  */
 export function getMcpSocialDataPath(): string {
-  return path.join(process.resourcesPath, 'mcp-socialdata', 'dist', 'index.js');
+  return path.join(process.resourcesPath, 'mcp-socialdata', 'dist', 'bundle.js');
 }
 
 /**

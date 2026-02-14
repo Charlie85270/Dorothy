@@ -1,6 +1,6 @@
 {
   "name": "dorothy",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "private": true,
   "main": "electron/dist/main.js",
   "scripts": {
@@ -27,22 +27,10 @@
       "electron/dist/**/*",
       "electron/resources/**/*",
       "out/**/*",
-      "mcp-orchestrator/dist/**/*",
-      "mcp-orchestrator/package.json",
-      "mcp-orchestrator/node_modules/**/*",
-      "mcp-telegram/dist/**/*",
-      "mcp-telegram/package.json",
-      "mcp-telegram/node_modules/**/*",
-      "mcp-kanban/dist/**/*",
-      "mcp-kanban/package.json",
-      "mcp-kanban/node_modules/**/*",
-      "mcp-vault/dist/**/*",
-      "mcp-vault/package.json",
-      "mcp-vault/node_modules/**/*",
-      "mcp-socialdata/dist/**/*",
-      "mcp-socialdata/package.json",
-      "mcp-socialdata/node_modules/**/*",
       "node_modules/**/*",
+      "!node_modules/@next/swc*",
+      "!node_modules/@next/env",
+      "!node_modules/@next/eslint-plugin-next",
       "skills/**/*",
       "hooks/**/*"
     ],
@@ -58,35 +46,40 @@
         "from": "mcp-orchestrator",
         "to": "mcp-orchestrator",
         "filter": [
-          "**/*"
+          "package.json",
+          "dist/bundle.js"
         ]
       },
       {
         "from": "mcp-telegram",
         "to": "mcp-telegram",
         "filter": [
-          "**/*"
+          "package.json",
+          "dist/bundle.js"
         ]
       },
       {
         "from": "mcp-kanban",
         "to": "mcp-kanban",
         "filter": [
-          "**/*"
+          "package.json",
+          "dist/bundle.js"
         ]
       },
       {
         "from": "mcp-vault",
         "to": "mcp-vault",
         "filter": [
-          "**/*"
+          "package.json",
+          "dist/bundle.js"
         ]
       },
       {
         "from": "mcp-socialdata",
         "to": "mcp-socialdata",
         "filter": [
-          "**/*"
+          "package.json",
+          "dist/bundle.js"
         ]
       }
     ],

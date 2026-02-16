@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Bot, ChevronRight, Play } from 'lucide-react';
 
 import type { NewChatModalProps, AgentPersonaValues } from './types';
+import type { AgentProvider } from '@/types/electron';
 import { CHARACTER_OPTIONS } from './constants';
 import { useSkillInstall } from './hooks/useSkillInstall';
 import StepProject from './StepProject';
@@ -44,6 +45,9 @@ export default function NewChatModal({
   const [branchName, setBranchName] = useState('');
   const [skipPermissions, setSkipPermissions] = useState(true);
   const [isOrchestrator, setIsOrchestrator] = useState(false);
+  const [provider, setProvider] = useState<AgentProvider>('claude');
+  const [localModel, setLocalModel] = useState('');
+  const [tasmaniaEnabled, setTasmaniaEnabled] = useState(false);
   const agentPersonaRef = useRef<AgentPersonaValues>({ character: 'robot', name: '' });
 
   const projectPath = selectedProject || customPath;
@@ -74,6 +78,13 @@ export default function NewChatModal({
       setSelectedSecondaryProject('');
       setCustomSecondaryPath('');
       setSkipPermissions(false);
+      setProvider('claude');
+      setLocalModel('');
+
+      // Check if Tasmania is enabled in app settings
+      window.electronAPI?.appSettings?.get().then((settings) => {
+        setTasmaniaEnabled(settings?.tasmaniaEnabled || false);
+      });
     }
   }, [open, initialProjectPath, initialStep]);
 
@@ -135,7 +146,7 @@ export default function NewChatModal({
 
     const secondaryPath = showSecondaryProject ? (selectedSecondaryProject || customSecondaryPath) : undefined;
 
-    onSubmit(projectPath, selectedSkills, finalPrompt, model, worktreeConfig, agentCharacter, finalName, secondaryPath, skipPermissions);
+    onSubmit(projectPath, selectedSkills, finalPrompt, model, worktreeConfig, agentCharacter, finalName, secondaryPath, skipPermissions, provider, localModel);
 
     // Reset form
     setStep(1);
@@ -150,7 +161,9 @@ export default function NewChatModal({
     setSelectedSecondaryProject('');
     setSkipPermissions(false);
     setCustomSecondaryPath('');
-  }, [projectPath, prompt, selectedSkills, useWorktree, branchName, showSecondaryProject, selectedSecondaryProject, customSecondaryPath, model, skipPermissions, onSubmit]);
+    setProvider('claude');
+    setLocalModel('');
+  }, [projectPath, prompt, selectedSkills, useWorktree, branchName, showSecondaryProject, selectedSecondaryProject, customSecondaryPath, model, skipPermissions, provider, localModel, onSubmit]);
 
   if (!open) return null;
 
@@ -248,6 +261,11 @@ export default function NewChatModal({
                 prompt={prompt}
                 onPromptChange={setPrompt}
                 agentPersonaRef={agentPersonaRef}
+                provider={provider}
+                onProviderChange={setProvider}
+                localModel={localModel}
+                onLocalModelChange={setLocalModel}
+                tasmaniaEnabled={tasmaniaEnabled}
               />
             )}
           </div>

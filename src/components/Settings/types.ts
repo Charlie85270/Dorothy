@@ -53,9 +53,11 @@ export interface AppSettings {
   jiraApiToken: string;
   socialDataEnabled: boolean;
   socialDataApiKey: string;
+  tasmaniaEnabled: boolean;
+  tasmaniaServerPath: string;
   verboseModeEnabled: boolean;
   autoCheckUpdates: boolean;
   cliPaths: CLIPaths;
 }
 
-export type SettingsSection = 'general' | 'memory' | 'git' | 'notifications' | 'telegram' | 'slack' | 'jira' | 'socialdata' | 'permissions' | 'skills' | 'cli' | 'system';
+export type SettingsSection = 'general' | 'memory' | 'git' | 'notifications' | 'telegram' | 'slack' | 'jira' | 'socialdata' | 'tasmania' | 'permissions' | 'skills' | 'cli' | 'system';

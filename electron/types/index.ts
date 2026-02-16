@@ -5,6 +5,8 @@ export interface WorktreeConfig {
 
 export type AgentCharacter = 'robot' | 'ninja' | 'wizard' | 'astronaut' | 'knight' | 'pirate' | 'alien' | 'viking';
 
+export type AgentProvider = 'claude' | 'local';
+
 export interface AgentStatus {
   id: string;
   status: 'idle' | 'running' | 'completed' | 'error' | 'waiting';
@@ -24,6 +26,8 @@ export interface AgentStatus {
   skipPermissions?: boolean;
   currentSessionId?: string;
   kanbanTaskId?: string;  // For kanban task completion tracking
+  provider?: AgentProvider;   // 'claude' (default) or 'local' (Tasmania)
+  localModel?: string;        // Tasmania model name when provider is 'local'
 }
 
 export interface CLIPaths {
@@ -55,6 +59,8 @@ export interface AppSettings {
   jiraApiToken: string;
   socialDataEnabled: boolean;
   socialDataApiKey: string;
+  tasmaniaEnabled: boolean;
+  tasmaniaServerPath: string;
   verboseModeEnabled: boolean;
   autoCheckUpdates: boolean;
   cliPaths: CLIPaths;

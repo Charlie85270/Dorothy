@@ -15,6 +15,7 @@ import {
   SlackSection,
   JiraSection,
   SocialDataSection,
+  TasmaniaSection,
   PermissionsSection,
   SkillsSection,
   CLIPathsSection,
@@ -109,6 +110,14 @@ export default function SettingsPage() {
       case 'socialdata':
         return (
           <SocialDataSection
+            appSettings={appSettings}
+            onSaveAppSettings={handleSaveAppSettings}
+            onUpdateLocalSettings={updateLocalAppSettings}
+          />
+        );
+      case 'tasmania':
+        return (
+          <TasmaniaSection
             appSettings={appSettings}
             onSaveAppSettings={handleSaveAppSettings}
             onUpdateLocalSettings={updateLocalAppSettings}

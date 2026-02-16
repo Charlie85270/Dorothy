@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import type { AgentStatus, AgentEvent, ElectronAPI, AgentCharacter } from '@/types/electron';
+import type { AgentStatus, AgentEvent, ElectronAPI, AgentCharacter, AgentProvider } from '@/types/electron';
 
 // Check if we're running in Electron
 export const isElectron = (): boolean => {
@@ -54,6 +54,8 @@ export function useElectronAgents() {
     name?: string;
     secondaryProjectPath?: string;
     skipPermissions?: boolean;
+    provider?: AgentProvider;
+    localModel?: string;
   }) => {
     if (!isElectron()) {
       throw new Error('Electron API not available');
@@ -86,7 +88,7 @@ export function useElectronAgents() {
   const startAgent = useCallback(async (
     id: string,
     prompt: string,
-    options?: { model?: string; resume?: boolean }
+    options?: { model?: string; resume?: boolean; provider?: AgentProvider; localModel?: string }
   ) => {
     if (!isElectron()) {
       throw new Error('Electron API not available');

@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { execSync } from 'child_process';
+import type { AppSettings } from '../types';
 
 /**
  * MCP Orchestrator Service
@@ -60,7 +61,7 @@ export function getMcpSocialDataPath(): string {
  * Auto-setup MCP orchestrator on app start using claude mcp add command
  * This function runs during app initialization to ensure the orchestrator is properly configured
  */
-export async function setupMcpOrchestrator(): Promise<void> {
+export async function setupMcpOrchestrator(appSettings?: AppSettings): Promise<void> {
   try {
     const orchestratorPath = getMcpOrchestratorPath();
     const telegramPath = getMcpTelegramPath();
@@ -105,6 +106,16 @@ export async function setupMcpOrchestrator(): Promise<void> {
     } else {
       console.log('MCP socialdata not found at', socialDataPath);
     }
+
+    // Setup Tasmania MCP server if enabled in settings
+    if (appSettings?.tasmaniaEnabled && appSettings.tasmaniaServerPath) {
+      const tasmaniaPath = appSettings.tasmaniaServerPath;
+      if (fs.existsSync(tasmaniaPath)) {
+        await setupMcpServer('tasmania', tasmaniaPath, claudeDir, mcpConfigPath);
+      } else {
+        console.log('Tasmania MCP server not found at', tasmaniaPath);
+      }
+    }
   } catch (err) {
     console.error('Failed to auto-setup MCP servers:', err);
   }
@@ -114,18 +125,25 @@ export async function setupMcpOrchestrator(): Promise<void> {
  * Helper to setup a single MCP server
  */
 async function setupMcpServer(name: string, serverPath: string, claudeDir: string, mcpConfigPath: string): Promise<void> {
+  // Determine command based on file extension (.ts needs npx tsx, .js uses node)
+  const isTypeScript = serverPath.endsWith('.ts');
+  const command = isTypeScript ? 'npx' : 'node';
+  const args = isTypeScript ? ['tsx', serverPath] : [serverPath];
+
   // Check if current config path matches the expected path
   let needsUpdate = true;
   if (fs.existsSync(mcpConfigPath)) {
     try {
       const mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
       const existingConfig = mcpConfig.mcpServers?.[name];
-      if (existingConfig?.args?.[0] === serverPath) {
+      // Check the last arg (the actual server path) matches
+      const existingPath = existingConfig?.args?.[existingConfig.args.length - 1];
+      if (existingPath === serverPath) {
         console.log(`${name} already configured with correct path`);
         needsUpdate = false;
       } else if (existingConfig) {
         console.log(`${name} path changed, updating...`);
-        console.log('  Old path:', existingConfig.args?.[0]);
+        console.log('  Old path:', existingPath);
         console.log('  New path:', serverPath);
       }
     } catch {
@@ -146,7 +164,8 @@ async function setupMcpServer(name: string, serverPath: string, claudeDir: strin
   }
 
   // Add the MCP server using claude mcp add with -s user for global scope
-  const addCommand = `claude mcp add -s user ${name} node "${serverPath}"`;
+  const argsStr = args.map(a => `"${a}"`).join(' ');
+  const addCommand = `claude mcp add -s user ${name} ${command} ${argsStr}`;
   console.log('Running:', addCommand);
 
   try {
@@ -171,10 +190,7 @@ async function setupMcpServer(name: string, serverPath: string, claudeDir: strin
       }
     }
 
-    mcpConfig.mcpServers![name] = {
-      command: 'node',
-      args: [serverPath]
-    };
+    mcpConfig.mcpServers![name] = { command, args };
 
     fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
     console.log(`${name} configured via mcp.json fallback`);

@@ -62,6 +62,8 @@ export interface WorktreeConfig {
 
 export type AgentCharacter = 'robot' | 'ninja' | 'wizard' | 'astronaut' | 'knight' | 'pirate' | 'alien' | 'viking' | 'frog';
 
+export type AgentProvider = 'claude' | 'local';
+
 export interface AgentStatus {
   id: string;
   status: 'idle' | 'running' | 'completed' | 'error' | 'waiting';
@@ -79,6 +81,8 @@ export interface AgentStatus {
   name?: string;
   pathMissing?: boolean; // True if project path no longer exists
   skipPermissions?: boolean; // If true, use --dangerously-skip-permissions flag
+  provider?: AgentProvider;   // 'claude' (default) or 'local' (Tasmania)
+  localModel?: string;        // Tasmania model name when provider is 'local'
 }
 
 export interface PtyDataEvent {
@@ -117,6 +121,8 @@ export interface ElectronAPI {
       name?: string;
       secondaryProjectPath?: string;
       skipPermissions?: boolean;
+      provider?: AgentProvider;
+      localModel?: string;
     }) => Promise<AgentStatus & { ptyId: string }>;
     update: (params: {
       id: string;
@@ -126,7 +132,7 @@ export interface ElectronAPI {
       name?: string;
       character?: AgentCharacter;
     }) => Promise<{ success: boolean; error?: string; agent?: AgentStatus }>;
-    start: (params: { id: string; prompt: string; options?: { model?: string; resume?: boolean } }) => Promise<{ success: boolean }>;
+    start: (params: { id: string; prompt: string; options?: { model?: string; resume?: boolean; provider?: AgentProvider; localModel?: string } }) => Promise<{ success: boolean }>;
     get: (id: string) => Promise<AgentStatus | null>;
     list: () => Promise<AgentStatus[]>;
     stop: (id: string) => Promise<{ success: boolean }>;
@@ -233,6 +239,8 @@ export interface ElectronAPI {
       jiraApiToken: string;
       socialDataEnabled: boolean;
       socialDataApiKey: string;
+      tasmaniaEnabled: boolean;
+      tasmaniaServerPath: string;
       cliPaths?: {
         claude: string;
         gh: string;
@@ -262,6 +270,8 @@ export interface ElectronAPI {
       jiraApiToken?: string;
       socialDataEnabled?: boolean;
       socialDataApiKey?: string;
+      tasmaniaEnabled?: boolean;
+      tasmaniaServerPath?: string;
       cliPaths?: {
         claude: string;
         gh: string;
@@ -294,6 +304,39 @@ export interface ElectronAPI {
   // SocialData (Twitter/X)
   socialData?: {
     test: () => Promise<{ success: boolean; error?: string }>;
+  };
+
+  // Tasmania (Local LLM)
+  tasmania?: {
+    test: () => Promise<{ success: boolean; serverExists: boolean; apiReachable: boolean; error?: string }>;
+    getStatus: () => Promise<{
+      status: 'stopped' | 'starting' | 'running' | 'error';
+      backend: string | null;
+      port: number | null;
+      modelName: string | null;
+      modelPath: string | null;
+      endpoint: string | null;
+      startedAt: number | null;
+      error?: string;
+    }>;
+    getModels: () => Promise<{
+      models: Array<{
+        name: string;
+        filename: string;
+        path: string;
+        sizeBytes: number;
+        repo: string | null;
+        quantization: string | null;
+        parameters: string | null;
+        architecture: string | null;
+      }>;
+      error?: string;
+    }>;
+    loadModel: (modelPath: string) => Promise<{ success: boolean; error?: string }>;
+    stopModel: () => Promise<{ success: boolean; error?: string }>;
+    getMcpStatus: () => Promise<{ configured: boolean; error?: string }>;
+    setup: () => Promise<{ success: boolean; error?: string }>;
+    remove: () => Promise<{ success: boolean; error?: string }>;
   };
 
   // Dialogs

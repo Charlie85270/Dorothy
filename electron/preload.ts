@@ -50,6 +50,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       name?: string;
       secondaryProjectPath?: string;
       skipPermissions?: boolean;
+      provider?: 'claude' | 'local';
+      localModel?: string;
     }) => ipcRenderer.invoke('agent:create', config),
     update: (params: {
       id: string;
@@ -59,7 +61,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       name?: string;
       character?: string;
     }) => ipcRenderer.invoke('agent:update', params),
-    start: (params: { id: string; prompt: string; options?: { model?: string; resume?: boolean } }) =>
+    start: (params: { id: string; prompt: string; options?: { model?: string; resume?: boolean; provider?: 'claude' | 'local'; localModel?: string } }) =>
       ipcRenderer.invoke('agent:start', params),
     get: (id: string) =>
       ipcRenderer.invoke('agent:get', id),
@@ -243,6 +245,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
   socialData: {
     test: () =>
       ipcRenderer.invoke('socialdata:test'),
+  },
+
+  // Tasmania (Local LLM)
+  tasmania: {
+    test: () =>
+      ipcRenderer.invoke('tasmania:test'),
+    getStatus: () =>
+      ipcRenderer.invoke('tasmania:getStatus'),
+    getModels: () =>
+      ipcRenderer.invoke('tasmania:getModels'),
+    loadModel: (modelPath: string) =>
+      ipcRenderer.invoke('tasmania:loadModel', modelPath),
+    stopModel: () =>
+      ipcRenderer.invoke('tasmania:stopModel'),
+    getMcpStatus: () =>
+      ipcRenderer.invoke('tasmania:getMcpStatus'),
+    setup: () =>
+      ipcRenderer.invoke('tasmania:setup'),
+    remove: () =>
+      ipcRenderer.invoke('tasmania:remove'),
   },
 
   // Dialogs

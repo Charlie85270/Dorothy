@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play,
@@ -7,10 +7,26 @@ import {
   GitBranch,
   GitFork,
   Layers,
+  Cloud,
+  Cpu,
+  AlertCircle,
+  Loader2,
 } from 'lucide-react';
 import type { AgentPersonaValues } from './types';
+import type { AgentProvider } from '@/types/electron';
 import AgentPersonaEditor from './AgentPersonaEditor';
 import OrchestratorModeToggle from './OrchestratorModeToggle';
+
+interface TasmaniaModel {
+  name: string;
+  filename: string;
+  path: string;
+  sizeBytes: number;
+  repo: string | null;
+  quantization: string | null;
+  parameters: string | null;
+  architecture: string | null;
+}
 
 interface StepConfigureProps {
   projectPath: string;
@@ -30,6 +46,11 @@ interface StepConfigureProps {
   prompt: string;
   onPromptChange: (prompt: string) => void;
   agentPersonaRef: React.MutableRefObject<AgentPersonaValues>;
+  provider: AgentProvider;
+  onProviderChange: (provider: AgentProvider) => void;
+  localModel: string;
+  onLocalModelChange: (model: string) => void;
+  tasmaniaEnabled: boolean;
 }
 
 const StepConfigure = React.memo(function StepConfigure({
@@ -50,7 +71,45 @@ const StepConfigure = React.memo(function StepConfigure({
   prompt,
   onPromptChange,
   agentPersonaRef,
+  provider,
+  onProviderChange,
+  localModel,
+  onLocalModelChange,
+  tasmaniaEnabled,
 }: StepConfigureProps) {
+  // Tasmania state for local provider
+  const [tasmaniaStatus, setTasmaniaStatus] = useState<{
+    status: string; modelName: string | null; endpoint: string | null;
+  } | null>(null);
+  const [tasmaniaModels, setTasmaniaModels] = useState<TasmaniaModel[]>([]);
+  const [loadingTasmania, setLoadingTasmania] = useState(false);
+
+  // Fetch Tasmania status when switching to local provider
+  useEffect(() => {
+    if (provider !== 'local' || !tasmaniaEnabled) return;
+    let cancelled = false;
+    setLoadingTasmania(true);
+
+    Promise.all([
+      window.electronAPI?.tasmania?.getStatus(),
+      window.electronAPI?.tasmania?.getModels(),
+    ]).then(([status, modelsResult]) => {
+      if (cancelled) return;
+      if (status) setTasmaniaStatus(status);
+      if (modelsResult?.models) {
+        setTasmaniaModels(modelsResult.models);
+        // Auto-select loaded model if none selected
+        if (!localModel && status?.modelName) {
+          onLocalModelChange(status.modelName);
+        }
+      }
+    }).finally(() => {
+      if (!cancelled) setLoadingTasmania(false);
+    });
+
+    return () => { cancelled = true; };
+  }, [provider, tasmaniaEnabled]);
+
   return (
     <div className="space-y-6">
       <div>
@@ -104,31 +163,123 @@ const StepConfigure = React.memo(function StepConfigure({
         initialCharacter={agentPersonaRef.current.character}
       />
 
-      {/* Model Selection */}
-      <div>
-        <label className="block text-sm font-medium mb-2">Model</label>
-        <div className="grid grid-cols-3 gap-3">
-          {(['sonnet', 'opus', 'haiku'] as const).map((m) => (
+      {/* Provider Toggle — only shown when Tasmania is enabled */}
+      {tasmaniaEnabled && (
+        <div>
+          <label className="block text-sm font-medium mb-2">Provider</label>
+          <div className="grid grid-cols-2 gap-3">
             <button
-              key={m}
-              onClick={() => onModelChange(m)}
+              onClick={() => onProviderChange('claude')}
               className={`
-                p-3 rounded-none border transition-all text-center
-                ${model === m
+                p-3 rounded-none border transition-all text-center flex items-center justify-center gap-2
+                ${provider === 'claude'
                   ? 'border-accent-blue bg-accent-blue/10'
                   : 'border-border-primary hover:border-border-accent'
                 }
               `}
             >
-              <Zap className={`w-5 h-5 mx-auto mb-1 ${model === m ? 'text-accent-blue' : 'text-text-muted'}`} />
-              <span className="font-medium capitalize">{m}</span>
-              <p className="text-xs text-text-muted mt-0.5">
-                {m === 'opus' ? 'Most capable' : m === 'sonnet' ? 'Balanced' : 'Fastest'}
-              </p>
+              <Cloud className={`w-4 h-4 ${provider === 'claude' ? 'text-accent-blue' : 'text-text-muted'}`} />
+              <span className="font-medium">Claude Code</span>
             </button>
-          ))}
+            <button
+              onClick={() => onProviderChange('local')}
+              className={`
+                p-3 rounded-none border transition-all text-center flex items-center justify-center gap-2
+                ${provider === 'local'
+                  ? 'border-accent-green bg-accent-green/10'
+                  : 'border-border-primary hover:border-border-accent'
+                }
+              `}
+            >
+              <Cpu className={`w-4 h-4 ${provider === 'local' ? 'text-accent-green' : 'text-text-muted'}`} />
+              <span className="font-medium">Local LLM</span>
+            </button>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Model Selection — Claude models or Tasmania models */}
+      {provider === 'claude' ? (
+        <div>
+          <label className="block text-sm font-medium mb-2">Model</label>
+          <div className="grid grid-cols-3 gap-3">
+            {(['sonnet', 'opus', 'haiku'] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => onModelChange(m)}
+                className={`
+                  p-3 rounded-none border transition-all text-center
+                  ${model === m
+                    ? 'border-accent-blue bg-accent-blue/10'
+                    : 'border-border-primary hover:border-border-accent'
+                  }
+                `}
+              >
+                <Zap className={`w-5 h-5 mx-auto mb-1 ${model === m ? 'text-accent-blue' : 'text-text-muted'}`} />
+                <span className="font-medium capitalize">{m}</span>
+                <p className="text-xs text-text-muted mt-0.5">
+                  {m === 'opus' ? 'Most capable' : m === 'sonnet' ? 'Balanced' : 'Fastest'}
+                </p>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div>
+          <label className="block text-sm font-medium mb-2">Local Model</label>
+          {loadingTasmania ? (
+            <div className="p-4 border border-border-primary rounded-none flex items-center gap-2 text-text-muted">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span className="text-sm">Connecting to Tasmania...</span>
+            </div>
+          ) : tasmaniaStatus?.status !== 'running' ? (
+            <div className="p-4 border border-amber-500/30 bg-amber-500/5 rounded-none">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-amber-500">Tasmania not running</p>
+                  <p className="text-xs text-text-muted mt-1">
+                    Start Tasmania and load a model first. Go to Settings &gt; Tasmania to configure.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {/* Currently loaded model */}
+              {tasmaniaStatus.modelName && (
+                <div className="p-3 border border-accent-green/30 bg-accent-green/5 rounded-none">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-accent-green animate-pulse" />
+                    <span className="text-sm font-medium">{tasmaniaStatus.modelName}</span>
+                    <span className="text-xs text-text-muted ml-auto">loaded</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Available models dropdown */}
+              {tasmaniaModels.length > 0 && (
+                <div>
+                  <select
+                    value={localModel}
+                    onChange={(e) => onLocalModelChange(e.target.value)}
+                    className="w-full px-3 py-2 rounded-none text-sm bg-bg-primary border border-border-primary focus:border-accent-green focus:outline-none"
+                  >
+                    {tasmaniaModels.map((m) => (
+                      <option key={m.path} value={m.name}>
+                        {m.name}{m.quantization ? ` (${m.quantization})` : ''}{m.parameters ? ` - ${m.parameters}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-text-muted mt-1.5">
+                    Select the model to use. The currently loaded model will be used if available.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Git Worktree Option */}
       <div className="p-4 rounded-none border border-border-primary bg-bg-tertiary/30">

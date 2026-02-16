@@ -261,6 +261,29 @@ export async function initAgentPty(
   }
   const fullPath = buildFullPath(cliExtraPaths);
 
+  // For local provider, bake Tasmania env vars into the PTY process environment
+  let tasmaniaEnv: Record<string, string> = {};
+  if (agent.provider === 'local') {
+    try {
+      const { getTasmaniaStatus } = require('../services/tasmania-client') as typeof import('../services/tasmania-client');
+      const tasmaniaStatus = await getTasmaniaStatus();
+      if (tasmaniaStatus.status === 'running' && tasmaniaStatus.endpoint) {
+        const localModel = agent.localModel || tasmaniaStatus.modelName || 'default';
+        // Strip /v1 suffix — Claude Code SDK appends /v1/messages itself
+        const baseUrl = tasmaniaStatus.endpoint!.replace(/\/v1\/?$/, '');
+        tasmaniaEnv = {
+          ANTHROPIC_BASE_URL: baseUrl,
+          ANTHROPIC_MODEL: localModel,
+          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+        };
+      } else {
+        console.warn(`Agent ${agent.id} is local provider but Tasmania is not running — PTY created without Tasmania env vars`);
+      }
+    } catch (err) {
+      console.warn(`Failed to get Tasmania status for agent ${agent.id}:`, err);
+    }
+  }
+
   const ptyProcess = pty.spawn(shell, ['-l'], {
     name: 'xterm-256color',
     cols: 120,
@@ -272,6 +295,7 @@ export async function initAgentPty(
       CLAUDE_SKILLS: agent.skills.join(','),
       CLAUDE_AGENT_ID: agent.id,
       CLAUDE_PROJECT_PATH: agent.projectPath,
+      ...tasmaniaEnv,
     },
   });
 

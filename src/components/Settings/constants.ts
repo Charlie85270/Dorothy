@@ -9,6 +9,7 @@ import {
   Brain,
   Terminal,
   Twitter,
+  Server,
 } from 'lucide-react';
 import { SlackIcon } from './SlackIcon';
 import { JiraIcon } from './JiraIcon';
@@ -22,7 +23,8 @@ export const SECTIONS: { id: SettingsSection; label: string; icon: React.Compone
   { id: 'telegram', label: 'Telegram', icon: Send },
   { id: 'slack', label: 'Slack', icon: SlackIcon },
   { id: 'jira', label: 'JIRA', icon: JiraIcon },
-  { id: 'socialdata', label: 'SocialData', icon: Twitter },
+  { id: 'socialdata', label: 'X (Twitter)', icon: Twitter },
+  { id: 'localmodels', label: 'Local Models', icon: Server },
   { id: 'permissions', label: 'Permissions', icon: Shield },
   { id: 'skills', label: 'Skills & Plugins', icon: Sparkles },
   { id: 'cli', label: 'CLI Paths', icon: Terminal },
@@ -51,6 +53,13 @@ export const DEFAULT_APP_SETTINGS = {
   jiraApiToken: '',
   socialDataEnabled: false,
   socialDataApiKey: '',
+  xPostingEnabled: false,
+  xApiKey: '',
+  xApiSecret: '',
+  xAccessToken: '',
+  xAccessTokenSecret: '',
+  localModelEnabled: false,
+  localModelBaseUrl: '',
   verboseModeEnabled: false,
   autoCheckUpdates: true,
   cliPaths: {

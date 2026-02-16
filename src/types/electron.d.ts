@@ -296,6 +296,16 @@ export interface ElectronAPI {
     test: () => Promise<{ success: boolean; error?: string }>;
   };
 
+  // X API (posting)
+  xApi?: {
+    test: () => Promise<{ success: boolean; username?: string; error?: string }>;
+  };
+
+  // Local Model
+  localModel?: {
+    detect: () => Promise<{ found: boolean; port?: number; url?: string }>;
+  };
+
   // Dialogs
   dialog: {
     openFolder: () => Promise<string | null>;
@@ -375,8 +385,19 @@ export interface ElectronAPI {
       };
     }) => Promise<{ success: boolean; error?: string; taskId?: string }>;
     deleteTask: (taskId: string) => Promise<{ success: boolean; error?: string }>;
+    updateTask: (taskId: string, updates: {
+      prompt?: string;
+      schedule?: string;
+      projectPath?: string;
+      autonomous?: boolean;
+      notifications?: { telegram: boolean; slack: boolean };
+    }) => Promise<{ success: boolean; error?: string }>;
     runTask: (taskId: string) => Promise<{ success: boolean; error?: string }>;
-    getLogs: (taskId: string) => Promise<{ logs: string; error?: string }>;
+    getLogs: (taskId: string) => Promise<{
+      logs: string;
+      runs?: Array<{ startedAt: string; completedAt?: string; content: string }>;
+      error?: string;
+    }>;
     fixMcpPaths: () => Promise<{ success: boolean; error?: string }>;
   };
 

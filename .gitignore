@@ -53,6 +53,8 @@ mcp-vault/node_modules
 mcp-vault/dist
 mcp-socialdata/node_modules
 mcp-socialdata/dist
+mcp-x/node_modules
+mcp-x/dist
 electron/dist
 
 .idea

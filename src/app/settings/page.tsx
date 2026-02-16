@@ -15,6 +15,7 @@ import {
   SlackSection,
   JiraSection,
   SocialDataSection,
+  LocalModelsSection,
   PermissionsSection,
   SkillsSection,
   CLIPathsSection,
@@ -109,6 +110,14 @@ export default function SettingsPage() {
       case 'socialdata':
         return (
           <SocialDataSection
+            appSettings={appSettings}
+            onSaveAppSettings={handleSaveAppSettings}
+            onUpdateLocalSettings={updateLocalAppSettings}
+          />
+        );
+      case 'localmodels':
+        return (
+          <LocalModelsSection
             appSettings={appSettings}
             onSaveAppSettings={handleSaveAppSettings}
             onUpdateLocalSettings={updateLocalAppSettings}

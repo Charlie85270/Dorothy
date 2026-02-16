@@ -19,6 +19,7 @@ import {
   Filter,
   X,
   Play,
+  Pencil,
 } from 'lucide-react';
 import { isElectron } from '@/hooks/useElectron';
 
@@ -81,8 +82,26 @@ export default function RecurringTasksPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [selectedLogs, setSelectedLogs] = useState<{ taskId: string; logs: string } | null>(null);
+  const [selectedLogs, setSelectedLogs] = useState<{
+    taskId: string;
+    logs: string;
+    runs: Array<{ startedAt: string; completedAt?: string; content: string }>;
+    selectedRunIndex: number;
+  } | null>(null);
   const [runningTaskId, setRunningTaskId] = useState<string | null>(null);
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
+  const [editingTask, setEditingTask] = useState<ScheduledTask | null>(null);
+  const [editForm, setEditForm] = useState({
+    prompt: '',
+    schedulePreset: 'custom',
+    customCron: '',
+    time: '09:00',
+    projectPath: '',
+    autonomous: true,
+    notifyTelegram: false,
+    notifySlack: false,
+  });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // Filters
   const [filterProject, setFilterProject] = useState<string>('all');
@@ -279,12 +298,104 @@ export default function RecurringTasksPage() {
     if (!isElectron()) return;
     try {
       const result = await window.electronAPI?.scheduler?.getLogs(taskId);
-      if (result?.logs) {
-        setSelectedLogs({ taskId, logs: result.logs });
+      if (result) {
+        const runs = result.runs || [];
+        setSelectedLogs({
+          taskId,
+          logs: result.logs,
+          runs,
+          selectedRunIndex: runs.length > 0 ? runs.length - 1 : 0, // default to latest run
+        });
       }
     } catch (err) {
       console.error('Error fetching logs:', err);
     }
+  };
+
+  // Edit task — derive preset from cron
+  const handleEditTask = (task: ScheduledTask) => {
+    const cron = task.schedule;
+    const parts = cron.split(' ');
+    let preset = 'custom';
+    let time = '09:00';
+
+    if (parts.length === 5) {
+      const [min, hr, dom, , dow] = parts;
+      if (hr !== '*') {
+        time = `${hr.padStart(2, '0')}:${min.padStart(2, '0')}`;
+      }
+      if (hr === '*' && dom === '*' && dow === '*') preset = 'hourly';
+      else if (dom === '*' && dow === '1-5') preset = 'weekdays';
+      else if (dom === '*' && dow === '1') preset = 'weekly';
+      else if (dom === '1' && dow === '*') preset = 'monthly';
+      else if (dom === '*' && dow === '*') preset = 'daily';
+    }
+
+    setEditingTask(task);
+    setEditForm({
+      prompt: task.prompt,
+      schedulePreset: preset,
+      customCron: preset === 'custom' ? cron : '',
+      time,
+      projectPath: task.projectPath,
+      autonomous: task.autonomous,
+      notifyTelegram: task.notifications.telegram,
+      notifySlack: task.notifications.slack,
+    });
+  };
+
+  // Build cron from edit form
+  const buildEditCron = (): string => {
+    if (editForm.schedulePreset === 'custom') return editForm.customCron;
+    const preset = SCHEDULE_PRESETS.find(p => p.value === editForm.schedulePreset);
+    if (!preset) return editForm.customCron;
+    const [hour, minute] = editForm.time.split(':');
+    return preset.cron.replace(/^0 \*/, `${minute} ${hour}`).replace(/^0 9/, `${minute} ${hour}`);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!isElectron() || !editingTask) return;
+    setIsSavingEdit(true);
+    try {
+      const newCron = buildEditCron();
+      const updates: {
+        prompt?: string;
+        schedule?: string;
+        projectPath?: string;
+        autonomous?: boolean;
+        notifications?: { telegram: boolean; slack: boolean };
+      } = {};
+
+      if (editForm.prompt !== editingTask.prompt) updates.prompt = editForm.prompt;
+      if (newCron !== editingTask.schedule) updates.schedule = newCron;
+      if (editForm.projectPath !== editingTask.projectPath) updates.projectPath = editForm.projectPath;
+      if (editForm.autonomous !== editingTask.autonomous) updates.autonomous = editForm.autonomous;
+      if (editForm.notifyTelegram !== editingTask.notifications.telegram ||
+          editForm.notifySlack !== editingTask.notifications.slack) {
+        updates.notifications = { telegram: editForm.notifyTelegram, slack: editForm.notifySlack };
+      }
+
+      if (Object.keys(updates).length === 0) {
+        setEditingTask(null);
+        return;
+      }
+
+      const result = await window.electronAPI?.scheduler?.updateTask(editingTask.id, updates);
+      if (result?.success) {
+        await loadTasks();
+        setEditingTask(null);
+        setToast({ message: 'Task updated successfully', type: 'success' });
+        setTimeout(() => setToast(null), 2000);
+      } else {
+        setToast({ message: result?.error || 'Failed to update task', type: 'error' });
+        setTimeout(() => setToast(null), 3000);
+      }
+    } catch (err) {
+      console.error('Error updating task:', err);
+      setToast({ message: 'Failed to update task', type: 'error' });
+      setTimeout(() => setToast(null), 3000);
+    }
+    setIsSavingEdit(false);
   };
 
   // Get unique projects from tasks
@@ -489,9 +600,22 @@ export default function RecurringTasksPage() {
                       </div>
 
                       {/* Task prompt/description */}
-                      <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
+                      <p className={`text-sm text-muted-foreground mb-1 ${expandedTasks.has(task.id) ? '' : 'line-clamp-2'}`}>
                         {task.prompt}
                       </p>
+                      {task.prompt.length > 120 && (
+                        <button
+                          onClick={() => setExpandedTasks(prev => {
+                            const next = new Set(prev);
+                            if (next.has(task.id)) next.delete(task.id);
+                            else next.add(task.id);
+                            return next;
+                          })}
+                          className="text-xs text-muted-foreground hover:text-foreground transition-colors mb-1"
+                        >
+                          {expandedTasks.has(task.id) ? 'Show less' : 'Show more'}
+                        </button>
+                      )}
 
                       <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                         <div className="flex items-center gap-1">
@@ -559,6 +683,13 @@ export default function RecurringTasksPage() {
                         title="View logs"
                       >
                         <FileText className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleEditTask(task)}
+                        className="p-2 hover:bg-secondary rounded-lg transition-colors"
+                        title="Edit task"
+                      >
+                        <Pencil className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDeleteTask(task.id)}
@@ -807,19 +938,221 @@ export default function RecurringTasksPage() {
               onClick={(e) => e.stopPropagation()}
               className="bg-card border border-border rounded-xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col"
             >
-              <div className="p-4 border-b border-border flex items-center justify-between">
-                <h2 className="font-semibold">Task Logs: {selectedLogs.taskId}</h2>
+              <div className="p-4 border-b border-border flex items-center justify-between gap-3">
+                <h2 className="font-semibold shrink-0">Task Logs</h2>
+                {selectedLogs.runs.length > 1 && (
+                  <select
+                    value={selectedLogs.selectedRunIndex}
+                    onChange={(e) => setSelectedLogs({ ...selectedLogs, selectedRunIndex: parseInt(e.target.value) })}
+                    className="flex-1 min-w-0 px-3 py-1.5 text-sm bg-secondary border border-border rounded-lg truncate"
+                  >
+                    {selectedLogs.runs.map((run, i) => (
+                      <option key={i} value={i}>
+                        {run.startedAt}{!run.completedAt ? ' (running)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {selectedLogs.runs.length === 1 && (
+                  <span className="text-xs text-muted-foreground truncate">
+                    {selectedLogs.runs[0].startedAt}{!selectedLogs.runs[0].completedAt ? ' (running)' : ''}
+                  </span>
+                )}
                 <button
                   onClick={() => setSelectedLogs(null)}
+                  className="p-1 hover:bg-secondary rounded-lg transition-colors shrink-0"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              {selectedLogs.runs.length > 0 && selectedLogs.runs[selectedLogs.selectedRunIndex] && (
+                <div className="px-4 py-2 border-b border-border flex items-center gap-3 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    Started: {selectedLogs.runs[selectedLogs.selectedRunIndex].startedAt}
+                  </div>
+                  {selectedLogs.runs[selectedLogs.selectedRunIndex].completedAt ? (
+                    <div className="flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3 text-green-500" />
+                      Completed: {selectedLogs.runs[selectedLogs.selectedRunIndex].completedAt}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Still running...
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="flex-1 overflow-auto p-4 bg-[#0D0B08]">
+                <pre className="text-xs font-mono whitespace-pre-wrap text-muted-foreground">
+                  {selectedLogs.runs.length > 0
+                    ? (selectedLogs.runs[selectedLogs.selectedRunIndex]?.content || 'No content for this run')
+                    : (selectedLogs.logs || 'No logs available')}
+                </pre>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Task Modal */}
+      <AnimatePresence>
+        {editingTask && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() => setEditingTask(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-card border border-border rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+            >
+              <div className="p-6 border-b border-border flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Edit Scheduled Task</h2>
+                <button
+                  onClick={() => setEditingTask(null)}
                   className="p-1 hover:bg-secondary rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              <div className="flex-1 overflow-auto p-4 bg-[#0D0B08]">
-                <pre className="text-xs font-mono whitespace-pre-wrap text-muted-foreground">
-                  {selectedLogs.logs || 'No logs available'}
-                </pre>
+
+              <div className="p-6 space-y-4">
+                {/* Project Path */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">Project Path</label>
+                  <input
+                    type="text"
+                    value={editForm.projectPath}
+                    onChange={(e) => setEditForm({ ...editForm, projectPath: e.target.value })}
+                    className="w-full px-3 py-2 bg-secondary border border-border rounded-lg font-mono text-sm"
+                  />
+                </div>
+
+                {/* Prompt */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">Task Prompt</label>
+                  <textarea
+                    value={editForm.prompt}
+                    onChange={(e) => setEditForm({ ...editForm, prompt: e.target.value })}
+                    rows={6}
+                    className="w-full px-3 py-2 bg-secondary border border-border rounded-lg resize-none text-sm"
+                  />
+                </div>
+
+                {/* Schedule */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Schedule</label>
+                    <select
+                      value={editForm.schedulePreset}
+                      onChange={(e) => setEditForm({ ...editForm, schedulePreset: e.target.value })}
+                      className="w-full px-3 py-2 bg-secondary border border-border rounded-lg"
+                    >
+                      {SCHEDULE_PRESETS.map(preset => (
+                        <option key={preset.value} value={preset.value}>{preset.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Time</label>
+                    <input
+                      type="time"
+                      value={editForm.time}
+                      onChange={(e) => setEditForm({ ...editForm, time: e.target.value })}
+                      className="w-full px-3 py-2 bg-secondary border border-border rounded-lg"
+                    />
+                  </div>
+                </div>
+
+                {editForm.schedulePreset === 'custom' && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Custom Cron Expression</label>
+                    <input
+                      type="text"
+                      value={editForm.customCron}
+                      onChange={(e) => setEditForm({ ...editForm, customCron: e.target.value })}
+                      placeholder="0 9 * * 1-5"
+                      className="w-full px-3 py-2 bg-secondary border border-border rounded-lg font-mono text-sm"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Format: minute hour day month weekday
+                    </p>
+                  </div>
+                )}
+
+                {/* Options */}
+                <div className="space-y-3">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editForm.autonomous}
+                      onChange={(e) => setEditForm({ ...editForm, autonomous: e.target.checked })}
+                      className="w-4 h-4 rounded border-border"
+                    />
+                    <div>
+                      <span className="text-sm font-medium">Run autonomously</span>
+                      <p className="text-xs text-muted-foreground">Skip permission prompts during execution</p>
+                    </div>
+                  </label>
+                </div>
+
+                {/* Notifications */}
+                <div className="border-t border-border pt-4">
+                  <label className="block text-sm font-medium mb-3">Send results to:</label>
+                  <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editForm.notifyTelegram}
+                        onChange={(e) => setEditForm({ ...editForm, notifyTelegram: e.target.checked })}
+                        className="w-4 h-4 rounded border-border"
+                      />
+                      <Send className="w-4 h-4 text-blue-400" />
+                      <span className="text-sm">Telegram</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editForm.notifySlack}
+                        onChange={(e) => setEditForm({ ...editForm, notifySlack: e.target.checked })}
+                        className="w-4 h-4 rounded border-border"
+                      />
+                      <SlackIcon className="w-4 h-4 text-purple-400" />
+                      <span className="text-sm">Slack</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-border flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setEditingTask(null)}
+                  className="px-4 py-2 text-sm hover:bg-secondary rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveEdit}
+                  disabled={isSavingEdit || !editForm.prompt.trim()}
+                  className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {isSavingEdit ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save Changes'
+                  )}
+                </button>
               </div>
             </motion.div>
           </motion.div>

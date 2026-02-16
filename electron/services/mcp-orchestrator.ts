@@ -57,6 +57,14 @@ export function getMcpSocialDataPath(): string {
 }
 
 /**
+ * Get the path to the bundled MCP X server (tweet posting)
+ * Always uses the packaged app path - MCP servers are bundled in extraResources
+ */
+export function getMcpXPath(): string {
+  return path.join(process.resourcesPath, 'mcp-x', 'dist', 'bundle.js');
+}
+
+/**
  * Auto-setup MCP orchestrator on app start using claude mcp add command
  * This function runs during app initialization to ensure the orchestrator is properly configured
  */
@@ -67,6 +75,7 @@ export async function setupMcpOrchestrator(): Promise<void> {
     const kanbanPath = getMcpKanbanPath();
     const vaultPath = getMcpVaultPath();
     const socialDataPath = getMcpSocialDataPath();
+    const xPath = getMcpXPath();
 
     const claudeDir = path.join(os.homedir(), '.claude');
     const mcpConfigPath = path.join(claudeDir, 'mcp.json');
@@ -104,6 +113,13 @@ export async function setupMcpOrchestrator(): Promise<void> {
       await setupMcpServer('dorothy-socialdata', socialDataPath, claudeDir, mcpConfigPath);
     } else {
       console.log('MCP socialdata not found at', socialDataPath);
+    }
+
+    // Setup X MCP server if exists (makes tweet posting available to all agents)
+    if (fs.existsSync(xPath)) {
+      await setupMcpServer('dorothy-x', xPath, claudeDir, mcpConfigPath);
+    } else {
+      console.log('MCP x not found at', xPath);
     }
   } catch (err) {
     console.error('Failed to auto-setup MCP servers:', err);

@@ -55,6 +55,13 @@ export interface AppSettings {
   jiraApiToken: string;
   socialDataEnabled: boolean;
   socialDataApiKey: string;
+  xPostingEnabled: boolean;
+  xApiKey: string;
+  xApiSecret: string;
+  xAccessToken: string;
+  xAccessTokenSecret: string;
+  localModelEnabled: boolean;
+  localModelBaseUrl: string;
   verboseModeEnabled: boolean;
   autoCheckUpdates: boolean;
   cliPaths: CLIPaths;

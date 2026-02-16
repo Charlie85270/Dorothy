@@ -128,6 +128,13 @@ function loadAppSettings(): AppSettings {
     jiraApiToken: '',
     socialDataEnabled: false,
     socialDataApiKey: '',
+    xPostingEnabled: false,
+    xApiKey: '',
+    xApiSecret: '',
+    xAccessToken: '',
+    xAccessTokenSecret: '',
+    localModelEnabled: false,
+    localModelBaseUrl: '',
     verboseModeEnabled: false,
     autoCheckUpdates: true,
     cliPaths: {

@@ -237,22 +237,24 @@ export async function initAgentPty(
 
   // Build PATH that includes user-configured paths, nvm, and other common locations for claude
   const cliExtraPaths: string[] = [];
+  let savedSettings: Record<string, unknown> = {};
   try {
     const settingsFile = path.join(os.homedir(), '.dorothy', 'app-settings.json');
     if (fs.existsSync(settingsFile)) {
-      const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'));
-      if (settings.cliPaths) {
-        if (settings.cliPaths.claude) {
-          cliExtraPaths.push(path.dirname(settings.cliPaths.claude));
+      savedSettings = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'));
+      const cliPaths = savedSettings.cliPaths as Record<string, unknown> | undefined;
+      if (cliPaths) {
+        if (cliPaths.claude) {
+          cliExtraPaths.push(path.dirname(cliPaths.claude as string));
         }
-        if (settings.cliPaths.gh) {
-          cliExtraPaths.push(path.dirname(settings.cliPaths.gh));
+        if (cliPaths.gh) {
+          cliExtraPaths.push(path.dirname(cliPaths.gh as string));
         }
-        if (settings.cliPaths.node) {
-          cliExtraPaths.push(path.dirname(settings.cliPaths.node));
+        if (cliPaths.node) {
+          cliExtraPaths.push(path.dirname(cliPaths.node as string));
         }
-        if (settings.cliPaths.additionalPaths) {
-          cliExtraPaths.push(...settings.cliPaths.additionalPaths.filter(Boolean));
+        if (cliPaths.additionalPaths) {
+          cliExtraPaths.push(...(cliPaths.additionalPaths as string[]).filter(Boolean));
         }
       }
     }
@@ -296,6 +298,9 @@ export async function initAgentPty(
       CLAUDE_AGENT_ID: agent.id,
       CLAUDE_PROJECT_PATH: agent.projectPath,
       ...tasmaniaEnv,
+      ...(savedSettings.localModelEnabled && savedSettings.localModelBaseUrl
+        ? { ANTHROPIC_BASE_URL: savedSettings.localModelBaseUrl as string }
+        : {}),
     },
   });
 

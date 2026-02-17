@@ -247,6 +247,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('socialdata:test'),
   },
 
+  // X API (posting)
+  xApi: {
+    test: () =>
+      ipcRenderer.invoke('xapi:test') as Promise<{ success: boolean; username?: string; error?: string }>,
+  },
+
+  // Local Model
+  localModel: {
+    detect: () =>
+      ipcRenderer.invoke('localmodel:detect') as Promise<{ found: boolean; port?: number; url?: string }>,
+  },
+
   // Tasmania (Local LLM)
   tasmania: {
     test: () =>
@@ -329,6 +341,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('scheduler:createTask', params),
     deleteTask: (taskId: string) =>
       ipcRenderer.invoke('scheduler:deleteTask', taskId),
+    updateTask: (taskId: string, updates: {
+      prompt?: string;
+      schedule?: string;
+      projectPath?: string;
+      autonomous?: boolean;
+      notifications?: { telegram: boolean; slack: boolean };
+    }) =>
+      ipcRenderer.invoke('scheduler:updateTask', taskId, updates),
     runTask: (taskId: string) =>
       ipcRenderer.invoke('scheduler:runTask', taskId),
     getLogs: (taskId: string) =>

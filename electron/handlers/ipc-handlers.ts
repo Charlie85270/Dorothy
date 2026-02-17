@@ -60,6 +60,7 @@ export function registerIpcHandlers(deps: IpcHandlerDependencies): void {
   registerSettingsHandlers(deps);
   registerAppSettingsHandlers(deps);
   registerUpdateHandlers();
+  registerLocalModelHandlers(deps);
   // Orchestrator handlers are registered separately in services/mcp-orchestrator.ts
   registerTasmaniaHandlers(deps);
   registerFileSystemHandlers(deps);
@@ -257,6 +258,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
           CLAUDE_SKILLS: config.skills.join(','),
           CLAUDE_AGENT_ID: id,
           CLAUDE_PROJECT_PATH: config.projectPath,
+          ...(currentSettings.localModelEnabled && currentSettings.localModelBaseUrl
+            ? { ANTHROPIC_BASE_URL: currentSettings.localModelBaseUrl }
+            : {}),
         },
       });
       console.log(`PTY created successfully for agent ${id}, PID: ${ptyProcess.pid}`);
@@ -1192,6 +1196,77 @@ function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
     return { success: true };
   });
 
+  // Test X API credentials (OAuth 1.0a)
+  ipcMain.handle('xapi:test', async () => {
+    const appSettings = getAppSettings();
+    if (!appSettings.xApiKey || !appSettings.xApiSecret || !appSettings.xAccessToken || !appSettings.xAccessTokenSecret) {
+      return { success: false, error: 'All 4 X API credentials are required' };
+    }
+
+    try {
+      const crypto = require('crypto');
+      const https = require('https');
+
+      // OAuth 1.0a signing for GET /2/users/me
+      const method = 'GET';
+      const url = 'https://api.x.com/2/users/me';
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const nonce = crypto.randomBytes(16).toString('hex');
+
+      const percentEncode = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (c: string) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+
+      const oauthParams: Record<string, string> = {
+        oauth_consumer_key: appSettings.xApiKey,
+        oauth_nonce: nonce,
+        oauth_signature_method: 'HMAC-SHA1',
+        oauth_timestamp: timestamp,
+        oauth_token: appSettings.xAccessToken,
+        oauth_version: '1.0',
+      };
+
+      const paramString = Object.keys(oauthParams).sort()
+        .map(k => `${percentEncode(k)}=${percentEncode(oauthParams[k])}`).join('&');
+      const sigBase = `${method}&${percentEncode(url)}&${percentEncode(paramString)}`;
+      const sigKey = `${percentEncode(appSettings.xApiSecret)}&${percentEncode(appSettings.xAccessTokenSecret)}`;
+      const signature = crypto.createHmac('sha1', sigKey).update(sigBase).digest('base64');
+      oauthParams['oauth_signature'] = signature;
+
+      const authHeader = 'OAuth ' + Object.keys(oauthParams).sort()
+        .map(k => `${percentEncode(k)}="${percentEncode(oauthParams[k])}"`).join(', ');
+
+      const result = await new Promise<{ success: boolean; username?: string; error?: string }>((resolve) => {
+        const req = https.request({
+          hostname: 'api.x.com',
+          port: 443,
+          path: '/2/users/me',
+          method: 'GET',
+          headers: { 'Authorization': authHeader, 'Accept': 'application/json' },
+        }, (res: import('http').IncomingMessage) => {
+          let data = '';
+          res.on('data', (chunk: string) => { data += chunk; });
+          res.on('end', () => {
+            if (res.statusCode === 200) {
+              try {
+                const parsed = JSON.parse(data);
+                resolve({ success: true, username: parsed.data?.username });
+              } catch {
+                resolve({ success: false, error: 'Invalid response' });
+              }
+            } else {
+              resolve({ success: false, error: `HTTP ${res.statusCode}: ${data.slice(0, 200)}` });
+            }
+          });
+        });
+        req.on('error', (err: Error) => resolve({ success: false, error: err.message }));
+        req.end();
+      });
+      return result;
+    } catch (err) {
+      console.error('X API test failed:', err);
+      return { success: false, error: String(err) };
+    }
+  });
+
   // Test SocialData API key
   ipcMain.handle('socialdata:test', async () => {
     const appSettings = getAppSettings();
@@ -1330,6 +1405,36 @@ function registerUpdateHandlers(): void {
   ipcMain.handle('app:openExternal', async (_event, url: string) => {
     shell.openExternal(url);
     return { success: true };
+  });
+}
+
+// ============== Local Model IPC Handlers ==============
+
+function registerLocalModelHandlers(deps: IpcHandlerDependencies): void {
+  ipcMain.handle('localmodel:detect', async () => {
+    const http = require('http');
+    const ports = [11434, 1234, 8080, 8081, 8082, 4000, 5000, 3001];
+
+    const testPort = (port: number): Promise<{ found: boolean; port: number; url: string } | null> => {
+      return new Promise((resolve) => {
+        const req = http.get(`http://127.0.0.1:${port}/v1/models`, { timeout: 2000 }, (res: { statusCode: number }) => {
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 400) {
+            resolve({ found: true, port, url: `http://127.0.0.1:${port}/v1` });
+          } else {
+            resolve(null);
+          }
+        });
+        req.on('error', () => resolve(null));
+        req.on('timeout', () => {
+          req.destroy();
+          resolve(null);
+        });
+      });
+    };
+
+    const results = await Promise.all(ports.map(testPort));
+    const found = results.find((r) => r !== null);
+    return found || { found: false };
   });
 }
 

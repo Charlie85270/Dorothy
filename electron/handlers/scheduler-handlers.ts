@@ -827,6 +827,157 @@ export function registerSchedulerHandlers(): void {
     }
   });
 
+  // Update a scheduled task
+  ipcMain.handle('scheduler:updateTask', async (_event, taskId: string, updates: {
+    prompt?: string;
+    schedule?: string;
+    projectPath?: string;
+    autonomous?: boolean;
+    notifications?: { telegram: boolean; slack: boolean };
+  }) => {
+    try {
+      // Update schedules.json
+      const globalSchedulesPath = path.join(os.homedir(), '.claude', 'schedules.json');
+      let found = false;
+      let task: Record<string, unknown> | undefined;
+
+      if (fs.existsSync(globalSchedulesPath)) {
+        const schedules = JSON.parse(fs.readFileSync(globalSchedulesPath, 'utf-8'));
+        if (Array.isArray(schedules)) {
+          for (const s of schedules) {
+            if (s.id === taskId) {
+              if (updates.prompt !== undefined) s.prompt = updates.prompt;
+              if (updates.schedule !== undefined) s.schedule = updates.schedule;
+              if (updates.projectPath !== undefined) s.projectPath = updates.projectPath;
+              if (updates.autonomous !== undefined) s.autonomous = updates.autonomous;
+              task = s;
+              found = true;
+              break;
+            }
+          }
+          if (found) {
+            fs.writeFileSync(globalSchedulesPath, JSON.stringify(schedules, null, 2));
+          }
+        }
+      }
+
+      if (!found || !task) {
+        return { success: false, error: 'Task not found' };
+      }
+
+      // Update metadata (notifications)
+      if (updates.notifications) {
+        const metadata = loadSchedulerMetadata();
+        if (metadata[taskId]) {
+          metadata[taskId].notifications = updates.notifications;
+          saveSchedulerMetadata(metadata);
+        }
+      }
+
+      const prompt = (task.prompt as string) || '';
+      const schedule = (task.schedule as string) || '';
+      const projectPath = (task.projectPath as string) || os.homedir();
+      const autonomous = (task.autonomous as boolean) ?? true;
+      const scheduleChanged = updates.schedule !== undefined;
+
+      // Always regenerate the shell script
+      const claudePath = await getClaudePath();
+      const claudeDir = path.dirname(claudePath);
+      const logPath = path.join(os.homedir(), '.claude', 'logs', `${taskId}.log`);
+      const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
+      const homeDir = os.homedir();
+      const escapedPrompt = prompt.replace(/'/g, "'\\''");
+      const flags = autonomous ? '--dangerously-skip-permissions' : '';
+
+      const scriptPath = path.join(os.homedir(), '.dorothy', 'scripts', `${taskId}.sh`);
+      const scriptsDir = path.dirname(scriptPath);
+      if (!fs.existsSync(scriptsDir)) {
+        fs.mkdirSync(scriptsDir, { recursive: true });
+      }
+
+      const scriptContent = `#!/bin/bash
+
+# Source shell profile for proper PATH (nvm, homebrew, etc.)
+export HOME="${homeDir}"
+
+if [ -s "${homeDir}/.nvm/nvm.sh" ]; then
+  source "${homeDir}/.nvm/nvm.sh" 2>/dev/null || true
+fi
+
+if [ -f "${homeDir}/.bashrc" ]; then
+  source "${homeDir}/.bashrc" 2>/dev/null || true
+elif [ -f "${homeDir}/.bash_profile" ]; then
+  source "${homeDir}/.bash_profile" 2>/dev/null || true
+elif [ -f "${homeDir}/.zshrc" ]; then
+  source "${homeDir}/.zshrc" 2>/dev/null || true
+fi
+
+export PATH="${claudeDir}:$PATH"
+cd "${projectPath}"
+echo "=== Task started at $(date) ===" >> "${logPath}"
+"${claudePath}" ${flags} --mcp-config "${mcpConfigPath}" -p '${escapedPrompt}' >> "${logPath}" 2>&1
+echo "=== Task completed at $(date) ===" >> "${logPath}"
+`;
+
+      fs.writeFileSync(scriptPath, scriptContent);
+      fs.chmodSync(scriptPath, '755');
+
+      // If schedule changed, recreate the platform job
+      if (scheduleChanged) {
+        if (os.platform() === 'darwin') {
+          // Remove old launchd job
+          const label = `com.dorothy.scheduler.${taskId}`;
+          const plistPath = path.join(os.homedir(), 'Library', 'LaunchAgents', `${label}.plist`);
+          const uid = process.getuid?.() || 501;
+
+          try {
+            await new Promise<void>((resolve) => {
+              const proc = spawn('launchctl', ['bootout', `gui/${uid}/${label}`]);
+              proc.on('close', () => resolve());
+              proc.on('error', () => resolve());
+            });
+          } catch {
+            // Ignore
+          }
+
+          if (fs.existsSync(plistPath)) {
+            fs.unlinkSync(plistPath);
+          }
+
+          // Create new launchd job with updated schedule
+          await createLaunchdJob(taskId, schedule, projectPath, prompt, autonomous);
+        } else {
+          // Remove old cron entry
+          await new Promise<void>((resolve) => {
+            const getCron = spawn('crontab', ['-l']);
+            let existingCron = '';
+            getCron.stdout.on('data', (data: Buffer) => { existingCron += data; });
+            getCron.on('close', () => {
+              const newCron = existingCron
+                .split('\n')
+                .filter(line => !line.includes(`dorothy-${taskId}`))
+                .join('\n');
+              const setCron = spawn('crontab', ['-']);
+              setCron.stdin.write(newCron);
+              setCron.stdin.end();
+              setCron.on('close', () => resolve());
+              setCron.on('error', () => resolve());
+            });
+            getCron.on('error', () => resolve());
+          });
+
+          // Create new cron job
+          await createCronJob(taskId, schedule, projectPath, prompt, autonomous);
+        }
+      }
+
+      return { success: true };
+    } catch (err) {
+      console.error('Error updating task:', err);
+      return { success: false, error: err instanceof Error ? err.message : 'Failed to update task' };
+    }
+  });
+
   // Run a task immediately
   ipcMain.handle('scheduler:runTask', async (_event, taskId: string) => {
     try {
@@ -873,7 +1024,7 @@ export function registerSchedulerHandlers(): void {
     }
   });
 
-  // Get task logs
+  // Get task logs — parsed into individual runs
   ipcMain.handle('scheduler:getLogs', async (_event, taskId: string) => {
     try {
       const logPath = path.join(os.homedir(), '.claude', 'logs', `${taskId}.log`);
@@ -891,38 +1042,80 @@ export function registerSchedulerHandlers(): void {
         if (stdErrMatch) customErrorLogPath = stdErrMatch[1];
       }
 
-      let logs = '';
+      let fullContent = '';
       let hasLogs = false;
 
       if (fs.existsSync(customLogPath)) {
-        const stat = fs.statSync(customLogPath);
         const content = fs.readFileSync(customLogPath, 'utf-8');
         if (content.trim()) {
           hasLogs = true;
-          logs += `=== Output Log (${stat.mtime.toLocaleString()}) ===\n`;
-          logs += content;
+          fullContent = content;
         }
       }
 
+      // Append error log if present
+      let errorContent = '';
       if (fs.existsSync(customErrorLogPath)) {
-        const stat = fs.statSync(customErrorLogPath);
-        const errorContent = fs.readFileSync(customErrorLogPath, 'utf-8');
-        if (errorContent.trim()) {
+        const content = fs.readFileSync(customErrorLogPath, 'utf-8');
+        if (content.trim()) {
           hasLogs = true;
-          if (logs) logs += '\n\n';
-          logs += `=== Error Log (${stat.mtime.toLocaleString()}) ===\n`;
-          logs += errorContent;
+          errorContent = content;
         }
       }
 
       if (!hasLogs) {
-        return { logs: 'No logs available yet. The task has not run.', error: undefined };
+        return { logs: 'No logs available yet. The task has not run.', runs: [], error: undefined };
       }
 
-      return { logs, error: undefined };
+      // Parse runs from log content using "=== Task started/completed ===" markers
+      const runs: Array<{ startedAt: string; completedAt?: string; content: string }> = [];
+      const startRegex = /^=== Task started at (.+?) ===$/gm;
+      const completeRegex = /^=== Task completed at (.+?) ===$/gm;
+
+      const starts: Array<{ date: string; index: number }> = [];
+      let match: RegExpExecArray | null;
+      while ((match = startRegex.exec(fullContent)) !== null) {
+        starts.push({ date: match[1], index: match.index + match[0].length });
+      }
+
+      const completes: Array<{ date: string; index: number }> = [];
+      while ((match = completeRegex.exec(fullContent)) !== null) {
+        completes.push({ date: match[1], index: match.index });
+      }
+
+      for (let i = 0; i < starts.length; i++) {
+        const start = starts[i];
+        const nextStart = starts[i + 1];
+        // Find the matching completion between this start and the next start
+        const completion = completes.find(c => c.index > start.index && (!nextStart || c.index < nextStart.index));
+
+        const endIndex = completion ? completion.index : (nextStart ? nextStart.index - (`=== Task started at ${nextStart.date} ===`).length : fullContent.length);
+        const runContent = fullContent.substring(start.index, endIndex).trim();
+
+        runs.push({
+          startedAt: start.date,
+          completedAt: completion?.date,
+          content: runContent,
+        });
+      }
+
+      // If no runs were parsed (old format without markers), return as single run
+      if (runs.length === 0 && fullContent.trim()) {
+        runs.push({
+          startedAt: 'Unknown',
+          content: fullContent.trim(),
+        });
+      }
+
+      // Append error log to the last run if present
+      if (errorContent && runs.length > 0) {
+        runs[runs.length - 1].content += '\n\n=== Error Log ===\n' + errorContent;
+      }
+
+      return { logs: fullContent, runs, error: undefined };
     } catch (err) {
       console.error('Error reading logs:', err);
-      return { logs: '', error: err instanceof Error ? err.message : 'Failed to read logs' };
+      return { logs: '', runs: [], error: err instanceof Error ? err.message : 'Failed to read logs' };
     }
   });
 }

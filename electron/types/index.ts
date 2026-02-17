@@ -59,6 +59,13 @@ export interface AppSettings {
   jiraApiToken: string;
   socialDataEnabled: boolean;
   socialDataApiKey: string;
+  xPostingEnabled: boolean;
+  xApiKey: string;
+  xApiSecret: string;
+  xAccessToken: string;
+  xAccessTokenSecret: string;
+  localModelEnabled: boolean;
+  localModelBaseUrl: string;
   tasmaniaEnabled: boolean;
   tasmaniaServerPath: string;
   verboseModeEnabled: boolean;

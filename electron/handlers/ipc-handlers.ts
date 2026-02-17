@@ -60,7 +60,6 @@ export function registerIpcHandlers(deps: IpcHandlerDependencies): void {
   registerSettingsHandlers(deps);
   registerAppSettingsHandlers(deps);
   registerUpdateHandlers();
-  registerLocalModelHandlers(deps);
   // Orchestrator handlers are registered separately in services/mcp-orchestrator.ts
   registerTasmaniaHandlers(deps);
   registerFileSystemHandlers(deps);
@@ -258,9 +257,6 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
           CLAUDE_SKILLS: config.skills.join(','),
           CLAUDE_AGENT_ID: id,
           CLAUDE_PROJECT_PATH: config.projectPath,
-          ...(currentSettings.localModelEnabled && currentSettings.localModelBaseUrl
-            ? { ANTHROPIC_BASE_URL: currentSettings.localModelBaseUrl }
-            : {}),
         },
       });
       console.log(`PTY created successfully for agent ${id}, PID: ${ptyProcess.pid}`);
@@ -1405,36 +1401,6 @@ function registerUpdateHandlers(): void {
   ipcMain.handle('app:openExternal', async (_event, url: string) => {
     shell.openExternal(url);
     return { success: true };
-  });
-}
-
-// ============== Local Model IPC Handlers ==============
-
-function registerLocalModelHandlers(deps: IpcHandlerDependencies): void {
-  ipcMain.handle('localmodel:detect', async () => {
-    const http = require('http');
-    const ports = [11434, 1234, 8080, 8081, 8082, 4000, 5000, 3001];
-
-    const testPort = (port: number): Promise<{ found: boolean; port: number; url: string } | null> => {
-      return new Promise((resolve) => {
-        const req = http.get(`http://127.0.0.1:${port}/v1/models`, { timeout: 2000 }, (res: { statusCode: number }) => {
-          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 400) {
-            resolve({ found: true, port, url: `http://127.0.0.1:${port}/v1` });
-          } else {
-            resolve(null);
-          }
-        });
-        req.on('error', () => resolve(null));
-        req.on('timeout', () => {
-          req.destroy();
-          resolve(null);
-        });
-      });
-    };
-
-    const results = await Promise.all(ports.map(testPort));
-    const found = results.find((r) => r !== null);
-    return found || { found: false };
   });
 }
 

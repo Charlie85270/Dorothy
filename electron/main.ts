@@ -133,8 +133,6 @@ function loadAppSettings(): AppSettings {
     xApiSecret: '',
     xAccessToken: '',
     xAccessTokenSecret: '',
-    localModelEnabled: false,
-    localModelBaseUrl: '',
     tasmaniaEnabled: false,
     tasmaniaServerPath: '',
     verboseModeEnabled: false,

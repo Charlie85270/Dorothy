@@ -311,11 +311,6 @@ export interface ElectronAPI {
     test: () => Promise<{ success: boolean; username?: string; error?: string }>;
   };
 
-  // Local Model
-  localModel?: {
-    detect: () => Promise<{ found: boolean; port?: number; url?: string }>;
-  };
-
   // Tasmania (Local LLM)
   tasmania?: {
     test: () => Promise<{ success: boolean; serverExists: boolean; apiReachable: boolean; error?: string }>;

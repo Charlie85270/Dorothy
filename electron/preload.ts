@@ -253,12 +253,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('xapi:test') as Promise<{ success: boolean; username?: string; error?: string }>,
   },
 
-  // Local Model
-  localModel: {
-    detect: () =>
-      ipcRenderer.invoke('localmodel:detect') as Promise<{ found: boolean; port?: number; url?: string }>,
-  },
-
   // Tasmania (Local LLM)
   tasmania: {
     test: () =>

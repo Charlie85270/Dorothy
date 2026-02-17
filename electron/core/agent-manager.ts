@@ -298,9 +298,6 @@ export async function initAgentPty(
       CLAUDE_AGENT_ID: agent.id,
       CLAUDE_PROJECT_PATH: agent.projectPath,
       ...tasmaniaEnv,
-      ...(savedSettings.localModelEnabled && savedSettings.localModelBaseUrl
-        ? { ANTHROPIC_BASE_URL: savedSettings.localModelBaseUrl as string }
-        : {}),
     },
   });
 

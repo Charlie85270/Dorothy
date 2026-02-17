@@ -64,8 +64,6 @@ export interface AppSettings {
   xApiSecret: string;
   xAccessToken: string;
   xAccessTokenSecret: string;
-  localModelEnabled: boolean;
-  localModelBaseUrl: string;
   tasmaniaEnabled: boolean;
   tasmaniaServerPath: string;
   verboseModeEnabled: boolean;

@@ -20,6 +20,8 @@ export { SlackSection } from './SlackSection';
 export { JiraSection } from './JiraSection';
 export { SocialDataSection } from './SocialDataSection';
 export { LocalModelsSection } from './LocalModelsSection';
+export { TasmaniaSection } from './TasmaniaSection';
+export { TasmaniaIcon } from './TasmaniaIcon';
 export { PermissionsSection } from './PermissionsSection';
 export { SkillsSection } from './SkillsSection';
 export { CLIPathsSection } from './CLIPathsSection';

@@ -135,6 +135,8 @@ function loadAppSettings(): AppSettings {
     xAccessTokenSecret: '',
     localModelEnabled: false,
     localModelBaseUrl: '',
+    tasmaniaEnabled: false,
+    tasmaniaServerPath: '',
     verboseModeEnabled: false,
     autoCheckUpdates: true,
     cliPaths: {
@@ -529,7 +531,7 @@ app.whenReady().then(async () => {
   initApiServer();
 
   // Setup MCP orchestrator and hooks
-  await setupMcpOrchestrator();
+  await setupMcpOrchestrator(appSettings);
   await configureStatusHooks();
 
   // Auto-check for updates on startup

@@ -60,9 +60,11 @@ export interface AppSettings {
   xAccessTokenSecret: string;
   localModelEnabled: boolean;
   localModelBaseUrl: string;
+  tasmaniaEnabled: boolean;
+  tasmaniaServerPath: string;
   verboseModeEnabled: boolean;
   autoCheckUpdates: boolean;
   cliPaths: CLIPaths;
 }
 
-export type SettingsSection = 'general' | 'memory' | 'git' | 'notifications' | 'telegram' | 'slack' | 'jira' | 'socialdata' | 'localmodels' | 'permissions' | 'skills' | 'cli' | 'system';
+export type SettingsSection = 'general' | 'memory' | 'git' | 'notifications' | 'telegram' | 'slack' | 'jira' | 'socialdata' | 'localmodels' | 'tasmania' | 'permissions' | 'skills' | 'cli' | 'system';

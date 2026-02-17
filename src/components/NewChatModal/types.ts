@@ -1,4 +1,4 @@
-import type { AgentCharacter } from '@/types/electron';
+import type { AgentCharacter, AgentProvider } from '@/types/electron';
 import type { ClaudeSkill } from '@/lib/claude-code';
 
 export interface AgentPersonaValues {
@@ -28,7 +28,9 @@ export interface NewChatModalProps {
     character?: AgentCharacter,
     name?: string,
     secondaryProjectPath?: string,
-    skipPermissions?: boolean
+    skipPermissions?: boolean,
+    provider?: AgentProvider,
+    localModel?: string,
   ) => void;
   projects: Project[];
   onBrowseFolder?: () => Promise<string | null>;

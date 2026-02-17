@@ -100,6 +100,11 @@ export function AgentCard({ agent, isSelected, onSelect, onEdit }: AgentCardProp
             >
               {projectName}
             </span>
+            {agent.provider === 'local' && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-accent-green/20 text-accent-green">
+                {agent.localModel || 'Local'}
+              </span>
+            )}
             {agent.branchName && (
               <span className="flex items-center gap-1 text-[10px] text-accent-purple">
                 <GitBranch className="w-3 h-3" />

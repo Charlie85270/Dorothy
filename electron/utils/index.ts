@@ -165,6 +165,13 @@ export function getSuperAgentInstructionsPath(): string {
 }
 
 /**
+ * Get the path to the local agent runner script
+ */
+export function getLocalAgentRunnerPath(): string {
+  return getResourcePath('local-agent-runner.js');
+}
+
+/**
  * Get the path to the Telegram-specific instructions file
  */
 export function getTelegramInstructionsPath(): string {

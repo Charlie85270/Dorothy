@@ -7,7 +7,7 @@ import { useClaude } from '@/hooks/useClaude';
 import { useAgentFiltering } from '@/hooks/useAgentFiltering';
 import { useSuperAgent } from '@/hooks/useSuperAgent';
 import { useAgentTerminal } from '@/hooks/useAgentTerminal';
-import type { AgentCharacter } from '@/types/electron';
+import type { AgentCharacter, AgentProvider } from '@/types/electron';
 import NewChatModal from '@/components/NewChatModal';
 import AgentTerminalDialog from '@/components/AgentWorld/AgentTerminalDialog';
 import {
@@ -90,16 +90,18 @@ export default function AgentsPage() {
     character?: AgentCharacter,
     name?: string,
     secondaryProjectPath?: string,
-    skipPermissions?: boolean
+    skipPermissions?: boolean,
+    provider?: AgentProvider,
+    localModel?: string,
   ) => {
     try {
-      const agent = await createAgent({ projectPath, skills, worktree, character, name, secondaryProjectPath, skipPermissions });
+      const agent = await createAgent({ projectPath, skills, worktree, character, name, secondaryProjectPath, skipPermissions, provider, localModel });
       setSelectedAgent(agent.id);
       setShowNewChatModal(false);
 
       if (prompt) {
         setTimeout(async () => {
-          await startAgent(agent.id, prompt, { model });
+          await startAgent(agent.id, prompt, { model: provider === 'local' ? undefined : model, provider, localModel });
         }, 600);
       }
     } catch (error) {

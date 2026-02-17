@@ -9,7 +9,7 @@ import TelegramBot from 'node-telegram-bot-api';
 import { App as SlackApp, LogLevel } from '@slack/bolt';
 
 // Import types
-import type { AgentStatus, WorktreeConfig, AgentCharacter, AppSettings } from '../types';
+import type { AgentStatus, WorktreeConfig, AgentCharacter, AppSettings, AgentProvider } from '../types';
 import { buildFullPath } from '../utils/path-builder';
 
 // Dependencies interface for dependency injection
@@ -62,6 +62,7 @@ export function registerIpcHandlers(deps: IpcHandlerDependencies): void {
   registerUpdateHandlers();
   registerLocalModelHandlers(deps);
   // Orchestrator handlers are registered separately in services/mcp-orchestrator.ts
+  registerTasmaniaHandlers(deps);
   registerFileSystemHandlers(deps);
   registerShellHandlers(deps);
 }
@@ -158,6 +159,8 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     name?: string;
     secondaryProjectPath?: string;
     skipPermissions?: boolean;
+    provider?: 'claude' | 'local';
+    localModel?: string;
   }) => {
     const id = uuidv4();
     const shell = '/bin/bash';
@@ -238,6 +241,10 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     const fullPath = buildFullPath(cliExtraPaths);
 
     // Create PTY for this agent
+    // Strip CLAUDECODE env var to prevent "nested session" errors when launching claude
+    const cleanEnv = { ...process.env as { [key: string]: string } };
+    delete cleanEnv['CLAUDECODE'];
+
     let ptyProcess: pty.IPty;
     try {
       ptyProcess = pty.spawn(shell, ['-l'], {
@@ -246,7 +253,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
         rows: 30,
         cwd,
         env: {
-          ...process.env as { [key: string]: string },
+          ...cleanEnv,
           PATH: fullPath,
           CLAUDE_SKILLS: config.skills.join(','),
           CLAUDE_AGENT_ID: id,
@@ -290,6 +297,8 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       character: config.character || 'robot',
       name: config.name || `Agent ${id.slice(0, 4)}`,
       skipPermissions: config.skipPermissions || false,
+      provider: config.provider || 'claude',
+      localModel: config.localModel,
     };
     agents.set(id, status);
 
@@ -297,22 +306,23 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     saveAgents();
 
     // Forward PTY output to renderer
+    // Guard: skip if this PTY was replaced (e.g. local provider recreates PTY in agent:start)
     ptyProcess.onData((data) => {
       const agent = agents.get(id);
-      if (agent) {
-        agent.output.push(data);
-        agent.lastActivity = new Date().toISOString();
+      if (!agent || agent.ptyId !== ptyId) return;
 
-        // Capture Super Agent output for Telegram
-        if (getSuperAgentTelegramTask() && isSuperAgent(agent)) {
-          const buffer = getSuperAgentOutputBuffer();
-          buffer.push(data);
-          // Keep buffer reasonable
-          if (buffer.length > 200) {
-            setSuperAgentOutputBuffer(buffer.slice(-100));
-          }
+      agent.output.push(data);
+      agent.lastActivity = new Date().toISOString();
+
+      // Capture Super Agent output for Telegram
+      if (getSuperAgentTelegramTask() && isSuperAgent(agent)) {
+        const buffer = getSuperAgentOutputBuffer();
+        buffer.push(data);
+        if (buffer.length > 200) {
+          setSuperAgentOutputBuffer(buffer.slice(-100));
         }
       }
+
       getMainWindow()?.webContents.send('agent:output', {
         type: 'output',
         agentId: id,
@@ -323,24 +333,23 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     });
 
     ptyProcess.onExit(({ exitCode }) => {
-      console.log(`Agent ${id} PTY exited with code ${exitCode}`);
       const agent = agents.get(id);
-      if (agent) {
+      // Skip status update if this PTY was replaced by a newer one
+      if (agent && agent.ptyId === ptyId) {
+        console.log(`Agent ${id} PTY exited with code ${exitCode}`);
         const newStatus = exitCode === 0 ? 'completed' : 'error';
         agent.status = newStatus;
         agent.lastActivity = new Date().toISOString();
-        // Send notification
         handleStatusChangeNotification(agent, newStatus);
+        getMainWindow()?.webContents.send('agent:complete', {
+          type: 'complete',
+          agentId: id,
+          ptyId,
+          exitCode,
+          timestamp: new Date().toISOString(),
+        });
       }
-      // Remove PTY from map since it's exited
       ptyProcesses.delete(ptyId);
-      getMainWindow()?.webContents.send('agent:complete', {
-        type: 'complete',
-        agentId: id,
-        ptyId,
-        exitCode,
-        timestamp: new Date().toISOString(),
-      });
     });
 
     return { ...status, ptyId };
@@ -350,7 +359,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
   ipcMain.handle('agent:start', async (_event, { id, prompt, options }: {
     id: string;
     prompt: string;
-    options?: { model?: string; resume?: boolean }
+    options?: { model?: string; resume?: boolean; provider?: AgentProvider; localModel?: string }
   }) => {
     const agent = agents.get(id);
     if (!agent) throw new Error('Agent not found');
@@ -362,10 +371,124 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       agent.ptyId = ptyId;
     }
 
-    const ptyProcess = ptyProcesses.get(agent.ptyId);
+    // Determine provider — prefer agent-level, fallback to options, default to 'claude'
+    const provider = agent.provider || options?.provider || 'claude';
+    const localModel = agent.localModel || options?.localModel;
+
+    // ── For local provider, recreate PTY with Tasmania env vars baked in ──
+    if (provider === 'local') {
+      const { getTasmaniaStatus } = require('../services/tasmania-client') as typeof import('../services/tasmania-client');
+
+      const tasmaniaStatus = await getTasmaniaStatus();
+      if (tasmaniaStatus.status !== 'running' || !tasmaniaStatus.endpoint) {
+        throw new Error('Tasmania is not running or no model is loaded. Start a model in Tasmania settings first.');
+      }
+
+      // Strip /v1 suffix from endpoint. Tasmania's TerminalPanel uses
+      // `http://127.0.0.1:${port}` (no /v1), because Claude Code's SDK
+      // appends /v1/messages itself. Including /v1 causes double-pathing
+      // (http://…/v1/v1/messages) which breaks all API calls.
+      const endpoint = tasmaniaStatus.endpoint!.replace(/\/v1\/?$/, '');
+      const model = localModel || tasmaniaStatus.modelName || 'default';
+
+      // Kill the existing PTY and recreate with env vars in the process environment.
+      // Writing `export ...` to an already-running shell is racy — the shell may not
+      // process the export before the claude command runs. Baking vars into pty.spawn()
+      // guarantees they're in the process environment from the start.
+      const oldPty = ptyProcesses.get(agent.ptyId!);
+      if (oldPty) {
+        oldPty.kill();
+        ptyProcesses.delete(agent.ptyId!);
+      }
+
+      const currentSettings = getAppSettings();
+      const extraPaths: string[] = [];
+      if (currentSettings.cliPaths) {
+        if (currentSettings.cliPaths.claude) extraPaths.push(path.dirname(currentSettings.cliPaths.claude));
+        if (currentSettings.cliPaths.gh) extraPaths.push(path.dirname(currentSettings.cliPaths.gh));
+        if (currentSettings.cliPaths.node) extraPaths.push(path.dirname(currentSettings.cliPaths.node));
+        if (currentSettings.cliPaths.additionalPaths) extraPaths.push(...currentSettings.cliPaths.additionalPaths.filter(Boolean));
+      }
+      const fullPathForLocal = buildFullPath(extraPaths);
+
+      const cleanEnvLocal = { ...process.env as { [key: string]: string } };
+      delete cleanEnvLocal['CLAUDECODE'];
+
+      const workingDir = agent.worktreePath || agent.projectPath;
+      const cwd = fs.existsSync(workingDir) ? workingDir : os.homedir();
+
+      const newPty = pty.spawn('/bin/bash', ['-l'], {
+        name: 'xterm-256color',
+        cols: 120,
+        rows: 30,
+        cwd,
+        env: {
+          ...cleanEnvLocal,
+          PATH: fullPathForLocal,
+          CLAUDE_SKILLS: agent.skills.join(','),
+          CLAUDE_AGENT_ID: agent.id,
+          CLAUDE_PROJECT_PATH: agent.projectPath,
+          // Match Tasmania's env var pattern exactly:
+          // - ANTHROPIC_BASE_URL without /v1 (SDK appends /v1/messages)
+          // - ANTHROPIC_MODEL with the raw local model name
+          ANTHROPIC_BASE_URL: endpoint,
+          ANTHROPIC_MODEL: model,
+          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+        },
+      });
+
+      const newPtyId = uuidv4();
+      ptyProcesses.set(newPtyId, newPty);
+      agent.ptyId = newPtyId;
+
+      // Re-attach event handlers
+      newPty.onData((data) => {
+        const agentData = agents.get(id);
+        if (agentData) {
+          agentData.output.push(data);
+          agentData.lastActivity = new Date().toISOString();
+          if (getSuperAgentTelegramTask() && isSuperAgent(agentData)) {
+            const buffer = getSuperAgentOutputBuffer();
+            buffer.push(data);
+            if (buffer.length > 200) {
+              setSuperAgentOutputBuffer(buffer.slice(-100));
+            }
+          }
+        }
+        getMainWindow()?.webContents.send('agent:output', {
+          type: 'output',
+          agentId: id,
+          ptyId: newPtyId,
+          data,
+          timestamp: new Date().toISOString(),
+        });
+      });
+
+      newPty.onExit(({ exitCode }) => {
+        console.log(`Agent ${id} PTY exited with code ${exitCode}`);
+        const agentData = agents.get(id);
+        if (agentData) {
+          const newStatus = exitCode === 0 ? 'completed' : 'error';
+          agentData.status = newStatus;
+          agentData.lastActivity = new Date().toISOString();
+          handleStatusChangeNotification(agentData, newStatus);
+        }
+        ptyProcesses.delete(newPtyId);
+        getMainWindow()?.webContents.send('agent:complete', {
+          type: 'complete',
+          agentId: id,
+          ptyId: newPtyId,
+          exitCode,
+          timestamp: new Date().toISOString(),
+        });
+      });
+    }
+
+    // Get the (potentially recreated) PTY process
+    const ptyProcess = ptyProcesses.get(agent.ptyId!);
     if (!ptyProcess) throw new Error('PTY not found');
 
-    // Build Claude Code command — use full path from settings if configured
+    // ── Claude Code CLI ──────────────────────────────────────────────
     const appSettingsForCommand = getAppSettings();
     let command = (appSettingsForCommand.cliPaths?.claude) || 'claude';
 
@@ -384,12 +507,12 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       const { getSuperAgentInstructionsPath } = await import('../utils');
       const superAgentInstructionsPath = getSuperAgentInstructionsPath();
       if (fs.existsSync(superAgentInstructionsPath)) {
-      
+
         command += ` --append-system-prompt-file ${superAgentInstructionsPath}`;
       }
     }
 
-    if (options?.model) {
+    if (options?.model && provider !== 'local') {
       command += ` --model ${options.model}`;
     }
 
@@ -430,9 +553,22 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     const workingPath = (agent.worktreePath || agent.projectPath).replace(/'/g, "'\\''");
     const fullCommand = `cd '${workingPath}' && ${command}`;
 
-    ptyProcess.write(fullCommand);
-    ptyProcess.write('\r');
-    
+    // For local provider, the PTY was just recreated — wait for shell to initialize
+    // before writing the command (matches Tasmania's 1s delay pattern).
+    // For claude provider, the PTY has been alive since agent:create, so no delay needed.
+    if (provider === 'local') {
+      await new Promise<void>((resolve) => {
+        setTimeout(() => {
+          ptyProcess.write(fullCommand);
+          ptyProcess.write('\r');
+          resolve();
+        }, 1000);
+      });
+    } else {
+      ptyProcess.write(fullCommand);
+      ptyProcess.write('\r');
+    }
+
     // Save updated status
     saveAgents();
 
@@ -1393,6 +1529,227 @@ function registerFileSystemHandlers(deps: IpcHandlerDependencies): void {
       ],
     });
     return result.filePaths || [];
+  });
+}
+
+// ============== Tasmania IPC Handlers ==============
+
+function registerTasmaniaHandlers(deps: IpcHandlerDependencies): void {
+  const { getAppSettings } = deps;
+
+  // Import shared Tasmania client
+  const { tasmaniaFetch } = require('../services/tasmania-client') as typeof import('../services/tasmania-client');
+
+  // Test: check MCP server exists + Control API reachable
+  ipcMain.handle('tasmania:test', async () => {
+    const appSettings = getAppSettings();
+    const serverPath = appSettings.tasmaniaServerPath;
+    const serverExists = serverPath ? fs.existsSync(serverPath) : false;
+
+    let apiReachable = false;
+    try {
+      const res = await tasmaniaFetch('/api/status');
+      apiReachable = res.ok;
+    } catch {
+      // API not reachable
+    }
+
+    return {
+      success: serverExists && apiReachable,
+      serverExists,
+      apiReachable,
+    };
+  });
+
+  // Get live server status from Control API
+  ipcMain.handle('tasmania:getStatus', async () => {
+    try {
+      const res = await tasmaniaFetch('/api/status');
+      if (!res.ok) {
+        return { status: 'stopped' as const, backend: null, port: null, modelName: null, modelPath: null, endpoint: null, startedAt: null, error: `HTTP ${res.status}` };
+      }
+      const data = await res.json();
+      return {
+        status: data.status || 'stopped',
+        backend: data.backend || null,
+        port: data.port || null,
+        modelName: data.modelName || null,
+        modelPath: data.modelPath || null,
+        endpoint: data.endpoint || null,
+        startedAt: data.startedAt || null,
+      };
+    } catch {
+      return { status: 'stopped' as const, backend: null, port: null, modelName: null, modelPath: null, endpoint: null, startedAt: null };
+    }
+  });
+
+  // List available local models from Control API
+  ipcMain.handle('tasmania:getModels', async () => {
+    try {
+      const res = await tasmaniaFetch('/api/models');
+      if (!res.ok) {
+        return { models: [], error: `HTTP ${res.status}` };
+      }
+      const models = await res.json();
+      return { models: Array.isArray(models) ? models : [] };
+    } catch (err) {
+      return { models: [], error: String(err) };
+    }
+  });
+
+  // Start a model via Control API
+  ipcMain.handle('tasmania:loadModel', async (_event, modelPath: string) => {
+    try {
+      const res = await tasmaniaFetch('/api/start', {
+        method: 'POST',
+        body: JSON.stringify({ modelPath }),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        return { success: false, error: `HTTP ${res.status}: ${text.slice(0, 200)}` };
+      }
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  });
+
+  // Stop running model via Control API
+  ipcMain.handle('tasmania:stopModel', async () => {
+    try {
+      const res = await tasmaniaFetch('/api/stop', { method: 'POST' });
+      if (!res.ok) {
+        const text = await res.text();
+        return { success: false, error: `HTTP ${res.status}: ${text.slice(0, 200)}` };
+      }
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  });
+
+  // Check if Tasmania MCP is registered in Claude Code
+  ipcMain.handle('tasmania:getMcpStatus', async () => {
+    try {
+      const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
+      let configured = false;
+
+      if (fs.existsSync(mcpConfigPath)) {
+        try {
+          const mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
+          configured = mcpConfig?.mcpServers?.['tasmania'] !== undefined;
+        } catch {
+          // Ignore parse errors
+        }
+      }
+
+      // Also check via claude mcp list if not found in mcp.json
+      if (!configured) {
+        try {
+          const { execSync: execSyncImport } = await import('child_process');
+          const stdout = execSyncImport('claude mcp list 2>/dev/null', { encoding: 'utf-8', timeout: 5000, stdio: 'pipe' });
+          configured = stdout.includes('tasmania');
+        } catch {
+          // claude CLI not available
+        }
+      }
+
+      return { configured };
+    } catch (err) {
+      return { configured: false, error: String(err) };
+    }
+  });
+
+  // Register Tasmania MCP with Claude Code
+  ipcMain.handle('tasmania:setup', async () => {
+    try {
+      const appSettings = getAppSettings();
+      const serverPath = appSettings.tasmaniaServerPath;
+
+      if (!serverPath) {
+        return { success: false, error: 'MCP server path not configured. Set the path above first.' };
+      }
+
+      if (!fs.existsSync(serverPath)) {
+        return { success: false, error: `MCP server not found at ${serverPath}` };
+      }
+
+      // Determine command based on file extension (.ts needs tsx, .js uses node)
+      const command = serverPath.endsWith('.ts') ? 'npx' : 'node';
+      const args = serverPath.endsWith('.ts') ? ['tsx', serverPath] : [serverPath];
+
+      // Remove existing first
+      try {
+        const { execSync: execSyncImport } = await import('child_process');
+        execSyncImport('claude mcp remove -s user tasmania 2>&1', { encoding: 'utf-8', stdio: 'pipe' });
+      } catch {
+        // Ignore if doesn't exist
+      }
+
+      // Add via claude mcp add
+      try {
+        const { execSync: execSyncImport } = await import('child_process');
+        const argsStr = args.map(a => `"${a}"`).join(' ');
+        execSyncImport(`claude mcp add -s user tasmania ${command} ${argsStr}`, { encoding: 'utf-8', stdio: 'pipe' });
+        return { success: true };
+      } catch {
+        // Fallback: write to mcp.json
+        const claudeDir = path.join(os.homedir(), '.claude');
+        const mcpConfigPath = path.join(claudeDir, 'mcp.json');
+
+        if (!fs.existsSync(claudeDir)) {
+          fs.mkdirSync(claudeDir, { recursive: true });
+        }
+
+        let mcpConfig: { mcpServers?: Record<string, unknown> } = { mcpServers: {} };
+        if (fs.existsSync(mcpConfigPath)) {
+          try {
+            mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
+            if (!mcpConfig.mcpServers) mcpConfig.mcpServers = {};
+          } catch {
+            mcpConfig = { mcpServers: {} };
+          }
+        }
+
+        mcpConfig.mcpServers!['tasmania'] = { command, args };
+
+        fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
+        return { success: true };
+      }
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  });
+
+  // Remove Tasmania MCP from Claude Code
+  ipcMain.handle('tasmania:remove', async () => {
+    try {
+      // Remove from claude mcp
+      try {
+        const { execSync: execSyncImport } = await import('child_process');
+        execSyncImport('claude mcp remove -s user tasmania 2>&1', { encoding: 'utf-8', stdio: 'pipe' });
+      } catch {
+        // Ignore
+      }
+
+      // Also clean up mcp.json
+      const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
+      if (fs.existsSync(mcpConfigPath)) {
+        try {
+          const mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
+          if (mcpConfig?.mcpServers?.['tasmania']) {
+            delete mcpConfig.mcpServers['tasmania'];
+            fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      }
+
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
   });
 }
 

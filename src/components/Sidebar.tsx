@@ -17,6 +17,7 @@ import {
   Moon,
   Sun,
   Archive,
+  Video,
 } from 'lucide-react';
 
 // Custom icon component for Pallet Town using the pokemon logo
@@ -38,6 +39,7 @@ const navItems = [
   { href: '/recurring-tasks', icon: CalendarClock, label: 'Scheduled Tasks', shortcut: '8' },
   { href: '/automations', icon: Zap, label: 'Automations', shortcut: '9' },
   { href: '/usage', icon: BarChart2, label: 'Usage', shortcut: '0' },
+  { href: '/npc', icon: Video, label: 'NPC' },
   { href: '/pallet-town', icon: PalletTownIcon, label: 'ClaudeMon' },
 ];
 

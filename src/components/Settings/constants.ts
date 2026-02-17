@@ -10,6 +10,7 @@ import {
   Terminal,
   Twitter,
   Server,
+  Video,
 } from 'lucide-react';
 import { SlackIcon } from './SlackIcon';
 import { JiraIcon } from './JiraIcon';
@@ -25,6 +26,7 @@ export const SECTIONS: { id: SettingsSection; label: string; icon: React.Compone
   { id: 'jira', label: 'JIRA', icon: JiraIcon },
   { id: 'socialdata', label: 'X (Twitter)', icon: Twitter },
   { id: 'localmodels', label: 'Local Models', icon: Server },
+  { id: 'npc', label: 'NPC Avatar', icon: Video },
   { id: 'permissions', label: 'Permissions', icon: Shield },
   { id: 'skills', label: 'Skills & Plugins', icon: Sparkles },
   { id: 'cli', label: 'CLI Paths', icon: Terminal },
@@ -60,6 +62,11 @@ export const DEFAULT_APP_SETTINGS = {
   xAccessTokenSecret: '',
   localModelEnabled: false,
   localModelBaseUrl: '',
+  npcEnabled: false,
+  elevenlabsApiKey: '',
+  elevenlabsAgentId: '',
+  simliApiKey: '',
+  simliFaceId: '',
   verboseModeEnabled: false,
   autoCheckUpdates: true,
   cliPaths: {

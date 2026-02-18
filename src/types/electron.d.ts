@@ -55,6 +55,26 @@ export interface VaultAttachmentElectron {
   created_at: string;
 }
 
+export interface MemoryFile {
+  name: string;
+  path: string;
+  content: string;
+  size: number;
+  lastModified: string;
+  isEntrypoint: boolean;
+}
+
+export interface ProjectMemory {
+  id: string;
+  projectName: string;
+  projectPath: string;
+  memoryDir: string;
+  files: MemoryFile[];
+  totalSize: number;
+  lastModified: string;
+  hasMemory: boolean;
+}
+
 export interface ImportPreview {
   name: string;
   description: string;
@@ -643,6 +663,15 @@ export interface ElectronAPI {
       releaseNotes: string;
       hasUpdate: boolean;
     }) => void) => () => void;
+  };
+
+  // Native Claude memory (reads ~/.claude/projects/*/memory/)
+  memory?: {
+    listProjects: () => Promise<{ projects: ProjectMemory[]; error: string | null }>;
+    readFile: (filePath: string) => Promise<{ content: string; error?: string }>;
+    writeFile: (filePath: string, content: string) => Promise<{ success: boolean; error?: string }>;
+    createFile: (memoryDir: string, fileName: string, content?: string) => Promise<{ success: boolean; file?: MemoryFile; error?: string }>;
+    deleteFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
   };
 
   // Get home path helper

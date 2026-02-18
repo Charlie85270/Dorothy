@@ -12,7 +12,6 @@ export { InstallTerminalModal } from './InstallTerminalModal';
 
 // Section Components
 export { GeneralSection } from './GeneralSection';
-export { MemorySection } from './MemorySection';
 export { GitSection } from './GitSection';
 export { NotificationsSection } from './NotificationsSection';
 export { TelegramSection } from './TelegramSection';

@@ -1,5 +1,6 @@
 import { ipcMain, dialog, shell } from 'electron';
 import { checkForUpdates } from '../services/update-checker';
+import { registerMemoryHandlers } from './memory-handlers';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -64,6 +65,7 @@ export function registerIpcHandlers(deps: IpcHandlerDependencies): void {
   registerTasmaniaHandlers(deps);
   registerFileSystemHandlers(deps);
   registerShellHandlers(deps);
+  registerMemoryHandlers();
 }
 
 // ============== PTY Terminal IPC Handlers ==============
@@ -531,6 +533,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       const escapedSecondaryPath = agent.secondaryProjectPath.replace(/'/g, "'\\''");
       command += ` --add-dir '${escapedSecondaryPath}'`;
     }
+
+    // Load Dorothy's CLAUDE.md for all agents via ~/.dorothy
+    command += ` --add-dir '${os.homedir()}/.dorothy'`;
 
     // Build the final prompt with skills directive if agent has skills
     // Always include world-builder skill so agents can generate game zones
@@ -1614,12 +1619,16 @@ function registerTasmaniaHandlers(deps: IpcHandlerDependencies): void {
         }
       }
 
-      // Also check via claude mcp list if not found in mcp.json
+      // Also check via claude mcp list if not found in mcp.json (async — never use execSync in main process)
       if (!configured) {
         try {
-          const { execSync: execSyncImport } = await import('child_process');
-          const stdout = execSyncImport('claude mcp list 2>/dev/null', { encoding: 'utf-8', timeout: 5000, stdio: 'pipe' });
-          configured = stdout.includes('tasmania');
+          const { exec } = await import('child_process');
+          await new Promise<void>((resolve) => {
+            exec('claude mcp list', { timeout: 3000 }, (_err, stdout) => {
+              if (stdout) configured = stdout.includes('tasmania');
+              resolve();
+            });
+          });
         } catch {
           // claude CLI not available
         }

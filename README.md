@@ -90,15 +90,6 @@ Extend agent capabilities with skills from [skills.sh](https://skills.sh) and th
 - **Development Workflows**: Commit commands, PR review tools
 - Install skills per-agent for specialized task handling
 
-### Persistent Memory
-
-Powered by [claude-mem](https://github.com/thedotmack/claude-mem), agents retain decisions, learnings, and context across sessions.
-
-- Automatic memory capture of tool uses, decisions, and learnings
-- Cross-session context persistence — agents build on previous work
-- AI-powered summarization for efficient storage
-- Works across all Claude Code sessions, not just Dorothy
-
 ### Settings Management
 
 Configure Claude Code settings directly — permissions, environment variables, hooks, and model defaults.
@@ -769,4 +760,3 @@ This project is open source and available under the [MIT License](LICENSE).
 
 - [Anthropic](https://anthropic.com) for Claude Code
 - [skills.sh](https://skills.sh) for the skills ecosystem
-- [claude-mem](https://github.com/thedotmack/claude-mem) for persistent memory

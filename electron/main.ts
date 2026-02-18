@@ -99,6 +99,7 @@ import {
   isSuperAgent,
   getSuperAgent,
   ensureDataDir,
+  ensureDorothyClaudeMd,
   migrateFromClaudeManager,
 } from './utils';
 
@@ -289,6 +290,9 @@ app.whenReady().then(async () => {
 
   // Ensure data directory exists
   ensureDataDir();
+
+  // Write Dorothy's CLAUDE.md to ~/.dorothy/ so all spawned agents can load it
+  ensureDorothyClaudeMd();
 
   // Migrate data from ~/.claude-manager if it exists (rebrand migration)
   migrateFromClaudeManager();

@@ -32,6 +32,33 @@ function loadSchedulerMetadata(): Record<string, SchedulerTaskMetadata> {
   return {};
 }
 
+/**
+ * Read the last run's content from a log file and determine its status.
+ * Reads only the segment after the last "=== Task started at ... ===" marker
+ * so that errors from old runs don't pollute the current status.
+ */
+function getLastRunStatus(logPath: string): { lastRun: string | undefined; lastRunStatus: 'success' | 'error' | undefined } {
+  if (!fs.existsSync(logPath)) return { lastRun: undefined, lastRunStatus: undefined };
+  const stat = fs.statSync(logPath);
+  const lastRun = stat.mtime.toISOString();
+  try {
+    const logContent = fs.readFileSync(logPath, 'utf-8');
+    // Find the last "=== Task started at ... ===" marker
+    const startRegex = /^=== Task started at .+? ===$/gm;
+    let lastStartIndex = -1;
+    let match: RegExpExecArray | null;
+    while ((match = startRegex.exec(logContent)) !== null) {
+      lastStartIndex = match.index + match[0].length;
+    }
+    // Use content from the last run onwards; fall back to full content for old format
+    const relevantContent = lastStartIndex >= 0 ? logContent.slice(lastStartIndex) : logContent;
+    const lastRunStatus: 'success' | 'error' = relevantContent.includes('error') || relevantContent.includes('Error') ? 'error' : 'success';
+    return { lastRun, lastRunStatus };
+  } catch {
+    return { lastRun, lastRunStatus: 'success' };
+  }
+}
+
 function saveSchedulerMetadata(metadata: Record<string, SchedulerTaskMetadata>): void {
   try {
     const dir = path.dirname(SCHEDULER_METADATA_PATH);
@@ -267,7 +294,7 @@ fi
 export PATH="${claudeDir}:$PATH"
 cd "${projectPath}"
 echo "=== Task started at $(date) ===" >> "${logPath}"
-"${claudePath}" ${flags} --mcp-config "${mcpConfigPath}" -p '${escapedPrompt}' >> "${logPath}" 2>&1
+CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 "${claudePath}" ${flags} --mcp-config "${mcpConfigPath}" --add-dir "${homeDir}/.dorothy" -p '${escapedPrompt}' >> "${logPath}" 2>&1
 echo "=== Task completed at $(date) ===" >> "${logPath}"
 `;
 
@@ -371,7 +398,7 @@ fi
 export PATH="${claudeDir}:$PATH"
 cd "${projectPath}"
 echo "=== Task started at $(date) ===" >> "${logPath}"
-"${claudePath}" ${flags} --mcp-config "${mcpConfigPath}" -p '${escapedPrompt}' >> "${logPath}" 2>&1
+CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 "${claudePath}" ${flags} --mcp-config "${mcpConfigPath}" --add-dir "${homeDir}/.dorothy" -p '${escapedPrompt}' >> "${logPath}" 2>&1
 echo "=== Task completed at $(date) ===" >> "${logPath}"
 `;
 
@@ -458,19 +485,8 @@ export function registerSchedulerHandlers(): void {
                 createdAt: new Date().toISOString(),
               };
 
-              let lastRun: string | undefined;
-              let lastRunStatus: 'success' | 'error' | undefined;
               const logPath = path.join(os.homedir(), '.claude', 'logs', `${schedule.id}.log`);
-              if (fs.existsSync(logPath)) {
-                const stat = fs.statSync(logPath);
-                lastRun = stat.mtime.toISOString();
-                try {
-                  const logContent = fs.readFileSync(logPath, 'utf-8');
-                  lastRunStatus = logContent.includes('error') || logContent.includes('Error') ? 'error' : 'success';
-                } catch {
-                  lastRunStatus = 'success';
-                }
-              }
+              const { lastRun, lastRunStatus } = getLastRunStatus(logPath);
 
               const taskId = schedule.id || uuidv4();
               addedTaskIds.add(taskId);
@@ -516,19 +532,8 @@ export function registerSchedulerHandlers(): void {
                       createdAt: new Date().toISOString(),
                     };
 
-                    let lastRun: string | undefined;
-                    let lastRunStatus: 'success' | 'error' | undefined;
                     const logPath = path.join(os.homedir(), '.claude', 'logs', `${schedule.id}.log`);
-                    if (fs.existsSync(logPath)) {
-                      const stat = fs.statSync(logPath);
-                      lastRun = stat.mtime.toISOString();
-                      try {
-                        const logContent = fs.readFileSync(logPath, 'utf-8');
-                        lastRunStatus = logContent.includes('error') || logContent.includes('Error') ? 'error' : 'success';
-                      } catch {
-                        lastRunStatus = 'success';
-                      }
-                    }
+                    const { lastRun, lastRunStatus } = getLastRunStatus(logPath);
 
                     const projectPath = '/' + projectDir.replace(/-/g, '/');
                     const taskId = schedule.id || uuidv4();
@@ -626,19 +631,8 @@ export function registerSchedulerHandlers(): void {
                 if (weekday !== undefined) cron = `${minute} ${hour} * * ${weekday}`;
                 else if (day !== undefined) cron = `${minute} ${hour} ${day} * *`;
 
-                let lastRun: string | undefined;
-                let lastRunStatus: 'success' | 'error' | undefined;
                 const logPath = path.join(os.homedir(), '.claude', 'logs', `${taskId}.log`);
-                if (fs.existsSync(logPath)) {
-                  const stat = fs.statSync(logPath);
-                  lastRun = stat.mtime.toISOString();
-                  try {
-                    const logContent = fs.readFileSync(logPath, 'utf-8');
-                    lastRunStatus = logContent.includes('error') || logContent.includes('Error') ? 'error' : 'success';
-                  } catch {
-                    lastRunStatus = 'success';
-                  }
-                }
+                const { lastRun, lastRunStatus } = getLastRunStatus(logPath);
 
                 const plistStat = fs.statSync(plistPath);
                 const taskMeta = metadata[taskId] || {
@@ -915,7 +909,7 @@ fi
 export PATH="${claudeDir}:$PATH"
 cd "${projectPath}"
 echo "=== Task started at $(date) ===" >> "${logPath}"
-"${claudePath}" ${flags} --mcp-config "${mcpConfigPath}" -p '${escapedPrompt}' >> "${logPath}" 2>&1
+CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 "${claudePath}" ${flags} --mcp-config "${mcpConfigPath}" --add-dir "${homeDir}/.dorothy" -p '${escapedPrompt}' >> "${logPath}" 2>&1
 echo "=== Task completed at $(date) ===" >> "${logPath}"
 `;
 

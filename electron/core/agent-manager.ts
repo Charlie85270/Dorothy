@@ -297,6 +297,8 @@ export async function initAgentPty(
       CLAUDE_SKILLS: agent.skills.join(','),
       CLAUDE_AGENT_ID: agent.id,
       CLAUDE_PROJECT_PATH: agent.projectPath,
+      // Load CLAUDE.md from --add-dir directories (e.g. ~/.dorothy)
+      CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD: '1',
       ...tasmaniaEnv,
     },
   });

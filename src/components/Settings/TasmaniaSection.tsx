@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Loader2, CheckCircle, XCircle, Play, Square, RefreshCw, Cpu, Server } from 'lucide-react';
 import { Toggle } from './Toggle';
 import { TasmaniaIcon } from './TasmaniaIcon';
@@ -63,14 +63,20 @@ export const TasmaniaSection = ({ appSettings, onSaveAppSettings, onUpdateLocalS
   const [mcpConfigured, setMcpConfigured] = useState(false);
   const [settingUpMcp, setSettingUpMcp] = useState(false);
 
-  // Poll server status every 5s when Tasmania is enabled
+  // Guard against overlapping status polls (each request has a 5s timeout)
+  const statusFetchingRef = useRef(false);
+
   const fetchStatus = useCallback(async () => {
+    if (statusFetchingRef.current) return;
     if (!window.electronAPI?.tasmania?.getStatus) return;
+    statusFetchingRef.current = true;
     try {
       const status = await window.electronAPI.tasmania.getStatus();
       setServerStatus(status);
     } catch {
       setServerStatus(null);
+    } finally {
+      statusFetchingRef.current = false;
     }
   }, []);
 
@@ -97,14 +103,17 @@ export const TasmaniaSection = ({ appSettings, onSaveAppSettings, onUpdateLocalS
     }
   }, []);
 
+  // Only fetch data and start polling when Tasmania is enabled
   useEffect(() => {
+    if (!appSettings.tasmaniaEnabled) return;
+
     fetchStatus();
     fetchModels();
     fetchMcpStatus();
 
     const interval = setInterval(fetchStatus, 5000);
     return () => clearInterval(interval);
-  }, [fetchStatus, fetchModels, fetchMcpStatus]);
+  }, [appSettings.tasmaniaEnabled, fetchStatus, fetchModels, fetchMcpStatus]);
 
   const handleTestConnection = async () => {
     if (!window.electronAPI?.tasmania?.test) return;
@@ -274,129 +283,133 @@ export const TasmaniaSection = ({ appSettings, onSaveAppSettings, onUpdateLocalS
         </div>
       </div>
 
-      {/* Server Status Card */}
-      <div className="border border-border bg-card p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-medium">Server Status</h3>
-          <button
-            onClick={fetchStatus}
-            className="p-1.5 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
-        </div>
+      {/* Server Status + Model Browser — only rendered when Tasmania is enabled */}
+      {appSettings.tasmaniaEnabled && (
+        <>
+          <div className="border border-border bg-card p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-medium">Server Status</h3>
+              <button
+                onClick={fetchStatus}
+                className="p-1.5 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+            </div>
 
-        <div className="space-y-3 text-sm">
-          <div className="flex items-center gap-2">
-            <div className={`w-2.5 h-2.5 rounded-full ${statusColor}`} />
-            <span className="font-medium">{statusText}</span>
-          </div>
-
-          {serverStatus?.status === 'running' && (
-            <>
-              {serverStatus.modelName && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Model</span>
-                  <span className="font-mono text-xs">{serverStatus.modelName}</span>
-                </div>
-              )}
-              {serverStatus.endpoint && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Endpoint</span>
-                  <span className="font-mono text-xs">{serverStatus.endpoint}</span>
-                </div>
-              )}
-              {serverStatus.backend && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Backend</span>
-                  <span>{serverStatus.backend}</span>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Uptime</span>
-                <span>{formatUptime(serverStatus.startedAt)}</span>
+            <div className="space-y-3 text-sm">
+              <div className="flex items-center gap-2">
+                <div className={`w-2.5 h-2.5 rounded-full ${statusColor}`} />
+                <span className="font-medium">{statusText}</span>
               </div>
 
-              <button
-                onClick={handleStopModel}
-                disabled={stoppingModel}
-                className="mt-2 px-3 py-1.5 bg-red-600/10 text-red-500 hover:bg-red-600/20 border border-red-600/20 transition-colors text-sm flex items-center gap-2"
-              >
-                {stoppingModel ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" />}
-                Stop Model
-              </button>
-            </>
-          )}
-
-          {!serverStatus && (
-            <p className="text-muted-foreground text-xs">Unable to reach Tasmania. Make sure the app is running.</p>
-          )}
-        </div>
-      </div>
-
-      {/* Model Browser */}
-      <div className="border border-border bg-card p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-medium">Local Models</h3>
-          <button
-            onClick={fetchModels}
-            disabled={loadingModels}
-            className="p-1.5 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {loadingModels ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-          </button>
-        </div>
-
-        {models.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            {loadingModels ? 'Loading models...' : 'No local models found. Make sure Tasmania is running.'}
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {models.map((model) => {
-              const isLoaded = serverStatus?.modelPath === model.path;
-              return (
-                <div
-                  key={model.path}
-                  className={`flex items-center justify-between p-3 border transition-colors ${
-                    isLoaded ? 'border-green-600/30 bg-green-600/5' : 'border-border'
-                  }`}
-                >
-                  <div className="flex-1 min-w-0 mr-3">
-                    <div className="flex items-center gap-2">
-                      <Cpu className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                      <span className="font-medium text-sm truncate">{model.name}</span>
-                      {isLoaded && (
-                        <span className="text-xs bg-green-600/20 text-green-500 px-1.5 py-0.5 shrink-0">Active</span>
-                      )}
+              {serverStatus?.status === 'running' && (
+                <>
+                  {serverStatus.modelName && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Model</span>
+                      <span className="font-mono text-xs">{serverStatus.modelName}</span>
                     </div>
-                    <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
-                      <span>{formatBytes(model.sizeBytes)}</span>
-                      {model.quantization && <span>{model.quantization}</span>}
-                      {model.architecture && <span>{model.architecture}</span>}
-                      {model.parameters && <span>{model.parameters}</span>}
-                    </div>
-                  </div>
-                  {!isLoaded && (
-                    <button
-                      onClick={() => handleLoadModel(model.path)}
-                      disabled={loadingModel !== null}
-                      className="px-3 py-1.5 bg-secondary text-foreground hover:bg-secondary/80 disabled:opacity-50 transition-colors text-xs flex items-center gap-1.5 shrink-0"
-                    >
-                      {loadingModel === model.path ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : (
-                        <Play className="w-3 h-3" />
-                      )}
-                      Load
-                    </button>
                   )}
-                </div>
-              );
-            })}
+                  {serverStatus.endpoint && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Endpoint</span>
+                      <span className="font-mono text-xs">{serverStatus.endpoint}</span>
+                    </div>
+                  )}
+                  {serverStatus.backend && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Backend</span>
+                      <span>{serverStatus.backend}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Uptime</span>
+                    <span>{formatUptime(serverStatus.startedAt)}</span>
+                  </div>
+
+                  <button
+                    onClick={handleStopModel}
+                    disabled={stoppingModel}
+                    className="mt-2 px-3 py-1.5 bg-red-600/10 text-red-500 hover:bg-red-600/20 border border-red-600/20 transition-colors text-sm flex items-center gap-2"
+                  >
+                    {stoppingModel ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" />}
+                    Stop Model
+                  </button>
+                </>
+              )}
+
+              {!serverStatus && (
+                <p className="text-muted-foreground text-xs">Unable to reach Tasmania. Make sure the app is running.</p>
+              )}
+            </div>
           </div>
-        )}
-      </div>
+
+          {/* Model Browser */}
+          <div className="border border-border bg-card p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-medium">Local Models</h3>
+              <button
+                onClick={fetchModels}
+                disabled={loadingModels}
+                className="p-1.5 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {loadingModels ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              </button>
+            </div>
+
+            {models.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {loadingModels ? 'Loading models...' : 'No local models found. Make sure Tasmania is running.'}
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {models.map((model) => {
+                  const isLoaded = serverStatus?.modelPath === model.path;
+                  return (
+                    <div
+                      key={model.path}
+                      className={`flex items-center justify-between p-3 border transition-colors ${
+                        isLoaded ? 'border-green-600/30 bg-green-600/5' : 'border-border'
+                      }`}
+                    >
+                      <div className="flex-1 min-w-0 mr-3">
+                        <div className="flex items-center gap-2">
+                          <Cpu className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                          <span className="font-medium text-sm truncate">{model.name}</span>
+                          {isLoaded && (
+                            <span className="text-xs bg-green-600/20 text-green-500 px-1.5 py-0.5 shrink-0">Active</span>
+                          )}
+                        </div>
+                        <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
+                          <span>{formatBytes(model.sizeBytes)}</span>
+                          {model.quantization && <span>{model.quantization}</span>}
+                          {model.architecture && <span>{model.architecture}</span>}
+                          {model.parameters && <span>{model.parameters}</span>}
+                        </div>
+                      </div>
+                      {!isLoaded && (
+                        <button
+                          onClick={() => handleLoadModel(model.path)}
+                          disabled={loadingModel !== null}
+                          className="px-3 py-1.5 bg-secondary text-foreground hover:bg-secondary/80 disabled:opacity-50 transition-colors text-xs flex items-center gap-1.5 shrink-0"
+                        >
+                          {loadingModel === model.path ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Play className="w-3 h-3" />
+                          )}
+                          Load
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       {/* Available MCP Tools */}
       <div className="border border-border bg-card p-6">

@@ -65,4 +65,4 @@ export interface AppSettings {
   cliPaths: CLIPaths;
 }
 
-export type SettingsSection = 'general' | 'memory' | 'git' | 'notifications' | 'telegram' | 'slack' | 'jira' | 'socialdata' | 'tasmania' | 'permissions' | 'skills' | 'cli' | 'system';
+export type SettingsSection = 'general' | 'git' | 'notifications' | 'telegram' | 'slack' | 'jira' | 'socialdata' | 'tasmania' | 'permissions' | 'skills' | 'cli' | 'system';

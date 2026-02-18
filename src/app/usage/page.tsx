@@ -26,6 +26,9 @@ const MODEL_PRICING: Record<string, {
   cache5mWritePerMTok: number;
   cache1hWritePerMTok: number;
 }> = {
+  // Opus 4.6
+  'claude-opus-4-6-20250514': { inputPerMTok: 5, outputPerMTok: 25, cacheHitsPerMTok: 0.50, cache5mWritePerMTok: 6.25, cache1hWritePerMTok: 10 },
+  'claude-opus-4-6': { inputPerMTok: 5, outputPerMTok: 25, cacheHitsPerMTok: 0.50, cache5mWritePerMTok: 6.25, cache1hWritePerMTok: 10 },
   // Opus 4.5
   'claude-opus-4-5-20251101': { inputPerMTok: 5, outputPerMTok: 25, cacheHitsPerMTok: 0.50, cache5mWritePerMTok: 6.25, cache1hWritePerMTok: 10 },
   'claude-opus-4-5': { inputPerMTok: 5, outputPerMTok: 25, cacheHitsPerMTok: 0.50, cache5mWritePerMTok: 6.25, cache1hWritePerMTok: 10 },
@@ -35,6 +38,9 @@ const MODEL_PRICING: Record<string, {
   // Opus 4
   'claude-opus-4-20250514': { inputPerMTok: 15, outputPerMTok: 75, cacheHitsPerMTok: 1.50, cache5mWritePerMTok: 18.75, cache1hWritePerMTok: 30 },
   'claude-opus-4': { inputPerMTok: 15, outputPerMTok: 75, cacheHitsPerMTok: 1.50, cache5mWritePerMTok: 18.75, cache1hWritePerMTok: 30 },
+  // Sonnet 4.6
+  'claude-sonnet-4-6-20250514': { inputPerMTok: 3, outputPerMTok: 15, cacheHitsPerMTok: 0.30, cache5mWritePerMTok: 3.75, cache1hWritePerMTok: 6 },
+  'claude-sonnet-4-6': { inputPerMTok: 3, outputPerMTok: 15, cacheHitsPerMTok: 0.30, cache5mWritePerMTok: 3.75, cache1hWritePerMTok: 6 },
   // Sonnet 4.5
   'claude-sonnet-4-5-20251022': { inputPerMTok: 3, outputPerMTok: 15, cacheHitsPerMTok: 0.30, cache5mWritePerMTok: 3.75, cache1hWritePerMTok: 6 },
   'claude-sonnet-4-5': { inputPerMTok: 3, outputPerMTok: 15, cacheHitsPerMTok: 0.30, cache5mWritePerMTok: 3.75, cache1hWritePerMTok: 6 },
@@ -65,6 +71,9 @@ function getModelPricing(modelId: string) {
 
   // Try partial match
   const lowerModel = modelId.toLowerCase();
+  if (lowerModel.includes('opus-4-6') || lowerModel.includes('opus-4.6')) {
+    return MODEL_PRICING['claude-opus-4-6'];
+  }
   if (lowerModel.includes('opus-4-5') || lowerModel.includes('opus-4.5')) {
     return MODEL_PRICING['claude-opus-4-5'];
   }
@@ -76,6 +85,9 @@ function getModelPricing(modelId: string) {
   }
   if (lowerModel.includes('opus-3') || lowerModel.includes('opus3')) {
     return MODEL_PRICING['claude-opus-3'];
+  }
+  if (lowerModel.includes('sonnet-4-6') || lowerModel.includes('sonnet-4.6')) {
+    return MODEL_PRICING['claude-sonnet-4-6'];
   }
   if (lowerModel.includes('sonnet-4-5') || lowerModel.includes('sonnet-4.5')) {
     return MODEL_PRICING['claude-sonnet-4-5'];
@@ -122,10 +134,12 @@ function calculateModelCost(
 // Get friendly model name
 function getModelDisplayName(modelId: string): string {
   const lowerModel = modelId.toLowerCase();
+  if (lowerModel.includes('opus-4-6') || lowerModel.includes('opus-4.6')) return 'Claude Opus 4.6';
   if (lowerModel.includes('opus-4-5') || lowerModel.includes('opus-4.5')) return 'Claude Opus 4.5';
   if (lowerModel.includes('opus-4-1') || lowerModel.includes('opus-4.1')) return 'Claude Opus 4.1';
   if (lowerModel.includes('opus-4') || lowerModel.includes('opus4')) return 'Claude Opus 4';
   if (lowerModel.includes('opus-3') || lowerModel.includes('opus3')) return 'Claude Opus 3';
+  if (lowerModel.includes('sonnet-4-6') || lowerModel.includes('sonnet-4.6')) return 'Claude Sonnet 4.6';
   if (lowerModel.includes('sonnet-4-5') || lowerModel.includes('sonnet-4.5')) return 'Claude Sonnet 4.5';
   if (lowerModel.includes('sonnet-4') || lowerModel.includes('sonnet4')) return 'Claude Sonnet 4';
   if (lowerModel.includes('sonnet-3') || lowerModel.includes('sonnet3')) return 'Claude Sonnet 3.7';
@@ -139,7 +153,7 @@ type TimeRange = 'daily' | 'weekly' | 'monthly';
 
 export default function UsagePage() {
   const { data, loading, error } = useClaude();
-  const [costTimeRange, setCostTimeRange] = useState<TimeRange>('weekly');
+  const [costTimeRange, setCostTimeRange] = useState<TimeRange>('daily');
   const [showPricingTable, setShowPricingTable] = useState(false);
 
   // Get today's stats - use the most recent available
@@ -183,14 +197,18 @@ export default function UsagePage() {
       totalCacheRead += usage.cacheReadInputTokens || 0;
       totalCacheWrite += usage.cacheCreationInputTokens || 0;
 
-      // Calculate cost using our pricing
-      totalCost += calculateModelCost(
-        modelId,
-        usage.inputTokens || 0,
-        usage.outputTokens || 0,
-        usage.cacheReadInputTokens || 0,
-        usage.cacheCreationInputTokens || 0
-      );
+      // Use actual costUSD if available (Claude tracks this natively), else estimate
+      if (usage.costUSD && usage.costUSD > 0) {
+        totalCost += usage.costUSD;
+      } else {
+        totalCost += calculateModelCost(
+          modelId,
+          usage.inputTokens || 0,
+          usage.outputTokens || 0,
+          usage.cacheReadInputTokens || 0,
+          usage.cacheCreationInputTokens || 0
+        );
+      }
     });
 
     return {
@@ -202,6 +220,48 @@ export default function UsagePage() {
       totalCacheWrite,
     };
   }, [data?.stats?.modelUsage]);
+
+  // Cost-per-(input+output)-token rate for each model.
+  // dailyModelTokens only tracks input+output tokens per day (not cache).
+  // We compute rate = all_time_cost / (all_time_input + all_time_output) per model.
+  // This properly amortises cache costs across productive token output.
+  const costPerTokenByModel = useMemo(() => {
+    if (!data?.stats?.modelUsage) return new Map<string, number>();
+    const rateMap = new Map<string, number>();
+    Object.entries(data.stats.modelUsage).forEach(([modelId, usage]) => {
+      const nonCacheTotal = (usage.inputTokens || 0) + (usage.outputTokens || 0);
+      if (nonCacheTotal === 0) return;
+      const cost = calculateModelCost(
+        modelId,
+        usage.inputTokens || 0,
+        usage.outputTokens || 0,
+        usage.cacheReadInputTokens || 0,
+        usage.cacheCreationInputTokens || 0,
+      );
+      rateMap.set(modelId, cost / nonCacheTotal);
+    });
+    return rateMap;
+  }, [data?.stats?.modelUsage]);
+
+  // Per-day cost map derived from per-model daily tokens × per-model cost rate
+  const dailyCostMap = useMemo(() => {
+    if (!data?.stats?.dailyModelTokens) return new Map<string, number>();
+    const map = new Map<string, number>();
+    data.stats.dailyModelTokens.forEach(day => {
+      let dayCost = 0;
+      Object.entries(day.tokensByModel).forEach(([modelId, tokens]) => {
+        const rate = costPerTokenByModel.get(modelId);
+        if (rate !== undefined) {
+          dayCost += tokens * rate;
+        } else {
+          // Fallback: rough estimate assuming even input/output split
+          dayCost += calculateModelCost(modelId, tokens / 2, tokens / 2, 0, 0);
+        }
+      });
+      map.set(day.date, dayCost);
+    });
+    return map;
+  }, [data?.stats?.dailyModelTokens, costPerTokenByModel]);
 
   // Calculate cost breakdown by model
   const modelCostBreakdown = useMemo(() => {
@@ -232,89 +292,66 @@ export default function UsagePage() {
     }).sort((a, b) => b.cost - a.cost);
   }, [data?.stats?.modelUsage]);
 
-  // Calculate total tokens from daily data and use proportional cost allocation
-  const { totalDailyTokens, dailyTokensData } = useMemo(() => {
-    if (!data?.stats?.dailyModelTokens) return { totalDailyTokens: 0, dailyTokensData: [] };
+  // Latest available date in stats (stats-cache.json is updated by Claude Code on session end,
+  // so it may lag behind real-time — use lastComputedDate instead of today's calendar date)
+  const latestDataDate = data?.stats?.lastComputedDate ?? null;
 
-    const sorted = [...data.stats.dailyModelTokens].sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-    );
-
-    let total = 0;
-    const dailyData = sorted.map(day => {
-      const dayTokens = Object.values(day.tokensByModel).reduce((sum, t) => sum + t, 0);
-      total += dayTokens;
-      return { date: day.date, tokens: dayTokens };
-    });
-
-    return { totalDailyTokens: total, dailyTokensData: dailyData };
-  }, [data?.stats?.dailyModelTokens]);
-
-  // Get cost data for charts based on time range - using proportional allocation
+  // Get cost data for charts based on time range.
+  // Anchor to lastComputedDate (not today's calendar date) since stats-cache.json
+  // is only updated by Claude Code on session completion and may lag behind real-time.
   const costChartData = useMemo(() => {
-    if (dailyTokensData.length === 0 || totalDailyTokens === 0) return [];
-
-    // Calculate each day's cost as a proportion of total cost
-    const calculateDayCost = (dayTokens: number) => {
-      const proportion = dayTokens / totalDailyTokens;
-      return proportion * totalUsage.totalCost;
-    };
+    // Anchor date: latest date that has data, fallback to today
+    const anchor = latestDataDate ? new Date(latestDataDate + 'T00:00:00') : new Date();
+    anchor.setHours(0, 0, 0, 0);
 
     if (costTimeRange === 'daily') {
-      // Last 7 days
-      return dailyTokensData.slice(-7).map(day => ({
-        date: day.date,
-        label: new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' }),
-        cost: calculateDayCost(day.tokens),
-      }));
+      // Last 30 calendar days ending at anchor
+      return Array.from({ length: 30 }, (_, i) => {
+        const d = new Date(anchor);
+        d.setDate(anchor.getDate() - (29 - i));
+        const dateKey = d.toISOString().split('T')[0];
+        return {
+          date: dateKey,
+          label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          cost: dailyCostMap.get(dateKey) ?? 0,
+        };
+      });
     } else if (costTimeRange === 'weekly') {
-      // Last 4 weeks
-      const weeks: { [key: string]: { tokens: number; startDate: string } } = {};
-      dailyTokensData.forEach(day => {
-        const date = new Date(day.date);
-        const weekStart = new Date(date);
-        weekStart.setDate(date.getDate() - date.getDay());
+      // Last 12 weeks (Sun–Sat) ending at anchor's week
+      return Array.from({ length: 12 }, (_, i) => {
+        const weekStart = new Date(anchor);
+        weekStart.setDate(anchor.getDate() - anchor.getDay() - (11 - i) * 7);
         const weekKey = weekStart.toISOString().split('T')[0];
-
-        if (!weeks[weekKey]) {
-          weeks[weekKey] = { tokens: 0, startDate: weekKey };
+        let cost = 0;
+        for (let d = 0; d < 7; d++) {
+          const day = new Date(weekStart);
+          day.setDate(weekStart.getDate() + d);
+          const dk = day.toISOString().split('T')[0];
+          cost += dailyCostMap.get(dk) ?? 0;
         }
-
-        weeks[weekKey].tokens += day.tokens;
+        return {
+          date: weekKey,
+          label: weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          cost,
+        };
       });
-
-      return Object.values(weeks)
-        .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
-        .slice(-4)
-        .map(week => ({
-          date: week.startDate,
-          label: `Week of ${new Date(week.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
-          cost: calculateDayCost(week.tokens),
-        }));
     } else {
-      // Last 6 months
-      const months: { [key: string]: { tokens: number; monthKey: string } } = {};
-      dailyTokensData.forEach(day => {
-        const date = new Date(day.date);
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-
-        if (!months[monthKey]) {
-          months[monthKey] = { tokens: 0, monthKey };
-        }
-
-        months[monthKey].tokens += day.tokens;
+      // Last 12 months ending at anchor's month
+      return Array.from({ length: 12 }, (_, i) => {
+        const d = new Date(anchor.getFullYear(), anchor.getMonth() - (11 - i), 1);
+        const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        let cost = 0;
+        dailyCostMap.forEach((dayCost, dateKey) => {
+          if (dateKey.startsWith(monthKey)) cost += dayCost;
+        });
+        return {
+          date: monthKey,
+          label: d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+          cost,
+        };
       });
-
-      return Object.values(months)
-        .sort((a, b) => a.monthKey.localeCompare(b.monthKey))
-        .slice(-6)
-        .map(month => ({
-          date: month.monthKey,
-          label: new Date(month.monthKey + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
-          cost: calculateDayCost(month.tokens),
-        }));
     }
-  }, [dailyTokensData, totalDailyTokens, costTimeRange, totalUsage.totalCost]);
+  }, [dailyCostMap, costTimeRange, latestDataDate]);
 
   // Get last 7 days of activity for the chart
   const weeklyActivity = useMemo(() => {
@@ -328,14 +365,11 @@ export default function UsagePage() {
     return last7Days;
   }, [data?.stats?.dailyActivity]);
 
-  // Today's estimated cost using proportional allocation
+  // Cost for the latest available day
   const todayCost = useMemo(() => {
-    if (!todayTokens.byModel || Object.keys(todayTokens.byModel).length === 0 || totalDailyTokens === 0) return 0;
-
-    const todayTotalTokens = Object.values(todayTokens.byModel).reduce((sum, t) => sum + t, 0);
-    const proportion = todayTotalTokens / totalDailyTokens;
-    return proportion * totalUsage.totalCost;
-  }, [todayTokens.byModel, totalDailyTokens, totalUsage.totalCost]);
+    if (!latestDataDate) return 0;
+    return dailyCostMap.get(latestDataDate) ?? 0;
+  }, [dailyCostMap, latestDataDate]);
 
   if (loading && !data) {
     return (
@@ -408,12 +442,12 @@ export default function UsagePage() {
               <DollarSign className="w-5 h-5 text-accent-amber" />
             </div>
             <div>
-              <p className="text-xs text-text-muted">Today's Cost</p>
+              <p className="text-xs text-text-muted">Latest Day Cost</p>
               <p className="text-xl lg:text-2xl font-bold text-accent-amber">${todayCost.toFixed(2)}</p>
             </div>
           </div>
           <p className="text-xs text-text-muted">
-            {todayTokens.date || 'No data today'}
+            {latestDataDate ?? 'No data'}
           </p>
         </motion.div>
 
@@ -489,28 +523,40 @@ export default function UsagePage() {
           </div>
         </div>
 
-        <div className="flex items-end gap-2 h-48">
+        <div className="flex items-end gap-1 h-52 group">
           {costChartData.length === 0 ? (
             <div className="flex-1 flex items-center justify-center text-text-muted text-sm">
               No cost data available
             </div>
           ) : (
             costChartData.map((item, i) => {
-              const height = (item.cost / maxCost) * 100;
+              const height = maxCost > 0 ? (item.cost / maxCost) * 100 : 0;
+              // For daily (30 bars), only show label on significant bars to avoid overlap
+              const isDaily = costTimeRange === 'daily';
+              const showCostLabel = isDaily ? height > 8 : true;
+              // For daily x-axis: show every ~5th label or just the ones at week boundaries
+              const showDateLabel = isDaily
+                ? (i === 0 || i === 7 || i === 14 || i === 21 || i === 29 || item.cost === Math.max(...costChartData.map(d => d.cost)))
+                : true;
               return (
-                <div key={item.date} className="flex-1 flex flex-col items-center gap-1">
-                  <div className="w-full flex flex-col items-center justify-end h-40">
-                    <span className="text-xs text-accent-green font-medium mb-1">
-                      ${item.cost.toFixed(2)}
-                    </span>
+                <div key={item.date} className="flex-1 flex flex-col items-center gap-0.5 relative">
+                  <div className="w-full flex flex-col items-center justify-end h-44">
+                    {showCostLabel && (
+                      <span className={`${isDaily ? 'text-[9px]' : 'text-xs'} text-accent-green font-medium mb-0.5 whitespace-nowrap`}>
+                        ${item.cost < 1 ? item.cost.toFixed(2) : item.cost.toFixed(0)}
+                      </span>
+                    )}
                     <motion.div
                       initial={{ height: 0 }}
-                      animate={{ height: `${Math.max(height, 4)}%` }}
-                      transition={{ delay: 0.2 + i * 0.05, duration: 0.5 }}
-                      className="w-full max-w-12 bg-gradient-to-t from-accent-green to-accent-cyan rounded-none"
+                      animate={{ height: `${Math.max(height, item.cost > 0 ? 3 : 0)}%` }}
+                      transition={{ delay: 0.1 + i * 0.02, duration: 0.4 }}
+                      className={`w-full bg-gradient-to-t from-accent-green to-accent-cyan rounded-none ${item.cost === 0 ? 'opacity-20' : ''}`}
+                      title={`${item.label}: $${item.cost.toFixed(2)}`}
                     />
                   </div>
-                  <span className="text-[10px] text-text-muted text-center">{item.label}</span>
+                  <span className={`${isDaily ? 'text-[8px]' : 'text-[10px]'} text-text-muted text-center leading-tight ${!showDateLabel ? 'invisible' : ''}`}>
+                    {item.label}
+                  </span>
                 </div>
               );
             })
@@ -736,9 +782,11 @@ export default function UsagePage() {
               </thead>
               <tbody>
                 {[
+                  { name: 'Claude Opus 4.6', key: 'claude-opus-4-6' },
                   { name: 'Claude Opus 4.5', key: 'claude-opus-4-5' },
                   { name: 'Claude Opus 4.1', key: 'claude-opus-4-1' },
                   { name: 'Claude Opus 4', key: 'claude-opus-4' },
+                  { name: 'Claude Sonnet 4.6', key: 'claude-sonnet-4-6' },
                   { name: 'Claude Sonnet 4.5', key: 'claude-sonnet-4-5' },
                   { name: 'Claude Sonnet 4', key: 'claude-sonnet-4' },
                   { name: 'Claude Haiku 4.5', key: 'claude-haiku-4-5' },

@@ -538,6 +538,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
   },
 
+  // Native Claude memory (reads ~/.claude/projects/*/memory/)
+  memory: {
+    listProjects: () =>
+      ipcRenderer.invoke('memory:list-projects'),
+    readFile: (filePath: string) =>
+      ipcRenderer.invoke('memory:read-file', filePath),
+    writeFile: (filePath: string, content: string) =>
+      ipcRenderer.invoke('memory:write-file', filePath, content),
+    createFile: (memoryDir: string, fileName: string, content?: string) =>
+      ipcRenderer.invoke('memory:create-file', memoryDir, fileName, content ?? ''),
+    deleteFile: (filePath: string) =>
+      ipcRenderer.invoke('memory:delete-file', filePath),
+  },
+
   // Platform info
   platform: process.platform,
 });

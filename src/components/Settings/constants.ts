@@ -6,7 +6,6 @@ import {
   Shield,
   Sparkles,
   Monitor,
-  Brain,
   Terminal,
   Twitter,
 } from 'lucide-react';
@@ -17,7 +16,6 @@ import type { SettingsSection } from './types';
 
 export const SECTIONS: { id: SettingsSection; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'general', label: 'General', icon: Settings },
-  { id: 'memory', label: 'Memory', icon: Brain },
   { id: 'git', label: 'Git', icon: GitCommit },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'telegram', label: 'Telegram', icon: Send },

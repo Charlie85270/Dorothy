@@ -25,6 +25,67 @@ export function ensureDataDir() {
 }
 
 /**
+ * Write Dorothy's CLAUDE.md to ~/.dorothy/CLAUDE.md so all agents spawned from
+ * Dorothy can load it via --add-dir ~/.dorothy with
+ * CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1.
+ *
+ * First tries to read the live CLAUDE.md from the app source directory.
+ * Falls back to a bundled minimal version if the source file is unavailable
+ * (e.g. in a packaged .asar build without unpacked assets).
+ */
+export function ensureDorothyClaudeMd(): void {
+  try {
+    ensureDataDir();
+    const dest = path.join(DATA_DIR, 'CLAUDE.md');
+
+    // Try to read from app source (works in dev and when app.asar is unpacked)
+    let content: string | null = null;
+    const appPath = app.getAppPath().replace(/app\.asar$/, '').replace(/app\.asar\.unpacked$/, '');
+    const candidates = [
+      path.join(appPath, 'CLAUDE.md'),
+      path.join(appPath, '..', 'CLAUDE.md'),
+    ];
+    for (const candidate of candidates) {
+      if (fs.existsSync(candidate)) {
+        content = fs.readFileSync(candidate, 'utf-8');
+        break;
+      }
+    }
+
+    // Fallback: write essential agent instructions
+    if (!content) {
+      content = `# Dorothy Agent Instructions
+
+## Memory
+
+Use auto memory (\`~/.claude/projects/.../memory/\`) actively on every project:
+- Save architectural decisions, key file locations, and debugging insights to \`MEMORY.md\`
+- Create topic files (e.g. \`patterns.md\`, \`debugging.md\`) for detailed notes — keep \`MEMORY.md\` under 200 lines
+- At session start, review \`MEMORY.md\` for relevant context before diving in
+- After any correction or new discovery, update memory so the next session benefits
+
+## Workflow
+
+- Enter plan mode for non-trivial tasks (3+ steps or architectural decisions)
+- After any correction from the user: update \`tasks/lessons.md\` with the pattern
+- Never mark a task complete without proving it works
+- When given a bug report: just fix it — point at logs, errors, failing tests and resolve them
+
+## Core Principles
+
+- **Simplicity First**: Make every change as simple as possible. Impact minimal code.
+- **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
+- **Minimal Impact**: Changes should only touch what is necessary.
+`;
+    }
+
+    fs.writeFileSync(dest, content, 'utf-8');
+  } catch (err) {
+    console.warn('Failed to write Dorothy CLAUDE.md:', err);
+  }
+}
+
+/**
  * Migrate data from ~/.claude-manager to ~/.dorothy on first launch after rebrand.
  * Only copies files that don't already exist in the new location to avoid overwriting newer data.
  * Removes the old directory after successful migration.

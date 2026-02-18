@@ -458,7 +458,7 @@ export default function MemoryPage() {
           {selectedProject ? (
             <>
               {/* Project header */}
-              <div className="px-3 py-2 border-b !rounded-none border-border !border-t-0 shrink-0 bg-secondary/20">
+              <div className="px-3 py-2 border-b !rounded-none border-border !border-t-0image.png shrink-0 bg-secondary/20">
                 <p className="text-xs font-semibold truncate">{selectedProject.projectName}</p>
                 <p className="text-[10px] text-muted-foreground truncate mt-0.5" title={selectedProject.projectPath}>
                   {selectedProject.projectPath}

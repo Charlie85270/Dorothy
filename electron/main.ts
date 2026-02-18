@@ -87,6 +87,7 @@ import { registerAutomationHandlers } from './handlers/automation-handlers';
 import { registerCLIPathsHandlers, getCLIPathsConfig } from './handlers/cli-paths-handlers';
 import { registerKanbanHandlers, KanbanHandlerDependencies } from './handlers/kanban-handlers';
 import { registerVaultHandlers } from './handlers/vault-handlers';
+import { registerWorldHandlers } from './handlers/world-handlers';
 import { initVaultDb, closeVaultDb } from './services/vault-db';
 import { checkForUpdates } from './services/update-checker';
 import { initKanbanAutomation, findMatchingAgent, createAgentForTask, startAgentForTask } from './services/kanban-automation';
@@ -322,6 +323,9 @@ app.whenReady().then(async () => {
   // Register vault handlers
   registerVaultHandlers({ getMainWindow });
 
+  // Register world (generative zone) handlers
+  registerWorldHandlers({ getMainWindow });
+
   // Initialize kanban automation service
   initKanbanAutomation({
     agents,
@@ -338,6 +342,9 @@ app.whenReady().then(async () => {
         cwd = os.homedir();
       }
 
+      // Always include world-builder skill
+      const allSkills = [...new Set([...config.skills, 'world-builder'])];
+
       const ptyProcess = pty.spawn(shell, ['-l'], {
         name: 'xterm-256color',
         cols: 120,
@@ -345,7 +352,7 @@ app.whenReady().then(async () => {
         cwd,
         env: {
           ...process.env as { [key: string]: string },
-          CLAUDE_SKILLS: config.skills.join(','),
+          CLAUDE_SKILLS: allSkills.join(','),
           CLAUDE_AGENT_ID: id,
           CLAUDE_PROJECT_PATH: config.projectPath,
         },
@@ -358,7 +365,7 @@ app.whenReady().then(async () => {
         id,
         status: 'idle',
         projectPath: config.projectPath,
-        skills: config.skills,
+        skills: allSkills,
         output: [],
         lastActivity: new Date().toISOString(),
         ptyId,

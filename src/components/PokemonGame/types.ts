@@ -1,6 +1,6 @@
 export type Direction = 'down' | 'up' | 'left' | 'right';
 
-export type Screen = 'title' | 'game' | 'battle' | 'menu' | 'interior' | 'route' | 'transition';
+export type Screen = 'title' | 'game' | 'battle' | 'menu' | 'interior' | 'route' | 'transition' | 'generative-zone';
 
 export type TileType =
   | 'grass'      // 0 - walkable ground

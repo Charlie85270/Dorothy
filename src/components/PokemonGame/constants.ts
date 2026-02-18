@@ -131,6 +131,13 @@ function generateMap(): number[][] {
     map[2][col] = TILE.GRASS; // Cleared path
   }
 
+  // Southern passage to World Gate (generative zones)
+  for (const col of [19, 20, 21]) {
+    map[MAP_HEIGHT - 1][col] = TILE.ROUTE_EXIT;
+    map[MAP_HEIGHT - 2][col] = TILE.GRASS;
+    map[MAP_HEIGHT - 3][col] = TILE.GRASS;
+  }
+
   // Interior tree clusters
   const treeClusters = [
     [8,4],[9,4],[8,5], [22,5],[23,5], [21,4],[22,4],

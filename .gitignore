@@ -55,6 +55,8 @@ mcp-socialdata/node_modules
 mcp-socialdata/dist
 mcp-x/node_modules
 mcp-x/dist
+mcp-world/node_modules
+mcp-world/dist
 electron/dist
 
 .idea

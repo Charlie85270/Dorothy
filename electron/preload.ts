@@ -491,6 +491,32 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
   },
 
+  // World (generative zones)
+  world: {
+    listZones: () =>
+      ipcRenderer.invoke('world:listZones'),
+    getZone: (zoneId: string) =>
+      ipcRenderer.invoke('world:getZone', zoneId),
+    exportZone: (params: { zoneId: string; screenshot: string }) =>
+      ipcRenderer.invoke('world:exportZone', params),
+    importZone: () =>
+      ipcRenderer.invoke('world:importZone'),
+    confirmImport: (zone: unknown) =>
+      ipcRenderer.invoke('world:confirmImport', zone),
+    deleteZone: (zoneId: string) =>
+      ipcRenderer.invoke('world:deleteZone', zoneId),
+    onZoneUpdated: (callback: (zone: unknown) => void) => {
+      const listener = (_: unknown, zone: unknown) => callback(zone);
+      ipcRenderer.on('world:zoneUpdated', listener);
+      return () => ipcRenderer.removeListener('world:zoneUpdated', listener);
+    },
+    onZoneDeleted: (callback: (event: { id: string }) => void) => {
+      const listener = (_: unknown, event: { id: string }) => callback(event);
+      ipcRenderer.on('world:zoneDeleted', listener);
+      return () => ipcRenderer.removeListener('world:zoneDeleted', listener);
+    },
+  },
+
   // CLI Paths management
   cliPaths: {
     detect: () =>

@@ -1,7 +1,7 @@
 'use client';
 import { useRef, useEffect, useCallback } from 'react';
 import { GameAssets, NPC, Building, Direction } from './types';
-import { SCALED_TILE, MOVE_DURATION, TILE } from './constants';
+import { SCALED_TILE, MOVE_DURATION, TILE, MAP_HEIGHT } from './constants';
 import { useGameLoop } from './hooks/useGameLoop';
 import { useKeyboard } from './hooks/useKeyboard';
 import { useGameState } from './hooks/useGameState';
@@ -74,6 +74,7 @@ export default function GameCanvas({
     { id: 'wanderer-prof', name: 'Professor', type: 'wanderer', x: 18, y: 13, direction: 'down' as Direction, spritePath: '/pokemon/pnj/prof.png', dialogue: ['Don\'t go on the road to the north, I\'ve heard that strange things happen there.'] },
     { id: 'wanderer-girl', name: 'Lass', type: 'wanderer', x: 24, y: 20, direction: 'left' as Direction, spritePath: '/pokemon/pnj/girld.png', dialogue: ['My brother went to Apple in the north to buy a Mac mini, he never came back, I\'m starting to worry.'] },
     { id: 'wanderer-brian', name: 'Brian', type: 'wanderer', x: 15, y: 28, direction: 'right' as Direction, spritePath: '/pokemon/pnj/coinbase-brian.png', dialogue: ['Hey Bro, I\'m Brian from Coinbase!', 'Did you see my video at halftime during the Super Bowl? It\'s awesome, right?'] },
+    { id: 'world-builder-npc', name: 'World Architect', type: 'professor' as const, x: 20, y: 33, direction: 'up' as Direction, spritePath: '/pokemon/pnj/trainer_SAGE.png', dialogue: ['Welcome to the World Gate!', 'I can take you to an existing world, or create a brand new one!'] },
   ]);
   const wandererMovementRef = useRef<Map<string, { tileX: number; tileY: number; targetX: number; targetY: number; isMoving: boolean; moveProgress: number; nextMoveTime: number }>>(new Map());
 
@@ -143,7 +144,12 @@ export default function GameCanvas({
         const targetTile = getTileAt(player.targetX, player.targetY);
         if (targetTile === TILE.ROUTE_EXIT && !routeTriggeredRef.current) {
           routeTriggeredRef.current = true;
-          onEnterRoute('route1');
+          // South edge = World Gate (generative zones), North edge = Route 1
+          if (player.targetY >= MAP_HEIGHT - 2) {
+            onEnterRoute('world:latest');
+          } else {
+            onEnterRoute('route1');
+          }
         }
       } else {
         // Animate walk cycle

@@ -55,6 +55,16 @@ export interface VaultAttachmentElectron {
   created_at: string;
 }
 
+export interface ImportPreview {
+  name: string;
+  description: string;
+  width: number;
+  height: number;
+  npcCount: number;
+  buildingCount: number;
+  screenshot: string;
+}
+
 export interface WorktreeConfig {
   enabled: boolean;
   branchName: string;
@@ -600,6 +610,18 @@ export interface ElectronAPI {
     onTaskCreated: (callback: (task: KanbanTaskElectron) => void) => () => void;
     onTaskUpdated: (callback: (task: KanbanTaskElectron) => void) => () => void;
     onTaskDeleted: (callback: (event: { id: string }) => void) => () => void;
+  };
+
+  // World (generative zones)
+  world?: {
+    listZones: () => Promise<{ zones: unknown[]; error?: string }>;
+    getZone: (zoneId: string) => Promise<{ zone: unknown | null; error?: string }>;
+    exportZone: (params: { zoneId: string; screenshot: string }) => Promise<{ success: boolean; filePath?: string; error?: string }>;
+    importZone: () => Promise<{ success: boolean; preview?: ImportPreview; zone?: unknown; error?: string }>;
+    confirmImport: (zone: unknown) => Promise<{ success: boolean; zoneId?: string; error?: string }>;
+    deleteZone: (zoneId: string) => Promise<{ success: boolean; error?: string }>;
+    onZoneUpdated: (callback: (zone: unknown) => void) => () => void;
+    onZoneDeleted: (callback: (event: { id: string }) => void) => () => void;
   };
 
   // Updates

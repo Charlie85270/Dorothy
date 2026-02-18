@@ -244,6 +244,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     const cleanEnv = { ...process.env as { [key: string]: string } };
     delete cleanEnv['CLAUDECODE'];
 
+    // Always include world-builder skill so agents can generate game zones
+    const allSkills = [...new Set([...config.skills, 'world-builder'])];
+
     let ptyProcess: pty.IPty;
     try {
       ptyProcess = pty.spawn(shell, ['-l'], {
@@ -254,7 +257,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
         env: {
           ...cleanEnv,
           PATH: fullPath,
-          CLAUDE_SKILLS: config.skills.join(','),
+          CLAUDE_SKILLS: allSkills.join(','),
           CLAUDE_AGENT_ID: id,
           CLAUDE_PROJECT_PATH: config.projectPath,
         },
@@ -530,9 +533,11 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     }
 
     // Build the final prompt with skills directive if agent has skills
+    // Always include world-builder skill so agents can generate game zones
+    const allAgentSkills = [...new Set([...(agent.skills || []), 'world-builder'])];
     let finalPrompt = prompt;
-    if (agent.skills && agent.skills.length > 0 && !isSuperAgentCheck) {
-      const skillsList = agent.skills.join(', ');
+    if (allAgentSkills.length > 0 && !isSuperAgentCheck) {
+      const skillsList = allAgentSkills.join(', ');
       finalPrompt = `[IMPORTANT: Use these skills for this session: ${skillsList}. Invoke them with /<skill-name> when relevant to the task.] ${prompt}`;
     }
 

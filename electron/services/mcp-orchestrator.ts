@@ -66,6 +66,14 @@ export function getMcpXPath(): string {
 }
 
 /**
+ * Get the path to the bundled MCP world server (generative zones)
+ * Always uses the packaged app path - MCP servers are bundled in extraResources
+ */
+export function getMcpWorldPath(): string {
+  return path.join(process.resourcesPath, 'mcp-world', 'dist', 'bundle.js');
+}
+
+/**
  * Auto-setup MCP orchestrator on app start using claude mcp add command
  * This function runs during app initialization to ensure the orchestrator is properly configured
  */
@@ -77,6 +85,7 @@ export async function setupMcpOrchestrator(appSettings?: AppSettings): Promise<v
     const vaultPath = getMcpVaultPath();
     const socialDataPath = getMcpSocialDataPath();
     const xPath = getMcpXPath();
+    const worldPath = getMcpWorldPath();
 
     const claudeDir = path.join(os.homedir(), '.claude');
     const mcpConfigPath = path.join(claudeDir, 'mcp.json');
@@ -123,6 +132,13 @@ export async function setupMcpOrchestrator(appSettings?: AppSettings): Promise<v
       console.log('MCP x not found at', xPath);
     }
 
+    // Setup world MCP server if exists (makes zone creation available to all agents)
+    if (fs.existsSync(worldPath)) {
+      await setupMcpServer('dorothy-world', worldPath, claudeDir, mcpConfigPath);
+    } else {
+      console.log('MCP world not found at', worldPath);
+    }
+
     // Setup Tasmania MCP server if enabled in settings
     if (appSettings?.tasmaniaEnabled && appSettings.tasmaniaServerPath) {
       const tasmaniaPath = appSettings.tasmaniaServerPath;
@@ -132,8 +148,54 @@ export async function setupMcpOrchestrator(appSettings?: AppSettings): Promise<v
         console.log('Tasmania MCP server not found at', tasmaniaPath);
       }
     }
+
+    // Install bundled skills to ~/.claude/skills/
+    await installBundledSkills();
   } catch (err) {
     console.error('Failed to auto-setup MCP servers:', err);
+  }
+}
+
+/**
+ * Install bundled skills from the app to ~/.claude/skills/
+ * Skills bundled in the app's skills/ directory are copied to the user's
+ * global skills directory so they're available to all agents.
+ */
+async function installBundledSkills(): Promise<void> {
+  const bundledSkills = ['world-builder'];
+  const targetBaseDir = path.join(os.homedir(), '.claude', 'skills');
+
+  for (const skillName of bundledSkills) {
+    try {
+      const sourceDir = path.join(app.getAppPath(), 'skills', skillName);
+      const sourceFile = path.join(sourceDir, 'SKILL.md');
+
+      if (!fs.existsSync(sourceFile)) {
+        console.log(`Bundled skill ${skillName} not found at ${sourceFile}`);
+        continue;
+      }
+
+      const targetDir = path.join(targetBaseDir, skillName);
+      const targetFile = path.join(targetDir, 'SKILL.md');
+
+      // Check if already installed with same content
+      if (fs.existsSync(targetFile)) {
+        const sourceContent = fs.readFileSync(sourceFile, 'utf-8');
+        const targetContent = fs.readFileSync(targetFile, 'utf-8');
+        if (sourceContent === targetContent) {
+          console.log(`Skill ${skillName} already installed and up to date`);
+          continue;
+        }
+        console.log(`Skill ${skillName} outdated, updating...`);
+      }
+
+      // Install the skill
+      fs.mkdirSync(targetDir, { recursive: true });
+      fs.copyFileSync(sourceFile, targetFile);
+      console.log(`Installed skill ${skillName} to ${targetDir}`);
+    } catch (err) {
+      console.error(`Failed to install skill ${skillName}:`, err);
+    }
   }
 }
 

@@ -6,6 +6,12 @@
 
 export type KanbanColumn = 'backlog' | 'planned' | 'ongoing' | 'done';
 
+export interface Subtask {
+  id: string;
+  title: string;
+  completed: boolean;
+}
+
 export interface TaskAttachment {
   path: string;                  // Full file path
   name: string;                  // Display name (filename)
@@ -32,6 +38,7 @@ export interface KanbanTask {
   labels: string[];
   completionSummary?: string;    // Summary of what was done by the agent
   attachments: TaskAttachment[]; // Files attached to the task
+  subtasks: Subtask[];
 }
 
 export interface KanbanTaskCreate {
@@ -55,6 +62,7 @@ export interface KanbanTaskUpdate {
   progress?: number;
   assignedAgentId?: string | null;
   completionSummary?: string;
+  subtasks?: Subtask[];
 }
 
 export interface KanbanMoveResult {

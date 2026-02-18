@@ -19,6 +19,12 @@ interface TaskAttachment {
   size?: number;
 }
 
+interface Subtask {
+  id: string;
+  title: string;
+  completed: boolean;
+}
+
 interface KanbanTask {
   id: string;
   title: string;
@@ -38,6 +44,7 @@ interface KanbanTask {
   labels: string[];
   completionSummary?: string;
   attachments: TaskAttachment[];
+  subtasks: Subtask[];
 }
 
 interface KanbanTaskCreate {
@@ -61,6 +68,7 @@ interface KanbanTaskUpdate {
   progress?: number;
   assignedAgentId?: string | null;
   completionSummary?: string;
+  subtasks?: Subtask[];
 }
 
 // Dependencies interface
@@ -89,7 +97,8 @@ function loadTasks(): KanbanTask[] {
   }
   try {
     const data = fs.readFileSync(KANBAN_FILE, 'utf-8');
-    return JSON.parse(data);
+    const tasks: KanbanTask[] = JSON.parse(data);
+    return tasks.map(t => ({ ...t, subtasks: t.subtasks || [] }));
   } catch {
     return [];
   }
@@ -149,6 +158,7 @@ export function registerKanbanHandlers(dependencies: KanbanHandlerDependencies):
         order: maxOrder + 1,
         labels: params.labels || [],
         attachments: params.attachments || [],
+        subtasks: [],
       };
 
       tasks.push(newTask);
@@ -184,6 +194,7 @@ export function registerKanbanHandlers(dependencies: KanbanHandlerDependencies):
       if (params.progress !== undefined) task.progress = params.progress;
       if (params.assignedAgentId !== undefined) task.assignedAgentId = params.assignedAgentId;
       if (params.completionSummary !== undefined) task.completionSummary = params.completionSummary;
+      if (params.subtasks !== undefined) task.subtasks = params.subtasks;
 
       task.updatedAt = new Date().toISOString();
 

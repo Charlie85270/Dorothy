@@ -410,6 +410,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       labels?: string[];
       progress?: number;
       assignedAgentId?: string | null;
+      subtasks?: Array<{ id: string; title: string; completed: boolean }>;
     }) =>
       ipcRenderer.invoke('kanban:update', params),
     move: (params: { id: string; column: 'backlog' | 'planned' | 'ongoing' | 'done'; order?: number }) =>

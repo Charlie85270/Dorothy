@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { X, FolderOpen, Plus, Minus, Sparkles, Wand2, ListTodo, Loader2, Paperclip, FileImage, FileText, File } from 'lucide-react';
+import { X, FolderOpen, Plus, Sparkles, Wand2, ListTodo, Loader2, Paperclip, FileImage, FileText, File } from 'lucide-react';
 import type { KanbanTaskCreate, TaskAttachment } from '@/types/kanban';
 import { isElectron } from '@/hooks/useElectron';
 
@@ -244,7 +244,7 @@ export function NewTaskModal({ onClose, onCreate }: NewTaskModalProps) {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onClose}
-        className="fixed inset-0 bg-black/60 z-50"
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
       />
 
       {/* Modal */}
@@ -252,9 +252,9 @@ export function NewTaskModal({ onClose, onCreate }: NewTaskModalProps) {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-lg"
+        className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-xl"
       >
-        <div className="bg-card border border-border rounded-lg shadow-xl">
+        <div className="bg-card border border-border rounded-2xl shadow-2xl overflow-hidden">
           {/* Header with Tabs */}
           <div className="flex items-center justify-between p-4 border-b border-border">
             <div className="flex items-center gap-1">
@@ -469,230 +469,221 @@ export function NewTaskModal({ onClose, onCreate }: NewTaskModalProps) {
 
           {/* Manual Mode */}
           {activeTab === 'manual' && (
-            <form onSubmit={handleManualSubmit} className="p-4 space-y-4">
-              {/* Title */}
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1">
-                  Title <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="What needs to be done?"
-                  className="w-full px-3 py-2 bg-secondary border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                  autoFocus
-                />
-              </div>
-
-              {/* Description */}
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1">
-                  Description
-                </label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Detailed instructions for the agent..."
-                  rows={3}
-                  className="w-full px-3 py-2 bg-secondary border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-primary resize-none"
-                />
-              </div>
-
-              {/* Project */}
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1">
-                  Project <span className="text-red-400">*</span>
-                </label>
-                <div className="flex gap-2">
-                  <select
-                    value={selectedProjectPath}
-                    onChange={(e) => setSelectedProjectPath(e.target.value)}
-                    className="flex-1 px-3 py-2 bg-secondary border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    {projects.length === 0 && (
-                      <option value="">Select a project</option>
-                    )}
-                    {projects.map((p) => (
-                      <option key={p.path} value={p.path}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={handleSelectFolder}
-                    className="px-3 py-2 bg-secondary border border-border rounded-md hover:bg-secondary/80 transition-colors"
-                    title="Browse folders"
-                  >
-                    <FolderOpen className="w-4 h-4 text-muted-foreground" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Priority */}
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1">
-                  Priority
-                </label>
-                <div className="flex gap-2">
-                  {(['low', 'medium', 'high'] as const).map((p) => (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => setPriority(p)}
-                      className={`
-                        flex-1 px-3 py-1.5 text-sm rounded-md border transition-colors
-                        ${priority === p
-                          ? p === 'high'
-                            ? 'bg-red-900/30 border-red-500/50 text-red-400'
-                            : p === 'medium'
-                              ? 'bg-yellow-900/30 border-yellow-500/50 text-yellow-400'
-                              : 'bg-zinc-700/50 border-zinc-500/50 text-zinc-400'
-                          : 'bg-secondary border-border text-muted-foreground hover:bg-secondary/80'
-                        }
-                      `}
-                    >
-                      {p.charAt(0).toUpperCase() + p.slice(1)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Required Skills */}
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1">
-                  Required Skills
-                </label>
-                <div className="flex gap-2 mb-2">
+            <form onSubmit={handleManualSubmit}>
+              <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+                {/* Title + Priority row */}
+                <div className="flex items-center gap-3">
                   <input
                     type="text"
-                    value={skillInput}
-                    onChange={(e) => setSkillInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddSkill();
-                      }
-                    }}
-                    placeholder="e.g., commit, test"
-                    className="flex-1 px-3 py-1.5 bg-secondary border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Task title..."
+                    className="flex-1 text-lg font-semibold bg-transparent border-none focus:outline-none focus:ring-0 py-1 pl-4 placeholder:text-muted-foreground/50"
+                    autoFocus
                   />
-                  <button
-                    type="button"
-                    onClick={handleAddSkill}
-                    className="px-2 py-1.5 bg-secondary border border-border rounded-md hover:bg-secondary/80"
-                  >
-                    <Plus className="w-4 h-4 text-muted-foreground" />
-                  </button>
-                </div>
-                {requiredSkills.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {requiredSkills.map((skill) => (
-                      <span
-                        key={skill}
-                        className="flex items-center gap-1 px-2 py-0.5 bg-blue-900/30 text-blue-400 text-xs rounded-full"
+                  <div className="flex gap-1 flex-shrink-0">
+                    {(['low', 'medium', 'high'] as const).map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setPriority(p)}
+                        className={`
+                          px-2.5 py-1 text-xs rounded-full transition-all font-medium
+                          ${priority === p
+                            ? p === 'high'
+                              ? 'bg-red-500/15 text-red-500'
+                              : p === 'medium'
+                              ? 'bg-amber-500/15 text-amber-500'
+                              : 'bg-zinc-500/15 text-zinc-400'
+                            : 'text-muted-foreground/40 hover:text-muted-foreground'
+                          }
+                        `}
                       >
-                        {skill}
-                        <button type="button" onClick={() => handleRemoveSkill(skill)}>
-                          <Minus className="w-3 h-3" />
-                        </button>
-                      </span>
+                        {p.charAt(0).toUpperCase() + p.slice(1)}
+                      </button>
                     ))}
                   </div>
-                )}
-              </div>
-
-              {/* Labels */}
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1">
-                  Labels
-                </label>
-                <div className="flex gap-2 mb-2">
-                  <input
-                    type="text"
-                    value={labelInput}
-                    onChange={(e) => setLabelInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddLabel();
-                      }
-                    }}
-                    placeholder="e.g., bug, feature"
-                    className="flex-1 px-3 py-1.5 bg-secondary border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddLabel}
-                    className="px-2 py-1.5 bg-secondary border border-border rounded-md hover:bg-secondary/80"
-                  >
-                    <Plus className="w-4 h-4 text-muted-foreground" />
-                  </button>
                 </div>
-                {labels.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
+
+                {/* Description */}
+                <div>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Add a description..."
+                    rows={2}
+                    className="w-full text-sm bg-secondary/30 border border-border/50 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none placeholder:text-muted-foreground/50"
+                  />
+                </div>
+
+                {/* Project */}
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                    Project <span className="text-red-400">*</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <select
+                      value={selectedProjectPath}
+                      onChange={(e) => setSelectedProjectPath(e.target.value)}
+                      className="flex-1 px-3 py-1.5 bg-secondary/30 border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    >
+                      {projects.length === 0 && (
+                        <option value="">Select a project</option>
+                      )}
+                      {projects.map((p) => (
+                        <option key={p.path} value={p.path}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={handleSelectFolder}
+                      className="px-3 py-1.5 bg-secondary/50 border border-border/50 rounded-lg hover:bg-secondary transition-colors"
+                      title="Browse folders"
+                    >
+                      <FolderOpen className="w-4 h-4 text-muted-foreground" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Labels */}
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                    Labels
+                  </label>
+                  <div className="flex gap-2 mb-2">
+                    <input
+                      type="text"
+                      value={labelInput}
+                      onChange={(e) => setLabelInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddLabel();
+                        }
+                      }}
+                      placeholder="Add label..."
+                      className="flex-1 px-3 py-1.5 bg-secondary/30 border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddLabel}
+                      className="px-3 py-1.5 bg-secondary/50 border border-border/50 rounded-lg hover:bg-secondary transition-colors"
+                    >
+                      <Plus className="w-4 h-4 text-muted-foreground" />
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
                     {labels.map((label) => (
                       <span
                         key={label}
-                        className="flex items-center gap-1 px-2 py-0.5 bg-secondary text-muted-foreground text-xs rounded-full"
+                        className="flex items-center gap-1 px-2.5 py-0.5 bg-secondary text-muted-foreground rounded-full text-xs font-medium"
                       >
                         {label}
-                        <button type="button" onClick={() => handleRemoveLabel(label)}>
-                          <Minus className="w-3 h-3" />
+                        <button type="button" onClick={() => handleRemoveLabel(label)} className="hover:opacity-70">
+                          <X className="w-3 h-3" />
                         </button>
                       </span>
                     ))}
+                    {labels.length === 0 && (
+                      <span className="text-xs text-muted-foreground/50">No labels</span>
+                    )}
                   </div>
-                )}
-              </div>
-
-              {/* Attachments */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
-                    <Paperclip className="w-4 h-4" />
-                    Attachments
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleAddAttachments}
-                    className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground bg-secondary hover:bg-secondary/80 border border-border rounded transition-colors"
-                  >
-                    <Plus className="w-3 h-3" />
-                    Add Files
-                  </button>
                 </div>
-                {attachments.length > 0 ? (
-                  <div className="space-y-1.5 max-h-24 overflow-y-auto">
-                    {attachments.map((attachment) => (
-                      <div
-                        key={attachment.path}
-                        className="flex items-center gap-2 px-2 py-1.5 bg-secondary/50 border border-border rounded text-sm"
-                      >
-                        <FileTypeIcon type={attachment.type} />
-                        <span className="flex-1 truncate text-foreground" title={attachment.path}>
-                          {attachment.name}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveAttachment(attachment.path)}
-                          className="p-0.5 hover:bg-secondary rounded"
-                        >
-                          <X className="w-3 h-3 text-muted-foreground" />
-                        </button>
-                      </div>
-                    ))}
+
+                {/* Required Skills */}
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                    Required Skills
+                  </label>
+                  <div className="flex gap-2 mb-2">
+                    <input
+                      type="text"
+                      value={skillInput}
+                      onChange={(e) => setSkillInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddSkill();
+                        }
+                      }}
+                      placeholder="Add skill..."
+                      className="flex-1 px-3 py-1.5 bg-secondary/30 border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddSkill}
+                      className="px-3 py-1.5 bg-secondary/50 border border-border/50 rounded-lg hover:bg-secondary transition-colors"
+                    >
+                      <Plus className="w-4 h-4 text-muted-foreground" />
+                    </button>
                   </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    Add images, PDFs, or documents for reference
-                  </p>
-                )}
+                  <div className="flex flex-wrap gap-1.5">
+                    {requiredSkills.map((skill) => (
+                      <span
+                        key={skill}
+                        className="flex items-center gap-1 px-2.5 py-0.5 bg-blue-500/10 text-blue-500 rounded-full text-xs font-medium"
+                      >
+                        {skill}
+                        <button type="button" onClick={() => handleRemoveSkill(skill)} className="hover:opacity-70">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                    {requiredSkills.length === 0 && (
+                      <span className="text-xs text-muted-foreground/50">No skills required</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Attachments */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                      <Paperclip className="w-3.5 h-3.5" />
+                      Attachments
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleAddAttachments}
+                      className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground bg-secondary/50 hover:bg-secondary border border-border/50 rounded-lg transition-colors"
+                    >
+                      <Plus className="w-3 h-3" />
+                      Add Files
+                    </button>
+                  </div>
+                  {attachments.length > 0 ? (
+                    <div className="space-y-1.5 max-h-24 overflow-y-auto">
+                      {attachments.map((attachment) => (
+                        <div
+                          key={attachment.path}
+                          className="flex items-center gap-2 px-2 py-1.5 bg-secondary/30 border border-border/50 rounded-lg text-sm"
+                        >
+                          <FileTypeIcon type={attachment.type} />
+                          <span className="flex-1 truncate text-foreground" title={attachment.path}>
+                            {attachment.name}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveAttachment(attachment.path)}
+                            className="p-0.5 hover:bg-secondary rounded"
+                          >
+                            <X className="w-3 h-3 text-muted-foreground" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground/50">
+                      Add images, PDFs, or documents for reference
+                    </span>
+                  )}
+                </div>
               </div>
 
-              {/* Actions */}
-              <div className="flex justify-end gap-2 pt-2">
+              {/* Footer */}
+              <div className="flex justify-end gap-3 px-6 py-4 border-t border-border bg-secondary/20">
                 <button
                   type="button"
                   onClick={onClose}
@@ -703,7 +694,7 @@ export function NewTaskModal({ onClose, onCreate }: NewTaskModalProps) {
                 <button
                   type="submit"
                   disabled={!title.trim() || !selectedProjectPath || isSubmitting}
-                  className="px-4 py-2 bg-primary text-primary-foreground text-sm rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-5 py-2 bg-primary text-primary-foreground text-sm rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                 >
                   {isSubmitting ? 'Creating...' : 'Create Task'}
                 </button>

@@ -19,7 +19,7 @@ import * as os from 'os';
 import type { AppSettings, AgentStatus } from './types';
 
 // Constants
-import { DATA_DIR, APP_SETTINGS_FILE } from './constants';
+import { APP_SETTINGS_FILE } from './constants';
 
 // Core modules
 import {
@@ -27,7 +27,6 @@ import {
   registerProtocolSchemes,
   setupProtocolHandler,
   getMainWindow,
-  setMainWindow,
 } from './core/window-manager';
 
 import {
@@ -36,7 +35,6 @@ import {
   saveAgents,
   initAgentPty,
   handleStatusChangeNotification,
-  setSuperAgentTelegramTask,
   getSuperAgentOutputBuffer,
   clearSuperAgentOutputBuffer,
 } from './core/agent-manager';
@@ -46,7 +44,6 @@ import {
   quickPtyProcesses,
   skillPtyProcesses,
   pluginPtyProcesses,
-  createQuickPty,
   killAllPty,
 } from './core/pty-manager';
 
@@ -84,8 +81,8 @@ import {
 import { registerIpcHandlers, IpcHandlerDependencies } from './handlers/ipc-handlers';
 import { registerSchedulerHandlers } from './handlers/scheduler-handlers';
 import { registerAutomationHandlers } from './handlers/automation-handlers';
-import { registerCLIPathsHandlers, getCLIPathsConfig } from './handlers/cli-paths-handlers';
-import { registerKanbanHandlers, KanbanHandlerDependencies } from './handlers/kanban-handlers';
+import { registerCLIPathsHandlers } from './handlers/cli-paths-handlers';
+import { registerKanbanHandlers } from './handlers/kanban-handlers';
 import { registerVaultHandlers } from './handlers/vault-handlers';
 import { registerWorldHandlers } from './handlers/world-handlers';
 import { initVaultDb, closeVaultDb } from './services/vault-db';
@@ -321,6 +318,56 @@ app.whenReady().then(async () => {
     saveAppSettings: saveAppSettingsToFile,
   });
 
+  // Register kanban handlers
+  registerKanbanHandlers({
+    getMainWindow,
+    findMatchingAgent,
+    createAgentForTask,
+    startAgent: startAgentForTask,
+    stopAgent: async (agentId: string) => {
+      const agent = agents.get(agentId);
+      if (agent?.ptyId) {
+        const ptyProcess = ptyProcesses.get(agent.ptyId);
+        if (ptyProcess) {
+          // Send Ctrl+C to interrupt
+          ptyProcess.write('\x03');
+        }
+        agent.status = 'idle';
+        agent.currentTask = undefined;
+        agent.lastActivity = new Date().toISOString();
+        saveAgents();
+
+        getMainWindow()?.webContents.send('agent:status', {
+          type: 'status',
+          agentId,
+          status: 'idle',
+          timestamp: new Date().toISOString(),
+        });
+      }
+    },
+    deleteAgent: async (agentId: string) => {
+      const agent = agents.get(agentId);
+      if (agent) {
+        // Stop PTY if running
+        if (agent.ptyId) {
+          const ptyProcess = ptyProcesses.get(agent.ptyId);
+          if (ptyProcess) {
+            ptyProcess.kill();
+          }
+          ptyProcesses.delete(agent.ptyId);
+        }
+        // Remove agent
+        agents.delete(agentId);
+        saveAgents();
+        console.log(`Agent ${agentId} deleted`);
+      }
+    },
+    getAgentOutput: (agentId: string) => {
+      const agent = agents.get(agentId);
+      return agent?.output || [];
+    },
+  });
+
   // Initialize vault database
   initVaultDb();
 
@@ -479,56 +526,6 @@ app.whenReady().then(async () => {
       saveAgents();
     },
     saveAgents,
-  });
-
-  // Register kanban handlers
-  registerKanbanHandlers({
-    getMainWindow,
-    findMatchingAgent,
-    createAgentForTask,
-    startAgent: startAgentForTask,
-    stopAgent: async (agentId: string) => {
-      const agent = agents.get(agentId);
-      if (agent?.ptyId) {
-        const ptyProcess = ptyProcesses.get(agent.ptyId);
-        if (ptyProcess) {
-          // Send Ctrl+C to interrupt
-          ptyProcess.write('\x03');
-        }
-        agent.status = 'idle';
-        agent.currentTask = undefined;
-        agent.lastActivity = new Date().toISOString();
-        saveAgents();
-
-        getMainWindow()?.webContents.send('agent:status', {
-          type: 'status',
-          agentId,
-          status: 'idle',
-          timestamp: new Date().toISOString(),
-        });
-      }
-    },
-    deleteAgent: async (agentId: string) => {
-      const agent = agents.get(agentId);
-      if (agent) {
-        // Stop PTY if running
-        if (agent.ptyId) {
-          const ptyProcess = ptyProcesses.get(agent.ptyId);
-          if (ptyProcess) {
-            ptyProcess.kill();
-          }
-          ptyProcesses.delete(agent.ptyId);
-        }
-        // Remove agent
-        agents.delete(agentId);
-        saveAgents();
-        console.log(`Agent ${agentId} deleted`);
-      }
-    },
-    getAgentOutput: (agentId: string) => {
-      const agent = agents.get(agentId);
-      return agent?.output || [];
-    },
   });
 
   // Initialize services

@@ -19,9 +19,11 @@ import {
   Database,
   Clock,
   HardDrive,
+  Share2,
 } from 'lucide-react';
 import { useMemory, formatBytes, timeAgo } from '@/hooks/useMemory';
 import type { ProjectMemory, MemoryFile } from '@/types/electron';
+import AgentKnowledgeGraph from '@/components/Memory/AgentKnowledgeGraph';
 
 // ─── Inline editor with save/cancel ────────────────────────────────────────
 
@@ -288,6 +290,7 @@ export default function MemoryPage() {
     refresh,
   } = useMemory();
 
+  const [activeTab, setActiveTab] = useState<'projects' | 'agents'>('projects');
   const [editingFile, setEditingFile] = useState<MemoryFile | null>(null);
   const [showNewFileModal, setShowNewFileModal] = useState(false);
   const [deletingFile, setDeletingFile] = useState<string | null>(null);
@@ -345,15 +348,50 @@ export default function MemoryPage() {
             Native Claude Code memory — per-project context that persists across sessions
           </p>
         </div>
-        <button
-          onClick={refresh}
-          disabled={loading}
-          className="px-3 lg:px-4 py-2 border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors flex items-center gap-2 text-sm self-start sm:self-auto"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          <span className="hidden sm:inline">Refresh</span>
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          {activeTab === 'projects' && (
+            <button
+              onClick={refresh}
+              disabled={loading}
+              className="px-3 lg:px-4 py-2 border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors flex items-center gap-2 text-sm"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* ── Tabs ── */}
+      <div className="flex items-center gap-0 border-b border-border mb-4 shrink-0">
+        {([
+          { id: 'projects', label: 'Projects', icon: FolderOpen },
+          { id: 'agents',   label: 'Agents',   icon: Share2 },
+        ] as const).map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => setActiveTab(id)}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+              activeTab === id
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Icon className="w-4 h-4" />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Agents graph tab ── */}
+      {activeTab === 'agents' && (
+        <div className="flex-1 min-h-0">
+          <AgentKnowledgeGraph />
+        </div>
+      )}
+
+      {/* ── Projects tab content ── */}
+      {activeTab === 'projects' && <>
 
       {/* ── Stats bar ── */}
       <div className="grid grid-cols-3 gap-3 mb-4 shrink-0">
@@ -576,6 +614,8 @@ export default function MemoryPage() {
           />
         )}
       </AnimatePresence>
+
+      </>}
     </div>
   );
 }

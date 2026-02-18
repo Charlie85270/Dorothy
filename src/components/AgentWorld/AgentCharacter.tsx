@@ -64,7 +64,7 @@ export default function AgentCharacter({
   const legLeftRef = useRef<THREE.Mesh>(null);
   const legRightRef = useRef<THREE.Mesh>(null);
 
-  const colors = CHARACTER_COLORS[character];
+  const colors = CHARACTER_COLORS[character] ?? CHARACTER_COLORS.robot;
   const isWorking = status === 'running' || status === 'waiting';
 
   // Animation

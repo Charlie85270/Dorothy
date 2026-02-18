@@ -441,6 +441,7 @@ export interface ElectronAPI {
       }>;
     }>;
     createTask: (params: {
+      title?: string;
       agentId?: string;
       prompt: string;
       schedule: string;
@@ -454,6 +455,7 @@ export interface ElectronAPI {
     }) => Promise<{ success: boolean; error?: string; taskId?: string }>;
     deleteTask: (taskId: string) => Promise<{ success: boolean; error?: string }>;
     updateTask: (taskId: string, updates: {
+      title?: string;
       prompt?: string;
       schedule?: string;
       projectPath?: string;

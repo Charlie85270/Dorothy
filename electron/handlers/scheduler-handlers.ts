@@ -12,6 +12,7 @@ import { v4 as uuidv4 } from 'uuid';
 const SCHEDULER_METADATA_PATH = path.join(os.homedir(), '.dorothy', 'scheduler-metadata.json');
 
 interface SchedulerTaskMetadata {
+  title?: string;
   agentId?: string;
   agentName?: string;
   notifications: {
@@ -455,6 +456,7 @@ export function registerSchedulerHandlers(): void {
     try {
       const tasks: Array<{
         id: string;
+        title?: string;
         prompt: string;
         schedule: string;
         scheduleHuman: string;
@@ -492,6 +494,7 @@ export function registerSchedulerHandlers(): void {
               addedTaskIds.add(taskId);
               tasks.push({
                 id: taskId,
+                title: taskMeta.title,
                 prompt: schedule.prompt || schedule.task || '',
                 schedule: schedule.schedule || schedule.cron || '',
                 scheduleHuman: cronToHuman(schedule.schedule || schedule.cron || ''),
@@ -540,6 +543,7 @@ export function registerSchedulerHandlers(): void {
                     addedTaskIds.add(taskId);
                     tasks.push({
                       id: taskId,
+                      title: taskMeta.title,
                       prompt: schedule.prompt || schedule.task || '',
                       schedule: schedule.schedule || schedule.cron || '',
                       scheduleHuman: cronToHuman(schedule.schedule || schedule.cron || ''),
@@ -676,6 +680,7 @@ export function registerSchedulerHandlers(): void {
 
   // Create a new scheduled task
   ipcMain.handle('scheduler:createTask', async (_event, config: {
+    title?: string;
     prompt: string;
     schedule: string;
     projectPath: string;
@@ -721,6 +726,7 @@ export function registerSchedulerHandlers(): void {
       // Save metadata
       const metadata = loadSchedulerMetadata();
       metadata[taskId] = {
+        title: config.title,
         agentId: config.agentId,
         agentName: config.agentName,
         notifications: config.notifications || { telegram: false, slack: false },
@@ -823,6 +829,7 @@ export function registerSchedulerHandlers(): void {
 
   // Update a scheduled task
   ipcMain.handle('scheduler:updateTask', async (_event, taskId: string, updates: {
+    title?: string;
     prompt?: string;
     schedule?: string;
     projectPath?: string;
@@ -859,11 +866,12 @@ export function registerSchedulerHandlers(): void {
         return { success: false, error: 'Task not found' };
       }
 
-      // Update metadata (notifications)
-      if (updates.notifications) {
+      // Update metadata (title, notifications)
+      if (updates.title !== undefined || updates.notifications) {
         const metadata = loadSchedulerMetadata();
         if (metadata[taskId]) {
-          metadata[taskId].notifications = updates.notifications;
+          if (updates.title !== undefined) metadata[taskId].title = updates.title;
+          if (updates.notifications) metadata[taskId].notifications = updates.notifications;
           saveSchedulerMetadata(metadata);
         }
       }

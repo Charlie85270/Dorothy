@@ -22,6 +22,7 @@ import {
   Pencil,
 } from 'lucide-react';
 import { isElectron } from '@/hooks/useElectron';
+import SchedulerCalendar from '@/components/SchedulerCalendar';
 
 // Slack Icon component
 const SlackIcon = ({ className }: { className?: string }) => (
@@ -39,6 +40,7 @@ const SlackIcon = ({ className }: { className?: string }) => (
 
 interface ScheduledTask {
   id: string;
+  title?: string;
   prompt: string;
   schedule: string;
   scheduleHuman: string;
@@ -92,6 +94,7 @@ export default function RecurringTasksPage() {
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [editingTask, setEditingTask] = useState<ScheduledTask | null>(null);
   const [editForm, setEditForm] = useState({
+    title: '',
     prompt: '',
     schedulePreset: 'custom',
     customCron: '',
@@ -112,6 +115,7 @@ export default function RecurringTasksPage() {
   const [formData, setFormData] = useState({
     agentId: '',
     projectPath: '',
+    title: '',
     prompt: '',
     schedulePreset: 'daily',
     customCron: '',
@@ -211,6 +215,12 @@ export default function RecurringTasksPage() {
       const selectedAgent = agents.find(a => a.id === formData.agentId);
       const projectPath = formData.projectPath || selectedAgent?.projectPath || '';
 
+      if (!formData.title.trim()) {
+        setCreateError('Please enter a title for this task');
+        setIsCreating(false);
+        return;
+      }
+
       if (!projectPath) {
         setCreateError('Please select an agent or enter a project path');
         setIsCreating(false);
@@ -218,6 +228,7 @@ export default function RecurringTasksPage() {
       }
 
       const result = await window.electronAPI?.scheduler?.createTask({
+        title: formData.title.trim(),
         agentId: formData.agentId || undefined,
         prompt: fullPrompt,
         schedule: cron,
@@ -235,6 +246,7 @@ export default function RecurringTasksPage() {
         setFormData({
           agentId: '',
           projectPath: '',
+          title: '',
           prompt: '',
           schedulePreset: 'daily',
           customCron: '',
@@ -333,6 +345,7 @@ export default function RecurringTasksPage() {
 
     setEditingTask(task);
     setEditForm({
+      title: task.title || '',
       prompt: task.prompt,
       schedulePreset: preset,
       customCron: preset === 'custom' ? cron : '',
@@ -359,6 +372,7 @@ export default function RecurringTasksPage() {
     try {
       const newCron = buildEditCron();
       const updates: {
+        title?: string;
         prompt?: string;
         schedule?: string;
         projectPath?: string;
@@ -366,6 +380,7 @@ export default function RecurringTasksPage() {
         notifications?: { telegram: boolean; slack: boolean };
       } = {};
 
+      if (editForm.title !== (editingTask.title || '')) updates.title = editForm.title;
       if (editForm.prompt !== editingTask.prompt) updates.prompt = editForm.prompt;
       if (newCron !== editingTask.schedule) updates.schedule = newCron;
       if (editForm.projectPath !== editingTask.projectPath) updates.projectPath = editForm.projectPath;
@@ -479,6 +494,17 @@ export default function RecurringTasksPage() {
         </div>
       </div>
 
+      {/* Calendar */}
+      {!isLoading && tasks.length > 0 && (
+        <SchedulerCalendar
+          tasks={tasks}
+          onRunTask={handleRunTask}
+          onEditTask={handleEditTask}
+          onDeleteTask={handleDeleteTask}
+          onViewLogs={handleViewLogs}
+        />
+      )}
+
       {/* Toast */}
       <AnimatePresence>
         {toast && (
@@ -581,7 +607,11 @@ export default function RecurringTasksPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <CalendarClock className="w-4 h-4 text-primary shrink-0" />
-                        <span className="font-medium text-sm font-mono">{task.id}</span>
+                        {task.title ? (
+                          <span className="font-semibold text-sm">{task.title}</span>
+                        ) : (
+                          <span className="font-medium text-sm font-mono text-muted-foreground">{task.id}</span>
+                        )}
                         {formatNextRun(task.nextRun) && (
                           <span className="px-1.5 py-0.5 bg-cyan-500/10 text-cyan-400 rounded text-[10px] font-medium">
                             {formatNextRun(task.nextRun)}
@@ -735,6 +765,21 @@ export default function RecurringTasksPage() {
               </div>
 
               <div className="p-6 space-y-4">
+                {/* Title */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Title <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    placeholder="e.g. Daily code review"
+                    className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm"
+                    autoFocus
+                  />
+                </div>
+
                 {/* Agent Selection (optional) */}
                 <div>
                   <label className="block text-sm font-medium mb-2">Agent (optional)</label>
@@ -1024,6 +1069,18 @@ export default function RecurringTasksPage() {
               </div>
 
               <div className="p-6 space-y-4">
+                {/* Title */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">Title</label>
+                  <input
+                    type="text"
+                    value={editForm.title}
+                    onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                    placeholder="e.g. Daily code review"
+                    className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm"
+                  />
+                </div>
+
                 {/* Project Path */}
                 <div>
                   <label className="block text-sm font-medium mb-2">Project Path</label>

@@ -817,7 +817,7 @@ export default function AgentKnowledgeGraph() {
   const openPanel = useCallback(async (node: GraphNode) => {
     setPanelNode(node);
     setPanelLoading(true);
-    setPanelTab('write');
+    setPanelTab('preview');
     try {
       let content = '';
       if (node.kind === 'memory' && node.meta?.filePath) {

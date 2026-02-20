@@ -71,11 +71,22 @@ interface Agent {
 
 const SCHEDULE_PRESETS = [
   { value: 'hourly', label: 'Every hour', cron: '0 * * * *' },
-  { value: 'daily', label: 'Daily', cron: '0 9 * * *' },
-  { value: 'weekdays', label: 'Weekdays', cron: '0 9 * * 1-5' },
-  { value: 'weekly', label: 'Weekly', cron: '0 9 * * 1' },
+  { value: 'daily', label: 'Every day', cron: '0 9 * * *' },
+  { value: 'every_n_days', label: 'Every N days', cron: '' },
+  { value: 'specific_days', label: 'Specific days', cron: '' },
+  { value: 'weekdays', label: 'Weekdays (Mon–Fri)', cron: '0 9 * * 1-5' },
   { value: 'monthly', label: 'Monthly', cron: '0 9 1 * *' },
   { value: 'custom', label: 'Custom cron', cron: '' },
+];
+
+const DAY_OPTIONS = [
+  { value: '1', label: 'Mon' },
+  { value: '2', label: 'Tue' },
+  { value: '3', label: 'Wed' },
+  { value: '4', label: 'Thu' },
+  { value: '5', label: 'Fri' },
+  { value: '6', label: 'Sat' },
+  { value: '0', label: 'Sun' },
 ];
 
 export default function RecurringTasksPage() {
@@ -99,6 +110,8 @@ export default function RecurringTasksPage() {
     schedulePreset: 'custom',
     customCron: '',
     time: '09:00',
+    intervalDays: 2,
+    selectedDays: ['1'] as string[],
     projectPath: '',
     autonomous: true,
     notifyTelegram: false,
@@ -121,6 +134,8 @@ export default function RecurringTasksPage() {
     customCron: '',
     time: '09:00',
     days: ['1', '2', '3', '4', '5'], // Mon-Fri
+    intervalDays: 2,
+    selectedDays: ['1'] as string[],
     autonomous: true,
     useWorktree: false,
     notifyTelegram: false,
@@ -188,13 +203,19 @@ export default function RecurringTasksPage() {
 
     try {
       // Build cron expression
+      const [hour, minute] = formData.time.split(':');
       let cron = formData.customCron;
-      if (formData.schedulePreset !== 'custom') {
+      if (formData.schedulePreset === 'hourly') {
+        cron = '0 * * * *';
+      } else if (formData.schedulePreset === 'every_n_days') {
+        cron = `${minute} ${hour} */${formData.intervalDays} * *`;
+      } else if (formData.schedulePreset === 'specific_days') {
+        const days = [...formData.selectedDays].sort((a, b) => parseInt(a) - parseInt(b)).join(',');
+        cron = `${minute} ${hour} * * ${days}`;
+      } else if (formData.schedulePreset !== 'custom') {
         const preset = SCHEDULE_PRESETS.find(p => p.value === formData.schedulePreset);
-        if (preset) {
-          // Replace time in preset
-          const [hour, minute] = formData.time.split(':');
-          cron = preset.cron.replace(/^0 \*/, `${minute} ${hour}`).replace(/^0 9/, `${minute} ${hour}`);
+        if (preset?.cron) {
+          cron = preset.cron.replace(/^0 9/, `${minute} ${hour}`);
         }
       }
 
@@ -252,6 +273,8 @@ export default function RecurringTasksPage() {
           customCron: '',
           time: '09:00',
           days: ['1', '2', '3', '4', '5'],
+          intervalDays: 2,
+          selectedDays: ['1'],
           autonomous: true,
           useWorktree: false,
           notifyTelegram: false,
@@ -330,17 +353,29 @@ export default function RecurringTasksPage() {
     const parts = cron.split(' ');
     let preset = 'custom';
     let time = '09:00';
+    let intervalDays = 2;
+    let selectedDays: string[] = ['1'];
 
     if (parts.length === 5) {
       const [min, hr, dom, , dow] = parts;
       if (hr !== '*') {
         time = `${hr.padStart(2, '0')}:${min.padStart(2, '0')}`;
       }
-      if (hr === '*' && dom === '*' && dow === '*') preset = 'hourly';
-      else if (dom === '*' && dow === '1-5') preset = 'weekdays';
-      else if (dom === '*' && dow === '1') preset = 'weekly';
-      else if (dom === '1' && dow === '*') preset = 'monthly';
-      else if (dom === '*' && dow === '*') preset = 'daily';
+      if (hr === '*' && dom === '*' && dow === '*') {
+        preset = 'hourly';
+      } else if (dom.startsWith('*/') && dow === '*') {
+        preset = 'every_n_days';
+        intervalDays = parseInt(dom.slice(2)) || 2;
+      } else if (dom === '*' && dow === '1-5') {
+        preset = 'weekdays';
+      } else if (dom === '1' && dow === '*') {
+        preset = 'monthly';
+      } else if (dom === '*' && dow !== '*') {
+        preset = 'specific_days';
+        selectedDays = dow.split(',');
+      } else if (dom === '*' && dow === '*') {
+        preset = 'daily';
+      }
     }
 
     setEditingTask(task);
@@ -350,6 +385,8 @@ export default function RecurringTasksPage() {
       schedulePreset: preset,
       customCron: preset === 'custom' ? cron : '',
       time,
+      intervalDays,
+      selectedDays,
       projectPath: task.projectPath,
       autonomous: task.autonomous,
       notifyTelegram: task.notifications.telegram,
@@ -359,11 +396,19 @@ export default function RecurringTasksPage() {
 
   // Build cron from edit form
   const buildEditCron = (): string => {
-    if (editForm.schedulePreset === 'custom') return editForm.customCron;
-    const preset = SCHEDULE_PRESETS.find(p => p.value === editForm.schedulePreset);
-    if (!preset) return editForm.customCron;
     const [hour, minute] = editForm.time.split(':');
-    return preset.cron.replace(/^0 \*/, `${minute} ${hour}`).replace(/^0 9/, `${minute} ${hour}`);
+    if (editForm.schedulePreset === 'custom') return editForm.customCron;
+    if (editForm.schedulePreset === 'hourly') return '0 * * * *';
+    if (editForm.schedulePreset === 'every_n_days') {
+      return `${minute} ${hour} */${editForm.intervalDays} * *`;
+    }
+    if (editForm.schedulePreset === 'specific_days') {
+      const days = [...editForm.selectedDays].sort((a, b) => parseInt(a) - parseInt(b)).join(',');
+      return `${minute} ${hour} * * ${days}`;
+    }
+    const preset = SCHEDULE_PRESETS.find(p => p.value === editForm.schedulePreset);
+    if (!preset?.cron) return editForm.customCron;
+    return preset.cron.replace(/^0 9/, `${minute} ${hour}`);
   };
 
   const handleSaveEdit = async () => {
@@ -831,45 +876,108 @@ export default function RecurringTasksPage() {
                 </div>
 
                 {/* Schedule */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Schedule</label>
-                    <select
-                      value={formData.schedulePreset}
-                      onChange={(e) => setFormData({ ...formData, schedulePreset: e.target.value })}
-                      className="w-full px-3 py-2 bg-secondary border border-border rounded-lg"
-                    >
-                      {SCHEDULE_PRESETS.map(preset => (
-                        <option key={preset.value} value={preset.value}>{preset.label}</option>
-                      ))}
-                    </select>
+                <div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Schedule</label>
+                      <select
+                        value={formData.schedulePreset}
+                        onChange={(e) => setFormData({ ...formData, schedulePreset: e.target.value })}
+                        className="w-full px-3 py-2 bg-secondary border border-border rounded-lg"
+                      >
+                        {SCHEDULE_PRESETS.map(preset => (
+                          <option key={preset.value} value={preset.value}>{preset.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {formData.schedulePreset !== 'hourly' && (
+                      <div>
+                        <label className="block text-sm font-medium mb-2">Time</label>
+                        <input
+                          type="time"
+                          value={formData.time}
+                          onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+                          className="w-full px-3 py-2 bg-secondary border border-border rounded-lg"
+                        />
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Time</label>
-                    <input
-                      type="time"
-                      value={formData.time}
-                      onChange={(e) => setFormData({ ...formData, time: e.target.value })}
-                      className="w-full px-3 py-2 bg-secondary border border-border rounded-lg"
-                    />
-                  </div>
-                </div>
 
-                {formData.schedulePreset === 'custom' && (
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Custom Cron Expression</label>
-                    <input
-                      type="text"
-                      value={formData.customCron}
-                      onChange={(e) => setFormData({ ...formData, customCron: e.target.value })}
-                      placeholder="0 9 * * 1-5"
-                      className="w-full px-3 py-2 bg-secondary border border-border rounded-lg font-mono text-sm"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Format: minute hour day month weekday (e.g., &apos;0 9 * * 1-5&apos; for weekdays at 9am)
-                    </p>
-                  </div>
-                )}
+                  {formData.schedulePreset === 'every_n_days' && (
+                    <div className="mt-3 flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">Every</span>
+                      <input
+                        type="number"
+                        min={2}
+                        max={30}
+                        value={formData.intervalDays}
+                        onChange={(e) => setFormData({ ...formData, intervalDays: parseInt(e.target.value) || 2 })}
+                        className="w-16 px-2 py-1.5 bg-secondary border border-border rounded text-sm text-center"
+                      />
+                      <span className="text-sm text-muted-foreground">days</span>
+                      <div className="flex items-center gap-1 ml-1">
+                        {[2, 3, 7, 14].map(n => (
+                          <button
+                            key={n}
+                            type="button"
+                            onClick={() => setFormData({ ...formData, intervalDays: n })}
+                            className={`px-2 py-1 text-xs rounded transition-colors ${
+                              formData.intervalDays === n
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-secondary hover:bg-secondary/80 border border-border'
+                            }`}
+                          >
+                            {n}d
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {formData.schedulePreset === 'specific_days' && (
+                    <div className="mt-3">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {DAY_OPTIONS.map(day => {
+                          const isSelected = formData.selectedDays.includes(day.value);
+                          return (
+                            <button
+                              key={day.value}
+                              type="button"
+                              onClick={() => {
+                                const next = isSelected
+                                  ? formData.selectedDays.filter(d => d !== day.value)
+                                  : [...formData.selectedDays, day.value];
+                                if (next.length > 0) setFormData({ ...formData, selectedDays: next });
+                              }}
+                              className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
+                                isSelected
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'bg-secondary hover:bg-secondary/80 border border-border'
+                              }`}
+                            >
+                              {day.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {formData.schedulePreset === 'custom' && (
+                    <div className="mt-3">
+                      <input
+                        type="text"
+                        value={formData.customCron}
+                        onChange={(e) => setFormData({ ...formData, customCron: e.target.value })}
+                        placeholder="0 9 * * 1-5"
+                        className="w-full px-3 py-2 bg-secondary border border-border rounded-lg font-mono text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Format: minute hour day month weekday (e.g., &apos;0 9 * * 1-5&apos; for weekdays at 9am)
+                      </p>
+                    </div>
+                  )}
+                </div>
 
                 {/* Options */}
                 <div className="space-y-3">
@@ -1104,45 +1212,108 @@ export default function RecurringTasksPage() {
                 </div>
 
                 {/* Schedule */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Schedule</label>
-                    <select
-                      value={editForm.schedulePreset}
-                      onChange={(e) => setEditForm({ ...editForm, schedulePreset: e.target.value })}
-                      className="w-full px-3 py-2 bg-secondary border border-border rounded-lg"
-                    >
-                      {SCHEDULE_PRESETS.map(preset => (
-                        <option key={preset.value} value={preset.value}>{preset.label}</option>
-                      ))}
-                    </select>
+                <div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Schedule</label>
+                      <select
+                        value={editForm.schedulePreset}
+                        onChange={(e) => setEditForm({ ...editForm, schedulePreset: e.target.value })}
+                        className="w-full px-3 py-2 bg-secondary border border-border rounded-lg"
+                      >
+                        {SCHEDULE_PRESETS.map(preset => (
+                          <option key={preset.value} value={preset.value}>{preset.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {editForm.schedulePreset !== 'hourly' && (
+                      <div>
+                        <label className="block text-sm font-medium mb-2">Time</label>
+                        <input
+                          type="time"
+                          value={editForm.time}
+                          onChange={(e) => setEditForm({ ...editForm, time: e.target.value })}
+                          className="w-full px-3 py-2 bg-secondary border border-border rounded-lg"
+                        />
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Time</label>
-                    <input
-                      type="time"
-                      value={editForm.time}
-                      onChange={(e) => setEditForm({ ...editForm, time: e.target.value })}
-                      className="w-full px-3 py-2 bg-secondary border border-border rounded-lg"
-                    />
-                  </div>
-                </div>
 
-                {editForm.schedulePreset === 'custom' && (
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Custom Cron Expression</label>
-                    <input
-                      type="text"
-                      value={editForm.customCron}
-                      onChange={(e) => setEditForm({ ...editForm, customCron: e.target.value })}
-                      placeholder="0 9 * * 1-5"
-                      className="w-full px-3 py-2 bg-secondary border border-border rounded-lg font-mono text-sm"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Format: minute hour day month weekday
-                    </p>
-                  </div>
-                )}
+                  {editForm.schedulePreset === 'every_n_days' && (
+                    <div className="mt-3 flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">Every</span>
+                      <input
+                        type="number"
+                        min={2}
+                        max={30}
+                        value={editForm.intervalDays}
+                        onChange={(e) => setEditForm({ ...editForm, intervalDays: parseInt(e.target.value) || 2 })}
+                        className="w-16 px-2 py-1.5 bg-secondary border border-border rounded text-sm text-center"
+                      />
+                      <span className="text-sm text-muted-foreground">days</span>
+                      <div className="flex items-center gap-1 ml-1">
+                        {[2, 3, 7, 14].map(n => (
+                          <button
+                            key={n}
+                            type="button"
+                            onClick={() => setEditForm({ ...editForm, intervalDays: n })}
+                            className={`px-2 py-1 text-xs rounded transition-colors ${
+                              editForm.intervalDays === n
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-secondary hover:bg-secondary/80 border border-border'
+                            }`}
+                          >
+                            {n}d
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {editForm.schedulePreset === 'specific_days' && (
+                    <div className="mt-3">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {DAY_OPTIONS.map(day => {
+                          const isSelected = editForm.selectedDays.includes(day.value);
+                          return (
+                            <button
+                              key={day.value}
+                              type="button"
+                              onClick={() => {
+                                const next = isSelected
+                                  ? editForm.selectedDays.filter(d => d !== day.value)
+                                  : [...editForm.selectedDays, day.value];
+                                if (next.length > 0) setEditForm({ ...editForm, selectedDays: next });
+                              }}
+                              className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
+                                isSelected
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'bg-secondary hover:bg-secondary/80 border border-border'
+                              }`}
+                            >
+                              {day.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {editForm.schedulePreset === 'custom' && (
+                    <div className="mt-3">
+                      <input
+                        type="text"
+                        value={editForm.customCron}
+                        onChange={(e) => setEditForm({ ...editForm, customCron: e.target.value })}
+                        placeholder="0 9 * * 1-5"
+                        className="w-full px-3 py-2 bg-secondary border border-border rounded-lg font-mono text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Format: minute hour day month weekday
+                      </p>
+                    </div>
+                  )}
+                </div>
 
                 {/* Options */}
                 <div className="space-y-3">

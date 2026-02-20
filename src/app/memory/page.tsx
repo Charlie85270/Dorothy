@@ -290,7 +290,7 @@ export default function MemoryPage() {
     refresh,
   } = useMemory();
 
-  const [activeTab, setActiveTab] = useState<'projects' | 'agents'>('projects');
+  const [activeTab, setActiveTab] = useState<'projects' | 'agents'>('agents');
   const [editingFile, setEditingFile] = useState<MemoryFile | null>(null);
   const [showNewFileModal, setShowNewFileModal] = useState(false);
   const [deletingFile, setDeletingFile] = useState<string | null>(null);
@@ -365,17 +365,16 @@ export default function MemoryPage() {
       {/* ── Tabs ── */}
       <div className="flex items-center gap-0 border-b border-border mb-4 shrink-0">
         {([
+          { id: 'agents', label: 'Agents', icon: Share2 },
           { id: 'projects', label: 'Projects', icon: FolderOpen },
-          { id: 'agents',   label: 'Agents',   icon: Share2 },
         ] as const).map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setActiveTab(id)}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
-              activeTab === id
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px !rounded-none ${activeTab === id
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
           >
             <Icon className="w-4 h-4" />
             {label}
@@ -393,227 +392,227 @@ export default function MemoryPage() {
       {/* ── Projects tab content ── */}
       {activeTab === 'projects' && <>
 
-      {/* ── Stats bar ── */}
-      <div className="grid grid-cols-3 gap-3 mb-4 shrink-0">
-        {[
-          { icon: Database, label: 'Projects', value: projectsWithMemory },
-          { icon: FileText, label: 'Memory Files', value: totalFiles },
-          { icon: HardDrive, label: 'Total Size', value: formatBytes(totalSize) },
-        ].map(({ icon: Icon, label, value }) => (
-          <div key={label} className="bg-card border border-border px-4 py-3 flex items-center gap-3">
-            <Icon className="w-4 h-4 text-primary/60 shrink-0" />
-            <div className="min-w-0">
-              <p className="text-xs text-muted-foreground truncate">{label}</p>
-              <p className="text-sm font-semibold tabular-nums">{loading ? '—' : value}</p>
+        {/* ── Stats bar ── */}
+        <div className="grid grid-cols-3 gap-3 mb-4 shrink-0">
+          {[
+            { icon: Database, label: 'Projects', value: projectsWithMemory },
+            { icon: FileText, label: 'Memory Files', value: totalFiles },
+            { icon: HardDrive, label: 'Total Size', value: formatBytes(totalSize) },
+          ].map(({ icon: Icon, label, value }) => (
+            <div key={label} className="bg-card border border-border px-4 py-3 flex items-center gap-3">
+              <Icon className="w-4 h-4 text-primary/60 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground truncate">{label}</p>
+                <p className="text-sm font-semibold tabular-nums">{loading ? '—' : value}</p>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
-
-      {/* ── Error ── */}
-      {error && (
-        <div className="mb-3 p-3 bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center gap-2 shrink-0">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          {error}
+          ))}
         </div>
-      )}
 
-      {/* ── Main 3-pane layout ── */}
-      <div className="flex-1 flex gap-0 border border-border overflow-hidden min-h-0 bg-card">
+        {/* ── Error ── */}
+        {error && (
+          <div className="mb-3 p-3 bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center gap-2 shrink-0">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {error}
+          </div>
+        )}
 
-        {/* ── Left: Project list ── */}
-        <div className="w-56 lg:w-64 shrink-0 flex flex-col border-r border-border overflow-hidden">
-          {/* Search */}
-          <div className="p-2 border-b border-border shrink-0">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="Filter projects…"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 text-xs bg-background border border-border focus:outline-none focus:border-primary transition-colors"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+        {/* ── Main 3-pane layout ── */}
+        <div className="flex-1 flex gap-0 border border-border overflow-hidden min-h-0 bg-card">
+
+          {/* ── Left: Project list ── */}
+          <div className="w-56 lg:w-64 shrink-0 flex flex-col border-r border-border overflow-hidden">
+            {/* Search */}
+            <div className="p-2 border-b border-border shrink-0">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Filter projects…"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 text-xs bg-background border border-border focus:outline-none focus:border-primary transition-colors"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Project list */}
+            <div className="flex-1 overflow-y-auto">
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : filteredProjects.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                  <Brain className="w-8 h-8 text-muted-foreground/30 mb-3" />
+                  <p className="text-xs text-muted-foreground">
+                    {searchQuery ? 'No projects match your search' : 'No Claude projects found'}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground/60 mt-1">
+                    Memory is created automatically as you work with Claude Code
+                  </p>
+                </div>
+              ) : (
+                <motion.div
+                  initial="hidden"
+                  animate="visible"
+                  variants={{
+                    visible: { transition: { staggerChildren: 0.04 } },
+                    hidden: {},
+                  }}
                 >
-                  <X className="w-3.5 h-3.5" />
-                </button>
+                  {filteredProjects.map((project) => (
+                    <motion.div
+                      key={project.id}
+                      variants={{
+                        hidden: { opacity: 0, x: -8 },
+                        visible: { opacity: 1, x: 0 },
+                      }}
+                    >
+                      <ProjectCard
+                        project={project}
+                        isSelected={selectedProject?.id === project.id}
+                        activeAgents={agentCountByPath.get(project.projectPath) ?? 0}
+                        onClick={() => handleSelectProject(project)}
+                      />
+                    </motion.div>
+                  ))}
+                </motion.div>
               )}
             </div>
           </div>
 
-          {/* Project list */}
-          <div className="flex-1 overflow-y-auto">
-            {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-              </div>
-            ) : filteredProjects.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-                <Brain className="w-8 h-8 text-muted-foreground/30 mb-3" />
-                <p className="text-xs text-muted-foreground">
-                  {searchQuery ? 'No projects match your search' : 'No Claude projects found'}
-                </p>
-                <p className="text-[10px] text-muted-foreground/60 mt-1">
-                  Memory is created automatically as you work with Claude Code
-                </p>
-              </div>
-            ) : (
-              <motion.div
-                initial="hidden"
-                animate="visible"
-                variants={{
-                  visible: { transition: { staggerChildren: 0.04 } },
-                  hidden: {},
-                }}
-              >
-                {filteredProjects.map((project) => (
-                  <motion.div
-                    key={project.id}
-                    variants={{
-                      hidden: { opacity: 0, x: -8 },
-                      visible: { opacity: 1, x: 0 },
-                    }}
+          {/* ── Middle: File list ── */}
+          <div className="w-44 lg:w-52 shrink-0 flex flex-col border-r border-border overflow-hidden">
+            {selectedProject ? (
+              <>
+                {/* Project header */}
+                <div className="px-3 py-2 border-b !rounded-none border-border !border-t-0image.png shrink-0 bg-secondary/20">
+                  <p className="text-xs font-semibold truncate">{selectedProject.projectName}</p>
+                  <p className="text-[10px] text-muted-foreground truncate mt-0.5" title={selectedProject.projectPath}>
+                    {selectedProject.projectPath}
+                  </p>
+                </div>
+
+                {/* File list */}
+                <div className="flex-1 overflow-y-auto">
+                  {!selectedProject.hasMemory ? (
+                    <div className="flex flex-col items-center justify-center py-8 px-3 text-center">
+                      <FileText className="w-7 h-7 text-muted-foreground/30 mb-2" />
+                      <p className="text-[10px] text-muted-foreground">No memory files yet</p>
+                    </div>
+                  ) : (
+                    <div className="py-1">
+                      {selectedProject.files.map((file) => (
+                        <button
+                          key={file.path}
+                          onClick={() => handleSelectFile(file)}
+                          className={`w-full flex items-center gap-2 px-3 py-2.5 text-left transition-all group ${selectedFile?.path === file.path
+                            ? 'bg-primary/10 text-foreground'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+                            }`}
+                        >
+                          <FileText className="w-3.5 h-3.5 shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-mono truncate">{file.name}</p>
+                            {file.isEntrypoint && (
+                              <p className="text-[9px] text-primary/70 mt-0.5">entrypoint</p>
+                            )}
+                          </div>
+                          {selectedFile?.path === file.path && (
+                            <ChevronRight className="w-3 h-3 text-primary shrink-0" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* New file button */}
+                <div className="border-t border-border shrink-0">
+                  <button
+                    onClick={() => setShowNewFileModal(true)}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
                   >
-                    <ProjectCard
-                      project={project}
-                      isSelected={selectedProject?.id === project.id}
-                      activeAgents={agentCountByPath.get(project.projectPath) ?? 0}
-                      onClick={() => handleSelectProject(project)}
-                    />
-                  </motion.div>
-                ))}
-              </motion.div>
+                    <Plus className="w-3.5 h-3.5" />
+                    New topic file
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full px-3 text-center">
+                <FolderOpen className="w-8 h-8 text-muted-foreground/20 mb-2" />
+                <p className="text-xs text-muted-foreground/60">Select a project</p>
+              </div>
             )}
+          </div>
+
+          {/* ── Right: Content viewer / editor ── */}
+          <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+            <AnimatePresence mode="wait">
+              {selectedFile ? (
+                <motion.div
+                  key={selectedFile.path}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.1 }}
+                  className="flex-1 flex flex-col overflow-hidden"
+                >
+                  {editingFile?.path === selectedFile.path ? (
+                    <FileEditor
+                      file={editingFile}
+                      onSave={handleSave}
+                      onCancel={() => setEditingFile(null)}
+                      saving={saving}
+                    />
+                  ) : (
+                    <FileViewer
+                      file={selectedFile}
+                      onEdit={() => setEditingFile(selectedFile)}
+                      onDelete={() => handleDelete(selectedFile.path)}
+                    />
+                  )}
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="empty"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex-1 flex flex-col items-center justify-center text-center px-8"
+                >
+                  <Brain className="w-12 h-12 text-muted-foreground/20 mb-4" />
+                  <p className="text-sm text-muted-foreground">
+                    {selectedProject
+                      ? 'Select a memory file to view or edit'
+                      : 'Select a project to explore its memory'}
+                  </p>
+                  <p className="text-xs text-muted-foreground/50 mt-2 max-w-xs leading-relaxed">
+                    Claude Code automatically saves learnings, patterns, and architectural notes here as you work.
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 
-        {/* ── Middle: File list ── */}
-        <div className="w-44 lg:w-52 shrink-0 flex flex-col border-r border-border overflow-hidden">
-          {selectedProject ? (
-            <>
-              {/* Project header */}
-              <div className="px-3 py-2 border-b !rounded-none border-border !border-t-0image.png shrink-0 bg-secondary/20">
-                <p className="text-xs font-semibold truncate">{selectedProject.projectName}</p>
-                <p className="text-[10px] text-muted-foreground truncate mt-0.5" title={selectedProject.projectPath}>
-                  {selectedProject.projectPath}
-                </p>
-              </div>
-
-              {/* File list */}
-              <div className="flex-1 overflow-y-auto">
-                {!selectedProject.hasMemory ? (
-                  <div className="flex flex-col items-center justify-center py-8 px-3 text-center">
-                    <FileText className="w-7 h-7 text-muted-foreground/30 mb-2" />
-                    <p className="text-[10px] text-muted-foreground">No memory files yet</p>
-                  </div>
-                ) : (
-                  <div className="py-1">
-                    {selectedProject.files.map((file) => (
-                      <button
-                        key={file.path}
-                        onClick={() => handleSelectFile(file)}
-                        className={`w-full flex items-center gap-2 px-3 py-2.5 text-left transition-all group ${selectedFile?.path === file.path
-                          ? 'bg-primary/10 text-foreground'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
-                          }`}
-                      >
-                        <FileText className="w-3.5 h-3.5 shrink-0" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-mono truncate">{file.name}</p>
-                          {file.isEntrypoint && (
-                            <p className="text-[9px] text-primary/70 mt-0.5">entrypoint</p>
-                          )}
-                        </div>
-                        {selectedFile?.path === file.path && (
-                          <ChevronRight className="w-3 h-3 text-primary shrink-0" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* New file button */}
-              <div className="border-t border-border shrink-0">
-                <button
-                  onClick={() => setShowNewFileModal(true)}
-                  className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  New topic file
-                </button>
-              </div>
-            </>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full px-3 text-center">
-              <FolderOpen className="w-8 h-8 text-muted-foreground/20 mb-2" />
-              <p className="text-xs text-muted-foreground/60">Select a project</p>
-            </div>
+        {/* ── New file modal ── */}
+        <AnimatePresence>
+          {showNewFileModal && (
+            <NewFileModal
+              onConfirm={handleCreateFile}
+              onClose={() => setShowNewFileModal(false)}
+            />
           )}
-        </div>
-
-        {/* ── Right: Content viewer / editor ── */}
-        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          <AnimatePresence mode="wait">
-            {selectedFile ? (
-              <motion.div
-                key={selectedFile.path}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.1 }}
-                className="flex-1 flex flex-col overflow-hidden"
-              >
-                {editingFile?.path === selectedFile.path ? (
-                  <FileEditor
-                    file={editingFile}
-                    onSave={handleSave}
-                    onCancel={() => setEditingFile(null)}
-                    saving={saving}
-                  />
-                ) : (
-                  <FileViewer
-                    file={selectedFile}
-                    onEdit={() => setEditingFile(selectedFile)}
-                    onDelete={() => handleDelete(selectedFile.path)}
-                  />
-                )}
-              </motion.div>
-            ) : (
-              <motion.div
-                key="empty"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex-1 flex flex-col items-center justify-center text-center px-8"
-              >
-                <Brain className="w-12 h-12 text-muted-foreground/20 mb-4" />
-                <p className="text-sm text-muted-foreground">
-                  {selectedProject
-                    ? 'Select a memory file to view or edit'
-                    : 'Select a project to explore its memory'}
-                </p>
-                <p className="text-xs text-muted-foreground/50 mt-2 max-w-xs leading-relaxed">
-                  Claude Code automatically saves learnings, patterns, and architectural notes here as you work.
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
-
-      {/* ── New file modal ── */}
-      <AnimatePresence>
-        {showNewFileModal && (
-          <NewFileModal
-            onConfirm={handleCreateFile}
-            onClose={() => setShowNewFileModal(false)}
-          />
-        )}
-      </AnimatePresence>
+        </AnimatePresence>
 
       </>}
     </div>

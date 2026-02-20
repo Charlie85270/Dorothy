@@ -7,6 +7,7 @@ import {
   Bot,
   MessageSquare,
   Paperclip,
+  CheckSquare,
   Calendar,
   CheckCircle2,
   StopCircle,
@@ -223,6 +224,14 @@ export function KanbanCard({ task, onEdit, onDelete, onStart, onOpenTerminal, is
             <div className="flex items-center gap-1 text-xs text-blue-400" title={task.attachments.map(a => a.name).join(', ')}>
               <Paperclip className="w-3 h-3" />
               <span>{task.attachments.length}</span>
+            </div>
+          )}
+
+          {/* Subtasks count */}
+          {task.subtasks && task.subtasks.length > 0 && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground" title={`${task.subtasks.filter(s => s.completed).length}/${task.subtasks.length} subtasks done`}>
+              <CheckSquare className="w-3 h-3" />
+              <span>{task.subtasks.filter(s => s.completed).length}/{task.subtasks.length}</span>
             </div>
           )}
         </div>

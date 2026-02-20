@@ -22,6 +22,7 @@ export interface KanbanTaskElectron {
   updatedAt: string;
   order: number;
   labels: string[];
+  subtasks: Array<{ id: string; title: string; completed: boolean }>;
 }
 
 export interface VaultDocumentElectron {
@@ -596,6 +597,7 @@ export interface ElectronAPI {
       labels?: string[];
       progress?: number;
       assignedAgentId?: string | null;
+      subtasks?: Array<{ id: string; title: string; completed: boolean }>;
     }) => Promise<{ success: boolean; task?: KanbanTaskElectron; error?: string }>;
     move: (params: {
       id: string;

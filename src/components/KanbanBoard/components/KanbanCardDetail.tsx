@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, Trash2, Save, Bot, Clock, Plus, Minus } from 'lucide-react';
-import type { KanbanTask } from '@/types/kanban';
+import { X, Trash2, Save, Bot, Clock, Plus, Square, CheckSquare } from 'lucide-react';
+import { v4 as uuidv4 } from 'uuid';
+import type { KanbanTask, Subtask } from '@/types/kanban';
 import { COLUMN_CONFIG, getLabelColor } from '../constants';
 
 interface KanbanCardDetailProps {
@@ -21,6 +22,8 @@ export function KanbanCardDetail({ task, onClose, onUpdate, onDelete }: KanbanCa
   const [skillInput, setSkillInput] = useState('');
   const [labels, setLabels] = useState<string[]>(task.labels);
   const [labelInput, setLabelInput] = useState('');
+  const [subtasks, setSubtasks] = useState<Subtask[]>(task.subtasks || []);
+  const [subtaskInput, setSubtaskInput] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   const columnConfig = COLUMN_CONFIG[task.column];
@@ -30,7 +33,8 @@ export function KanbanCardDetail({ task, onClose, onUpdate, onDelete }: KanbanCa
     description !== task.description ||
     priority !== task.priority ||
     JSON.stringify(requiredSkills) !== JSON.stringify(task.requiredSkills) ||
-    JSON.stringify(labels) !== JSON.stringify(task.labels);
+    JSON.stringify(labels) !== JSON.stringify(task.labels) ||
+    JSON.stringify(subtasks) !== JSON.stringify(task.subtasks || []);
 
   const handleAddSkill = () => {
     if (skillInput.trim() && !requiredSkills.includes(skillInput.trim())) {
@@ -54,6 +58,21 @@ export function KanbanCardDetail({ task, onClose, onUpdate, onDelete }: KanbanCa
     setLabels(labels.filter((l) => l !== label));
   };
 
+  const handleAddSubtask = () => {
+    if (subtaskInput.trim()) {
+      setSubtasks([...subtasks, { id: uuidv4(), title: subtaskInput.trim(), completed: false }]);
+      setSubtaskInput('');
+    }
+  };
+
+  const handleToggleSubtask = (id: string) => {
+    setSubtasks(subtasks.map((s) => s.id === id ? { ...s, completed: !s.completed } : s));
+  };
+
+  const handleRemoveSubtask = (id: string) => {
+    setSubtasks(subtasks.filter((s) => s.id !== id));
+  };
+
   const handleSave = async () => {
     if (!title.trim()) return;
 
@@ -65,6 +84,7 @@ export function KanbanCardDetail({ task, onClose, onUpdate, onDelete }: KanbanCa
         priority,
         requiredSkills,
         labels,
+        subtasks,
       });
     } finally {
       setIsSaving(false);
@@ -116,49 +136,31 @@ export function KanbanCardDetail({ task, onClose, onUpdate, onDelete }: KanbanCa
           </div>
 
           {/* Content */}
-          <div className="p-6 space-y-5 max-h-[60vh] overflow-y-auto">
-            {/* Title */}
-            <div>
+          <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+            {/* Title + Priority row */}
+            <div className="flex items-center gap-3">
               <input
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Task title..."
-                className="w-full text-lg font-semibold bg-transparent border-none focus:outline-none focus:ring-0 p-0 placeholder:text-muted-foreground/50"
+                className="flex-1 text-lg font-semibold bg-transparent border-none focus:outline-none focus:ring-0 py-1 pl-4 placeholder:text-muted-foreground/50"
               />
-            </div>
-
-            {/* Description */}
-            <div>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Add a description..."
-                rows={4}
-                className="w-full text-sm bg-secondary/30 border border-border/50 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none placeholder:text-muted-foreground/50"
-              />
-            </div>
-
-            {/* Priority */}
-            <div>
-              <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-                Priority
-              </label>
-              <div className="flex gap-2">
+              <div className="flex gap-1 flex-shrink-0">
                 {(['low', 'medium', 'high'] as const).map((p) => (
                   <button
                     key={p}
                     type="button"
                     onClick={() => setPriority(p)}
                     className={`
-                      flex-1 px-3 py-2 text-sm rounded-lg border-2 transition-all font-medium
+                      px-2.5 py-1 text-xs rounded-full transition-all font-medium
                       ${priority === p
                         ? p === 'high'
-                          ? 'bg-red-500/10 border-red-500/50 text-red-500'
+                          ? 'bg-red-500/15 text-red-500'
                           : p === 'medium'
-                          ? 'bg-amber-500/10 border-amber-500/50 text-amber-500'
-                          : 'bg-zinc-500/10 border-zinc-500/50 text-zinc-500'
-                        : 'bg-transparent border-border/50 text-muted-foreground hover:border-border'
+                          ? 'bg-amber-500/15 text-amber-500'
+                          : 'bg-zinc-500/15 text-zinc-400'
+                        : 'text-muted-foreground/40 hover:text-muted-foreground'
                       }
                     `}
                   >
@@ -168,12 +170,96 @@ export function KanbanCardDetail({ task, onClose, onUpdate, onDelete }: KanbanCa
               </div>
             </div>
 
+            {/* Description */}
+            <div>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Add a description..."
+                rows={2}
+                className="w-full text-sm bg-secondary/30 border border-border/50 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none placeholder:text-muted-foreground/50"
+              />
+            </div>
+
+            {/* Subtasks */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Subtasks
+                </label>
+                {subtasks.length > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    {subtasks.filter((s) => s.completed).length}/{subtasks.length} done
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="text"
+                  value={subtaskInput}
+                  onChange={(e) => setSubtaskInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddSubtask();
+                    }
+                  }}
+                  placeholder="Add subtask..."
+                  className="flex-1 px-3 py-1.5 bg-secondary/30 border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddSubtask}
+                  className="px-3 py-1.5 bg-secondary/50 border border-border/50 rounded-lg hover:bg-secondary transition-colors"
+                >
+                  <Plus className="w-4 h-4 text-muted-foreground" />
+                </button>
+              </div>
+              <div className="space-y-0.5">
+                {subtasks.map((subtask) => (
+                  <div
+                    key={subtask.id}
+                    className="flex items-center gap-2 group/subtask px-2 py-1 rounded-lg hover:bg-secondary/30 transition-colors"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleToggleSubtask(subtask.id)}
+                      className="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {subtask.completed ? (
+                        <CheckSquare className="w-4 h-4 text-green-500" />
+                      ) : (
+                        <Square className="w-4 h-4" />
+                      )}
+                    </button>
+                    <span
+                      className={`flex-1 text-sm ${
+                        subtask.completed ? 'line-through text-muted-foreground/50' : 'text-foreground'
+                      }`}
+                    >
+                      {subtask.title}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveSubtask(subtask.id)}
+                      className="opacity-0 group-hover/subtask:opacity-100 hover:text-red-500 text-muted-foreground transition-all"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+                {subtasks.length === 0 && (
+                  <span className="text-xs text-muted-foreground/50 pl-2">No subtasks</span>
+                )}
+              </div>
+            </div>
+
             {/* Labels */}
             <div>
               <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
                 Labels
               </label>
-              <div className="flex gap-2 mb-3">
+              <div className="flex gap-2 mb-2">
                 <input
                   type="text"
                   value={labelInput}
@@ -185,23 +271,23 @@ export function KanbanCardDetail({ task, onClose, onUpdate, onDelete }: KanbanCa
                     }
                   }}
                   placeholder="Add label..."
-                  className="flex-1 px-3 py-2 bg-secondary/30 border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  className="flex-1 px-3 py-1.5 bg-secondary/30 border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
                 <button
                   type="button"
                   onClick={handleAddLabel}
-                  className="px-3 py-2 bg-secondary/50 border border-border/50 rounded-lg hover:bg-secondary transition-colors"
+                  className="px-3 py-1.5 bg-secondary/50 border border-border/50 rounded-lg hover:bg-secondary transition-colors"
                 >
                   <Plus className="w-4 h-4 text-muted-foreground" />
                 </button>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 {labels.map((label) => {
                   const colors = getLabelColor(label);
                   return (
                     <span
                       key={label}
-                      className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${colors.bg} ${colors.text}`}
+                      className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${colors.bg} ${colors.text}`}
                     >
                       {label}
                       <button
@@ -225,7 +311,7 @@ export function KanbanCardDetail({ task, onClose, onUpdate, onDelete }: KanbanCa
               <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
                 Required Skills
               </label>
-              <div className="flex gap-2 mb-3">
+              <div className="flex gap-2 mb-2">
                 <input
                   type="text"
                   value={skillInput}
@@ -237,21 +323,21 @@ export function KanbanCardDetail({ task, onClose, onUpdate, onDelete }: KanbanCa
                     }
                   }}
                   placeholder="Add skill..."
-                  className="flex-1 px-3 py-2 bg-secondary/30 border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  className="flex-1 px-3 py-1.5 bg-secondary/30 border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
                 <button
                   type="button"
                   onClick={handleAddSkill}
-                  className="px-3 py-2 bg-secondary/50 border border-border/50 rounded-lg hover:bg-secondary transition-colors"
+                  className="px-3 py-1.5 bg-secondary/50 border border-border/50 rounded-lg hover:bg-secondary transition-colors"
                 >
                   <Plus className="w-4 h-4 text-muted-foreground" />
                 </button>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 {requiredSkills.map((skill) => (
                   <span
                     key={skill}
-                    className="flex items-center gap-1.5 px-3 py-1 bg-blue-500/10 text-blue-500 rounded-full text-xs font-medium"
+                    className="flex items-center gap-1 px-2.5 py-0.5 bg-blue-500/10 text-blue-500 rounded-full text-xs font-medium"
                   >
                     {skill}
                     <button
@@ -270,7 +356,7 @@ export function KanbanCardDetail({ task, onClose, onUpdate, onDelete }: KanbanCa
             </div>
 
             {/* Meta info */}
-            <div className="flex items-center gap-4 pt-4 border-t border-border/50 text-xs text-muted-foreground">
+            <div className="flex items-center gap-4 pt-2 text-xs text-muted-foreground">
               {task.assignedAgentId && (
                 <div className="flex items-center gap-1.5 text-green-500">
                   <Bot className="w-3.5 h-3.5" />

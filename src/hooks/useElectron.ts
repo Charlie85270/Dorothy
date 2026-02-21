@@ -56,6 +56,7 @@ export function useElectronAgents() {
     skipPermissions?: boolean;
     provider?: AgentProvider;
     localModel?: string;
+    codexModel?: string;
   }) => {
     if (!isElectron()) {
       throw new Error('Electron API not available');
@@ -88,7 +89,7 @@ export function useElectronAgents() {
   const startAgent = useCallback(async (
     id: string,
     prompt: string,
-    options?: { model?: string; resume?: boolean; provider?: AgentProvider; localModel?: string }
+    options?: { model?: string; resume?: boolean; provider?: AgentProvider; localModel?: string; codexModel?: string }
   ) => {
     if (!isElectron()) {
       throw new Error('Electron API not available');

@@ -134,10 +134,13 @@ function loadAppSettings(): AppSettings {
     xAccessTokenSecret: '',
     tasmaniaEnabled: false,
     tasmaniaServerPath: '',
+    codexEnabled: false,
+    codexDefaultModel: '',
     verboseModeEnabled: false,
     autoCheckUpdates: true,
     cliPaths: {
       claude: '',
+      codex: '',
       gh: '',
       node: '',
       additionalPaths: [],

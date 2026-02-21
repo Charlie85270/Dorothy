@@ -48,6 +48,8 @@ export default function NewChatModal({
   const [provider, setProvider] = useState<AgentProvider>('claude');
   const [localModel, setLocalModel] = useState('');
   const [tasmaniaEnabled, setTasmaniaEnabled] = useState(false);
+  const [codexEnabled, setCodexEnabled] = useState(false);
+  const [codexModel, setCodexModel] = useState('gpt-5.3-codex');
   const agentPersonaRef = useRef<AgentPersonaValues>({ character: 'robot', name: '' });
 
   const projectPath = selectedProject || customPath;
@@ -80,10 +82,15 @@ export default function NewChatModal({
       setSkipPermissions(false);
       setProvider('claude');
       setLocalModel('');
+      setCodexModel('gpt-5.3-codex');
 
-      // Check if Tasmania is enabled in app settings
+      // Check if Tasmania/Codex are enabled in app settings
       window.electronAPI?.appSettings?.get().then((settings) => {
         setTasmaniaEnabled(settings?.tasmaniaEnabled || false);
+        setCodexEnabled(settings?.codexEnabled || false);
+        if (settings?.codexDefaultModel) {
+          setCodexModel(settings.codexDefaultModel);
+        }
       });
     }
   }, [open, initialProjectPath, initialStep]);
@@ -146,7 +153,10 @@ export default function NewChatModal({
 
     const secondaryPath = showSecondaryProject ? (selectedSecondaryProject || customSecondaryPath) : undefined;
 
-    onSubmit(projectPath, selectedSkills, finalPrompt, model, worktreeConfig, agentCharacter, finalName, secondaryPath, skipPermissions, provider, localModel);
+    // Guard: fall back to claude if the selected provider's feature flag is off
+    const effectiveProvider = (provider === 'codex' && !codexEnabled) || (provider === 'local' && !tasmaniaEnabled) ? 'claude' : provider;
+
+    onSubmit(projectPath, selectedSkills, finalPrompt, model, worktreeConfig, agentCharacter, finalName, secondaryPath, skipPermissions, effectiveProvider, localModel, codexModel);
 
     // Reset form
     setStep(1);
@@ -163,7 +173,8 @@ export default function NewChatModal({
     setCustomSecondaryPath('');
     setProvider('claude');
     setLocalModel('');
-  }, [projectPath, prompt, selectedSkills, useWorktree, branchName, showSecondaryProject, selectedSecondaryProject, customSecondaryPath, model, skipPermissions, provider, localModel, onSubmit]);
+    setCodexModel('gpt-5.3-codex');
+  }, [projectPath, prompt, selectedSkills, useWorktree, branchName, showSecondaryProject, selectedSecondaryProject, customSecondaryPath, model, skipPermissions, provider, localModel, codexModel, codexEnabled, tasmaniaEnabled, onSubmit]);
 
   if (!open) return null;
 
@@ -266,6 +277,9 @@ export default function NewChatModal({
                 localModel={localModel}
                 onLocalModelChange={setLocalModel}
                 tasmaniaEnabled={tasmaniaEnabled}
+                codexEnabled={codexEnabled}
+                codexModel={codexModel}
+                onCodexModelChange={setCodexModel}
               />
             )}
           </div>

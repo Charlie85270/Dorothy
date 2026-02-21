@@ -63,6 +63,7 @@ export function registerIpcHandlers(deps: IpcHandlerDependencies): void {
   registerUpdateHandlers();
   // Orchestrator handlers are registered separately in services/mcp-orchestrator.ts
   registerTasmaniaHandlers(deps);
+  registerCodexHandlers(deps);
   registerFileSystemHandlers(deps);
   registerShellHandlers(deps);
   registerMemoryHandlers();
@@ -160,8 +161,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     name?: string;
     secondaryProjectPath?: string;
     skipPermissions?: boolean;
-    provider?: 'claude' | 'local';
+    provider?: 'claude' | 'local' | 'codex';
     localModel?: string;
+    codexModel?: string;
   }) => {
     const id = uuidv4();
     const shell = '/bin/bash';
@@ -300,6 +302,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       skipPermissions: config.skipPermissions || false,
       provider: config.provider || 'claude',
       localModel: config.localModel,
+      codexModel: config.codexModel,
     };
     agents.set(id, status);
 
@@ -360,7 +363,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
   ipcMain.handle('agent:start', async (_event, { id, prompt, options }: {
     id: string;
     prompt: string;
-    options?: { model?: string; resume?: boolean; provider?: AgentProvider; localModel?: string }
+    options?: { model?: string; resume?: boolean; provider?: AgentProvider; localModel?: string; codexModel?: string }
   }) => {
     const agent = agents.get(id);
     if (!agent) throw new Error('Agent not found');
@@ -375,6 +378,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     // Determine provider — prefer agent-level, fallback to options, default to 'claude'
     const provider = agent.provider || options?.provider || 'claude';
     const localModel = agent.localModel || options?.localModel;
+    const codexModel = agent.codexModel || options?.codexModel;
 
     // ── For local provider, recreate PTY with Tasmania env vars baked in ──
     if (provider === 'local') {
@@ -489,53 +493,77 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     const ptyProcess = ptyProcesses.get(agent.ptyId!);
     if (!ptyProcess) throw new Error('PTY not found');
 
-    // ── Claude Code CLI ──────────────────────────────────────────────
+    // ── Build CLI command (Claude or Codex) ────────────────────────
     const appSettingsForCommand = getAppSettings();
-    let command = (appSettingsForCommand.cliPaths?.claude) || 'claude';
 
     // Check if this is the Super Agent (orchestrator)
     const isSuperAgentCheck = agent.name?.toLowerCase().includes('super agent') ||
                       agent.name?.toLowerCase().includes('orchestrator');
 
-    // Add explicit MCP config for Super Agent to ensure orchestrator tools are loaded
-    if (isSuperAgentCheck) {
-      const { app } = await import('electron');
-      const mcpConfigPath = path.join(app.getPath('home'), '.claude', 'mcp.json');
-      if (fs.existsSync(mcpConfigPath)) {
-        command += ` --mcp-config ${mcpConfigPath}`;
+    let command: string;
+
+    if (provider === 'codex') {
+      // ── Codex CLI ──
+      command = appSettingsForCommand.cliPaths?.codex || 'codex';
+
+      // Model flag
+      const modelToUse = codexModel || appSettingsForCommand.codexDefaultModel || '';
+      if (modelToUse) {
+        command += ` --model '${modelToUse.replace(/'/g, "'\\''")}'`;
       }
-      // Add super agent instructions (read via Node.js, not cat - asar compatibility)
-      const { getSuperAgentInstructionsPath } = await import('../utils');
-      const superAgentInstructionsPath = getSuperAgentInstructionsPath();
-      if (fs.existsSync(superAgentInstructionsPath)) {
 
-        command += ` --append-system-prompt-file ${superAgentInstructionsPath}`;
+      // Skip permissions → --full-auto
+      if (agent.skipPermissions) {
+        command += ' --full-auto';
       }
-    }
 
-    if (options?.model && provider !== 'local') {
-      command += ` --model ${options.model}`;
-    }
+      // Secondary project path
+      if (agent.secondaryProjectPath) {
+        const escapedSecondaryPath = agent.secondaryProjectPath.replace(/'/g, "'\\''");
+        command += ` --add-dir '${escapedSecondaryPath}'`;
+      }
+    } else {
+      // ── Claude Code CLI ──
+      command = appSettingsForCommand.cliPaths?.claude || 'claude';
 
-    // Add verbose flag if enabled in app settings
-    const currentAppSettings = getAppSettings();
-    if (currentAppSettings.verboseModeEnabled) {
-      command += ' --verbose';
-    }
+      // Add explicit MCP config for Super Agent to ensure orchestrator tools are loaded
+      if (isSuperAgentCheck) {
+        const { app } = await import('electron');
+        const mcpConfigPath = path.join(app.getPath('home'), '.claude', 'mcp.json');
+        if (fs.existsSync(mcpConfigPath)) {
+          command += ` --mcp-config ${mcpConfigPath}`;
+        }
+        // Add super agent instructions (read via Node.js, not cat - asar compatibility)
+        const { getSuperAgentInstructionsPath } = await import('../utils');
+        const superAgentInstructionsPath = getSuperAgentInstructionsPath();
+        if (fs.existsSync(superAgentInstructionsPath)) {
+          command += ` --append-system-prompt-file ${superAgentInstructionsPath}`;
+        }
+      }
 
-    // Add skip permissions flag if enabled
-    if (agent.skipPermissions) {
-      command += ' --dangerously-skip-permissions';
-    }
+      if (options?.model && provider !== 'local') {
+        command += ` --model ${options.model}`;
+      }
 
-    // Add secondary project path with --add-dir flag if set
-    if (agent.secondaryProjectPath) {
-      const escapedSecondaryPath = agent.secondaryProjectPath.replace(/'/g, "'\\''");
-      command += ` --add-dir '${escapedSecondaryPath}'`;
-    }
+      // Add verbose flag if enabled in app settings
+      if (appSettingsForCommand.verboseModeEnabled) {
+        command += ' --verbose';
+      }
 
-    // Load Dorothy's CLAUDE.md for all agents via ~/.dorothy
-    command += ` --add-dir '${os.homedir()}/.dorothy'`;
+      // Add skip permissions flag if enabled
+      if (agent.skipPermissions) {
+        command += ' --dangerously-skip-permissions';
+      }
+
+      // Add secondary project path with --add-dir flag if set
+      if (agent.secondaryProjectPath) {
+        const escapedSecondaryPath = agent.secondaryProjectPath.replace(/'/g, "'\\''");
+        command += ` --add-dir '${escapedSecondaryPath}'`;
+      }
+
+      // Load Dorothy's CLAUDE.md for all agents via ~/.dorothy
+      command += ` --add-dir '${os.homedir()}/.dorothy'`;
+    }
 
     // Build the final prompt with skills directive if agent has skills
     // Always include world-builder skill so agents can generate game zones
@@ -555,13 +583,13 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     agent.currentTask = prompt.slice(0, 100);
     agent.lastActivity = new Date().toISOString();
 
-    // First cd to the appropriate directory (worktree if exists, otherwise project), then run claude
+    // First cd to the appropriate directory (worktree if exists, otherwise project), then run CLI
     const workingPath = (agent.worktreePath || agent.projectPath).replace(/'/g, "'\\''");
     const fullCommand = `cd '${workingPath}' && ${command}`;
 
     // For local provider, the PTY was just recreated — wait for shell to initialize
     // before writing the command (matches Tasmania's 1s delay pattern).
-    // For claude provider, the PTY has been alive since agent:create, so no delay needed.
+    // For claude/codex providers, the PTY has been alive since agent:create, so no delay needed.
     if (provider === 'local') {
       await new Promise<void>((resolve) => {
         setTimeout(() => {
@@ -1505,6 +1533,39 @@ function registerFileSystemHandlers(deps: IpcHandlerDependencies): void {
       ],
     });
     return result.filePaths || [];
+  });
+}
+
+// ============== Codex IPC Handlers ==============
+
+function registerCodexHandlers(deps: IpcHandlerDependencies): void {
+  const { getAppSettings } = deps;
+
+  // Test: run `codex --version` to verify install
+  ipcMain.handle('codex:test', async () => {
+    try {
+      const { execSync } = await import('child_process');
+      const currentSettings = getAppSettings();
+      const codexBin = currentSettings.cliPaths?.codex || 'codex';
+      const version = execSync(`${codexBin} --version 2>/dev/null`, { encoding: 'utf-8', timeout: 10000 }).trim();
+      return { success: true, version };
+    } catch (err) {
+      return { success: false, error: `Codex CLI not found or not working: ${String(err)}` };
+    }
+  });
+
+  // Detect: run `which codex` to find the path
+  ipcMain.handle('codex:detectPath', async () => {
+    try {
+      const { execSync } = await import('child_process');
+      const codexPath = execSync('which codex 2>/dev/null', { encoding: 'utf-8', timeout: 5000 }).trim();
+      if (codexPath) {
+        return { found: true, path: codexPath };
+      }
+      return { found: false };
+    } catch {
+      return { found: false };
+    }
   });
 }
 

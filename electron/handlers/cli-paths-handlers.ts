@@ -20,9 +20,9 @@ export interface CLIPathsHandlerDependencies {
 /**
  * Detect CLI paths from the system
  */
-async function detectCLIPaths(): Promise<{ claude: string; gh: string; node: string }> {
+async function detectCLIPaths(): Promise<{ claude: string; codex: string; gh: string; node: string }> {
   const homeDir = os.homedir();
-  const paths = { claude: '', gh: '', node: '' };
+  const paths = { claude: '', codex: '', gh: '', node: '' };
 
   // Common locations to check
   const commonPaths = [
@@ -61,6 +61,29 @@ async function detectCLIPaths(): Promise<{ claude: string; gh: string; node: str
       });
       if (stdout.trim()) {
         paths.claude = stdout.trim();
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  // Check for codex
+  for (const dir of commonPaths) {
+    const codexPath = path.join(dir, 'codex');
+    if (fs.existsSync(codexPath)) {
+      paths.codex = codexPath;
+      break;
+    }
+  }
+
+  // Try which command for codex
+  if (!paths.codex) {
+    try {
+      const { stdout } = await execAsync('which codex', {
+        env: { ...process.env, PATH: `${commonPaths.join(':')}:${process.env.PATH}` },
+      });
+      if (stdout.trim()) {
+        paths.codex = stdout.trim();
       }
     } catch {
       // Ignore
@@ -191,7 +214,7 @@ export function registerCLIPathsHandlers(deps: CLIPathsHandlerDependencies): voi
   // Get CLI paths from app settings
   ipcMain.handle('cliPaths:get', async () => {
     const settings = getAppSettings();
-    return settings.cliPaths || { claude: '', gh: '', node: '', additionalPaths: [] };
+    return settings.cliPaths || { claude: '', codex: '', gh: '', node: '', additionalPaths: [] };
   });
 
   // Save CLI paths
@@ -244,6 +267,7 @@ export function getCLIPathsConfig(): CLIPaths & { fullPath: string } {
 
   return {
     claude: '',
+    codex: '',
     gh: '',
     node: '',
     additionalPaths: [],

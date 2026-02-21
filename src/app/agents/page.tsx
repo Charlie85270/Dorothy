@@ -93,15 +93,17 @@ export default function AgentsPage() {
     skipPermissions?: boolean,
     provider?: AgentProvider,
     localModel?: string,
+    codexModel?: string,
   ) => {
     try {
-      const agent = await createAgent({ projectPath, skills, worktree, character, name, secondaryProjectPath, skipPermissions, provider, localModel });
+      const agent = await createAgent({ projectPath, skills, worktree, character, name, secondaryProjectPath, skipPermissions, provider, localModel, codexModel });
       setSelectedAgent(agent.id);
       setShowNewChatModal(false);
 
       if (prompt) {
         setTimeout(async () => {
-          await startAgent(agent.id, prompt, { model: provider === 'local' ? undefined : model, provider, localModel });
+          const startModel = provider === 'local' || provider === 'codex' ? undefined : model;
+          await startAgent(agent.id, prompt, { model: startModel, provider, localModel, codexModel });
         }, 600);
       }
     } catch (error) {

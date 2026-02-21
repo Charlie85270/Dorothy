@@ -31,6 +31,7 @@ export interface NewChatModalProps {
     skipPermissions?: boolean,
     provider?: AgentProvider,
     localModel?: string,
+    codexModel?: string,
   ) => void;
   projects: Project[];
   onBrowseFolder?: () => Promise<string | null>;

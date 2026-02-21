@@ -10,7 +10,7 @@ const redis = process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_RE
   : null;
 
 // Download URL - update this to your actual release URL
-const DOWNLOAD_URL = 'https://github.com/Charlie85270/dorothy/releases/download/1.0.7/dorothy-1.0.7-arm64.dmg';
+const DOWNLOAD_URL = 'https://github.com/Charlie85270/dorothy/releases/download/1.1.1/dorothy-1.1.1-arm64.dmg';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);

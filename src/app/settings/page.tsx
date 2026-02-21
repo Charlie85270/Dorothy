@@ -8,14 +8,12 @@ import {
   SettingsSidebar,
   InstallTerminalModal,
   GeneralSection,
-  MemorySection,
   GitSection,
   NotificationsSection,
   TelegramSection,
   SlackSection,
   JiraSection,
   SocialDataSection,
-  LocalModelsSection,
   TasmaniaSection,
   PermissionsSection,
   SkillsSection,
@@ -47,34 +45,10 @@ export default function SettingsPage() {
     updateLocalAppSettings,
   } = useSettings();
 
-  const handleInstallClaudeMem = () => {
-    setInstallCommand('/plugin marketplace add thedotmack/claude-mem && /plugin install claude-mem');
-    setShowInstallTerminal(true);
-  };
-
-  const handleToggleClaudeMem = () => {
-    if (!settings) return;
-    const isClaudeMemInstalled = settings.enabledPlugins?.['claude-mem@thedotmack'] === true;
-    const updatedPlugins = {
-      ...settings.enabledPlugins,
-      'claude-mem@thedotmack': !isClaudeMemInstalled,
-    };
-    updateSettings({ enabledPlugins: updatedPlugins });
-  };
-
   const renderContent = () => {
     switch (activeSection) {
       case 'general':
         return <GeneralSection info={info} appSettings={appSettings} onSaveAppSettings={handleSaveAppSettings} />;
-      case 'memory':
-        return (
-          <MemorySection
-            settings={settings}
-            hasChanges={hasChanges}
-            onToggleClaudeMem={handleToggleClaudeMem}
-            onInstallClaudeMem={handleInstallClaudeMem}
-          />
-        );
       case 'git':
         return <GitSection settings={settings} onUpdateSettings={updateSettings} />;
       case 'notifications':
@@ -111,14 +85,6 @@ export default function SettingsPage() {
       case 'socialdata':
         return (
           <SocialDataSection
-            appSettings={appSettings}
-            onSaveAppSettings={handleSaveAppSettings}
-            onUpdateLocalSettings={updateLocalAppSettings}
-          />
-        );
-      case 'localmodels':
-        return (
-          <LocalModelsSection
             appSettings={appSettings}
             onSaveAppSettings={handleSaveAppSettings}
             onUpdateLocalSettings={updateLocalAppSettings}

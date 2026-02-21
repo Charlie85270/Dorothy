@@ -1,0 +1,19 @@
+{
+  "name": "mcp-world",
+  "version": "1.0.0",
+  "description": "MCP server for generative world system - agents create and update game zones",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc && esbuild dist/index.js --bundle --platform=node --format=esm --outfile=dist/bundle.js --banner:js=\"import{createRequire}from'module';const require=createRequire(import.meta.url);\"",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "typescript": "^5.3.3"
+  }
+}

@@ -26,7 +26,7 @@ export function renderNPCs(
         screenY + SCALED_TILE * 2 < 0 || screenY > viewportHeight) continue;
 
     if (npc.type === 'professor') {
-      renderProfessorChen(ctx, screenX, screenY, assets);
+      renderProfessorChen(ctx, screenX, screenY, npc, assets);
     } else if (npc.type === 'wanderer') {
       renderWandererNPC(ctx, screenX, screenY, npc);
     } else {
@@ -44,8 +44,15 @@ function renderProfessorChen(
   ctx: CanvasRenderingContext2D,
   screenX: number,
   screenY: number,
+  npc: NPC,
   assets: GameAssets
 ) {
+  // If NPC has a spritePath, render as sprite sheet (same as wanderer rendering)
+  if (npc.spritePath) {
+    renderWandererNPC(ctx, screenX, screenY, npc);
+    return;
+  }
+
   if (assets.chen) {
     ctx.imageSmoothingEnabled = false;
     const drawWidth = SCALED_TILE * 1.2;

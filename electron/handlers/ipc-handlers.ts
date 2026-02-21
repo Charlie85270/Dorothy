@@ -1,5 +1,6 @@
 import { ipcMain, dialog, shell } from 'electron';
 import { checkForUpdates } from '../services/update-checker';
+import { registerMemoryHandlers } from './memory-handlers';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -60,11 +61,11 @@ export function registerIpcHandlers(deps: IpcHandlerDependencies): void {
   registerSettingsHandlers(deps);
   registerAppSettingsHandlers(deps);
   registerUpdateHandlers();
-  registerLocalModelHandlers(deps);
   // Orchestrator handlers are registered separately in services/mcp-orchestrator.ts
   registerTasmaniaHandlers(deps);
   registerFileSystemHandlers(deps);
   registerShellHandlers(deps);
+  registerMemoryHandlers();
 }
 
 // ============== PTY Terminal IPC Handlers ==============
@@ -245,6 +246,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     const cleanEnv = { ...process.env as { [key: string]: string } };
     delete cleanEnv['CLAUDECODE'];
 
+    // Always include world-builder skill so agents can generate game zones
+    const allSkills = [...new Set([...config.skills, 'world-builder'])];
+
     let ptyProcess: pty.IPty;
     try {
       ptyProcess = pty.spawn(shell, ['-l'], {
@@ -255,12 +259,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
         env: {
           ...cleanEnv,
           PATH: fullPath,
-          CLAUDE_SKILLS: config.skills.join(','),
+          CLAUDE_SKILLS: allSkills.join(','),
           CLAUDE_AGENT_ID: id,
           CLAUDE_PROJECT_PATH: config.projectPath,
-          ...(currentSettings.localModelEnabled && currentSettings.localModelBaseUrl
-            ? { ANTHROPIC_BASE_URL: currentSettings.localModelBaseUrl }
-            : {}),
         },
       });
       console.log(`PTY created successfully for agent ${id}, PID: ${ptyProcess.pid}`);
@@ -533,10 +534,15 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       command += ` --add-dir '${escapedSecondaryPath}'`;
     }
 
+    // Load Dorothy's CLAUDE.md for all agents via ~/.dorothy
+    command += ` --add-dir '${os.homedir()}/.dorothy'`;
+
     // Build the final prompt with skills directive if agent has skills
+    // Always include world-builder skill so agents can generate game zones
+    const allAgentSkills = [...new Set([...(agent.skills || []), 'world-builder'])];
     let finalPrompt = prompt;
-    if (agent.skills && agent.skills.length > 0 && !isSuperAgentCheck) {
-      const skillsList = agent.skills.join(', ');
+    if (allAgentSkills.length > 0 && !isSuperAgentCheck) {
+      const skillsList = allAgentSkills.join(', ');
       finalPrompt = `[IMPORTANT: Use these skills for this session: ${skillsList}. Invoke them with /<skill-name> when relevant to the task.] ${prompt}`;
     }
 
@@ -1408,36 +1414,6 @@ function registerUpdateHandlers(): void {
   });
 }
 
-// ============== Local Model IPC Handlers ==============
-
-function registerLocalModelHandlers(deps: IpcHandlerDependencies): void {
-  ipcMain.handle('localmodel:detect', async () => {
-    const http = require('http');
-    const ports = [11434, 1234, 8080, 8081, 8082, 4000, 5000, 3001];
-
-    const testPort = (port: number): Promise<{ found: boolean; port: number; url: string } | null> => {
-      return new Promise((resolve) => {
-        const req = http.get(`http://127.0.0.1:${port}/v1/models`, { timeout: 2000 }, (res: { statusCode: number }) => {
-          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 400) {
-            resolve({ found: true, port, url: `http://127.0.0.1:${port}/v1` });
-          } else {
-            resolve(null);
-          }
-        });
-        req.on('error', () => resolve(null));
-        req.on('timeout', () => {
-          req.destroy();
-          resolve(null);
-        });
-      });
-    };
-
-    const results = await Promise.all(ports.map(testPort));
-    const found = results.find((r) => r !== null);
-    return found || { found: false };
-  });
-}
-
 // ============== File System IPC Handlers ==============
 
 function registerFileSystemHandlers(deps: IpcHandlerDependencies): void {
@@ -1643,12 +1619,16 @@ function registerTasmaniaHandlers(deps: IpcHandlerDependencies): void {
         }
       }
 
-      // Also check via claude mcp list if not found in mcp.json
+      // Also check via claude mcp list if not found in mcp.json (async — never use execSync in main process)
       if (!configured) {
         try {
-          const { execSync: execSyncImport } = await import('child_process');
-          const stdout = execSyncImport('claude mcp list 2>/dev/null', { encoding: 'utf-8', timeout: 5000, stdio: 'pipe' });
-          configured = stdout.includes('tasmania');
+          const { exec } = await import('child_process');
+          await new Promise<void>((resolve) => {
+            exec('claude mcp list', { timeout: 3000 }, (_err, stdout) => {
+              if (stdout) configured = stdout.includes('tasmania');
+              resolve();
+            });
+          });
         } catch {
           // claude CLI not available
         }

@@ -12,6 +12,7 @@ import { v4 as uuidv4 } from 'uuid';
 const SCHEDULER_METADATA_PATH = path.join(os.homedir(), '.dorothy', 'scheduler-metadata.json');
 
 interface SchedulerTaskMetadata {
+  title?: string;
   agentId?: string;
   agentName?: string;
   notifications: {
@@ -30,6 +31,33 @@ function loadSchedulerMetadata(): Record<string, SchedulerTaskMetadata> {
     // Ignore errors
   }
   return {};
+}
+
+/**
+ * Read the last run's content from a log file and determine its status.
+ * Reads only the segment after the last "=== Task started at ... ===" marker
+ * so that errors from old runs don't pollute the current status.
+ */
+function getLastRunStatus(logPath: string): { lastRun: string | undefined; lastRunStatus: 'success' | 'error' | undefined } {
+  if (!fs.existsSync(logPath)) return { lastRun: undefined, lastRunStatus: undefined };
+  const stat = fs.statSync(logPath);
+  const lastRun = stat.mtime.toISOString();
+  try {
+    const logContent = fs.readFileSync(logPath, 'utf-8');
+    // Find the last "=== Task started at ... ===" marker
+    const startRegex = /^=== Task started at .+? ===$/gm;
+    let lastStartIndex = -1;
+    let match: RegExpExecArray | null;
+    while ((match = startRegex.exec(logContent)) !== null) {
+      lastStartIndex = match.index + match[0].length;
+    }
+    // Use content from the last run onwards; fall back to full content for old format
+    const relevantContent = lastStartIndex >= 0 ? logContent.slice(lastStartIndex) : logContent;
+    const lastRunStatus: 'success' | 'error' = relevantContent.includes('error') || relevantContent.includes('Error') ? 'error' : 'success';
+    return { lastRun, lastRunStatus };
+  } catch {
+    return { lastRun, lastRunStatus: 'success' };
+  }
 }
 
 function saveSchedulerMetadata(metadata: Record<string, SchedulerTaskMetadata>): void {
@@ -267,7 +295,7 @@ fi
 export PATH="${claudeDir}:$PATH"
 cd "${projectPath}"
 echo "=== Task started at $(date) ===" >> "${logPath}"
-"${claudePath}" ${flags} --mcp-config "${mcpConfigPath}" -p '${escapedPrompt}' >> "${logPath}" 2>&1
+CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 "${claudePath}" ${flags} --mcp-config "${mcpConfigPath}" --add-dir "${homeDir}/.dorothy" -p '${escapedPrompt}' >> "${logPath}" 2>&1
 echo "=== Task completed at $(date) ===" >> "${logPath}"
 `;
 
@@ -371,7 +399,7 @@ fi
 export PATH="${claudeDir}:$PATH"
 cd "${projectPath}"
 echo "=== Task started at $(date) ===" >> "${logPath}"
-"${claudePath}" ${flags} --mcp-config "${mcpConfigPath}" -p '${escapedPrompt}' >> "${logPath}" 2>&1
+CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 "${claudePath}" ${flags} --mcp-config "${mcpConfigPath}" --add-dir "${homeDir}/.dorothy" -p '${escapedPrompt}' >> "${logPath}" 2>&1
 echo "=== Task completed at $(date) ===" >> "${logPath}"
 `;
 
@@ -428,6 +456,7 @@ export function registerSchedulerHandlers(): void {
     try {
       const tasks: Array<{
         id: string;
+        title?: string;
         prompt: string;
         schedule: string;
         scheduleHuman: string;
@@ -458,24 +487,14 @@ export function registerSchedulerHandlers(): void {
                 createdAt: new Date().toISOString(),
               };
 
-              let lastRun: string | undefined;
-              let lastRunStatus: 'success' | 'error' | undefined;
               const logPath = path.join(os.homedir(), '.claude', 'logs', `${schedule.id}.log`);
-              if (fs.existsSync(logPath)) {
-                const stat = fs.statSync(logPath);
-                lastRun = stat.mtime.toISOString();
-                try {
-                  const logContent = fs.readFileSync(logPath, 'utf-8');
-                  lastRunStatus = logContent.includes('error') || logContent.includes('Error') ? 'error' : 'success';
-                } catch {
-                  lastRunStatus = 'success';
-                }
-              }
+              const { lastRun, lastRunStatus } = getLastRunStatus(logPath);
 
               const taskId = schedule.id || uuidv4();
               addedTaskIds.add(taskId);
               tasks.push({
                 id: taskId,
+                title: taskMeta.title,
                 prompt: schedule.prompt || schedule.task || '',
                 schedule: schedule.schedule || schedule.cron || '',
                 scheduleHuman: cronToHuman(schedule.schedule || schedule.cron || ''),
@@ -516,25 +535,15 @@ export function registerSchedulerHandlers(): void {
                       createdAt: new Date().toISOString(),
                     };
 
-                    let lastRun: string | undefined;
-                    let lastRunStatus: 'success' | 'error' | undefined;
                     const logPath = path.join(os.homedir(), '.claude', 'logs', `${schedule.id}.log`);
-                    if (fs.existsSync(logPath)) {
-                      const stat = fs.statSync(logPath);
-                      lastRun = stat.mtime.toISOString();
-                      try {
-                        const logContent = fs.readFileSync(logPath, 'utf-8');
-                        lastRunStatus = logContent.includes('error') || logContent.includes('Error') ? 'error' : 'success';
-                      } catch {
-                        lastRunStatus = 'success';
-                      }
-                    }
+                    const { lastRun, lastRunStatus } = getLastRunStatus(logPath);
 
                     const projectPath = '/' + projectDir.replace(/-/g, '/');
                     const taskId = schedule.id || uuidv4();
                     addedTaskIds.add(taskId);
                     tasks.push({
                       id: taskId,
+                      title: taskMeta.title,
                       prompt: schedule.prompt || schedule.task || '',
                       schedule: schedule.schedule || schedule.cron || '',
                       scheduleHuman: cronToHuman(schedule.schedule || schedule.cron || ''),
@@ -626,19 +635,8 @@ export function registerSchedulerHandlers(): void {
                 if (weekday !== undefined) cron = `${minute} ${hour} * * ${weekday}`;
                 else if (day !== undefined) cron = `${minute} ${hour} ${day} * *`;
 
-                let lastRun: string | undefined;
-                let lastRunStatus: 'success' | 'error' | undefined;
                 const logPath = path.join(os.homedir(), '.claude', 'logs', `${taskId}.log`);
-                if (fs.existsSync(logPath)) {
-                  const stat = fs.statSync(logPath);
-                  lastRun = stat.mtime.toISOString();
-                  try {
-                    const logContent = fs.readFileSync(logPath, 'utf-8');
-                    lastRunStatus = logContent.includes('error') || logContent.includes('Error') ? 'error' : 'success';
-                  } catch {
-                    lastRunStatus = 'success';
-                  }
-                }
+                const { lastRun, lastRunStatus } = getLastRunStatus(logPath);
 
                 const plistStat = fs.statSync(plistPath);
                 const taskMeta = metadata[taskId] || {
@@ -682,6 +680,7 @@ export function registerSchedulerHandlers(): void {
 
   // Create a new scheduled task
   ipcMain.handle('scheduler:createTask', async (_event, config: {
+    title?: string;
     prompt: string;
     schedule: string;
     projectPath: string;
@@ -727,6 +726,7 @@ export function registerSchedulerHandlers(): void {
       // Save metadata
       const metadata = loadSchedulerMetadata();
       metadata[taskId] = {
+        title: config.title,
         agentId: config.agentId,
         agentName: config.agentName,
         notifications: config.notifications || { telegram: false, slack: false },
@@ -829,6 +829,7 @@ export function registerSchedulerHandlers(): void {
 
   // Update a scheduled task
   ipcMain.handle('scheduler:updateTask', async (_event, taskId: string, updates: {
+    title?: string;
     prompt?: string;
     schedule?: string;
     projectPath?: string;
@@ -865,11 +866,12 @@ export function registerSchedulerHandlers(): void {
         return { success: false, error: 'Task not found' };
       }
 
-      // Update metadata (notifications)
-      if (updates.notifications) {
+      // Update metadata (title, notifications)
+      if (updates.title !== undefined || updates.notifications) {
         const metadata = loadSchedulerMetadata();
         if (metadata[taskId]) {
-          metadata[taskId].notifications = updates.notifications;
+          if (updates.title !== undefined) metadata[taskId].title = updates.title;
+          if (updates.notifications) metadata[taskId].notifications = updates.notifications;
           saveSchedulerMetadata(metadata);
         }
       }
@@ -915,7 +917,7 @@ fi
 export PATH="${claudeDir}:$PATH"
 cd "${projectPath}"
 echo "=== Task started at $(date) ===" >> "${logPath}"
-"${claudePath}" ${flags} --mcp-config "${mcpConfigPath}" -p '${escapedPrompt}' >> "${logPath}" 2>&1
+CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 "${claudePath}" ${flags} --mcp-config "${mcpConfigPath}" --add-dir "${homeDir}/.dorothy" -p '${escapedPrompt}' >> "${logPath}" 2>&1
 echo "=== Task completed at $(date) ===" >> "${logPath}"
 `;
 

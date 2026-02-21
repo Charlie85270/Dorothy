@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Puzzle,
@@ -23,10 +23,11 @@ import {
   Shield,
   Zap,
   Tag,
+  User,
 } from 'lucide-react';
 import { useClaude } from '@/hooks/useClaude';
 import { isElectron } from '@/hooks/useElectron';
-import { PLUGINS_DATABASE, PLUGIN_CATEGORIES, MARKETPLACES, type Plugin } from '@/lib/plugins-database';
+import { usePluginsDatabase, type Plugin, type Marketplace } from '@/lib/plugins-database';
 // Import xterm CSS
 import 'xterm/css/xterm.css';
 
@@ -48,13 +49,150 @@ const CATEGORY_COLORS: Record<string, string> = {
   'Productivity': 'text-cyan-400 bg-cyan-500/20',
 };
 
+// ── Memoized plugin card ──
+
+interface PluginCardProps {
+  plugin: Plugin;
+  installed: boolean;
+  isCustom: boolean;
+  marketplaceName: string;
+  justCopied: boolean;
+  isInstalling: boolean;
+  hasElectron: boolean;
+  onInstall: (plugin: Plugin) => void;
+  onCopy: (plugin: Plugin) => void;
+}
+
+const PluginCard = React.memo(function PluginCard({
+  plugin,
+  installed,
+  isCustom,
+  marketplaceName,
+  justCopied,
+  isInstalling,
+  hasElectron,
+  onInstall,
+  onCopy,
+}: PluginCardProps) {
+  const Icon = CATEGORY_ICONS[plugin.category] || Puzzle;
+  const colorClass = CATEGORY_COLORS[plugin.category] || 'text-zinc-400 bg-zinc-500/20';
+
+  return (
+    <div className="border border-border bg-card p-4 hover:border-foreground/30 transition-colors">
+      <div className="flex items-start gap-3 mb-3">
+        <div className={`w-10 h-10 flex items-center justify-center shrink-0 ${installed ? 'bg-primary/10' : colorClass.split(' ')[1]}`}>
+          {installed ? (
+            <CheckCircle className="w-5 h-5 text-primary" />
+          ) : (
+            <Icon className={`w-5 h-5 ${colorClass.split(' ')[0]}`} />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-medium text-sm truncate">{plugin.name}</h3>
+            {isCustom && (
+              <span className="text-[10px] px-1.5 py-0.5 bg-purple-500/20 text-purple-400 font-medium">
+                Custom
+              </span>
+            )}
+            {installed && (
+              <span className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary" style={{ borderRadius: 5 }}>
+                Installed
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {isCustom ? plugin.marketplace : marketplaceName}
+          </p>
+        </div>
+      </div>
+
+      <p className="text-xs text-muted-foreground mb-3 line-clamp-2">
+        {plugin.description}
+      </p>
+
+      {plugin.binaryRequired && (
+        <div className="flex items-center gap-1.5 text-[10px] text-amber-700 mb-3">
+          <Info className="w-3 h-3" />
+          <span>Requires: <code className="bg-amber-500/15 text-amber-800 px-1 py-0.5">{plugin.binaryRequired}</code></span>
+        </div>
+      )}
+
+      {plugin.tags && plugin.tags.filter(t => t !== 'custom' && t !== 'installed').length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {plugin.tags.filter(t => t !== 'custom' && t !== 'installed').slice(0, 3).map((tag) => (
+            <span
+              key={tag}
+              className="text-[10px] px-1.5 py-0.5 bg-secondary text-muted-foreground flex items-center gap-1"
+            >
+              <Tag className="w-2.5 h-2.5" />
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 mt-auto pt-2 border-t border-border">
+        {installed ? (
+          <span className="flex-1 text-center text-xs text-primary py-1.5">
+            Already installed
+          </span>
+        ) : (
+          <>
+            <button
+              onClick={() => onInstall(plugin)}
+              disabled={isInstalling}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${isInstalling
+                ? 'bg-secondary text-muted-foreground'
+                : 'bg-foreground text-background hover:bg-foreground/90'
+                }`}
+              style={{ borderRadius: 7 }}
+            >
+              {isInstalling ? (
+                <>
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Installing...
+                </>
+              ) : hasElectron ? (
+                'Install'
+              ) : (
+                'Copy Command'
+              )}
+            </button>
+            <button
+              onClick={() => onCopy(plugin)}
+              className={`p-1.5 transition-colors ${justCopied
+                ? 'bg-primary/10 text-primary'
+                : 'bg-secondary text-muted-foreground hover:text-foreground'
+                }`}
+              style={{ borderRadius: 7 }}
+              title="Copy install command"
+            >
+              {justCopied ? (
+                <Check className="w-4 h-4" />
+              ) : (
+                <Copy className="w-4 h-4" />
+              )}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+});
+
 export default function PluginsPage() {
   const { data, loading } = useClaude();
+  const { plugins: PLUGINS_DATABASE, categories: PLUGIN_CATEGORIES, marketplaces: MARKETPLACES, authors: AUTHORS, loading: pluginsLoading } = usePluginsDatabase();
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedMarketplace, setSelectedMarketplace] = useState<string | null>(null);
+  const [selectedAuthor, setSelectedAuthor] = useState<string | null>(null);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showMarketplaceDropdown, setShowMarketplaceDropdown] = useState(false);
+  const [showAuthorDropdown, setShowAuthorDropdown] = useState(false);
   const [copiedPlugin, setCopiedPlugin] = useState<string | null>(null);
   const [showToast, setShowToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
   const [selectedPlugin, setSelectedPlugin] = useState<Plugin | null>(null);
@@ -213,33 +351,59 @@ export default function PluginsPage() {
     return unsubscribe;
   }, []);
 
+  // Debounced search handler
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearch(value);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => setDebouncedSearch(value), 200);
+  }, []);
+
   // Get installed plugins from settings
   const installedPlugins = useMemo(() => {
     const enabledPlugins = data?.settings?.enabledPlugins || {};
     return Object.keys(enabledPlugins).filter(key => enabledPlugins[key]);
   }, [data?.settings?.enabledPlugins]);
 
-  // Check if a plugin is installed
-  const isPluginInstalled = (pluginName: string, marketplace: string) => {
+  // Pre-compute O(1) lookup structures for installed checks
+  const installedLookup = useMemo(() => {
+    const exact = new Set<string>();
+    const lower = new Set<string>();
+    const byName = new Set<string>();
+    for (const p of installedPlugins) {
+      exact.add(p);
+      lower.add(p.toLowerCase());
+      const atIdx = p.indexOf('@');
+      if (atIdx > 0) byName.add(p.substring(0, atIdx));
+    }
+    return { exact, lower, byName };
+  }, [installedPlugins]);
+
+  const isPluginInstalled = useCallback((pluginName: string, marketplace: string): boolean => {
     const fullName = `${pluginName}@${marketplace}`;
-    return installedPlugins.some(p =>
-      p === fullName ||
-      p.toLowerCase() === fullName.toLowerCase() ||
-      p.startsWith(`${pluginName}@`)
+    return (
+      installedLookup.exact.has(fullName) ||
+      installedLookup.lower.has(fullName.toLowerCase()) ||
+      installedLookup.byName.has(pluginName)
     );
-  };
+  }, [installedLookup]);
 
   // Create custom plugin entries for installed plugins not in the database
   const customInstalledPlugins = useMemo((): Plugin[] => {
+    const dbNames = new Set<string>();
+    const dbKeys = new Set<string>();
+    const dbKeysLower = new Set<string>();
+    for (const p of PLUGINS_DATABASE) {
+      dbNames.add(p.name);
+      const key = `${p.name}@${p.marketplace}`;
+      dbKeys.add(key);
+      dbKeysLower.add(key.toLowerCase());
+    }
+
     return installedPlugins
       .filter(pluginKey => {
-        // Check if this plugin is already in the database
         const [name] = pluginKey.split('@');
-        return !PLUGINS_DATABASE.some(p =>
-          p.name === name ||
-          `${p.name}@${p.marketplace}` === pluginKey ||
-          `${p.name}@${p.marketplace}`.toLowerCase() === pluginKey.toLowerCase()
-        );
+        return !dbNames.has(name) && !dbKeys.has(pluginKey) && !dbKeysLower.has(pluginKey.toLowerCase());
       })
       .map(pluginKey => {
         const [name, marketplace] = pluginKey.split('@');
@@ -251,15 +415,14 @@ export default function PluginsPage() {
           tags: ['custom', 'installed'],
         };
       });
-  }, [installedPlugins]);
+  }, [PLUGINS_DATABASE, installedPlugins]);
 
-  // Filter plugins
+  // Filter plugins (uses debouncedSearch to avoid re-filtering on every keystroke)
   const filteredPlugins = useMemo(() => {
-    // Combine database plugins with custom installed plugins
     let plugins: Plugin[] = [...PLUGINS_DATABASE, ...customInstalledPlugins];
 
-    if (search) {
-      const q = search.toLowerCase();
+    if (debouncedSearch) {
+      const q = debouncedSearch.toLowerCase();
       plugins = plugins.filter(
         (p) =>
           p.name.toLowerCase().includes(q) ||
@@ -277,35 +440,67 @@ export default function PluginsPage() {
       plugins = plugins.filter((p) => p.marketplace === selectedMarketplace);
     }
 
-    // Sort installed plugins first
-    plugins = [...plugins].sort((a, b) => {
-      const aInstalled = installedPlugins.some(p =>
-        p === `${a.name}@${a.marketplace}` ||
-        p.toLowerCase() === `${a.name}@${a.marketplace}`.toLowerCase() ||
-        p.startsWith(`${a.name}@`)
-      );
-      const bInstalled = installedPlugins.some(p =>
-        p === `${b.name}@${b.marketplace}` ||
-        p.toLowerCase() === `${b.name}@${b.marketplace}`.toLowerCase() ||
-        p.startsWith(`${b.name}@`)
-      );
+    if (selectedAuthor) {
+      plugins = plugins.filter((p) => p.author === selectedAuthor);
+    }
+
+    // Sort installed plugins first using O(1) Set lookups
+    plugins.sort((a, b) => {
+      const aInstalled = isPluginInstalled(a.name, a.marketplace);
+      const bInstalled = isPluginInstalled(b.name, b.marketplace);
       if (aInstalled && !bInstalled) return -1;
       if (!aInstalled && bInstalled) return 1;
       return 0;
     });
 
     return plugins;
-  }, [search, selectedCategory, selectedMarketplace, installedPlugins, customInstalledPlugins]);
+  }, [PLUGINS_DATABASE, debouncedSearch, selectedCategory, selectedMarketplace, selectedAuthor, isPluginInstalled, customInstalledPlugins]);
 
-  const getInstallCommand = (plugin: Plugin) => {
+  // Pre-compute per-card metadata to avoid repeated lookups in render
+  const cardData = useMemo(() => {
+    const customSet = new Set(
+      customInstalledPlugins.map(p => `${p.name}@${p.marketplace}`)
+    );
+    const marketplaceNames = new Map(
+      MARKETPLACES.map(m => [m.id, m.name])
+    );
+    return filteredPlugins.map(plugin => ({
+      plugin,
+      installed: isPluginInstalled(plugin.name, plugin.marketplace),
+      isCustom: customSet.has(`${plugin.name}@${plugin.marketplace}`),
+      marketplaceName: marketplaceNames.get(plugin.marketplace) || plugin.marketplace,
+    }));
+  }, [filteredPlugins, customInstalledPlugins, MARKETPLACES, isPluginInstalled]);
+
+  const getInstallCommand = useCallback((plugin: Plugin) => {
     return `/plugin install ${plugin.name}@${plugin.marketplace}`;
-  };
+  }, []);
 
-  const handleInstall = async (plugin: Plugin) => {
+  const copyInstallCommand = useCallback(async (plugin: Plugin) => {
+    try {
+      await navigator.clipboard.writeText(getInstallCommand(plugin));
+      setCopiedPlugin(plugin.name);
+      setShowToast({
+        message: `Command copied! Run in Claude Code to install "${plugin.name}"`,
+        type: 'success',
+      });
+      setTimeout(() => {
+        setCopiedPlugin(null);
+        setShowToast(null);
+      }, 3000);
+    } catch {
+      setShowToast({
+        message: 'Failed to copy to clipboard',
+        type: 'error',
+      });
+      setTimeout(() => setShowToast(null), 3000);
+    }
+  }, [getInstallCommand]);
+
+  const handleInstall = useCallback(async (plugin: Plugin) => {
     const installCommand = getInstallCommand(plugin);
 
     if (hasElectron && window.electronAPI?.plugin?.installStart) {
-      // Open in-app terminal with Claude Code to run the install command
       setInstallingPlugin(plugin.name);
       setCurrentInstallCommand(installCommand);
       setInstallComplete(false);
@@ -313,13 +508,11 @@ export default function PluginsPage() {
       setShowInstallTerminal(true);
       setPendingInstallCommand(installCommand);
     } else {
-      // Copy command to clipboard
       await copyInstallCommand(plugin);
     }
-  };
+  }, [hasElectron, getInstallCommand, copyInstallCommand]);
 
   const closeInstallTerminal = () => {
-    // Kill the PTY if still running
     if (ptyIdRef.current && window.electronAPI?.plugin?.installKill) {
       window.electronAPI.plugin.installKill({ id: ptyIdRef.current });
     }
@@ -332,28 +525,7 @@ export default function PluginsPage() {
     ptyIdRef.current = null;
   };
 
-  const copyInstallCommand = async (plugin: Plugin) => {
-    try {
-      await navigator.clipboard.writeText(getInstallCommand(plugin));
-      setCopiedPlugin(plugin.name);
-      setShowToast({
-        message: `Command copied! Run in Claude Code to install "${plugin.name}"`,
-        type: 'success',
-      });
-      setTimeout(() => {
-        setCopiedPlugin(null);
-        setShowToast(null);
-      }, 3000);
-    } catch (err) {
-      setShowToast({
-        message: 'Failed to copy to clipboard',
-        type: 'error',
-      });
-      setTimeout(() => setShowToast(null), 3000);
-    }
-  };
-
-  if (loading && !data) {
+  if ((loading && !data) || pluginsLoading) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
         <div className="text-center">
@@ -436,7 +608,7 @@ export default function PluginsPage() {
           <input
             type="text"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={handleSearchChange}
             placeholder="Search plugins by name, description, or tags..."
             className="w-full pl-10 pr-4 py-2.5 rounded-none text-sm bg-secondary border border-border focus:border-foreground focus:outline-none"
           />
@@ -448,6 +620,7 @@ export default function PluginsPage() {
             onClick={() => {
               setShowCategoryDropdown(!showCategoryDropdown);
               setShowMarketplaceDropdown(false);
+              setShowAuthorDropdown(false);
             }}
             className="flex items-center gap-2 px-4 py-2.5 rounded-none bg-secondary border border-border text-muted-foreground hover:text-foreground transition-colors w-full sm:w-auto sm:min-w-[160px] text-sm"
           >
@@ -502,6 +675,7 @@ export default function PluginsPage() {
             onClick={() => {
               setShowMarketplaceDropdown(!showMarketplaceDropdown);
               setShowCategoryDropdown(false);
+              setShowAuthorDropdown(false);
             }}
             className="flex items-center gap-2 px-4 py-2.5 rounded-none bg-secondary border border-border text-muted-foreground hover:text-foreground transition-colors w-full sm:w-auto sm:min-w-[160px] text-sm"
           >
@@ -546,139 +720,89 @@ export default function PluginsPage() {
             )}
           </AnimatePresence>
         </div>
+
+        {/* Author Filter */}
+        <div className="relative">
+          <button
+            onClick={() => {
+              setShowAuthorDropdown(!showAuthorDropdown);
+              setShowCategoryDropdown(false);
+              setShowMarketplaceDropdown(false);
+            }}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-none bg-secondary border border-border text-muted-foreground hover:text-foreground transition-colors w-full sm:w-auto sm:min-w-[160px] text-sm"
+          >
+            <User className="w-4 h-4" />
+            {selectedAuthor || 'All Authors'}
+            <ChevronDown className="w-4 h-4 ml-auto" />
+          </button>
+
+          <AnimatePresence>
+            {showAuthorDropdown && (
+              <motion.div
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 5 }}
+                className="absolute top-full mt-2 right-0 w-56 bg-card border border-border rounded-none shadow-lg z-20 py-2 max-h-80 overflow-y-auto"
+              >
+                <button
+                  onClick={() => {
+                    setSelectedAuthor(null);
+                    setShowAuthorDropdown(false);
+                  }}
+                  className={`w-full text-left px-4 py-2 text-sm hover:bg-secondary ${!selectedAuthor ? 'text-white' : 'text-muted-foreground'
+                    }`}
+                >
+                  All Authors
+                </button>
+                {AUTHORS.map((author) => (
+                  <button
+                    key={author}
+                    onClick={() => {
+                      setSelectedAuthor(author);
+                      setShowAuthorDropdown(false);
+                    }}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-secondary truncate ${selectedAuthor === author ? 'text-white' : 'text-muted-foreground'
+                      }`}
+                  >
+                    {author}
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
       {/* Plugins Grid */}
       <div className="flex-1 overflow-y-auto mt-4">
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filteredPlugins.map((plugin) => {
-            const installed = isPluginInstalled(plugin.name, plugin.marketplace);
-            const justCopied = copiedPlugin === plugin.name;
-            const isInstalling = installingPlugin === plugin.name;
-            const isCustom = customInstalledPlugins.some(p => p.name === plugin.name && p.marketplace === plugin.marketplace);
-            const Icon = CATEGORY_ICONS[plugin.category] || Puzzle;
-            const colorClass = CATEGORY_COLORS[plugin.category] || 'text-zinc-400 bg-zinc-500/20';
-
-            return (
-              <motion.div
-                key={`${plugin.marketplace}-${plugin.name}`}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="border border-border bg-card p-4 hover:border-foreground/30 transition-colors"
-              >
-                <div className="flex items-start gap-3 mb-3">
-                  <div className={`w-10 h-10 flex items-center justify-center shrink-0 ${installed ? 'bg-primary/10' : colorClass.split(' ')[1]
-                    }`}>
-                    {installed ? (
-                      <CheckCircle className="w-5 h-5 text-primary" />
-                    ) : (
-                      <Icon className={`w-5 h-5 ${colorClass.split(' ')[0]}`} />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-medium text-sm truncate">{plugin.name}</h3>
-                      {isCustom && (
-                        <span className="text-[10px] px-1.5 py-0.5 bg-purple-500/20 text-purple-400 font-medium">
-                          Custom
-                        </span>
-                      )}
-                      {installed && (
-                        <span className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary" style={{ borderRadius: 5 }}>
-                          Installed
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {isCustom ? plugin.marketplace : MARKETPLACES.find(m => m.id === plugin.marketplace)?.name || plugin.marketplace}
-                    </p>
-                  </div>
-                </div>
-
-                <p className="text-xs text-muted-foreground mb-3 line-clamp-2">
-                  {plugin.description}
-                </p>
-
-                {plugin.binaryRequired && (
-                  <div className="flex items-center gap-1.5 text-[10px] text-amber-700 mb-3">
-                    <Info className="w-3 h-3" />
-                    <span>Requires: <code className="bg-amber-500/15 text-amber-800 px-1 py-0.5">{plugin.binaryRequired}</code></span>
-                  </div>
-                )}
-
-                {plugin.tags && plugin.tags.filter(t => t !== 'custom' && t !== 'installed').length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-3">
-                    {plugin.tags.filter(t => t !== 'custom' && t !== 'installed').slice(0, 3).map((tag) => (
-                      <span
-                        key={tag}
-                        className="text-[10px] px-1.5 py-0.5 bg-secondary text-muted-foreground flex items-center gap-1"
-                      >
-                        <Tag className="w-2.5 h-2.5" />
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                <div className="flex items-center gap-2 mt-auto pt-2 border-t border-border">
-                  {installed ? (
-                    <span className="flex-1 text-center text-xs text-primary py-1.5">
-                      Already installed
-                    </span>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => handleInstall(plugin)}
-                        disabled={isInstalling}
-                        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${isInstalling
-                          ? 'bg-secondary text-muted-foreground'
-                          : 'bg-foreground text-background hover:bg-foreground/90'
-                          }`}
-                        style={{ borderRadius: 7 }}
-                      >
-                        {isInstalling ? (
-                          <>
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                            Installing...
-                          </>
-                        ) : hasElectron ? (
-                          'Install'
-                        ) : (
-                          'Copy Command'
-                        )}
-                      </button>
-                      <button
-                        onClick={() => copyInstallCommand(plugin)}
-                        className={`p-1.5 transition-colors ${justCopied
-                          ? 'bg-primary/10 text-primary'
-                          : 'bg-secondary text-muted-foreground hover:text-foreground'
-                          }`}
-                        style={{ borderRadius: 7 }}
-                        title="Copy install command"
-                      >
-                        {justCopied ? (
-                          <Check className="w-4 h-4" />
-                        ) : (
-                          <Copy className="w-4 h-4" />
-                        )}
-                      </button>
-                    </>
-                  )}
-                </div>
-              </motion.div>
-            );
-          })}
+          {cardData.map(({ plugin, installed, isCustom, marketplaceName }) => (
+            <PluginCard
+              key={`${plugin.marketplace}-${plugin.name}`}
+              plugin={plugin}
+              installed={installed}
+              isCustom={isCustom}
+              marketplaceName={marketplaceName}
+              justCopied={copiedPlugin === plugin.name}
+              isInstalling={installingPlugin === plugin.name}
+              hasElectron={hasElectron}
+              onInstall={handleInstall}
+              onCopy={copyInstallCommand}
+            />
+          ))}
         </div>
 
-        {filteredPlugins.length === 0 && (
+        {cardData.length === 0 && (
           <div className="flex flex-col items-center justify-center h-64">
             <Puzzle className="w-12 h-12 text-muted-foreground/30 mb-4" />
             <p className="text-muted-foreground">No plugins found matching your search</p>
             <button
               onClick={() => {
                 setSearch('');
+                setDebouncedSearch('');
                 setSelectedCategory(null);
                 setSelectedMarketplace(null);
+                setSelectedAuthor(null);
               }}
               className="mt-3 text-sm text-foreground hover:underline"
             >

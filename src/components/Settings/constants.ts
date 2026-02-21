@@ -6,10 +6,8 @@ import {
   Shield,
   Sparkles,
   Monitor,
-  Brain,
   Terminal,
   Twitter,
-  Server,
 } from 'lucide-react';
 import { SlackIcon } from './SlackIcon';
 import { JiraIcon } from './JiraIcon';
@@ -18,14 +16,12 @@ import type { SettingsSection } from './types';
 
 export const SECTIONS: { id: SettingsSection; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'general', label: 'General', icon: Settings },
-  { id: 'memory', label: 'Memory', icon: Brain },
   { id: 'git', label: 'Git', icon: GitCommit },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'telegram', label: 'Telegram', icon: Send },
   { id: 'slack', label: 'Slack', icon: SlackIcon },
   { id: 'jira', label: 'JIRA', icon: JiraIcon },
   { id: 'socialdata', label: 'X (Twitter)', icon: Twitter },
-  { id: 'localmodels', label: 'Local Models', icon: Server },
   { id: 'tasmania', label: 'Tasmania', icon: TasmaniaIcon },
   { id: 'permissions', label: 'Permissions', icon: Shield },
   { id: 'skills', label: 'Skills & Plugins', icon: Sparkles },
@@ -60,8 +56,6 @@ export const DEFAULT_APP_SETTINGS = {
   xApiSecret: '',
   xAccessToken: '',
   xAccessTokenSecret: '',
-  localModelEnabled: false,
-  localModelBaseUrl: '',
   tasmaniaEnabled: false,
   tasmaniaServerPath: '',
   verboseModeEnabled: false,

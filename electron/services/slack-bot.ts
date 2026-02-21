@@ -457,6 +457,7 @@ export async function handleSlackCommand(
       if (agent.secondaryProjectPath) {
         command += ` --add-dir '${agent.secondaryProjectPath.replace(/'/g, "'\\''")}'`;
       }
+      command += ` --add-dir '${require('os').homedir()}/.dorothy'`;
       command += ` '${task.replace(/'/g, "'\\''")}'`;
 
       agent.status = 'running';

@@ -55,6 +55,36 @@ export interface VaultAttachmentElectron {
   created_at: string;
 }
 
+export interface MemoryFile {
+  name: string;
+  path: string;
+  content: string;
+  size: number;
+  lastModified: string;
+  isEntrypoint: boolean;
+}
+
+export interface ProjectMemory {
+  id: string;
+  projectName: string;
+  projectPath: string;
+  memoryDir: string;
+  files: MemoryFile[];
+  totalSize: number;
+  lastModified: string;
+  hasMemory: boolean;
+}
+
+export interface ImportPreview {
+  name: string;
+  description: string;
+  width: number;
+  height: number;
+  npcCount: number;
+  buildingCount: number;
+  screenshot: string;
+}
+
 export interface WorktreeConfig {
   enabled: boolean;
   branchName: string;
@@ -311,9 +341,37 @@ export interface ElectronAPI {
     test: () => Promise<{ success: boolean; username?: string; error?: string }>;
   };
 
-  // Local Model
-  localModel?: {
-    detect: () => Promise<{ found: boolean; port?: number; url?: string }>;
+  // Tasmania (Local LLM)
+  tasmania?: {
+    test: () => Promise<{ success: boolean; serverExists: boolean; apiReachable: boolean; error?: string }>;
+    getStatus: () => Promise<{
+      status: 'stopped' | 'starting' | 'running' | 'error';
+      backend: string | null;
+      port: number | null;
+      modelName: string | null;
+      modelPath: string | null;
+      endpoint: string | null;
+      startedAt: number | null;
+      error?: string;
+    }>;
+    getModels: () => Promise<{
+      models: Array<{
+        name: string;
+        filename: string;
+        path: string;
+        sizeBytes: number;
+        repo: string | null;
+        quantization: string | null;
+        parameters: string | null;
+        architecture: string | null;
+      }>;
+      error?: string;
+    }>;
+    loadModel: (modelPath: string) => Promise<{ success: boolean; error?: string }>;
+    stopModel: () => Promise<{ success: boolean; error?: string }>;
+    getMcpStatus: () => Promise<{ configured: boolean; error?: string }>;
+    setup: () => Promise<{ success: boolean; error?: string }>;
+    remove: () => Promise<{ success: boolean; error?: string }>;
   };
 
   // Tasmania (Local LLM)
@@ -416,6 +474,7 @@ export interface ElectronAPI {
       }>;
     }>;
     createTask: (params: {
+      title?: string;
       agentId?: string;
       prompt: string;
       schedule: string;
@@ -429,6 +488,7 @@ export interface ElectronAPI {
     }) => Promise<{ success: boolean; error?: string; taskId?: string }>;
     deleteTask: (taskId: string) => Promise<{ success: boolean; error?: string }>;
     updateTask: (taskId: string, updates: {
+      title?: string;
       prompt?: string;
       schedule?: string;
       projectPath?: string;
@@ -607,6 +667,18 @@ export interface ElectronAPI {
     onTaskDeleted: (callback: (event: { id: string }) => void) => () => void;
   };
 
+  // World (generative zones)
+  world?: {
+    listZones: () => Promise<{ zones: unknown[]; error?: string }>;
+    getZone: (zoneId: string) => Promise<{ zone: unknown | null; error?: string }>;
+    exportZone: (params: { zoneId: string; screenshot: string }) => Promise<{ success: boolean; filePath?: string; error?: string }>;
+    importZone: () => Promise<{ success: boolean; preview?: ImportPreview; zone?: unknown; error?: string }>;
+    confirmImport: (zone: unknown) => Promise<{ success: boolean; zoneId?: string; error?: string }>;
+    deleteZone: (zoneId: string) => Promise<{ success: boolean; error?: string }>;
+    onZoneUpdated: (callback: (zone: unknown) => void) => () => void;
+    onZoneDeleted: (callback: (event: { id: string }) => void) => () => void;
+  };
+
   // Updates
   updates?: {
     check: () => Promise<{
@@ -626,6 +698,15 @@ export interface ElectronAPI {
       releaseNotes: string;
       hasUpdate: boolean;
     }) => void) => () => void;
+  };
+
+  // Native Claude memory (reads ~/.claude/projects/*/memory/)
+  memory?: {
+    listProjects: () => Promise<{ projects: ProjectMemory[]; error: string | null }>;
+    readFile: (filePath: string) => Promise<{ content: string; error?: string }>;
+    writeFile: (filePath: string, content: string) => Promise<{ success: boolean; error?: string }>;
+    createFile: (memoryDir: string, fileName: string, content?: string) => Promise<{ success: boolean; file?: MemoryFile; error?: string }>;
+    deleteFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
   };
 
   // Get home path helper

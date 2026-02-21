@@ -12,7 +12,13 @@ import AgentInfoCard from './overlays/AgentInfoCard';
 import GameMenu from './overlays/GameMenu';
 import BuildingInterior from './overlays/BuildingInterior';
 import RouteOverlay from './overlays/RouteOverlay';
+import GenerativeZoneOverlay from './overlays/GenerativeZoneOverlay';
+import WorldBuilderPrompt from './overlays/WorldBuilderPrompt';
+import ImportPreviewOverlay from './overlays/ImportPreviewOverlay';
+import { renderZoneScreenshot } from './utils/zoneScreenshot';
 import { renderLoadingScreen } from './renderer/uiRenderer';
+import type { ImportPreview } from '@/types/electron';
+import { useWorldZones } from '@/hooks/useWorldZones';
 import AgentTerminalDialog from '@/components/AgentWorld/AgentTerminalDialog';
 import SkillInstallDialog from '@/components/SkillInstallDialog';
 import PluginInstallDialog from '@/components/PluginInstallDialog';
@@ -21,7 +27,7 @@ import { useElectronSkills } from '@/hooks/useElectron';
 import 'xterm/css/xterm.css';
 
 // Try to import electron hooks - gracefully handle if not available
-let useElectronAgentsHook: (() => { agents: any[]; isElectron: boolean; startAgent: (id: string, prompt: string, options?: any) => Promise<void>; stopAgent: (id: string) => Promise<void> }) | null = null;
+let useElectronAgentsHook: (() => { agents: any[]; isElectron: boolean; createAgent: (config: any) => Promise<any>; startAgent: (id: string, prompt: string, options?: any) => Promise<void>; stopAgent: (id: string) => Promise<void> }) | null = null;
 let isElectronFn: (() => boolean) | null = null;
 let useElectronFSHook: (() => { projects: { path: string; name: string }[]; openFolderDialog: () => Promise<string | null> }) | null = null;
 try {
@@ -125,8 +131,8 @@ function MusicPlayer({ screen, inBattle }: { screen: Screen; inBattle: boolean }
       // On first map: play main, stop battle
       battle.pause();
       main.play().catch(() => {});
-    } else if (screen === 'transition' || screen === 'route') {
-      // On route (no battle): stop both
+    } else if (screen === 'transition' || screen === 'route' || screen === 'generative-zone') {
+      // On route or generative zone (no battle): stop both
       main.pause();
       battle.pause();
     }
@@ -215,7 +221,15 @@ export default function PokemonGame() {
   const [activeRoute, setActiveRoute] = useState<string | null>(null);
   const [routeReturnPos, setRouteReturnPos] = useState<{ x: number; y: number } | null>(null);
   const pendingRouteRef = useRef<string | null>(null);
+  const [transitionLabel, setTransitionLabel] = useState('Vibe Coder Valley');
   const [inBattle, setInBattle] = useState(false);
+  const [activeGenerativeZoneId, setActiveGenerativeZoneId] = useState<string | null>(null);
+  const [showWorldBuilderPrompt, setShowWorldBuilderPrompt] = useState(false);
+  const [worldBuilderPending, setWorldBuilderPending] = useState(false);
+  const [importPreview, setImportPreview] = useState<{ preview: ImportPreview; zone: unknown } | null>(null);
+
+  // Generative world zones (loaded via Electron IPC, live-updated via fs.watch)
+  const { zones: worldZones } = useWorldZones();
 
   // ── Same pattern as agents/page.tsx ──
   // Get real agents from Electron
@@ -286,28 +300,58 @@ export default function PokemonGame() {
     }
   }, [activeRoute]);
 
-  // Enter route (e.g. Route 1) — with transition screen
+  // Enter route (e.g. Route 1) or generative zone (world:...)
   const handleEnterRoute = useCallback((routeId: string) => {
-    pendingRouteRef.current = routeId;
-    setScreen('transition');
-  }, []);
+    if (routeId.startsWith('world:')) {
+      // Find the zone to enter
+      let targetZone: string | null = null;
+      if (routeId === 'world:latest' && worldZones.length > 0) {
+        // Pick most recently updated zone
+        const sorted = [...worldZones].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+        targetZone = sorted[0].id;
+      } else {
+        targetZone = routeId.replace('world:', '');
+      }
 
-  // Transition: after 2.5s total animation, switch to route
+      if (targetZone && worldZones.find(z => z.id === targetZone)) {
+        const zone = worldZones.find(z => z.id === targetZone)!;
+        setTransitionLabel(zone.name);
+        pendingRouteRef.current = `world:${targetZone}`;
+        setScreen('transition');
+      } else {
+        // No zones available — show message
+        setDialogueSpeaker(undefined);
+        setDialogueText('The World Gate shimmers, but no worlds have been created yet...');
+        setDialogueQueue([]);
+      }
+    } else {
+      setTransitionLabel('Vibe Coder Valley');
+      pendingRouteRef.current = routeId;
+      setScreen('transition');
+    }
+  }, [worldZones]);
+
+  // Transition: after 2.5s total animation, switch to route or generative zone
   useEffect(() => {
     if (screen !== 'transition') return;
     const timer = setTimeout(() => {
-      if (pendingRouteRef.current) {
-        setActiveRoute(pendingRouteRef.current);
-        pendingRouteRef.current = null;
+      const pending = pendingRouteRef.current;
+      pendingRouteRef.current = null;
+      if (pending?.startsWith('world:')) {
+        setActiveGenerativeZoneId(pending.replace('world:', ''));
+        setScreen('generative-zone');
+      } else {
+        if (pending) setActiveRoute(pending);
+        setScreen('route');
       }
-      setScreen('route');
     }, 2500);
     return () => clearTimeout(timer);
   }, [screen]);
 
-  // Exit route
+  // Exit route or generative zone
   const handleExitRoute = useCallback(() => {
     setActiveRoute(null);
+    setActiveGenerativeZoneId(null);
     setRouteReturnPos(null);
     setInBattle(false);
     setScreen('game');
@@ -331,8 +375,16 @@ export default function PokemonGame() {
     if (npc.type === 'agent') {
       setBattleNPC(npc);
       setScreen('battle');
+    } else if (npc.id === 'world-builder-npc') {
+      // World Builder NPC — show dialogue, then prompt for theme
+      setDialogueSpeaker(npc.name);
+      if (npc.dialogue.length > 0) {
+        setDialogueText(npc.dialogue[0]);
+        setDialogueQueue(npc.dialogue.slice(1));
+      }
+      setWorldBuilderPending(true);
     } else {
-      // Professor Chen - show dialogue
+      // Regular NPC - show dialogue
       setDialogueSpeaker(npc.name);
       if (npc.dialogue.length > 0) {
         setDialogueText(npc.dialogue[0]);
@@ -347,6 +399,15 @@ export default function PokemonGame() {
       setDialogueText(dialogueQueue[0]);
       setDialogueQueue(prev => prev.slice(1));
     } else {
+      // Queue empty — check for world builder prompt
+      if (worldBuilderPending) {
+        setWorldBuilderPending(false);
+        setDialogueText(null);
+        setDialogueQueue([]);
+        setDialogueSpeaker(undefined);
+        setShowWorldBuilderPrompt(true);
+        return;
+      }
       setDialogueText(null);
       setDialogueQueue([]);
       setDialogueSpeaker(undefined);
@@ -357,7 +418,134 @@ export default function PokemonGame() {
         router.push(pendingRoute);
       }
     }
-  }, [dialogueQueue, router]);
+  }, [dialogueQueue, router, worldBuilderPending]);
+
+  // World Builder — create agent with world-builder skill
+  const handleWorldBuilderSubmit = useCallback(async (prompt: string) => {
+    setShowWorldBuilderPrompt(false);
+    if (!electronAgents?.createAgent || !electronFS?.projects?.length) return;
+
+    // Find the Dorothy app project — agent must run there for dorothy-world MCP access
+    const dorothyProject = electronFS.projects.find(p =>
+      p.path.includes('dorothy')
+    );
+    const projectPath = dorothyProject?.path || electronFS.projects[0]?.path;
+    if (!projectPath) return;
+
+    const agent = await electronAgents.createAgent({
+      projectPath,
+      skills: ['world-builder'],
+      name: `World: ${prompt.slice(0, 30)}`,
+      character: 'explorer',
+      skipPermissions: true,
+    });
+    await electronAgents.startAgent(agent.id,
+      `Use the /world-builder skill to create a new game zone about: ${prompt}`
+    );
+
+    // Show confirmation dialogue
+    setDialogueSpeaker('World Architect');
+    setDialogueText('Your world is being created! Head to the World Gate to the south when it\'s ready.');
+    setDialogueQueue([]);
+  }, [electronAgents, electronFS]);
+
+  const handleWorldBuilderSelectZone = useCallback((zoneId: string) => {
+    setShowWorldBuilderPrompt(false);
+    handleEnterRoute('world:' + zoneId);
+  }, [handleEnterRoute]);
+
+  const handleWorldBuilderCancel = useCallback(() => {
+    setShowWorldBuilderPrompt(false);
+  }, []);
+
+  // Export zone as .dorothy-world file
+  const handleExportZone = useCallback(async (zoneId: string) => {
+    const world = window.electronAPI?.world;
+    if (!world?.exportZone) return;
+
+    const zone = worldZones.find(z => z.id === zoneId);
+    if (!zone) return;
+
+    // Generate screenshot
+    let screenshot = '';
+    try {
+      screenshot = await renderZoneScreenshot(zone, assets);
+    } catch {
+      // Continue without screenshot if rendering fails
+    }
+
+    const result = await world.exportZone({ zoneId, screenshot });
+    setShowWorldBuilderPrompt(false);
+
+    if (result.success) {
+      setDialogueSpeaker('World Architect');
+      setDialogueText('World exported successfully!');
+      setDialogueQueue([]);
+    } else if (result.error && result.error !== 'Export cancelled') {
+      setDialogueSpeaker('World Architect');
+      setDialogueText(`Export failed: ${result.error}`);
+      setDialogueQueue([]);
+    }
+  }, [worldZones, assets]);
+
+  // Import .dorothy-world file
+  const handleImportZone = useCallback(async () => {
+    const world = window.electronAPI?.world;
+    if (!world?.importZone) return;
+
+    setShowWorldBuilderPrompt(false);
+    const result = await world.importZone();
+
+    if (result.success && result.preview && result.zone) {
+      setImportPreview({ preview: result.preview, zone: result.zone });
+    } else if (result.error && result.error !== 'Import cancelled') {
+      setDialogueSpeaker('World Architect');
+      setDialogueText(`Import failed: ${result.error}`);
+      setDialogueQueue([]);
+    }
+  }, []);
+
+  // Confirm import
+  const handleConfirmImport = useCallback(async () => {
+    const world = window.electronAPI?.world;
+    if (!world?.confirmImport || !importPreview) return;
+
+    const result = await world.confirmImport(importPreview.zone);
+    setImportPreview(null);
+
+    if (result.success) {
+      setDialogueSpeaker('World Architect');
+      setDialogueText('World imported successfully! It will appear in your zone list.');
+      setDialogueQueue([]);
+    } else {
+      setDialogueSpeaker('World Architect');
+      setDialogueText(`Import failed: ${result.error}`);
+      setDialogueQueue([]);
+    }
+  }, [importPreview]);
+
+  const handleCancelImport = useCallback(() => {
+    setImportPreview(null);
+  }, []);
+
+  // Delete zone
+  const handleDeleteZone = useCallback(async (zoneId: string) => {
+    const world = window.electronAPI?.world;
+    if (!world?.deleteZone) return;
+
+    const result = await world.deleteZone(zoneId);
+    setShowWorldBuilderPrompt(false);
+
+    if (result.success) {
+      setDialogueSpeaker('World Architect');
+      setDialogueText('World deleted.');
+      setDialogueQueue([]);
+    } else {
+      setDialogueSpeaker('World Architect');
+      setDialogueText(`Delete failed: ${result.error}`);
+      setDialogueQueue([]);
+    }
+  }, []);
 
   // ── Talk to agent — same as agents/page.tsx handleSelectAgent + setEditAgentId ──
   const handleTalkToAgent = useCallback((agentId: string) => {
@@ -478,7 +666,7 @@ export default function PokemonGame() {
           onDialogueAdvance={handleDialogueAdvance}
           onMenuToggle={handleMenuToggle}
           onEnterRoute={handleEnterRoute}
-          screen={screen === 'menu' ? 'menu' : screen === 'battle' ? 'battle' : screen === 'interior' || screen === 'route' ? 'interior' : 'game'}
+          screen={screen === 'menu' ? 'menu' : screen === 'battle' ? 'battle' : screen === 'interior' || screen === 'route' || screen === 'generative-zone' ? 'interior' : 'game'}
           dialogueText={dialogueText}
         />
       )}
@@ -489,6 +677,28 @@ export default function PokemonGame() {
           text={dialogueText}
           speakerName={dialogueSpeaker}
           onAdvance={handleDialogueAdvance}
+        />
+      )}
+
+      {/* Import Preview Overlay */}
+      {importPreview && screen === 'game' && (
+        <ImportPreviewOverlay
+          preview={importPreview.preview}
+          onConfirm={handleConfirmImport}
+          onCancel={handleCancelImport}
+        />
+      )}
+
+      {/* World Builder Prompt */}
+      {showWorldBuilderPrompt && !importPreview && screen === 'game' && (
+        <WorldBuilderPrompt
+          zones={worldZones}
+          onSelectZone={handleWorldBuilderSelectZone}
+          onSubmit={handleWorldBuilderSubmit}
+          onCancel={handleWorldBuilderCancel}
+          onExportZone={handleExportZone}
+          onImportZone={handleImportZone}
+          onDeleteZone={handleDeleteZone}
         />
       )}
 
@@ -583,7 +793,7 @@ export default function PokemonGame() {
                 whiteSpace: 'nowrap',
               }}
             >
-              Vibe Coder Valley
+              {transitionLabel}
             </span>
           </div>
         </div>
@@ -601,6 +811,19 @@ export default function PokemonGame() {
           onBattleEnd={() => setInBattle(false)}
         />
       )}
+
+      {/* Generative Zone Overlay */}
+      {screen === 'generative-zone' && activeGenerativeZoneId && (() => {
+        const activeZone = worldZones.find(z => z.id === activeGenerativeZoneId);
+        if (!activeZone) return null;
+        return (
+          <GenerativeZoneOverlay
+            zone={activeZone}
+            assets={assets}
+            onExit={handleExitRoute}
+          />
+        );
+      })()}
 
       {/* Agent Terminal Dialog — same as agents/page.tsx */}
       <AgentTerminalDialog

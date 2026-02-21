@@ -150,7 +150,7 @@ server.tool(
   "Send a text message to Telegram. IMPORTANT: When responding to a Telegram message, you MUST include the chat_id from the original request to ensure the response goes to the correct chat.",
   {
     message: z.string().describe("The message to send to Telegram"),
-    chat_id: z.string().optional().describe("The chat ID to send to. REQUIRED when responding to a specific Telegram chat. Use the chat_id from the incoming Telegram message."),
+    chat_id: z.coerce.string().optional().describe("The chat ID to send to. REQUIRED when responding to a specific Telegram chat. Use the chat_id from the incoming Telegram message."),
   },
   async ({ message, chat_id }) => {
     try {
@@ -200,7 +200,7 @@ server.tool(
   {
     photo_path: z.string().describe("The absolute file path to the photo/image to send (e.g., /Users/name/image.png)"),
     caption: z.string().optional().describe("Optional caption text to include with the photo"),
-    chat_id: z.string().optional().describe("The chat ID to send to. Use the chat_id from the incoming Telegram message."),
+    chat_id: z.coerce.string().optional().describe("The chat ID to send to. Use the chat_id from the incoming Telegram message."),
   },
   async ({ photo_path, caption, chat_id }) => {
     try {
@@ -252,7 +252,7 @@ server.tool(
   {
     video_path: z.string().describe("The absolute file path to the video to send (e.g., /Users/name/video.mp4)"),
     caption: z.string().optional().describe("Optional caption text to include with the video"),
-    chat_id: z.string().optional().describe("The chat ID to send to. Use the chat_id from the incoming Telegram message."),
+    chat_id: z.coerce.string().optional().describe("The chat ID to send to. Use the chat_id from the incoming Telegram message."),
   },
   async ({ video_path, caption, chat_id }) => {
     try {
@@ -304,7 +304,7 @@ server.tool(
   {
     document_path: z.string().describe("The absolute file path to the document to send (e.g., /Users/name/report.pdf)"),
     caption: z.string().optional().describe("Optional caption text to include with the document"),
-    chat_id: z.string().optional().describe("The chat ID to send to. Use the chat_id from the incoming Telegram message."),
+    chat_id: z.coerce.string().optional().describe("The chat ID to send to. Use the chat_id from the incoming Telegram message."),
   },
   async ({ document_path, caption, chat_id }) => {
     try {

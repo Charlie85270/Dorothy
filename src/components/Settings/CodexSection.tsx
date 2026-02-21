@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2, CheckCircle, XCircle, Terminal, Eye, EyeOff } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, Terminal } from 'lucide-react';
 import { Toggle } from './Toggle';
 import type { AppSettings } from './types';
 
@@ -12,22 +12,16 @@ interface CodexSectionProps {
 }
 
 const CODEX_MODELS = [
-  { value: 'o4-mini', label: 'o4-mini', description: 'Fast & affordable' },
-  { value: 'o3', label: 'o3', description: 'Most capable' },
-  { value: 'gpt-4.1', label: 'GPT-4.1', description: 'Balanced' },
-  { value: 'gpt-4.1-mini', label: 'GPT-4.1 Mini', description: 'Lightweight' },
-];
-
-const SANDBOX_MODES = [
-  { value: 'read-only' as const, label: 'Read Only', description: 'Can only read files' },
-  { value: 'workspace-write' as const, label: 'Workspace Write', description: 'Can write within the project directory' },
-  { value: 'full-auto' as const, label: 'Full Auto', description: 'Full system access (use with caution)' },
+  { value: 'gpt-5.3-codex', label: 'GPT-5.3 Codex', description: 'Latest frontier agentic coding model' },
+  { value: 'gpt-5.2-codex', label: 'GPT-5.2 Codex', description: 'Frontier agentic coding model' },
+  { value: 'gpt-5.1-codex-max', label: 'GPT-5.1 Codex Max', description: 'Deep and fast reasoning' },
+  { value: 'gpt-5.2', label: 'GPT-5.2', description: 'Frontier model, reasoning and coding' },
+  { value: 'gpt-5.1-codex-mini', label: 'GPT-5.1 Codex Mini', description: 'Cheaper, faster' },
 ];
 
 export const CodexSection = ({ appSettings, onSaveAppSettings, onUpdateLocalSettings }: CodexSectionProps) => {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [showApiKey, setShowApiKey] = useState(false);
   const [detecting, setDetecting] = useState(false);
 
   const handleTestConnection = async () => {
@@ -100,33 +94,7 @@ export const CodexSection = ({ appSettings, onSaveAppSettings, onUpdateLocalSett
           />
         </div>
 
-        {/* API Key */}
         <div className="pt-4 space-y-4">
-          <div>
-            <label className="text-sm font-medium mb-2 block">OpenAI API Key</label>
-            <div className="relative">
-              <input
-                type={showApiKey ? 'text' : 'password'}
-                value={appSettings.codexApiKey}
-                onChange={(e) => onUpdateLocalSettings({ codexApiKey: e.target.value })}
-                onBlur={() => {
-                  onSaveAppSettings({ codexApiKey: appSettings.codexApiKey });
-                }}
-                placeholder="sk-..."
-                className="w-full px-3 py-2 pr-10 bg-secondary border border-border text-sm font-mono focus:border-foreground focus:outline-none"
-              />
-              <button
-                onClick={() => setShowApiKey(!showApiKey)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
-              >
-                {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Your OpenAI API key. Required for Codex CLI to authenticate.
-            </p>
-          </div>
-
           {/* Codex CLI Path */}
           <div>
             <label className="text-sm font-medium mb-2 block">Codex CLI Path</label>
@@ -160,27 +128,11 @@ export const CodexSection = ({ appSettings, onSaveAppSettings, onUpdateLocalSett
           <div>
             <label className="text-sm font-medium mb-2 block">Default Model</label>
             <select
-              value={appSettings.codexDefaultModel || 'o4-mini'}
+              value={appSettings.codexDefaultModel || 'gpt-5.3-codex'}
               onChange={(e) => onSaveAppSettings({ codexDefaultModel: e.target.value })}
               className="w-full px-3 py-2 bg-secondary border border-border text-sm focus:border-foreground focus:outline-none"
             >
               {CODEX_MODELS.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label} - {m.description}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Default Sandbox Mode */}
-          <div>
-            <label className="text-sm font-medium mb-2 block">Default Sandbox Mode</label>
-            <select
-              value={appSettings.codexSandboxMode || 'workspace-write'}
-              onChange={(e) => onSaveAppSettings({ codexSandboxMode: e.target.value as AppSettings['codexSandboxMode'] })}
-              className="w-full px-3 py-2 bg-secondary border border-border text-sm focus:border-foreground focus:outline-none"
-            >
-              {SANDBOX_MODES.map((m) => (
                 <option key={m.value} value={m.value}>
                   {m.label} - {m.description}
                 </option>
@@ -217,13 +169,13 @@ export const CodexSection = ({ appSettings, onSaveAppSettings, onUpdateLocalSett
         <h3 className="font-medium mb-4">Setup Guide</h3>
         <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
           <li>Install Codex CLI: <code className="bg-secondary px-1">npm install -g @openai/codex</code></li>
-          <li>Add your OpenAI API key above</li>
+          <li>Authenticate: run <code className="bg-secondary px-1">codex auth</code> in your terminal</li>
           <li>Click &quot;Test Codex CLI&quot; to verify the installation</li>
           <li>Enable the integration with the toggle</li>
           <li>When creating new agents, select &quot;Codex&quot; as the provider</li>
         </ol>
         <p className="text-xs text-muted-foreground mt-4">
-          Codex CLI requires an OpenAI API key with access to Codex models.
+          Codex CLI handles its own authentication. Run <code className="bg-secondary px-1">codex auth</code> or set <code className="bg-secondary px-1">OPENAI_API_KEY</code> in your shell environment.
         </p>
       </div>
     </div>

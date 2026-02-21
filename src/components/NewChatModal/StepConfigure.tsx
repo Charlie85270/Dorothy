@@ -170,57 +170,63 @@ const StepConfigure = React.memo(function StepConfigure({
         initialCharacter={agentPersonaRef.current.character}
       />
 
-      {/* Provider Toggle — shown when Tasmania or Codex is enabled */}
-      {(tasmaniaEnabled || codexEnabled) && (
-        <div>
-          <label className="block text-sm font-medium mb-2">Provider</label>
-          <div className={`grid gap-3 ${tasmaniaEnabled && codexEnabled ? 'grid-cols-3' : 'grid-cols-2'}`}>
-            <button
-              onClick={() => onProviderChange('claude')}
-              className={`
-                p-3 rounded-none border transition-all text-center flex items-center justify-center gap-2
-                ${provider === 'claude'
-                  ? 'border-accent-blue bg-accent-blue/10'
-                  : 'border-border-primary hover:border-border-accent'
-                }
-              `}
-            >
-              <Cloud className={`w-4 h-4 ${provider === 'claude' ? 'text-accent-blue' : 'text-text-muted'}`} />
-              <span className="font-medium">Claude Code</span>
-            </button>
-            {tasmaniaEnabled && (
-              <button
-                onClick={() => onProviderChange('local')}
-                className={`
-                  p-3 rounded-none border transition-all text-center flex items-center justify-center gap-2
-                  ${provider === 'local'
-                    ? 'border-accent-green bg-accent-green/10'
-                    : 'border-border-primary hover:border-border-accent'
-                  }
-                `}
-              >
-                <Cpu className={`w-4 h-4 ${provider === 'local' ? 'text-accent-green' : 'text-text-muted'}`} />
-                <span className="font-medium">Local LLM</span>
-              </button>
-            )}
-            {codexEnabled && (
-              <button
-                onClick={() => onProviderChange('codex')}
-                className={`
-                  p-3 rounded-none border transition-all text-center flex items-center justify-center gap-2
-                  ${provider === 'codex'
-                    ? 'border-orange-500 bg-orange-500/10'
-                    : 'border-border-primary hover:border-border-accent'
-                  }
-                `}
-              >
-                <Code2 className={`w-4 h-4 ${provider === 'codex' ? 'text-orange-500' : 'text-text-muted'}`} />
-                <span className="font-medium">Codex</span>
-              </button>
-            )}
-          </div>
+      {/* Provider Toggle — always visible */}
+      <div>
+        <label className="block text-sm font-medium mb-2">Provider</label>
+        <div className="grid grid-cols-3 gap-3">
+          <button
+            onClick={() => onProviderChange('claude')}
+            className={`
+              p-3 rounded-none border transition-all text-center flex items-center justify-center gap-2
+              ${provider === 'claude'
+                ? 'border-accent-blue bg-accent-blue/10'
+                : 'border-border-primary hover:border-border-accent'
+              }
+            `}
+          >
+            <Cloud className={`w-4 h-4 ${provider === 'claude' ? 'text-accent-blue' : 'text-text-muted'}`} />
+            <span className="font-medium">Claude Code</span>
+          </button>
+          <button
+            onClick={() => onProviderChange('local')}
+            className={`
+              p-3 rounded-none border transition-all text-center flex flex-col items-center justify-center gap-1
+              ${provider === 'local'
+                ? 'border-accent-green bg-accent-green/10'
+                : 'border-border-primary hover:border-border-accent'
+              }
+            `}
+          >
+            <div className="flex items-center gap-2">
+              <Cpu className={`w-4 h-4 ${provider === 'local' ? 'text-accent-green' : 'text-text-muted'}`} />
+              <span className="font-medium">Local LLM</span>
+            </div>
+            {!tasmaniaEnabled && <span className="text-[10px] text-text-muted">Not configured</span>}
+          </button>
+          <button
+            onClick={() => onProviderChange('codex')}
+            className={`
+              p-3 rounded-none border transition-all text-center flex flex-col items-center justify-center gap-1
+              ${provider === 'codex'
+                ? 'border-orange-500 bg-orange-500/10'
+                : 'border-border-primary hover:border-border-accent'
+              }
+            `}
+          >
+            <div className="flex items-center gap-2">
+              <Code2 className={`w-4 h-4 ${provider === 'codex' ? 'text-orange-500' : 'text-text-muted'}`} />
+              <span className="font-medium">Codex</span>
+            </div>
+            {!codexEnabled && <span className="text-[10px] text-text-muted">Not configured</span>}
+          </button>
         </div>
-      )}
+        {provider === 'local' && !tasmaniaEnabled && (
+          <p className="text-xs text-amber-600 mt-2">Tasmania is not configured. Enable it in Settings → Tasmania first.</p>
+        )}
+        {provider === 'codex' && !codexEnabled && (
+          <p className="text-xs text-amber-600 mt-2">Codex is not configured. Enable it in Settings → Codex first.</p>
+        )}
+      </div>
 
       {/* Model Selection — Claude models, Tasmania models, or Codex models */}
       {provider === 'codex' ? (
@@ -228,10 +234,11 @@ const StepConfigure = React.memo(function StepConfigure({
           <label className="block text-sm font-medium mb-2">Codex Model</label>
           <div className="grid grid-cols-2 gap-3">
             {([
-              { id: 'o4-mini', label: 'o4-mini', desc: 'Fast & affordable' },
-              { id: 'o3', label: 'o3', desc: 'Most capable' },
-              { id: 'gpt-4.1', label: 'GPT-4.1', desc: 'Balanced' },
-              { id: 'gpt-4.1-mini', label: 'GPT-4.1 Mini', desc: 'Lightweight' },
+              { id: 'gpt-5.3-codex', label: 'GPT-5.3 Codex', desc: 'Latest frontier' },
+              { id: 'gpt-5.2-codex', label: 'GPT-5.2 Codex', desc: 'Frontier agentic' },
+              { id: 'gpt-5.1-codex-max', label: 'GPT-5.1 Max', desc: 'Deep reasoning' },
+              { id: 'gpt-5.2', label: 'GPT-5.2', desc: 'Reasoning & coding' },
+              { id: 'gpt-5.1-codex-mini', label: 'GPT-5.1 Mini', desc: 'Cheaper, faster' },
             ] as const).map((m) => (
               <button
                 key={m.id}

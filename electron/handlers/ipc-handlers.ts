@@ -380,168 +380,6 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     const localModel = agent.localModel || options?.localModel;
     const codexModel = agent.codexModel || options?.codexModel;
 
-    // ── For Codex provider, recreate PTY with OPENAI_API_KEY baked in ──
-    if (provider === 'codex') {
-      const currentSettings = getAppSettings();
-      const codexApiKey = currentSettings.codexApiKey;
-      if (!codexApiKey) {
-        throw new Error('Codex API key not configured. Set it in Settings > Codex first.');
-      }
-
-      // Kill the existing PTY and recreate with OPENAI_API_KEY in env
-      const oldPty = ptyProcesses.get(agent.ptyId!);
-      if (oldPty) {
-        oldPty.kill();
-        ptyProcesses.delete(agent.ptyId!);
-      }
-
-      const extraPaths: string[] = [];
-      if (currentSettings.cliPaths) {
-        if (currentSettings.cliPaths.claude) extraPaths.push(path.dirname(currentSettings.cliPaths.claude));
-        if (currentSettings.cliPaths.codex) extraPaths.push(path.dirname(currentSettings.cliPaths.codex));
-        if (currentSettings.cliPaths.gh) extraPaths.push(path.dirname(currentSettings.cliPaths.gh));
-        if (currentSettings.cliPaths.node) extraPaths.push(path.dirname(currentSettings.cliPaths.node));
-        if (currentSettings.cliPaths.additionalPaths) extraPaths.push(...currentSettings.cliPaths.additionalPaths.filter(Boolean));
-      }
-      const fullPathForCodex = buildFullPath(extraPaths);
-
-      const cleanEnvCodex = { ...process.env as { [key: string]: string } };
-      delete cleanEnvCodex['CLAUDECODE'];
-
-      const workingDir = agent.worktreePath || agent.projectPath;
-      const cwd = fs.existsSync(workingDir) ? workingDir : os.homedir();
-
-      const newPty = pty.spawn('/bin/bash', ['-l'], {
-        name: 'xterm-256color',
-        cols: 120,
-        rows: 30,
-        cwd,
-        env: {
-          ...cleanEnvCodex,
-          PATH: fullPathForCodex,
-          OPENAI_API_KEY: codexApiKey,
-          CLAUDE_SKILLS: agent.skills.join(','),
-          CLAUDE_AGENT_ID: agent.id,
-          CLAUDE_PROJECT_PATH: agent.projectPath,
-        },
-      });
-
-      const newPtyId = uuidv4();
-      ptyProcesses.set(newPtyId, newPty);
-      agent.ptyId = newPtyId;
-
-      // Re-attach event handlers
-      newPty.onData((data) => {
-        const agentData = agents.get(id);
-        if (agentData) {
-          agentData.output.push(data);
-          agentData.lastActivity = new Date().toISOString();
-          if (getSuperAgentTelegramTask() && isSuperAgent(agentData)) {
-            const buffer = getSuperAgentOutputBuffer();
-            buffer.push(data);
-            if (buffer.length > 200) {
-              setSuperAgentOutputBuffer(buffer.slice(-100));
-            }
-          }
-        }
-        getMainWindow()?.webContents.send('agent:output', {
-          type: 'output',
-          agentId: id,
-          ptyId: newPtyId,
-          data,
-          timestamp: new Date().toISOString(),
-        });
-      });
-
-      newPty.onExit(({ exitCode }) => {
-        console.log(`Agent ${id} PTY exited with code ${exitCode}`);
-        const agentData = agents.get(id);
-        if (agentData) {
-          const newStatus = exitCode === 0 ? 'completed' : 'error';
-          agentData.status = newStatus;
-          agentData.lastActivity = new Date().toISOString();
-          handleStatusChangeNotification(agentData, newStatus);
-        }
-        ptyProcesses.delete(newPtyId);
-        getMainWindow()?.webContents.send('agent:status', {
-          type: 'status',
-          agentId: id,
-          status: exitCode === 0 ? 'completed' : 'error',
-          timestamp: new Date().toISOString(),
-        });
-        getMainWindow()?.webContents.send('agent:complete', {
-          type: 'complete',
-          agentId: id,
-          ptyId: newPtyId,
-          exitCode,
-          timestamp: new Date().toISOString(),
-        });
-      });
-
-      // Build codex command
-      const codexBin = currentSettings.cliPaths?.codex || 'codex';
-      let codexCommand = codexBin;
-
-      // Model flag
-      const modelToUse = codexModel || currentSettings.codexDefaultModel || '';
-      if (modelToUse) {
-        codexCommand += ` --model '${modelToUse.replace(/'/g, "'\\''")}'`;
-      }
-
-      // Sandbox / permissions flag based on settings
-      const sandboxMode = currentSettings.codexSandboxMode || 'workspace-write';
-      if (agent.skipPermissions) {
-        codexCommand += ' --full-auto';
-      } else if (sandboxMode === 'full-auto') {
-        codexCommand += ' --full-auto';
-      }
-
-      // Secondary project path
-      if (agent.secondaryProjectPath) {
-        const escapedSecondary = agent.secondaryProjectPath.replace(/'/g, "'\\''");
-        codexCommand += ` --add-dir '${escapedSecondary}'`;
-      }
-
-      // Build prompt with skills
-      let codexPrompt = prompt;
-      const isSuperAgentCheck = agent.name?.toLowerCase().includes('super agent') ||
-                        agent.name?.toLowerCase().includes('orchestrator');
-      if (agent.skills && agent.skills.length > 0 && !isSuperAgentCheck) {
-        const skillsList = agent.skills.join(', ');
-        codexPrompt = `[IMPORTANT: Use these skills for this session: ${skillsList}. Invoke them with /<skill-name> when relevant to the task.] ${prompt}`;
-      }
-
-      const escapedCodexPrompt = codexPrompt.replace(/'/g, "'\\''");
-      codexCommand += codexPrompt ? ` '${escapedCodexPrompt}'` : '';
-
-      // Update status
-      agent.status = 'running';
-      agent.currentTask = prompt.slice(0, 100);
-      agent.lastActivity = new Date().toISOString();
-
-      const codexWorkingPath = (agent.worktreePath || agent.projectPath).replace(/'/g, "'\\''");
-      const fullCodexCommand = `cd '${codexWorkingPath}' && ${codexCommand}`;
-
-      // Wait for shell init before writing (same pattern as Tasmania)
-      await new Promise<void>((resolve) => {
-        setTimeout(() => {
-          // For long commands, write to a temp script to avoid PTY line-wrapping mangling
-          if (fullCodexCommand.length > 100) {
-            const tmpScript = path.join(os.tmpdir(), `codex-agent-${id}.sh`);
-            fs.writeFileSync(tmpScript, `#!/bin/bash\n${fullCodexCommand}\n`, { mode: 0o755 });
-            newPty.write(`bash '${tmpScript}'\r`);
-          } else {
-            newPty.write(fullCodexCommand);
-            newPty.write('\r');
-          }
-          resolve();
-        }, 1000);
-      });
-
-      saveAgents();
-      return { success: true };
-    }
-
     // ── For local provider, recreate PTY with Tasmania env vars baked in ──
     if (provider === 'local') {
       const { getTasmaniaStatus } = require('../services/tasmania-client') as typeof import('../services/tasmania-client');
@@ -655,53 +493,77 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     const ptyProcess = ptyProcesses.get(agent.ptyId!);
     if (!ptyProcess) throw new Error('PTY not found');
 
-    // ── Claude Code CLI ──────────────────────────────────────────────
+    // ── Build CLI command (Claude or Codex) ────────────────────────
     const appSettingsForCommand = getAppSettings();
-    let command = (appSettingsForCommand.cliPaths?.claude) || 'claude';
 
     // Check if this is the Super Agent (orchestrator)
     const isSuperAgentCheck = agent.name?.toLowerCase().includes('super agent') ||
                       agent.name?.toLowerCase().includes('orchestrator');
 
-    // Add explicit MCP config for Super Agent to ensure orchestrator tools are loaded
-    if (isSuperAgentCheck) {
-      const { app } = await import('electron');
-      const mcpConfigPath = path.join(app.getPath('home'), '.claude', 'mcp.json');
-      if (fs.existsSync(mcpConfigPath)) {
-        command += ` --mcp-config ${mcpConfigPath}`;
+    let command: string;
+
+    if (provider === 'codex') {
+      // ── Codex CLI ──
+      command = appSettingsForCommand.cliPaths?.codex || 'codex';
+
+      // Model flag
+      const modelToUse = codexModel || appSettingsForCommand.codexDefaultModel || '';
+      if (modelToUse) {
+        command += ` --model '${modelToUse.replace(/'/g, "'\\''")}'`;
       }
-      // Add super agent instructions (read via Node.js, not cat - asar compatibility)
-      const { getSuperAgentInstructionsPath } = await import('../utils');
-      const superAgentInstructionsPath = getSuperAgentInstructionsPath();
-      if (fs.existsSync(superAgentInstructionsPath)) {
 
-        command += ` --append-system-prompt-file ${superAgentInstructionsPath}`;
+      // Skip permissions → --full-auto
+      if (agent.skipPermissions) {
+        command += ' --full-auto';
       }
-    }
 
-    if (options?.model && provider !== 'local') {
-      command += ` --model ${options.model}`;
-    }
+      // Secondary project path
+      if (agent.secondaryProjectPath) {
+        const escapedSecondaryPath = agent.secondaryProjectPath.replace(/'/g, "'\\''");
+        command += ` --add-dir '${escapedSecondaryPath}'`;
+      }
+    } else {
+      // ── Claude Code CLI ──
+      command = appSettingsForCommand.cliPaths?.claude || 'claude';
 
-    // Add verbose flag if enabled in app settings
-    const currentAppSettings = getAppSettings();
-    if (currentAppSettings.verboseModeEnabled) {
-      command += ' --verbose';
-    }
+      // Add explicit MCP config for Super Agent to ensure orchestrator tools are loaded
+      if (isSuperAgentCheck) {
+        const { app } = await import('electron');
+        const mcpConfigPath = path.join(app.getPath('home'), '.claude', 'mcp.json');
+        if (fs.existsSync(mcpConfigPath)) {
+          command += ` --mcp-config ${mcpConfigPath}`;
+        }
+        // Add super agent instructions (read via Node.js, not cat - asar compatibility)
+        const { getSuperAgentInstructionsPath } = await import('../utils');
+        const superAgentInstructionsPath = getSuperAgentInstructionsPath();
+        if (fs.existsSync(superAgentInstructionsPath)) {
+          command += ` --append-system-prompt-file ${superAgentInstructionsPath}`;
+        }
+      }
 
-    // Add skip permissions flag if enabled
-    if (agent.skipPermissions) {
-      command += ' --dangerously-skip-permissions';
-    }
+      if (options?.model && provider !== 'local') {
+        command += ` --model ${options.model}`;
+      }
 
-    // Add secondary project path with --add-dir flag if set
-    if (agent.secondaryProjectPath) {
-      const escapedSecondaryPath = agent.secondaryProjectPath.replace(/'/g, "'\\''");
-      command += ` --add-dir '${escapedSecondaryPath}'`;
-    }
+      // Add verbose flag if enabled in app settings
+      if (appSettingsForCommand.verboseModeEnabled) {
+        command += ' --verbose';
+      }
 
-    // Load Dorothy's CLAUDE.md for all agents via ~/.dorothy
-    command += ` --add-dir '${os.homedir()}/.dorothy'`;
+      // Add skip permissions flag if enabled
+      if (agent.skipPermissions) {
+        command += ' --dangerously-skip-permissions';
+      }
+
+      // Add secondary project path with --add-dir flag if set
+      if (agent.secondaryProjectPath) {
+        const escapedSecondaryPath = agent.secondaryProjectPath.replace(/'/g, "'\\''");
+        command += ` --add-dir '${escapedSecondaryPath}'`;
+      }
+
+      // Load Dorothy's CLAUDE.md for all agents via ~/.dorothy
+      command += ` --add-dir '${os.homedir()}/.dorothy'`;
+    }
 
     // Build the final prompt with skills directive if agent has skills
     // Always include world-builder skill so agents can generate game zones
@@ -721,13 +583,13 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     agent.currentTask = prompt.slice(0, 100);
     agent.lastActivity = new Date().toISOString();
 
-    // First cd to the appropriate directory (worktree if exists, otherwise project), then run claude
+    // First cd to the appropriate directory (worktree if exists, otherwise project), then run CLI
     const workingPath = (agent.worktreePath || agent.projectPath).replace(/'/g, "'\\''");
     const fullCommand = `cd '${workingPath}' && ${command}`;
 
     // For local provider, the PTY was just recreated — wait for shell to initialize
     // before writing the command (matches Tasmania's 1s delay pattern).
-    // For claude provider, the PTY has been alive since agent:create, so no delay needed.
+    // For claude/codex providers, the PTY has been alive since agent:create, so no delay needed.
     if (provider === 'local') {
       await new Promise<void>((resolve) => {
         setTimeout(() => {

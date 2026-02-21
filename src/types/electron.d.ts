@@ -274,9 +274,7 @@ export interface ElectronAPI {
       tasmaniaEnabled: boolean;
       tasmaniaServerPath: string;
       codexEnabled: boolean;
-      codexApiKey: string;
       codexDefaultModel: string;
-      codexSandboxMode: 'read-only' | 'workspace-write' | 'full-auto';
       cliPaths?: {
         claude: string;
         codex: string;
@@ -310,9 +308,7 @@ export interface ElectronAPI {
       tasmaniaEnabled?: boolean;
       tasmaniaServerPath?: string;
       codexEnabled?: boolean;
-      codexApiKey?: string;
       codexDefaultModel?: string;
-      codexSandboxMode?: 'read-only' | 'workspace-write' | 'full-auto';
       cliPaths?: {
         claude: string;
         codex: string;

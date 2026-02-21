@@ -135,9 +135,7 @@ function loadAppSettings(): AppSettings {
     tasmaniaEnabled: false,
     tasmaniaServerPath: '',
     codexEnabled: false,
-    codexApiKey: '',
     codexDefaultModel: '',
-    codexSandboxMode: 'workspace-write' as const,
     verboseModeEnabled: false,
     autoCheckUpdates: true,
     cliPaths: {

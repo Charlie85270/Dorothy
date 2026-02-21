@@ -69,9 +69,7 @@ export interface AppSettings {
   tasmaniaEnabled: boolean;
   tasmaniaServerPath: string;
   codexEnabled: boolean;
-  codexApiKey: string;
   codexDefaultModel: string;
-  codexSandboxMode: 'read-only' | 'workspace-write' | 'full-auto';
   verboseModeEnabled: boolean;
   autoCheckUpdates: boolean;
   cliPaths: CLIPaths;

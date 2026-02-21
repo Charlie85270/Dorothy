@@ -61,9 +61,7 @@ export const DEFAULT_APP_SETTINGS = {
   tasmaniaEnabled: false,
   tasmaniaServerPath: '',
   codexEnabled: false,
-  codexApiKey: '',
   codexDefaultModel: '',
-  codexSandboxMode: 'workspace-write' as const,
   verboseModeEnabled: false,
   autoCheckUpdates: true,
   cliPaths: {

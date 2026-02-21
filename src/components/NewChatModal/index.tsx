@@ -49,7 +49,7 @@ export default function NewChatModal({
   const [localModel, setLocalModel] = useState('');
   const [tasmaniaEnabled, setTasmaniaEnabled] = useState(false);
   const [codexEnabled, setCodexEnabled] = useState(false);
-  const [codexModel, setCodexModel] = useState('o4-mini');
+  const [codexModel, setCodexModel] = useState('gpt-5.3-codex');
   const agentPersonaRef = useRef<AgentPersonaValues>({ character: 'robot', name: '' });
 
   const projectPath = selectedProject || customPath;
@@ -82,7 +82,7 @@ export default function NewChatModal({
       setSkipPermissions(false);
       setProvider('claude');
       setLocalModel('');
-      setCodexModel('o4-mini');
+      setCodexModel('gpt-5.3-codex');
 
       // Check if Tasmania/Codex are enabled in app settings
       window.electronAPI?.appSettings?.get().then((settings) => {
@@ -173,7 +173,7 @@ export default function NewChatModal({
     setCustomSecondaryPath('');
     setProvider('claude');
     setLocalModel('');
-    setCodexModel('o4-mini');
+    setCodexModel('gpt-5.3-codex');
   }, [projectPath, prompt, selectedSkills, useWorktree, branchName, showSecondaryProject, selectedSecondaryProject, customSecondaryPath, model, skipPermissions, provider, localModel, codexModel, codexEnabled, tasmaniaEnabled, onSubmit]);
 
   if (!open) return null;

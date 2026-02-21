@@ -63,6 +63,7 @@ export function registerIpcHandlers(deps: IpcHandlerDependencies): void {
   registerUpdateHandlers();
   // Orchestrator handlers are registered separately in services/mcp-orchestrator.ts
   registerTasmaniaHandlers(deps);
+  registerCodexHandlers(deps);
   registerFileSystemHandlers(deps);
   registerShellHandlers(deps);
   registerMemoryHandlers();
@@ -160,8 +161,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     name?: string;
     secondaryProjectPath?: string;
     skipPermissions?: boolean;
-    provider?: 'claude' | 'local';
+    provider?: 'claude' | 'local' | 'codex';
     localModel?: string;
+    codexModel?: string;
   }) => {
     const id = uuidv4();
     const shell = '/bin/bash';
@@ -300,6 +302,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       skipPermissions: config.skipPermissions || false,
       provider: config.provider || 'claude',
       localModel: config.localModel,
+      codexModel: config.codexModel,
     };
     agents.set(id, status);
 
@@ -360,7 +363,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
   ipcMain.handle('agent:start', async (_event, { id, prompt, options }: {
     id: string;
     prompt: string;
-    options?: { model?: string; resume?: boolean; provider?: AgentProvider; localModel?: string }
+    options?: { model?: string; resume?: boolean; provider?: AgentProvider; localModel?: string; codexModel?: string }
   }) => {
     const agent = agents.get(id);
     if (!agent) throw new Error('Agent not found');
@@ -375,6 +378,169 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     // Determine provider — prefer agent-level, fallback to options, default to 'claude'
     const provider = agent.provider || options?.provider || 'claude';
     const localModel = agent.localModel || options?.localModel;
+    const codexModel = agent.codexModel || options?.codexModel;
+
+    // ── For Codex provider, recreate PTY with OPENAI_API_KEY baked in ──
+    if (provider === 'codex') {
+      const currentSettings = getAppSettings();
+      const codexApiKey = currentSettings.codexApiKey;
+      if (!codexApiKey) {
+        throw new Error('Codex API key not configured. Set it in Settings > Codex first.');
+      }
+
+      // Kill the existing PTY and recreate with OPENAI_API_KEY in env
+      const oldPty = ptyProcesses.get(agent.ptyId!);
+      if (oldPty) {
+        oldPty.kill();
+        ptyProcesses.delete(agent.ptyId!);
+      }
+
+      const extraPaths: string[] = [];
+      if (currentSettings.cliPaths) {
+        if (currentSettings.cliPaths.claude) extraPaths.push(path.dirname(currentSettings.cliPaths.claude));
+        if (currentSettings.cliPaths.codex) extraPaths.push(path.dirname(currentSettings.cliPaths.codex));
+        if (currentSettings.cliPaths.gh) extraPaths.push(path.dirname(currentSettings.cliPaths.gh));
+        if (currentSettings.cliPaths.node) extraPaths.push(path.dirname(currentSettings.cliPaths.node));
+        if (currentSettings.cliPaths.additionalPaths) extraPaths.push(...currentSettings.cliPaths.additionalPaths.filter(Boolean));
+      }
+      const fullPathForCodex = buildFullPath(extraPaths);
+
+      const cleanEnvCodex = { ...process.env as { [key: string]: string } };
+      delete cleanEnvCodex['CLAUDECODE'];
+
+      const workingDir = agent.worktreePath || agent.projectPath;
+      const cwd = fs.existsSync(workingDir) ? workingDir : os.homedir();
+
+      const newPty = pty.spawn('/bin/bash', ['-l'], {
+        name: 'xterm-256color',
+        cols: 120,
+        rows: 30,
+        cwd,
+        env: {
+          ...cleanEnvCodex,
+          PATH: fullPathForCodex,
+          OPENAI_API_KEY: codexApiKey,
+          CLAUDE_SKILLS: agent.skills.join(','),
+          CLAUDE_AGENT_ID: agent.id,
+          CLAUDE_PROJECT_PATH: agent.projectPath,
+        },
+      });
+
+      const newPtyId = uuidv4();
+      ptyProcesses.set(newPtyId, newPty);
+      agent.ptyId = newPtyId;
+
+      // Re-attach event handlers
+      newPty.onData((data) => {
+        const agentData = agents.get(id);
+        if (agentData) {
+          agentData.output.push(data);
+          agentData.lastActivity = new Date().toISOString();
+          if (getSuperAgentTelegramTask() && isSuperAgent(agentData)) {
+            const buffer = getSuperAgentOutputBuffer();
+            buffer.push(data);
+            if (buffer.length > 200) {
+              setSuperAgentOutputBuffer(buffer.slice(-100));
+            }
+          }
+        }
+        getMainWindow()?.webContents.send('agent:output', {
+          type: 'output',
+          agentId: id,
+          ptyId: newPtyId,
+          data,
+          timestamp: new Date().toISOString(),
+        });
+      });
+
+      newPty.onExit(({ exitCode }) => {
+        console.log(`Agent ${id} PTY exited with code ${exitCode}`);
+        const agentData = agents.get(id);
+        if (agentData) {
+          const newStatus = exitCode === 0 ? 'completed' : 'error';
+          agentData.status = newStatus;
+          agentData.lastActivity = new Date().toISOString();
+          handleStatusChangeNotification(agentData, newStatus);
+        }
+        ptyProcesses.delete(newPtyId);
+        getMainWindow()?.webContents.send('agent:status', {
+          type: 'status',
+          agentId: id,
+          status: exitCode === 0 ? 'completed' : 'error',
+          timestamp: new Date().toISOString(),
+        });
+        getMainWindow()?.webContents.send('agent:complete', {
+          type: 'complete',
+          agentId: id,
+          ptyId: newPtyId,
+          exitCode,
+          timestamp: new Date().toISOString(),
+        });
+      });
+
+      // Build codex command
+      const codexBin = currentSettings.cliPaths?.codex || 'codex';
+      let codexCommand = codexBin;
+
+      // Model flag
+      const modelToUse = codexModel || currentSettings.codexDefaultModel || '';
+      if (modelToUse) {
+        codexCommand += ` --model '${modelToUse.replace(/'/g, "'\\''")}'`;
+      }
+
+      // Sandbox / permissions flag based on settings
+      const sandboxMode = currentSettings.codexSandboxMode || 'workspace-write';
+      if (agent.skipPermissions) {
+        codexCommand += ' --full-auto';
+      } else if (sandboxMode === 'full-auto') {
+        codexCommand += ' --full-auto';
+      }
+
+      // Secondary project path
+      if (agent.secondaryProjectPath) {
+        const escapedSecondary = agent.secondaryProjectPath.replace(/'/g, "'\\''");
+        codexCommand += ` --add-dir '${escapedSecondary}'`;
+      }
+
+      // Build prompt with skills
+      let codexPrompt = prompt;
+      const isSuperAgentCheck = agent.name?.toLowerCase().includes('super agent') ||
+                        agent.name?.toLowerCase().includes('orchestrator');
+      if (agent.skills && agent.skills.length > 0 && !isSuperAgentCheck) {
+        const skillsList = agent.skills.join(', ');
+        codexPrompt = `[IMPORTANT: Use these skills for this session: ${skillsList}. Invoke them with /<skill-name> when relevant to the task.] ${prompt}`;
+      }
+
+      const escapedCodexPrompt = codexPrompt.replace(/'/g, "'\\''");
+      codexCommand += codexPrompt ? ` '${escapedCodexPrompt}'` : '';
+
+      // Update status
+      agent.status = 'running';
+      agent.currentTask = prompt.slice(0, 100);
+      agent.lastActivity = new Date().toISOString();
+
+      const codexWorkingPath = (agent.worktreePath || agent.projectPath).replace(/'/g, "'\\''");
+      const fullCodexCommand = `cd '${codexWorkingPath}' && ${codexCommand}`;
+
+      // Wait for shell init before writing (same pattern as Tasmania)
+      await new Promise<void>((resolve) => {
+        setTimeout(() => {
+          // For long commands, write to a temp script to avoid PTY line-wrapping mangling
+          if (fullCodexCommand.length > 100) {
+            const tmpScript = path.join(os.tmpdir(), `codex-agent-${id}.sh`);
+            fs.writeFileSync(tmpScript, `#!/bin/bash\n${fullCodexCommand}\n`, { mode: 0o755 });
+            newPty.write(`bash '${tmpScript}'\r`);
+          } else {
+            newPty.write(fullCodexCommand);
+            newPty.write('\r');
+          }
+          resolve();
+        }, 1000);
+      });
+
+      saveAgents();
+      return { success: true };
+    }
 
     // ── For local provider, recreate PTY with Tasmania env vars baked in ──
     if (provider === 'local') {
@@ -1505,6 +1671,39 @@ function registerFileSystemHandlers(deps: IpcHandlerDependencies): void {
       ],
     });
     return result.filePaths || [];
+  });
+}
+
+// ============== Codex IPC Handlers ==============
+
+function registerCodexHandlers(deps: IpcHandlerDependencies): void {
+  const { getAppSettings } = deps;
+
+  // Test: run `codex --version` to verify install
+  ipcMain.handle('codex:test', async () => {
+    try {
+      const { execSync } = await import('child_process');
+      const currentSettings = getAppSettings();
+      const codexBin = currentSettings.cliPaths?.codex || 'codex';
+      const version = execSync(`${codexBin} --version 2>/dev/null`, { encoding: 'utf-8', timeout: 10000 }).trim();
+      return { success: true, version };
+    } catch (err) {
+      return { success: false, error: `Codex CLI not found or not working: ${String(err)}` };
+    }
+  });
+
+  // Detect: run `which codex` to find the path
+  ipcMain.handle('codex:detectPath', async () => {
+    try {
+      const { execSync } = await import('child_process');
+      const codexPath = execSync('which codex 2>/dev/null', { encoding: 'utf-8', timeout: 5000 }).trim();
+      if (codexPath) {
+        return { found: true, path: codexPath };
+      }
+      return { found: false };
+    } catch {
+      return { found: false };
+    }
   });
 }
 

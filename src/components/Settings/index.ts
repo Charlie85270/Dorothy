@@ -20,6 +20,7 @@ export { JiraSection } from './JiraSection';
 export { SocialDataSection } from './SocialDataSection';
 export { TasmaniaSection } from './TasmaniaSection';
 export { TasmaniaIcon } from './TasmaniaIcon';
+export { CodexSection } from './CodexSection';
 export { PermissionsSection } from './PermissionsSection';
 export { SkillsSection } from './SkillsSection';
 export { CLIPathsSection } from './CLIPathsSection';

@@ -50,8 +50,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
       name?: string;
       secondaryProjectPath?: string;
       skipPermissions?: boolean;
-      provider?: 'claude' | 'local';
+      provider?: 'claude' | 'local' | 'codex';
       localModel?: string;
+      codexModel?: string;
     }) => ipcRenderer.invoke('agent:create', config),
     update: (params: {
       id: string;
@@ -61,7 +62,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       name?: string;
       character?: string;
     }) => ipcRenderer.invoke('agent:update', params),
-    start: (params: { id: string; prompt: string; options?: { model?: string; resume?: boolean; provider?: 'claude' | 'local'; localModel?: string } }) =>
+    start: (params: { id: string; prompt: string; options?: { model?: string; resume?: boolean; provider?: 'claude' | 'local' | 'codex'; localModel?: string; codexModel?: string } }) =>
       ipcRenderer.invoke('agent:start', params),
     get: (id: string) =>
       ipcRenderer.invoke('agent:get', id),
@@ -252,6 +253,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     test: () =>
       ipcRenderer.invoke('xapi:test') as Promise<{ success: boolean; username?: string; error?: string }>,
   },
+
+  // Codex (OpenAI)
+  codex: {
+    test: () =>
+      ipcRenderer.invoke('codex:test'),
+    detectPath: () =>
+      ipcRenderer.invoke('codex:detectPath'),
+  },
+
 
   // Tasmania (Local LLM)
   tasmania: {
@@ -523,7 +533,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('cliPaths:detect'),
     get: () =>
       ipcRenderer.invoke('cliPaths:get'),
-    save: (paths: { claude: string; gh: string; node: string; additionalPaths: string[] }) =>
+    save: (paths: { claude: string; codex: string; gh: string; node: string; additionalPaths: string[] }) =>
       ipcRenderer.invoke('cliPaths:save', paths),
   },
 

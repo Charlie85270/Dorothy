@@ -26,6 +26,7 @@ export interface Skill {
 
 export interface CLIPaths {
   claude: string;
+  codex: string;
   gh: string;
   node: string;
   additionalPaths: string[];
@@ -60,9 +61,13 @@ export interface AppSettings {
   xAccessTokenSecret: string;
   tasmaniaEnabled: boolean;
   tasmaniaServerPath: string;
+  codexEnabled: boolean;
+  codexApiKey: string;
+  codexDefaultModel: string;
+  codexSandboxMode: 'read-only' | 'workspace-write' | 'full-auto';
   verboseModeEnabled: boolean;
   autoCheckUpdates: boolean;
   cliPaths: CLIPaths;
 }
 
-export type SettingsSection = 'general' | 'git' | 'notifications' | 'telegram' | 'slack' | 'jira' | 'socialdata' | 'tasmania' | 'permissions' | 'skills' | 'cli' | 'system';
+export type SettingsSection = 'general' | 'git' | 'notifications' | 'telegram' | 'slack' | 'jira' | 'socialdata' | 'tasmania' | 'codex' | 'permissions' | 'skills' | 'cli' | 'system';

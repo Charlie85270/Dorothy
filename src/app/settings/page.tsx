@@ -15,6 +15,7 @@ import {
   JiraSection,
   SocialDataSection,
   TasmaniaSection,
+  CodexSection,
   PermissionsSection,
   SkillsSection,
   CLIPathsSection,
@@ -93,6 +94,14 @@ export default function SettingsPage() {
       case 'tasmania':
         return (
           <TasmaniaSection
+            appSettings={appSettings}
+            onSaveAppSettings={handleSaveAppSettings}
+            onUpdateLocalSettings={updateLocalAppSettings}
+          />
+        );
+      case 'codex':
+        return (
+          <CodexSection
             appSettings={appSettings}
             onSaveAppSettings={handleSaveAppSettings}
             onUpdateLocalSettings={updateLocalAppSettings}

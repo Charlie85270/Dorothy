@@ -92,7 +92,7 @@ export interface WorktreeConfig {
 
 export type AgentCharacter = 'robot' | 'ninja' | 'wizard' | 'astronaut' | 'knight' | 'pirate' | 'alien' | 'viking' | 'frog';
 
-export type AgentProvider = 'claude' | 'local';
+export type AgentProvider = 'claude' | 'local' | 'codex';
 
 export interface AgentStatus {
   id: string;
@@ -111,8 +111,9 @@ export interface AgentStatus {
   name?: string;
   pathMissing?: boolean; // True if project path no longer exists
   skipPermissions?: boolean; // If true, use --dangerously-skip-permissions flag
-  provider?: AgentProvider;   // 'claude' (default) or 'local' (Tasmania)
+  provider?: AgentProvider;   // 'claude' (default), 'local' (Tasmania), or 'codex' (OpenAI Codex)
   localModel?: string;        // Tasmania model name when provider is 'local'
+  codexModel?: string;        // Codex model name when provider is 'codex'
 }
 
 export interface PtyDataEvent {
@@ -153,6 +154,7 @@ export interface ElectronAPI {
       skipPermissions?: boolean;
       provider?: AgentProvider;
       localModel?: string;
+      codexModel?: string;
     }) => Promise<AgentStatus & { ptyId: string }>;
     update: (params: {
       id: string;
@@ -162,7 +164,7 @@ export interface ElectronAPI {
       name?: string;
       character?: AgentCharacter;
     }) => Promise<{ success: boolean; error?: string; agent?: AgentStatus }>;
-    start: (params: { id: string; prompt: string; options?: { model?: string; resume?: boolean; provider?: AgentProvider; localModel?: string } }) => Promise<{ success: boolean }>;
+    start: (params: { id: string; prompt: string; options?: { model?: string; resume?: boolean; provider?: AgentProvider; localModel?: string; codexModel?: string } }) => Promise<{ success: boolean }>;
     get: (id: string) => Promise<AgentStatus | null>;
     list: () => Promise<AgentStatus[]>;
     stop: (id: string) => Promise<{ success: boolean }>;
@@ -271,8 +273,13 @@ export interface ElectronAPI {
       socialDataApiKey: string;
       tasmaniaEnabled: boolean;
       tasmaniaServerPath: string;
+      codexEnabled: boolean;
+      codexApiKey: string;
+      codexDefaultModel: string;
+      codexSandboxMode: 'read-only' | 'workspace-write' | 'full-auto';
       cliPaths?: {
         claude: string;
+        codex: string;
         gh: string;
         node: string;
         additionalPaths: string[];
@@ -302,8 +309,13 @@ export interface ElectronAPI {
       socialDataApiKey?: string;
       tasmaniaEnabled?: boolean;
       tasmaniaServerPath?: string;
+      codexEnabled?: boolean;
+      codexApiKey?: string;
+      codexDefaultModel?: string;
+      codexSandboxMode?: 'read-only' | 'workspace-write' | 'full-auto';
       cliPaths?: {
         claude: string;
+        codex: string;
         gh: string;
         node: string;
         additionalPaths: string[];
@@ -372,6 +384,12 @@ export interface ElectronAPI {
     getMcpStatus: () => Promise<{ configured: boolean; error?: string }>;
     setup: () => Promise<{ success: boolean; error?: string }>;
     remove: () => Promise<{ success: boolean; error?: string }>;
+  };
+
+  // Codex (OpenAI)
+  codex?: {
+    test: () => Promise<{ success: boolean; version?: string; error?: string }>;
+    detectPath: () => Promise<{ found: boolean; path?: string }>;
   };
 
   // Tasmania (Local LLM)
@@ -560,17 +578,20 @@ export interface ElectronAPI {
   cliPaths?: {
     detect: () => Promise<{
       claude: string;
+      codex: string;
       gh: string;
       node: string;
     }>;
     get: () => Promise<{
       claude: string;
+      codex: string;
       gh: string;
       node: string;
       additionalPaths: string[];
     }>;
     save: (paths: {
       claude: string;
+      codex: string;
       gh: string;
       node: string;
       additionalPaths: string[];

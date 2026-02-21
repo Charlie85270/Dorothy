@@ -5,7 +5,7 @@ export interface WorktreeConfig {
 
 export type AgentCharacter = 'robot' | 'ninja' | 'wizard' | 'astronaut' | 'knight' | 'pirate' | 'alien' | 'viking';
 
-export type AgentProvider = 'claude' | 'local';
+export type AgentProvider = 'claude' | 'local' | 'codex';
 
 export interface AgentStatus {
   id: string;
@@ -26,12 +26,14 @@ export interface AgentStatus {
   skipPermissions?: boolean;
   currentSessionId?: string;
   kanbanTaskId?: string;  // For kanban task completion tracking
-  provider?: AgentProvider;   // 'claude' (default) or 'local' (Tasmania)
+  provider?: AgentProvider;   // 'claude' (default), 'local' (Tasmania), or 'codex' (OpenAI Codex)
   localModel?: string;        // Tasmania model name when provider is 'local'
+  codexModel?: string;        // Codex model name when provider is 'codex'
 }
 
 export interface CLIPaths {
   claude: string;
+  codex: string;
   gh: string;
   node: string;
   additionalPaths: string[];
@@ -66,6 +68,10 @@ export interface AppSettings {
   xAccessTokenSecret: string;
   tasmaniaEnabled: boolean;
   tasmaniaServerPath: string;
+  codexEnabled: boolean;
+  codexApiKey: string;
+  codexDefaultModel: string;
+  codexSandboxMode: 'read-only' | 'workspace-write' | 'full-auto';
   verboseModeEnabled: boolean;
   autoCheckUpdates: boolean;
   cliPaths: CLIPaths;

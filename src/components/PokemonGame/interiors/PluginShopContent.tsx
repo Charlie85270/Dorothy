@@ -1,12 +1,13 @@
 'use client';
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import { InteriorContentProps, PokemonMenuItem } from '../types';
-import { PLUGINS_DATABASE } from '@/lib/plugins-database';
+import { usePluginsDatabase } from '@/lib/plugins-database';
 import { useClaude } from '@/hooks/useClaude';
 import PokemonMenu from '../overlays/PokemonMenu';
 
 export default function PluginShopContent({ onExit, onInstallPlugin }: InteriorContentProps) {
   const { data } = useClaude();
+  const { plugins: PLUGINS_DATABASE } = usePluginsDatabase();
 
   // Get installed plugins from settings (same logic as plugins page)
   const installedPlugins = useMemo(() => {
@@ -14,14 +15,14 @@ export default function PluginShopContent({ onExit, onInstallPlugin }: InteriorC
     return Object.keys(enabledPlugins).filter(key => enabledPlugins[key]);
   }, [data?.settings?.enabledPlugins]);
 
-  const isPluginInstalled = (name: string, marketplace: string) => {
+  const isPluginInstalled = useCallback((name: string, marketplace: string) => {
     const fullName = `${name}@${marketplace}`;
     return installedPlugins.some(p =>
       p === fullName ||
       p.toLowerCase() === fullName.toLowerCase() ||
       p.startsWith(`${name}@`)
     );
-  };
+  }, [installedPlugins]);
 
   const items: PokemonMenuItem[] = useMemo(() => {
     return PLUGINS_DATABASE.map((plugin, i) => ({
@@ -32,7 +33,7 @@ export default function PluginShopContent({ onExit, onInstallPlugin }: InteriorC
       repo: plugin.marketplace,
       badge: isPluginInstalled(plugin.name, plugin.marketplace) ? 'installed' as const : null,
     }));
-  }, [installedPlugins]);
+  }, [PLUGINS_DATABASE, isPluginInstalled]);
 
   const actions = [
     { id: 'install', label: 'INSTALL' },

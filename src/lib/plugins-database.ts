@@ -1,4 +1,9 @@
 // Plugin database for Claude Code plugins marketplace
+// Supports multiple data sources with per-source localStorage caching
+
+import { useState, useEffect, useRef } from 'react';
+
+// ── Public types ──
 
 export interface Plugin {
   name: string;
@@ -8,322 +13,262 @@ export interface Plugin {
   author?: string;
   tags?: string[];
   homepage?: string;
-  binaryRequired?: string; // For LSP plugins
+  binaryRequired?: string;
+  installCommand?: string;
 }
 
-export const PLUGIN_CATEGORIES = [
-  'Code Intelligence',
-  'External Integrations',
-  'Development Workflows',
-  'Output Styles',
-  'Security',
-  'Productivity',
-] as const;
+export interface Marketplace {
+  id: string;
+  name: string;
+  description: string;
+  source: string;
+}
 
-export type PluginCategory = (typeof PLUGIN_CATEGORIES)[number];
+export type PluginCategory = string;
 
-export const PLUGINS_DATABASE: Plugin[] = [
-  // === Code Intelligence (LSP) Plugins ===
-  {
-    name: 'typescript-lsp',
-    description: 'TypeScript/JavaScript language server for code intelligence, diagnostics, and navigation',
-    category: 'Code Intelligence',
-    marketplace: 'claude-plugins-official',
-    tags: ['typescript', 'javascript', 'lsp'],
-    binaryRequired: 'typescript-language-server',
-  },
-  {
-    name: 'pyright-lsp',
-    description: 'Python language server for type checking, diagnostics, and code navigation',
-    category: 'Code Intelligence',
-    marketplace: 'claude-plugins-official',
-    tags: ['python', 'lsp'],
-    binaryRequired: 'pyright-langserver',
-  },
-  {
-    name: 'rust-analyzer-lsp',
-    description: 'Rust language server for code intelligence and diagnostics',
-    category: 'Code Intelligence',
-    marketplace: 'claude-plugins-official',
-    tags: ['rust', 'lsp'],
-    binaryRequired: 'rust-analyzer',
-  },
-  {
-    name: 'gopls-lsp',
-    description: 'Go language server for code intelligence and diagnostics',
-    category: 'Code Intelligence',
-    marketplace: 'claude-plugins-official',
-    tags: ['go', 'golang', 'lsp'],
-    binaryRequired: 'gopls',
-  },
-  {
-    name: 'clangd-lsp',
-    description: 'C/C++ language server for code intelligence and diagnostics',
-    category: 'Code Intelligence',
-    marketplace: 'claude-plugins-official',
-    tags: ['c', 'cpp', 'lsp'],
-    binaryRequired: 'clangd',
-  },
-  {
-    name: 'csharp-lsp',
-    description: 'C# language server for code intelligence and diagnostics',
-    category: 'Code Intelligence',
-    marketplace: 'claude-plugins-official',
-    tags: ['csharp', 'dotnet', 'lsp'],
-    binaryRequired: 'csharp-ls',
-  },
-  {
-    name: 'jdtls-lsp',
-    description: 'Java language server for code intelligence and diagnostics',
-    category: 'Code Intelligence',
-    marketplace: 'claude-plugins-official',
-    tags: ['java', 'lsp'],
-    binaryRequired: 'jdtls',
-  },
-  {
-    name: 'kotlin-lsp',
-    description: 'Kotlin language server for code intelligence and diagnostics',
-    category: 'Code Intelligence',
-    marketplace: 'claude-plugins-official',
-    tags: ['kotlin', 'lsp'],
-    binaryRequired: 'kotlin-language-server',
-  },
-  {
-    name: 'swift-lsp',
-    description: 'Swift language server for code intelligence and diagnostics',
-    category: 'Code Intelligence',
-    marketplace: 'claude-plugins-official',
-    tags: ['swift', 'ios', 'macos', 'lsp'],
-    binaryRequired: 'sourcekit-lsp',
-  },
-  {
-    name: 'lua-lsp',
-    description: 'Lua language server for code intelligence and diagnostics',
-    category: 'Code Intelligence',
-    marketplace: 'claude-plugins-official',
-    tags: ['lua', 'lsp'],
-    binaryRequired: 'lua-language-server',
-  },
-  {
-    name: 'php-lsp',
-    description: 'PHP language server for code intelligence and diagnostics',
-    category: 'Code Intelligence',
-    marketplace: 'claude-plugins-official',
-    tags: ['php', 'lsp'],
-    binaryRequired: 'intelephense',
-  },
+// ── Remote schema ──
 
-  // === External Integrations ===
-  {
-    name: 'github',
-    description: 'GitHub integration for issues, PRs, and repository management',
-    category: 'External Integrations',
-    marketplace: 'claude-plugins-official',
-    tags: ['github', 'git', 'source-control'],
-  },
-  {
-    name: 'gitlab',
-    description: 'GitLab integration for issues, merge requests, and repository management',
-    category: 'External Integrations',
-    marketplace: 'claude-plugins-official',
-    tags: ['gitlab', 'git', 'source-control'],
-  },
-  {
-    name: 'atlassian',
-    description: 'Atlassian integration for Jira and Confluence',
-    category: 'External Integrations',
-    marketplace: 'claude-plugins-official',
-    tags: ['jira', 'confluence', 'project-management'],
-  },
-  {
-    name: 'asana',
-    description: 'Asana integration for task and project management',
-    category: 'External Integrations',
-    marketplace: 'claude-plugins-official',
-    tags: ['asana', 'project-management', 'tasks'],
-  },
-  {
-    name: 'linear',
-    description: 'Linear integration for issue tracking and project management',
-    category: 'External Integrations',
-    marketplace: 'claude-plugins-official',
-    tags: ['linear', 'project-management', 'issues'],
-  },
-  {
-    name: 'notion',
-    description: 'Notion integration for docs and knowledge management',
-    category: 'External Integrations',
-    marketplace: 'claude-plugins-official',
-    tags: ['notion', 'docs', 'knowledge'],
-  },
-  {
-    name: 'figma',
-    description: 'Figma integration for design collaboration',
-    category: 'External Integrations',
-    marketplace: 'claude-plugins-official',
-    tags: ['figma', 'design', 'ui'],
-  },
-  {
-    name: 'vercel',
-    description: 'Vercel integration for deployments and infrastructure',
-    category: 'External Integrations',
-    marketplace: 'claude-plugins-official',
-    tags: ['vercel', 'deployment', 'infrastructure'],
-  },
-  {
-    name: 'firebase',
-    description: 'Firebase integration for backend services',
-    category: 'External Integrations',
-    marketplace: 'claude-plugins-official',
-    tags: ['firebase', 'backend', 'google'],
-  },
-  {
-    name: 'supabase',
-    description: 'Supabase integration for database and auth services',
-    category: 'External Integrations',
-    marketplace: 'claude-plugins-official',
-    tags: ['supabase', 'database', 'backend'],
-  },
-  {
-    name: 'slack',
-    description: 'Slack integration for team communication',
-    category: 'External Integrations',
-    marketplace: 'claude-plugins-official',
-    tags: ['slack', 'communication', 'messaging'],
-  },
-  {
-    name: 'sentry',
-    description: 'Sentry integration for error monitoring and performance',
-    category: 'External Integrations',
-    marketplace: 'claude-plugins-official',
-    tags: ['sentry', 'monitoring', 'errors'],
-  },
+interface RemotePlugin {
+  id: string;
+  name: string;
+  description: string;
+  source: string;
+  marketplace: string;
+  marketplaceUrl: string;
+  category: string;
+  installCommand: string;
+  version?: string;
+  author?: { name: string; email?: string };
+  tags?: string[];
+}
 
-  // === Development Workflows ===
-  {
-    name: 'commit-commands',
-    description: 'Git commit workflows including commit, push, and PR creation',
-    category: 'Development Workflows',
-    marketplace: 'claude-plugins-official',
-    author: 'Anthropic',
-    tags: ['git', 'commit', 'workflow'],
-  },
-  {
-    name: 'pr-review-toolkit',
-    description: 'Specialized agents for reviewing pull requests with confidence-based scoring',
-    category: 'Development Workflows',
-    marketplace: 'claude-plugins-official',
-    author: 'Anthropic',
-    tags: ['pr', 'review', 'code-review'],
-  },
-  {
-    name: 'agent-sdk-dev',
-    description: 'Development kit for working with the Claude Agent SDK',
-    category: 'Development Workflows',
-    marketplace: 'claude-plugins-official',
-    author: 'Anthropic',
-    tags: ['sdk', 'agent', 'development'],
-  },
-  {
-    name: 'plugin-dev',
-    description: 'Toolkit for creating Claude Code plugins',
-    category: 'Development Workflows',
-    marketplace: 'claude-plugins-official',
-    author: 'Anthropic',
-    tags: ['plugin', 'development', 'tools'],
-  },
-  {
-    name: 'code-review',
-    description: 'Uses multiple agents with confidence-based scoring for comprehensive PR analysis',
-    category: 'Development Workflows',
-    marketplace: 'anthropics-claude-code',
-    author: 'Anthropic',
-    tags: ['review', 'code-quality', 'agents'],
-  },
-  {
-    name: 'feature-dev',
-    description: 'Specialized agents for codebase analysis and architecture planning',
-    category: 'Development Workflows',
-    marketplace: 'anthropics-claude-code',
-    author: 'Anthropic',
-    tags: ['feature', 'architecture', 'planning'],
-  },
-  {
-    name: 'hookify',
-    description: 'Creates custom behavior rules via markdown configuration',
-    category: 'Development Workflows',
-    marketplace: 'anthropics-claude-code',
-    author: 'Anthropic',
-    tags: ['hooks', 'configuration', 'rules'],
-  },
+// ── Data source abstraction ──
 
-  // === Output Styles ===
-  {
-    name: 'explanatory-output-style',
-    description: 'Adds educational insights about implementation choices and codebase patterns',
-    category: 'Output Styles',
-    marketplace: 'claude-plugins-official',
-    author: 'Anthropic',
-    tags: ['style', 'educational', 'learning'],
-  },
-  {
-    name: 'learning-output-style',
-    description: 'Interactive learning mode that requests meaningful contributions at decision points',
-    category: 'Output Styles',
-    marketplace: 'claude-plugins-official',
-    author: 'Anthropic',
-    tags: ['style', 'interactive', 'learning'],
-  },
+interface PluginSource {
+  /** Unique key — used as localStorage cache key suffix */
+  id: string;
+  /** Human-readable label */
+  name: string;
+  /** Fetches raw plugin data from the source */
+  fetch: () => Promise<RemotePlugin[]>;
+  /** Cache TTL in ms (default: DEFAULT_TTL) */
+  ttl?: number;
+}
 
-  // === Security ===
-  {
-    name: 'security-guidance',
-    description: 'Warns about injection vulnerabilities, XSS risks, and unsafe patterns',
-    category: 'Security',
-    marketplace: 'anthropics-claude-code',
-    author: 'Anthropic',
-    tags: ['security', 'vulnerabilities', 'xss'],
-  },
+const DEFAULT_TTL = 86_400_000; // 24 hours
+const CACHE_PREFIX = 'dorothy-plugins-src-';
 
-  // === Productivity ===
+// ── Source registry ──
+// Add new sources here. Each is fetched, cached, and merged independently.
+
+const SOURCES: PluginSource[] = [
   {
-    name: 'frontend-design',
-    description: 'Generates polished, production-grade UI interfaces with high design quality',
-    category: 'Productivity',
-    marketplace: 'anthropics-claude-code',
-    author: 'Anthropic',
-    tags: ['frontend', 'design', 'ui'],
-  },
-  {
-    name: 'claude-opus-4-5-migration',
-    description: 'Assists with upgrading code from earlier model versions to Claude Opus 4.5',
-    category: 'Productivity',
-    marketplace: 'anthropics-claude-code',
-    author: 'Anthropic',
-    tags: ['migration', 'upgrade', 'models'],
-  },
-  {
-    name: 'ralph-wiggum',
-    description: 'Enables iterative self-referential AI loops for complex task completion',
-    category: 'Productivity',
-    marketplace: 'anthropics-claude-code',
-    author: 'Anthropic',
-    tags: ['ai', 'loops', 'automation'],
+    id: 'claudemarketplaces',
+    name: 'Claude Marketplaces',
+    fetch: async () => {
+      const res = await fetch(
+        'https://raw.githubusercontent.com/mertbuilds/claudemarketplaces.com/refs/heads/main/lib/data/plugins.json',
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    },
   },
 ];
 
-// Get unique marketplaces
-export const MARKETPLACES = [
-  {
-    id: 'claude-plugins-official',
-    name: 'Official Anthropic',
-    description: 'Official plugins maintained by Anthropic',
-    source: 'Built-in',
-  },
-  {
-    id: 'anthropics-claude-code',
-    name: 'Demo Plugins',
-    description: 'Demo plugins from anthropics/claude-code repository',
-    source: 'anthropics/claude-code',
-  },
-] as const;
+// ── Plugin filters ──
+// Add predicates here to exclude plugins from the final list.
+// A plugin is kept only if ALL filters return true.
+
+type PluginFilter = (plugin: Plugin) => boolean;
+
+const FILTERS: PluginFilter[] = [];
+
+// ── Per-source localStorage cache ──
+
+interface CacheEntry {
+  timestamp: number;
+  data: RemotePlugin[];
+}
+
+function readCache(sourceId: string): CacheEntry | null {
+  try {
+    const raw = localStorage.getItem(CACHE_PREFIX + sourceId);
+    if (!raw) return null;
+    return JSON.parse(raw) as CacheEntry;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(sourceId: string, data: RemotePlugin[]): void {
+  try {
+    const entry: CacheEntry = { timestamp: Date.now(), data };
+    localStorage.setItem(CACHE_PREFIX + sourceId, JSON.stringify(entry));
+  } catch {
+    // Quota exceeded or other storage error — ignore
+  }
+}
+
+function isFresh(entry: CacheEntry, ttl: number): boolean {
+  return Date.now() - entry.timestamp < ttl;
+}
+
+// ── Mapping & derivation ──
+
+function mapRemotePlugin(remote: RemotePlugin): Plugin {
+  return {
+    name: remote.name,
+    description: remote.description || '',
+    category: remote.category || 'community',
+    marketplace: remote.marketplace,
+    author: remote.author?.name,
+    tags: remote.tags,
+    homepage: remote.marketplaceUrl,
+    installCommand: remote.installCommand,
+  };
+}
+
+function deriveCategories(plugins: Plugin[]): string[] {
+  const categories = new Set<string>();
+  for (const p of plugins) {
+    // Only expose categories that start with a capital letter
+    if (p.category && /^[A-Z]/.test(p.category)) categories.add(p.category);
+  }
+  return Array.from(categories).sort();
+}
+
+function deriveAuthors(plugins: Plugin[]): string[] {
+  const authors = new Set<string>();
+  for (const p of plugins) {
+    if (p.author) authors.add(p.author);
+  }
+  return Array.from(authors).sort();
+}
+
+/** Marketplaces exposed in the source dropdown. */
+const ALLOWED_MARKETPLACES = new Set(['anthropics-claude-code']);
+
+function deriveMarketplaces(plugins: Plugin[]): Marketplace[] {
+  const seen = new Map<string, Marketplace>();
+  for (const p of plugins) {
+    if (!seen.has(p.marketplace) && ALLOWED_MARKETPLACES.has(p.marketplace)) {
+      seen.set(p.marketplace, {
+        id: p.marketplace,
+        name: p.marketplace,
+        description: `Plugins from ${p.marketplace}`,
+        source: p.homepage || p.marketplace,
+      });
+    }
+  }
+  return Array.from(seen.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// ── Fetch a single source (cache-first) ──
+
+async function fetchSource(source: PluginSource): Promise<RemotePlugin[]> {
+  const ttl = source.ttl ?? DEFAULT_TTL;
+  const cached = readCache(source.id);
+
+  // Fresh cache → return immediately
+  if (cached && isFresh(cached, ttl)) {
+    return cached.data;
+  }
+
+  // Fetch from remote
+  try {
+    const data = await source.fetch();
+    writeCache(source.id, data);
+    return data;
+  } catch {
+    // Fetch failed — fall back to stale cache if available
+    if (cached) return cached.data;
+    return [];
+  }
+}
+
+// ── Aggregate all sources ──
+
+let cachedPlugins: Plugin[] | null = null;
+let cachedCategories: string[] | null = null;
+let cachedMarketplaces: Marketplace[] | null = null;
+let cachedAuthors: string[] | null = null;
+let fetchPromise: Promise<Plugin[]> | null = null;
+
+async function fetchPlugins(): Promise<Plugin[]> {
+  if (cachedPlugins) return cachedPlugins;
+  if (fetchPromise) return fetchPromise;
+
+  fetchPromise = Promise.allSettled(SOURCES.map(fetchSource))
+    .then((results) => {
+      const allRemote: RemotePlugin[] = [];
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          allRemote.push(...result.value);
+        }
+      }
+
+      // Deduplicate by name@marketplace
+      const seen = new Set<string>();
+      const unique: RemotePlugin[] = [];
+      for (const p of allRemote) {
+        const key = `${p.name}@${p.marketplace}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          unique.push(p);
+        }
+      }
+
+      cachedPlugins = unique.map(mapRemotePlugin).filter(
+        (p) => FILTERS.every((fn) => fn(p)),
+      );
+      cachedCategories = deriveCategories(cachedPlugins);
+      cachedMarketplaces = deriveMarketplaces(cachedPlugins);
+      cachedAuthors = deriveAuthors(cachedPlugins);
+      fetchPromise = null;
+      return cachedPlugins;
+    })
+    .catch((err) => {
+      fetchPromise = null;
+      throw err;
+    });
+
+  return fetchPromise;
+}
+
+// ── React hook ──
+
+export function usePluginsDatabase() {
+  const [plugins, setPlugins] = useState<Plugin[]>(cachedPlugins || []);
+  const [categories, setCategories] = useState<string[]>(cachedCategories || []);
+  const [marketplaces, setMarketplaces] = useState<Marketplace[]>(cachedMarketplaces || []);
+  const [authors, setAuthors] = useState<string[]>(cachedAuthors || []);
+  const [loading, setLoading] = useState(!cachedPlugins);
+  const [error, setError] = useState<string | null>(null);
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    if (cachedPlugins) return;
+
+    fetchPlugins()
+      .then((data) => {
+        if (!mounted.current) return;
+        setPlugins(data);
+        setCategories(cachedCategories!);
+        setMarketplaces(cachedMarketplaces!);
+        setAuthors(cachedAuthors!);
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (!mounted.current) return;
+        setError(err instanceof Error ? err.message : 'Failed to fetch plugins');
+        setLoading(false);
+      });
+
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  return { plugins, categories, marketplaces, authors, loading, error };
+}

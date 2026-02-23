@@ -754,11 +754,15 @@ export default function AgentTerminalDialog({
           term.focus();
         }, 350);
 
+        // Filter out xterm focus in/out reports (\x1b[I / \x1b[O) that Claude Code
+        // requests via DECSET 1004 — these should not be forwarded as user input.
         term.onData(async (data) => {
+          const cleaned = data.replace(/\x1b\[(?:I|O)/g, '');
+          if (!cleaned) return;
           const id = agentIdRef.current;
           if (id && window.electronAPI?.agent?.sendInput) {
             try {
-              await window.electronAPI.agent.sendInput({ id, input: data });
+              await window.electronAPI.agent.sendInput({ id, input: cleaned });
             } catch (err) {
               console.error('Error sending input:', err);
             }
@@ -948,8 +952,10 @@ export default function AgentTerminalDialog({
         }
 
         term.onData(async (data) => {
+          const cleaned = data.replace(/\x1b\[(?:I|O)/g, '');
+          if (!cleaned) return;
           if (quickPtyIdRef.current && window.electronAPI?.pty?.write) {
-            await window.electronAPI.pty.write({ id: quickPtyIdRef.current, data });
+            await window.electronAPI.pty.write({ id: quickPtyIdRef.current, data: cleaned });
           }
         });
 

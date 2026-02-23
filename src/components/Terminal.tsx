@@ -62,11 +62,13 @@ export default function Terminal({ ptyId, onData, className = '' }: TerminalProp
 
     // Handle terminal input
     term.onData((data) => {
-      onData?.(data);
+      const cleaned = data.replace(/\x1b\[(?:I|O)/g, '');
+      if (!cleaned) return;
+      onData?.(cleaned);
 
       // If we have a PTY, send input to it
       if (ptyId && window.electronAPI?.pty) {
-        window.electronAPI.pty.write({ id: ptyId, data });
+        window.electronAPI.pty.write({ id: ptyId, data: cleaned });
       }
     });
 

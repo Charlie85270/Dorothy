@@ -295,19 +295,49 @@ fi
 export PATH="${claudeDir}:$PATH"
 cd "${projectPath}"
 echo "=== Task started at $(date) ===" >> "${logPath}"
-CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 "${claudePath}" ${flags} --mcp-config "${mcpConfigPath}" --add-dir "${homeDir}/.dorothy" -p '${escapedPrompt}' >> "${logPath}" 2>&1
+unset CLAUDECODE
+CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 "${claudePath}" ${flags} --output-format stream-json --verbose --mcp-config "${mcpConfigPath}" --add-dir "${homeDir}/.dorothy" -p '${escapedPrompt}' >> "${logPath}" 2>&1
 echo "=== Task completed at $(date) ===" >> "${logPath}"
 `;
 
   fs.writeFileSync(scriptPath, scriptContent);
   fs.chmodSync(scriptPath, '755');
 
-  // Build StartCalendarInterval
-  const calendarInterval: Record<string, number> = {};
-  if (minute !== '*') calendarInterval.Minute = parseInt(minute, 10);
-  if (hour !== '*') calendarInterval.Hour = parseInt(hour, 10);
-  if (dayOfMonth !== '*') calendarInterval.Day = parseInt(dayOfMonth, 10);
-  if (dayOfWeek !== '*') calendarInterval.Weekday = parseInt(dayOfWeek, 10);
+  // Build StartCalendarInterval — supports comma-separated values ("1,7,13") and step expressions ("*/3")
+  const expandField = (field: string, max: number): (number | undefined)[] => {
+    if (field === '*') return [undefined];
+    if (field.startsWith('*/')) {
+      const step = parseInt(field.slice(2), 10);
+      if (!isNaN(step) && step > 0) {
+        return Array.from({ length: Math.ceil(max / step) }, (_, i) => i * step);
+      }
+    }
+    return field.split(',').map(v => parseInt(v.trim(), 10)).filter(v => !isNaN(v));
+  };
+
+  const minutes = expandField(minute, 60);
+  const hours = expandField(hour, 24);
+  const day = dayOfMonth !== '*' ? parseInt(dayOfMonth, 10) : undefined;
+  const weekday = dayOfWeek !== '*' ? parseInt(dayOfWeek, 10) : undefined;
+
+  const calendarEntries: Record<string, number>[] = [];
+  for (const h of hours) {
+    for (const m of minutes) {
+      const entry: Record<string, number> = {};
+      if (m !== undefined) entry.Minute = m;
+      if (h !== undefined) entry.Hour = h;
+      if (day !== undefined) entry.Day = day;
+      if (weekday !== undefined) entry.Weekday = weekday;
+      calendarEntries.push(entry);
+    }
+  }
+
+  const renderEntry = (e: Record<string, number>) =>
+    `  <dict>\n${Object.entries(e).map(([k, v]) => `    <key>${k}</key>\n    <integer>${v}</integer>`).join('\n')}\n  </dict>`;
+
+  const calendarIntervalXml = calendarEntries.length === 1
+    ? renderEntry(calendarEntries[0])
+    : `  <array>\n${calendarEntries.map(e => '  ' + renderEntry(e)).join('\n')}\n  </array>`;
 
   const label = `com.dorothy.scheduler.${taskId}`;
   const plistPath = path.join(os.homedir(), 'Library', 'LaunchAgents', `${label}.plist`);
@@ -328,9 +358,7 @@ echo "=== Task completed at $(date) ===" >> "${logPath}"
     <string>${scriptPath}</string>
   </array>
   <key>StartCalendarInterval</key>
-  <dict>
-${Object.entries(calendarInterval).map(([k, v]) => `    <key>${k}</key>\n    <integer>${v}</integer>`).join('\n')}
-  </dict>
+${calendarIntervalXml}
   <key>StandardOutPath</key>
   <string>${logPath}</string>
   <key>StandardErrorPath</key>
@@ -399,7 +427,8 @@ fi
 export PATH="${claudeDir}:$PATH"
 cd "${projectPath}"
 echo "=== Task started at $(date) ===" >> "${logPath}"
-CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 "${claudePath}" ${flags} --mcp-config "${mcpConfigPath}" --add-dir "${homeDir}/.dorothy" -p '${escapedPrompt}' >> "${logPath}" 2>&1
+unset CLAUDECODE
+CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 "${claudePath}" ${flags} --output-format stream-json --verbose --mcp-config "${mcpConfigPath}" --add-dir "${homeDir}/.dorothy" -p '${escapedPrompt}' >> "${logPath}" 2>&1
 echo "=== Task completed at $(date) ===" >> "${logPath}"
 `;
 
@@ -618,9 +647,12 @@ export function registerSchedulerHandlers(): void {
                 const workDirMatch = plistContent.match(/<key>WorkingDirectory<\/key>\s*<string>([^<]+)<\/string>/);
                 if (workDirMatch) projectPath = workDirMatch[1];
 
-                const calendarMatch = plistContent.match(/<key>StartCalendarInterval<\/key>\s*<dict>([\s\S]*?)<\/dict>/);
-                if (calendarMatch) {
-                  const cal = calendarMatch[1];
+                // Try single-dict format first, then array format for multi-time schedules
+                const dictMatch = plistContent.match(/<key>StartCalendarInterval<\/key>\s*<dict>([\s\S]*?)<\/dict>/);
+                const arrayMatch = plistContent.match(/<key>StartCalendarInterval<\/key>\s*<array>([\s\S]*?)<\/array>/);
+
+                if (dictMatch) {
+                  const cal = dictMatch[1];
                   const hm = cal.match(/<key>Hour<\/key>\s*<integer>(\d+)<\/integer>/);
                   const mm = cal.match(/<key>Minute<\/key>\s*<integer>(\d+)<\/integer>/);
                   const wm = cal.match(/<key>Weekday<\/key>\s*<integer>(\d+)<\/integer>/);
@@ -629,11 +661,45 @@ export function registerSchedulerHandlers(): void {
                   if (mm) minute = parseInt(mm[1], 10);
                   if (wm) weekday = parseInt(wm[1], 10);
                   if (dm) day = parseInt(dm[1], 10);
+                } else if (arrayMatch) {
+                  // Extract all <dict> entries from the array and collect unique hours/minutes
+                  const dictBlocks = arrayMatch[1].match(/<dict>([\s\S]*?)<\/dict>/g) || [];
+                  const hours: number[] = [];
+                  const minutes: number[] = [];
+                  for (const block of dictBlocks) {
+                    const hm = block.match(/<key>Hour<\/key>\s*<integer>(\d+)<\/integer>/);
+                    const mm = block.match(/<key>Minute<\/key>\s*<integer>(\d+)<\/integer>/);
+                    const wm = block.match(/<key>Weekday<\/key>\s*<integer>(\d+)<\/integer>/);
+                    const dm = block.match(/<key>Day<\/key>\s*<integer>(\d+)<\/integer>/);
+                    if (hm && !hours.includes(parseInt(hm[1], 10))) hours.push(parseInt(hm[1], 10));
+                    if (mm && !minutes.includes(parseInt(mm[1], 10))) minutes.push(parseInt(mm[1], 10));
+                    if (wm) weekday = parseInt(wm[1], 10);
+                    if (dm) day = parseInt(dm[1], 10);
+                  }
+                  // Try to detect step pattern (e.g. [0,3,6,9,12,15,18,21] → "*/3")
+                  const detectStep = (vals: number[], max: number): string | null => {
+                    if (vals.length < 2) return null;
+                    const sorted = [...vals].sort((a, b) => a - b);
+                    if (sorted[0] !== 0) return null;
+                    const step = sorted[1] - sorted[0];
+                    const expected = Array.from({ length: Math.ceil(max / step) }, (_, i) => i * step);
+                    return JSON.stringify(sorted) === JSON.stringify(expected) ? `*/${step}` : null;
+                  };
+                  if (hours.length) {
+                    const step = detectStep(hours, 24);
+                    hour = step ? (step as unknown as number) : (hours.length === 1 ? hours[0] : (hours.join(',') as unknown as number));
+                  }
+                  if (minutes.length) {
+                    const step = detectStep(minutes, 60);
+                    minute = step ? (step as unknown as number) : (minutes.length === 1 ? minutes[0] : (minutes.join(',') as unknown as number));
+                  }
                 }
 
-                let cron = `${minute} ${hour} * * *`;
-                if (weekday !== undefined) cron = `${minute} ${hour} * * ${weekday}`;
-                else if (day !== undefined) cron = `${minute} ${hour} ${day} * *`;
+                const hourStr = hour !== undefined ? String(hour) : '*';
+                const minuteStr = minute !== undefined ? String(minute) : '*';
+                let cron = `${minuteStr} ${hourStr} * * *`;
+                if (weekday !== undefined) cron = `${minuteStr} ${hourStr} * * ${weekday}`;
+                else if (day !== undefined) cron = `${minuteStr} ${hourStr} ${day} * *`;
 
                 const logPath = path.join(os.homedir(), '.claude', 'logs', `${taskId}.log`);
                 const { lastRun, lastRunStatus } = getLastRunStatus(logPath);
@@ -917,7 +983,8 @@ fi
 export PATH="${claudeDir}:$PATH"
 cd "${projectPath}"
 echo "=== Task started at $(date) ===" >> "${logPath}"
-CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 "${claudePath}" ${flags} --mcp-config "${mcpConfigPath}" --add-dir "${homeDir}/.dorothy" -p '${escapedPrompt}' >> "${logPath}" 2>&1
+unset CLAUDECODE
+CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 "${claudePath}" ${flags} --output-format stream-json --verbose --mcp-config "${mcpConfigPath}" --add-dir "${homeDir}/.dorothy" -p '${escapedPrompt}' >> "${logPath}" 2>&1
 echo "=== Task completed at $(date) ===" >> "${logPath}"
 `;
 

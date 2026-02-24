@@ -76,8 +76,10 @@ export default function PluginInstallDialog({ open, command, title, onClose }: P
       xtermRef.current = term;
 
       term.onData((data) => {
+        const cleaned = data.replace(/\x1b\[(?:I|O)/g, '');
+        if (!cleaned) return;
         if (ptyIdRef.current && window.electronAPI?.plugin?.installWrite) {
-          window.electronAPI.plugin.installWrite({ id: ptyIdRef.current, data });
+          window.electronAPI.plugin.installWrite({ id: ptyIdRef.current, data: cleaned });
         }
       });
 

@@ -66,8 +66,10 @@ export default function PokemonTerminal({ title, repo, onDone, onCancel }: Pokem
 
       // Handle user input - send to PTY
       term.onData((data) => {
+        const cleaned = data.replace(/\x1b\[(?:I|O)/g, '');
+        if (!cleaned) return;
         if (ptyIdRef.current && window.electronAPI?.skill?.installWrite) {
-          window.electronAPI.skill.installWrite({ id: ptyIdRef.current, data });
+          window.electronAPI.skill.installWrite({ id: ptyIdRef.current, data: cleaned });
         }
       });
 

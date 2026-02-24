@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow, dialog } from 'electron';
+import { ipcMain, BrowserWindow, dialog, app } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -477,7 +477,6 @@ export function registerWorldHandlers(deps: WorldHandlerDependencies): void {
   });
 
   // Clean up watcher when app closes
-  const { app } = require('electron');
   app.on('will-quit', () => {
     watcher.close();
     for (const timer of debounceTimers.values()) {

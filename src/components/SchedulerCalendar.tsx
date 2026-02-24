@@ -3,6 +3,9 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, X, Play, FileText, Pencil, Trash2, Clock } from 'lucide-react';
+import type { ScheduledTask } from '@/app/recurring-tasks/types';
+
+export type { ScheduledTask };
 
 const TOOLTIP_WIDTH = 288;
 
@@ -20,23 +23,6 @@ const TASK_COLORS = [
   { classes: 'bg-cyan-500/15 border-cyan-500/40 text-cyan-400 hover:bg-cyan-500/22', dot: 'bg-cyan-500' },
   { classes: 'bg-pink-500/15 border-pink-500/40 text-pink-400 hover:bg-pink-500/22', dot: 'bg-pink-500' },
 ];
-
-export interface ScheduledTask {
-  id: string;
-  title?: string;
-  prompt: string;
-  schedule: string;
-  scheduleHuman: string;
-  projectPath: string;
-  agentId?: string;
-  agentName?: string;
-  autonomous: boolean;
-  notifications: { telegram: boolean; slack: boolean };
-  createdAt: string;
-  lastRun?: string;
-  lastRunStatus?: 'success' | 'error';
-  nextRun?: string;
-}
 
 interface CalendarEvent {
   task: ScheduledTask;
@@ -56,6 +42,7 @@ interface AllDayEvent {
 
 interface SchedulerCalendarProps {
   tasks: ScheduledTask[];
+  runningTasks?: Set<string>;
   onRunTask: (taskId: string) => void;
   onEditTask: (task: ScheduledTask) => void;
   onDeleteTask: (taskId: string) => void;
@@ -216,6 +203,7 @@ function layoutEvents(events: CalendarEvent[]): LayoutEvent[] {
 
 export default function SchedulerCalendar({
   tasks,
+  runningTasks,
   onRunTask,
   onEditTask,
   onDeleteTask,
@@ -483,7 +471,14 @@ export default function SchedulerCalendar({
                       className={`w-full rounded border text-left px-1 py-0.5 transition-all ${color.classes} ${sel ? 'ring-1 ring-current' : ''}`}
                     >
                       <div className="flex items-center gap-1">
-                        <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${color.dot}`} />
+                        {runningTasks?.has(event.task.id) ? (
+                          <div className="relative shrink-0 w-1.5 h-1.5">
+                            <div className={`absolute inset-0 rounded-full ${color.dot} animate-ping opacity-75`} />
+                            <div className={`relative rounded-full w-1.5 h-1.5 ${color.dot}`} />
+                          </div>
+                        ) : (
+                          <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${color.dot}`} />
+                        )}
                         <span className="text-[9px] font-medium truncate">{event.label}</span>
                       </div>
                     </button>
@@ -567,7 +562,14 @@ export default function SchedulerCalendar({
                       {heightPx < 38 ? (
                         // Single-line compact: dot · title · time
                         <div className="px-1.5 h-full flex items-center gap-1 min-w-0">
-                          <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${color.dot}`} />
+                          {runningTasks?.has(event.task.id) ? (
+                            <div className="relative shrink-0 w-1.5 h-1.5">
+                              <div className={`absolute inset-0 rounded-full ${color.dot} animate-ping opacity-75`} />
+                              <div className={`relative rounded-full w-1.5 h-1.5 ${color.dot}`} />
+                            </div>
+                          ) : (
+                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${color.dot}`} />
+                          )}
                           <span className="text-[10px] font-medium leading-none truncate flex-1 min-w-0">
                             {event.task.title || `${event.hour.toString().padStart(2, '0')}:${event.minute.toString().padStart(2, '0')}`}
                           </span>
@@ -576,7 +578,14 @@ export default function SchedulerCalendar({
                         // Two-line: title prominent, time secondary
                         <div className="px-1.5 pt-1 h-full flex flex-col gap-0.5 min-w-0">
                           <div className="flex items-center gap-1 min-w-0">
-                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${color.dot}`} />
+                            {runningTasks?.has(event.task.id) ? (
+                              <div className="relative shrink-0 w-1.5 h-1.5">
+                                <div className={`absolute inset-0 rounded-full ${color.dot} animate-ping opacity-75`} />
+                                <div className={`relative rounded-full w-1.5 h-1.5 ${color.dot}`} />
+                              </div>
+                            ) : (
+                              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${color.dot}`} />
+                            )}
                             <span className="text-[10px] font-semibold tabular-nums leading-none opacity-70">
                               {`${event.hour.toString().padStart(2, '0')}:${event.minute.toString().padStart(2, '0')}`}
                             </span>

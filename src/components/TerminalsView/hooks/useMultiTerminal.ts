@@ -157,9 +157,13 @@ export function useMultiTerminal({ agents }: UseMultiTerminalOptions) {
       setTimeout(() => safeFit(agentId, entry), 200);
 
       // Forward keyboard input from xterm to PTY
+      // Filter out xterm focus in/out reports (\x1b[I / \x1b[O) that Claude Code
+      // requests via DECSET 1004 — these should not be forwarded as user input.
       term.onData((data) => {
+        const cleaned = data.replace(/\x1b\[(?:I|O)/g, '');
+        if (!cleaned) return;
         if (isElectron()) {
-          window.electronAPI!.agent.sendInput({ id: agentId, input: data }).catch(() => {});
+          window.electronAPI!.agent.sendInput({ id: agentId, input: cleaned }).catch(() => {});
         }
       });
 

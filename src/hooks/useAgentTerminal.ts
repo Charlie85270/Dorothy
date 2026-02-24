@@ -95,11 +95,15 @@ export function useAgentTerminal({ selectedAgentId, terminalRef }: UseAgentTermi
       container.addEventListener('click', handleClick);
 
       // Handle user input - send to agent PTY
+      // Filter out xterm focus in/out reports (\x1b[I / \x1b[O) that Claude Code
+      // requests via DECSET 1004 — these should not be forwarded as user input.
       term.onData(async (data) => {
+        const cleaned = data.replace(/\x1b\[(?:I|O)/g, '');
+        if (!cleaned) return;
         const agentId = selectedAgentIdRef.current;
         if (agentId && window.electronAPI?.agent?.sendInput) {
           try {
-            const result = await window.electronAPI.agent.sendInput({ id: agentId, input: data });
+            const result = await window.electronAPI.agent.sendInput({ id: agentId, input: cleaned });
             if (!result.success) {
               console.warn('Failed to send input to agent');
             }

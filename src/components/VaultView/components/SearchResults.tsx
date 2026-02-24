@@ -25,6 +25,18 @@ function formatDate(dateStr: string): string {
   return date.toLocaleDateString();
 }
 
+function sanitizeSnippet(html: string): string {
+  // Escape all HTML, then restore only the <mark> tags that SQLite FTS5 snippet() inserts
+  return html
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/&lt;mark&gt;/g, '<mark>')
+    .replace(/&lt;\/mark&gt;/g, '</mark>');
+}
+
 function parseTags(tagsStr: string): string[] {
   try {
     return JSON.parse(tagsStr || '[]');
@@ -67,7 +79,7 @@ export default function SearchResults({ results, query, onSelectDocument }: Sear
             {doc.snippet && (
               <p
                 className="text-xs text-muted-foreground mt-1 line-clamp-2 [&_mark]:bg-yellow-200 [&_mark]:dark:bg-yellow-800 [&_mark]:px-0.5 [&_mark]:rounded"
-                dangerouslySetInnerHTML={{ __html: doc.snippet }}
+                dangerouslySetInnerHTML={{ __html: sanitizeSnippet(doc.snippet) }}
               />
             )}
 

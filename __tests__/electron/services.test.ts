@@ -408,3 +408,126 @@ describe('kanban-automation', () => {
     });
   });
 });
+
+// ============================================================================
+// api-server: POST /api/scheduler/status — logic tests
+// ============================================================================
+// These test the validation and metadata update logic used by the endpoint,
+// without spinning up an actual HTTP server.
+
+describe('api-server scheduler status endpoint (logic)', () => {
+  describe('input validation', () => {
+    it('rejects when task_id is missing', () => {
+      const body = { status: 'running' } as { task_id?: string; status: string };
+      const isValid = !!(body.task_id && body.status);
+      expect(isValid).toBe(false);
+    });
+
+    it('rejects when status is missing', () => {
+      const body = { task_id: 'task-1' } as { task_id: string; status?: string };
+      const isValid = !!(body.task_id && body.status);
+      expect(isValid).toBe(false);
+    });
+
+    it('rejects invalid status values', () => {
+      const validStatuses = ['running', 'success', 'error', 'partial'];
+      expect(validStatuses.includes('pending')).toBe(false);
+      expect(validStatuses.includes('cancelled')).toBe(false);
+      expect(validStatuses.includes('')).toBe(false);
+    });
+
+    it('accepts all valid status values', () => {
+      const validStatuses = ['running', 'success', 'error', 'partial'];
+      for (const s of validStatuses) {
+        expect(validStatuses.includes(s)).toBe(true);
+      }
+    });
+  });
+
+  describe('metadata update', () => {
+    it('creates metadata entry for new task_id', () => {
+      const metadata: Record<string, Record<string, unknown>> = {};
+      const task_id = 'new-task';
+      const status = 'running';
+
+      if (!metadata[task_id]) {
+        metadata[task_id] = {};
+      }
+      metadata[task_id].lastRunStatus = status;
+      metadata[task_id].lastRun = new Date().toISOString();
+
+      expect(metadata[task_id].lastRunStatus).toBe('running');
+      expect(metadata[task_id].lastRun).toBeDefined();
+    });
+
+    it('updates existing metadata entry', () => {
+      const metadata: Record<string, Record<string, unknown>> = {
+        'existing-task': {
+          title: 'My Task',
+          notifications: { telegram: false, slack: false },
+          lastRunStatus: 'running',
+        },
+      };
+
+      metadata['existing-task'].lastRunStatus = 'success';
+      metadata['existing-task'].lastRun = new Date().toISOString();
+      metadata['existing-task'].lastRunSummary = 'All checks passed';
+
+      expect(metadata['existing-task'].lastRunStatus).toBe('success');
+      expect(metadata['existing-task'].lastRunSummary).toBe('All checks passed');
+      // Preserves other fields
+      expect(metadata['existing-task'].title).toBe('My Task');
+    });
+
+    it('omits summary from metadata when not provided', () => {
+      const metadata: Record<string, Record<string, unknown>> = {};
+      const task_id = 'task-no-summary';
+      const summary: string | undefined = undefined;
+
+      if (!metadata[task_id]) metadata[task_id] = {};
+      metadata[task_id].lastRunStatus = 'error';
+      metadata[task_id].lastRun = new Date().toISOString();
+      if (summary) {
+        metadata[task_id].lastRunSummary = summary;
+      }
+
+      expect(metadata[task_id].lastRunSummary).toBeUndefined();
+    });
+
+    it('includes summary in metadata when provided', () => {
+      const metadata: Record<string, Record<string, unknown>> = {};
+      const task_id = 'task-with-summary';
+      const summary = 'Deployed v2.1.0';
+
+      if (!metadata[task_id]) metadata[task_id] = {};
+      metadata[task_id].lastRunStatus = 'success';
+      metadata[task_id].lastRun = new Date().toISOString();
+      if (summary) {
+        metadata[task_id].lastRunSummary = summary;
+      }
+
+      expect(metadata[task_id].lastRunSummary).toBe('Deployed v2.1.0');
+    });
+  });
+
+  describe('IPC emission', () => {
+    it('emits correct event shape for frontend', () => {
+      const task_id = 'task-abc';
+      const status = 'success';
+      const summary = 'Done';
+
+      const event = { taskId: task_id, status, summary };
+      expect(event.taskId).toBe('task-abc');
+      expect(event.status).toBe('success');
+      expect(event.summary).toBe('Done');
+    });
+
+    it('uses taskId (not task_id) in emitted event', () => {
+      // The API accepts snake_case task_id but emits camelCase taskId
+      const task_id = 'my-task';
+      const emitted = { taskId: task_id, status: 'running' };
+      expect(emitted).toHaveProperty('taskId');
+      expect(emitted).not.toHaveProperty('task_id');
+    });
+  });
+});

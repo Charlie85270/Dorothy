@@ -2,6 +2,27 @@
 
 import React from 'react';
 
+const SAFE_URL_PROTOCOLS = ['http:', 'https:', 'mailto:'];
+
+export function isSafeUrl(href: string): string {
+  const trimmed = href.trim();
+  // Allow relative URLs and fragments
+  if (trimmed.startsWith('/') || trimmed.startsWith('./') || trimmed.startsWith('../') || trimmed.startsWith('#')) {
+    return trimmed;
+  }
+  try {
+    const parsed = new URL(trimmed);
+    if (SAFE_URL_PROTOCOLS.includes(parsed.protocol)) {
+      return trimmed;
+    }
+  } catch {
+    // Not a valid absolute URL — treat as relative (safe)
+    return trimmed;
+  }
+  // Blocked protocol (javascript:, data:, vbscript:, etc.)
+  return '#';
+}
+
 function resolveLocalSrc(src: string): string {
   if (src.startsWith('/') || /^[A-Z]:\\/.test(src)) {
     return `http://127.0.0.1:31415/api/local-file?path=${encodeURIComponent(src)}`;
@@ -64,7 +85,7 @@ function renderInline(text: string): React.ReactNode {
         const closeParen = remaining.indexOf(')', closeBracket + 2);
         if (closeParen !== -1) {
           const linkText = remaining.slice(1, closeBracket);
-          const href = remaining.slice(closeBracket + 2, closeParen);
+          const href = isSafeUrl(remaining.slice(closeBracket + 2, closeParen));
           parts.push(
             <a key={key++} href={href} className="text-primary underline hover:text-primary/80" target="_blank" rel="noopener noreferrer">
               {linkText}

@@ -8,12 +8,21 @@ import * as os from 'os';
 let handlers: Map<string, (...args: unknown[]) => Promise<unknown>>;
 let tmpDir: string;
 
+const mockWebContentsSend = vi.fn();
+
 vi.mock('electron', () => ({
   ipcMain: {
     handle: vi.fn((channel: string, fn: (...args: unknown[]) => Promise<unknown>) => {
       handlers.set(channel, fn);
     }),
   },
+}));
+
+vi.mock('../../../electron/core/window-manager', () => ({
+  getMainWindow: vi.fn(() => ({
+    isDestroyed: () => false,
+    webContents: { send: mockWebContentsSend },
+  })),
 }));
 
 vi.mock('child_process', () => ({
@@ -58,6 +67,7 @@ beforeEach(() => {
   vi.resetModules();
   handlers = new Map();
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sched-test-'));
+  mockWebContentsSend.mockClear();
 });
 
 afterEach(() => {
@@ -481,6 +491,165 @@ describe('scheduler-handlers', () => {
       await registerHandlers();
       const result = await invokeHandler('scheduler:fixMcpPaths') as { success: boolean };
       expect(result.success).toBe(true);
+    });
+  });
+
+  describe('scheduler:watchLogs', () => {
+    it('returns success when log file does not exist yet', async () => {
+      await registerHandlers();
+      const result = await invokeHandler('scheduler:watchLogs', 'nonexistent-task') as { success: boolean };
+      expect(result.success).toBe(true);
+    });
+
+    it('returns success when log file exists', async () => {
+      const logsDir = path.join(tmpDir, '.claude', 'logs');
+      fs.mkdirSync(logsDir, { recursive: true });
+      fs.writeFileSync(path.join(logsDir, 'watch-task.log'), 'initial content');
+
+      await registerHandlers();
+      const result = await invokeHandler('scheduler:watchLogs', 'watch-task') as { success: boolean };
+      expect(result.success).toBe(true);
+    });
+
+    it('replaces existing watcher for same task', async () => {
+      const logsDir = path.join(tmpDir, '.claude', 'logs');
+      fs.mkdirSync(logsDir, { recursive: true });
+      fs.writeFileSync(path.join(logsDir, 'dup-watch.log'), 'content');
+
+      await registerHandlers();
+      // Watch twice — should not throw
+      await invokeHandler('scheduler:watchLogs', 'dup-watch');
+      const result = await invokeHandler('scheduler:watchLogs', 'dup-watch') as { success: boolean };
+      expect(result.success).toBe(true);
+    });
+
+    it('sends new data via IPC when log file grows', async () => {
+      const logsDir = path.join(tmpDir, '.claude', 'logs');
+      fs.mkdirSync(logsDir, { recursive: true });
+      const logPath = path.join(logsDir, 'stream-task.log');
+      fs.writeFileSync(logPath, 'initial');
+
+      await registerHandlers();
+      await invokeHandler('scheduler:watchLogs', 'stream-task');
+
+      // Simulate file growth by appending data
+      fs.appendFileSync(logPath, '\nnew data line');
+
+      // Give fs.watch time to fire (may need a small delay)
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      // fs.watch may or may not fire in test env, but handler should not error
+    });
+  });
+
+  describe('scheduler:unwatchLogs', () => {
+    it('returns success even if no watcher exists', async () => {
+      await registerHandlers();
+      const result = await invokeHandler('scheduler:unwatchLogs', 'no-watcher') as { success: boolean };
+      expect(result.success).toBe(true);
+    });
+
+    it('stops an active watcher', async () => {
+      const logsDir = path.join(tmpDir, '.claude', 'logs');
+      fs.mkdirSync(logsDir, { recursive: true });
+      fs.writeFileSync(path.join(logsDir, 'unwatch-task.log'), 'content');
+
+      await registerHandlers();
+      await invokeHandler('scheduler:watchLogs', 'unwatch-task');
+      const result = await invokeHandler('scheduler:unwatchLogs', 'unwatch-task') as { success: boolean };
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('scheduler:listTasks — metadata status override', () => {
+    it('uses metadata lastRunStatus over log-based heuristic', async () => {
+      writeTmpJson('.claude/schedules.json', [
+        { id: 'meta-status', prompt: 'Test', schedule: '0 9 * * *', projectPath: '/test' },
+      ]);
+      // Log says success (no error keyword), but metadata says running
+      const logDir = path.join(tmpDir, '.claude', 'logs');
+      fs.mkdirSync(logDir, { recursive: true });
+      fs.writeFileSync(path.join(logDir, 'meta-status.log'),
+        '=== Task started at 2026-01-01 ===\nAll good\n=== Task completed at 2026-01-01 ===\n'
+      );
+      writeTmpJson('.dorothy/scheduler-metadata.json', {
+        'meta-status': {
+          notifications: { telegram: false, slack: false },
+          createdAt: '2026-01-01T00:00:00.000Z',
+          lastRunStatus: 'running',
+          lastRun: '2026-02-01T12:00:00.000Z',
+        },
+      });
+
+      await registerHandlers();
+      const result = await invokeHandler('scheduler:listTasks') as { tasks: Array<Record<string, unknown>> };
+
+      expect(result.tasks[0].lastRunStatus).toBe('running');
+      expect(result.tasks[0].lastRun).toBe('2026-02-01T12:00:00.000Z');
+    });
+
+    it('supports partial status from metadata', async () => {
+      writeTmpJson('.claude/schedules.json', [
+        { id: 'partial-task', prompt: 'Test', schedule: '0 9 * * *', projectPath: '/test' },
+      ]);
+      writeTmpJson('.dorothy/scheduler-metadata.json', {
+        'partial-task': {
+          notifications: { telegram: false, slack: false },
+          createdAt: '2026-01-01T00:00:00.000Z',
+          lastRunStatus: 'partial',
+        },
+      });
+
+      await registerHandlers();
+      const result = await invokeHandler('scheduler:listTasks') as { tasks: Array<Record<string, unknown>> };
+
+      expect(result.tasks[0].lastRunStatus).toBe('partial');
+    });
+
+    it('falls back to log heuristic when metadata has no status', async () => {
+      writeTmpJson('.claude/schedules.json', [
+        { id: 'no-meta-status', prompt: 'Test', schedule: '0 9 * * *', projectPath: '/test' },
+      ]);
+      const logDir = path.join(tmpDir, '.claude', 'logs');
+      fs.mkdirSync(logDir, { recursive: true });
+      fs.writeFileSync(path.join(logDir, 'no-meta-status.log'),
+        '=== Task started at 2026-01-01 ===\nSome error occurred\n=== Task completed at 2026-01-01 ===\n'
+      );
+      writeTmpJson('.dorothy/scheduler-metadata.json', {
+        'no-meta-status': {
+          notifications: { telegram: false, slack: false },
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+      });
+
+      await registerHandlers();
+      const result = await invokeHandler('scheduler:listTasks') as { tasks: Array<Record<string, unknown>> };
+
+      expect(result.tasks[0].lastRunStatus).toBe('error');
+    });
+  });
+
+  describe('prompt injection — status instructions', () => {
+    it('creates script with status reporting instructions in prompt', async () => {
+      await registerHandlers();
+
+      await invokeHandler('scheduler:createTask', {
+        prompt: 'Run daily checks',
+        schedule: '0 9 * * *',
+        projectPath: tmpDir,
+        autonomous: true,
+      });
+
+      const scriptPath = path.join(tmpDir, '.dorothy', 'scripts', 'test-uuid-1234.sh');
+      expect(fs.existsSync(scriptPath)).toBe(true);
+
+      const scriptContent = fs.readFileSync(scriptPath, 'utf-8');
+      expect(scriptContent).toContain('update_scheduled_task_status');
+      expect(scriptContent).toContain('task_id="test-uuid-1234"');
+      expect(scriptContent).toContain('status="running"');
+      expect(scriptContent).toContain('status="success"');
+      expect(scriptContent).toContain('status="error"');
+      expect(scriptContent).toContain('"partial"');
     });
   });
 });

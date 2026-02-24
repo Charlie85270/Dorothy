@@ -25,6 +25,15 @@ export interface ProjectMemory {
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 
 /**
+ * Validate that a file path is within the Claude projects directory.
+ * Uses path.resolve + startsWith to prevent traversal bypasses.
+ */
+function isWithinProjectsDir(filePath: string): boolean {
+  const resolved = path.resolve(filePath);
+  return resolved.startsWith(CLAUDE_PROJECTS_DIR + path.sep) || resolved === CLAUDE_PROJECTS_DIR;
+}
+
+/**
  * Decode Claude's project directory name back to a filesystem path.
  * Encoding: absolute path with each '/' replaced by '-', prefixed with '-'.
  * e.g. '-Users-charlie-Documents-octav-server' → '/Users/charlie/Documents/octav-server'
@@ -155,7 +164,7 @@ export function listProjectMemories(): ProjectMemory[] {
 
 export function readMemoryFileContent(filePath: string): { content: string; error?: string } {
   try {
-    if (!filePath.includes('/.claude/projects/')) {
+    if (!isWithinProjectsDir(filePath)) {
       return { content: '', error: 'Access denied: path outside Claude projects directory' };
     }
     const content = fs.readFileSync(filePath, 'utf-8');
@@ -167,7 +176,7 @@ export function readMemoryFileContent(filePath: string): { content: string; erro
 
 export function writeMemoryFileContent(filePath: string, content: string): { success: boolean; error?: string } {
   try {
-    if (!filePath.includes('/.claude/projects/')) {
+    if (!isWithinProjectsDir(filePath)) {
       return { success: false, error: 'Access denied: path outside Claude projects directory' };
     }
     fs.writeFileSync(filePath, content, 'utf-8');
@@ -179,8 +188,12 @@ export function writeMemoryFileContent(filePath: string, content: string): { suc
 
 export function createMemoryFile(memoryDir: string, fileName: string, content: string = ''): { success: boolean; file?: MemoryFile; error?: string } {
   try {
-    if (!memoryDir.includes('/.claude/projects/')) {
+    if (!isWithinProjectsDir(memoryDir)) {
       return { success: false, error: 'Access denied' };
+    }
+    // Reject path traversal in fileName
+    if (fileName.includes('/') || fileName.includes('..')) {
+      return { success: false, error: 'Invalid file name' };
     }
     if (!fs.existsSync(memoryDir)) {
       fs.mkdirSync(memoryDir, { recursive: true });
@@ -198,7 +211,7 @@ export function createMemoryFile(memoryDir: string, fileName: string, content: s
 
 export function deleteMemoryFile(filePath: string): { success: boolean; error?: string } {
   try {
-    if (!filePath.includes('/.claude/projects/')) {
+    if (!isWithinProjectsDir(filePath)) {
       return { success: false, error: 'Access denied' };
     }
     if (path.basename(filePath) === 'MEMORY.md') {

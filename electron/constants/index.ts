@@ -11,6 +11,7 @@ export const KANBAN_FILE = path.join(DATA_DIR, 'kanban-tasks.json');
 export const TELEGRAM_DOWNLOADS_DIR = path.join(DATA_DIR, 'telegram-downloads');
 export const VAULT_DIR = path.join(DATA_DIR, 'vault');
 export const VAULT_DB_FILE = path.join(DATA_DIR, 'vault.db');
+export const API_TOKEN_FILE = path.join(DATA_DIR, 'api-token');
 
 export const GITHUB_REPO = 'Charlie85270/dorothy';
 

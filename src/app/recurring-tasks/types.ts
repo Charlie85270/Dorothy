@@ -18,7 +18,7 @@ export interface ScheduledTask {
   };
   createdAt: string;
   lastRun?: string;
-  lastRunStatus?: 'success' | 'error';
+  lastRunStatus?: 'success' | 'error' | 'running' | 'partial';
   nextRun?: string;
 }
 

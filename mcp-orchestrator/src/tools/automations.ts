@@ -41,6 +41,38 @@ import { apiRequest } from "../utils/api.js";
 
 const execAsyncRaw = promisify(exec);
 
+/**
+ * Validate that a webhook URL is safe (not targeting internal/private networks).
+ * Requires HTTPS and rejects localhost, private IPs, and link-local addresses.
+ */
+function isAllowedWebhookUrl(urlString: string): boolean {
+  try {
+    const parsed = new URL(urlString);
+    if (parsed.protocol !== 'https:') return false;
+
+    const hostname = parsed.hostname.toLowerCase();
+
+    // Block localhost variants
+    if (hostname === 'localhost' || hostname === '[::1]') return false;
+
+    // Block private/reserved IP ranges
+    const ipParts = hostname.split('.').map(Number);
+    if (ipParts.length === 4 && ipParts.every(p => !isNaN(p))) {
+      const [a, b] = ipParts;
+      if (a === 127) return false;          // 127.x.x.x loopback
+      if (a === 10) return false;           // 10.x.x.x private
+      if (a === 172 && b >= 16 && b <= 31) return false; // 172.16-31.x.x private
+      if (a === 192 && b === 168) return false; // 192.168.x.x private
+      if (a === 169 && b === 254) return false; // 169.254.x.x link-local
+      if (a === 0) return false;            // 0.x.x.x
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Shared config file path that the Electron app writes to
 const CLI_PATHS_CONFIG_FILE = path.join(os.homedir(), ".dorothy", "cli-paths.json");
 
@@ -138,7 +170,12 @@ interface PollResult {
 async function pollGitHub(config: GitHubSourceConfig, automation: Automation): Promise<PollResult> {
   const items: PollResult["items"] = [];
 
+  const REPO_RE = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/;
+
   for (const repo of config.repos) {
+    if (!REPO_RE.test(repo)) {
+      return { items: [], error: `Invalid repository name: ${repo}` };
+    }
     for (const pollFor of config.pollFor) {
       try {
         if (pollFor === "pull_requests") {
@@ -453,6 +490,13 @@ async function sendOutput(output: OutputConfig, message: string, variables: Reco
     case "github_comment": {
       const { repo, number, type } = variables as { repo?: string; number?: number; type?: string };
       if (repo && number) {
+        // Validate repo and number to prevent command injection
+        if (!/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/.test(repo)) {
+          throw new Error(`Invalid repository name: ${repo}`);
+        }
+        if (!Number.isInteger(number) || number <= 0) {
+          throw new Error(`Invalid issue/PR number: ${number}`);
+        }
         const cmd = type === "issue"
           ? `gh issue comment ${number} --repo ${repo} --body '${finalMessage.replace(/'/g, "'\\''")}'`
           : `gh pr comment ${number} --repo ${repo} --body '${finalMessage.replace(/'/g, "'\\''")}'`;
@@ -515,6 +559,10 @@ async function sendOutput(output: OutputConfig, message: string, variables: Reco
     }
     case "webhook":
       if (output.webhookUrl) {
+        if (!isAllowedWebhookUrl(output.webhookUrl)) {
+          console.error(`Blocked webhook URL (SSRF protection): ${output.webhookUrl}`);
+          break;
+        }
         await fetch(output.webhookUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },

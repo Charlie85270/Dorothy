@@ -97,6 +97,31 @@ export function TaskCard({
               </div>
             )}
 
+            {task.lastRunStatus === 'running' && (
+              <span className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-500/10 text-blue-400 rounded text-[10px] font-medium">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                RUNNING
+              </span>
+            )}
+
+            {task.lastRunStatus === 'partial' && (
+              <span className="px-1.5 py-0.5 bg-yellow-500/10 text-yellow-500 rounded text-[10px] font-medium">
+                PARTIAL
+              </span>
+            )}
+
+            {task.lastRunStatus === 'success' && (
+              <span className="px-1.5 py-0.5 bg-green-500/10 text-green-500 rounded text-[10px] font-medium">
+                SUCCESS
+              </span>
+            )}
+
+            {task.lastRunStatus === 'error' && (
+              <span className="px-1.5 py-0.5 bg-red-500/10 text-red-500 rounded text-[10px] font-medium">
+                ERROR
+              </span>
+            )}
+
             {task.notifications.telegram && (
               <div className="flex items-center gap-1 text-blue-400">
                 <Send className="w-3 h-3" />

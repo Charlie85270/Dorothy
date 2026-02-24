@@ -66,6 +66,16 @@ export function registerIpcHandlers(deps: IpcHandlerDependencies): void {
   registerFileSystemHandlers(deps);
   registerShellHandlers(deps);
   registerMemoryHandlers();
+  registerApiTokenHandler();
+}
+
+// ============== API Token IPC Handler ==============
+
+function registerApiTokenHandler(): void {
+  ipcMain.handle('api:getToken', async () => {
+    const { getApiToken } = await import('../services/api-server');
+    return getApiToken();
+  });
 }
 
 // ============== PTY Terminal IPC Handlers ==============
@@ -179,6 +189,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     // Create git worktree if enabled
     if (config.worktree?.enabled && config.worktree?.branchName) {
       branchName = config.worktree.branchName;
+      if (!/^[a-zA-Z0-9._\-\/]+$/.test(branchName)) {
+        throw new Error('Invalid branch name');
+      }
       const worktreesDir = path.join(cwd, '.worktrees');
       worktreePath = path.join(worktreesDir, branchName);
 
@@ -199,13 +212,13 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
 
           // Check if branch already exists
           try {
-            execSync(`git rev-parse --verify ${branchName}`, { cwd, stdio: 'pipe' });
+            execSync(`git rev-parse --verify '${branchName}'`, { cwd, stdio: 'pipe' });
             // Branch exists, create worktree using existing branch
-            execSync(`git worktree add "${worktreePath}" ${branchName}`, { cwd, stdio: 'pipe' });
-          
+            execSync(`git worktree add '${worktreePath}' '${branchName}'`, { cwd, stdio: 'pipe' });
+
           } catch {
             // Branch doesn't exist, create worktree with new branch
-            execSync(`git worktree add -b ${branchName} "${worktreePath}"`, { cwd, stdio: 'pipe' });
+            execSync(`git worktree add -b '${branchName}' '${worktreePath}'`, { cwd, stdio: 'pipe' });
           
           }
         }
@@ -502,19 +515,21 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       const { app } = await import('electron');
       const mcpConfigPath = path.join(app.getPath('home'), '.claude', 'mcp.json');
       if (fs.existsSync(mcpConfigPath)) {
-        command += ` --mcp-config ${mcpConfigPath}`;
+        command += ` --mcp-config '${mcpConfigPath.replace(/'/g, "'\\''")}'`;
       }
       // Add super agent instructions (read via Node.js, not cat - asar compatibility)
       const { getSuperAgentInstructionsPath } = await import('../utils');
       const superAgentInstructionsPath = getSuperAgentInstructionsPath();
       if (fs.existsSync(superAgentInstructionsPath)) {
-
-        command += ` --append-system-prompt-file ${superAgentInstructionsPath}`;
+        command += ` --append-system-prompt-file '${superAgentInstructionsPath.replace(/'/g, "'\\''")}'`;
       }
     }
 
     if (options?.model && provider !== 'local') {
-      command += ` --model ${options.model}`;
+      if (!/^[a-zA-Z0-9._:/-]+$/.test(options.model)) {
+        throw new Error('Invalid model name');
+      }
+      command += ` --model '${options.model}'`;
     }
 
     // Add verbose flag if enabled in app settings
@@ -688,7 +703,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       try {
         const { execSync } = await import('child_process');
         console.log(`Removing worktree at ${agent.worktreePath}`);
-        execSync(`git worktree remove "${agent.worktreePath}" --force`, { cwd: agent.projectPath, stdio: 'pipe' });
+        execSync(`git worktree remove '${agent.worktreePath}' --force`, { cwd: agent.projectPath, stdio: 'pipe' });
         console.log(`Worktree removed successfully`);
       } catch (err) {
         console.warn(`Failed to remove worktree:`, err);
@@ -1660,17 +1675,16 @@ function registerTasmaniaHandlers(deps: IpcHandlerDependencies): void {
 
       // Remove existing first
       try {
-        const { execSync: execSyncImport } = await import('child_process');
-        execSyncImport('claude mcp remove -s user tasmania 2>&1', { encoding: 'utf-8', stdio: 'pipe' });
+        const { execFileSync: execFileSyncImport } = await import('child_process');
+        execFileSyncImport('claude', ['mcp', 'remove', '-s', 'user', 'tasmania'], { encoding: 'utf-8', stdio: 'pipe' });
       } catch {
         // Ignore if doesn't exist
       }
 
       // Add via claude mcp add
       try {
-        const { execSync: execSyncImport } = await import('child_process');
-        const argsStr = args.map(a => `"${a}"`).join(' ');
-        execSyncImport(`claude mcp add -s user tasmania ${command} ${argsStr}`, { encoding: 'utf-8', stdio: 'pipe' });
+        const { execFileSync: execFileSyncImport } = await import('child_process');
+        execFileSyncImport('claude', ['mcp', 'add', '-s', 'user', 'tasmania', command, ...args], { encoding: 'utf-8', stdio: 'pipe' });
         return { success: true };
       } catch {
         // Fallback: write to mcp.json

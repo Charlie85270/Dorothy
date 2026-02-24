@@ -120,7 +120,7 @@ export default function RecurringTasksPage() {
 
       <LogsModal
         selectedLogs={taskLogs.selectedLogs}
-        onClose={() => taskLogs.setSelectedLogs(null)}
+        onClose={() => taskLogs.closeLogs()}
         onRunIndexChange={(idx) =>
           taskLogs.setSelectedLogs(prev => prev ? { ...prev, selectedRunIndex: idx } : null)
         }

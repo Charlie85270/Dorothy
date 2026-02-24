@@ -349,6 +349,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('scheduler:getLogs', taskId),
     fixMcpPaths: () =>
       ipcRenderer.invoke('scheduler:fixMcpPaths'),
+    watchLogs: (taskId: string) =>
+      ipcRenderer.invoke('scheduler:watchLogs', taskId),
+    unwatchLogs: (taskId: string) =>
+      ipcRenderer.invoke('scheduler:unwatchLogs', taskId),
+    onLogData: (callback: (event: { taskId: string; data: string }) => void) => {
+      const listener = (_: unknown, event: { taskId: string; data: string }) => callback(event);
+      ipcRenderer.on('scheduler:log-data', listener);
+      return () => ipcRenderer.removeListener('scheduler:log-data', listener);
+    },
+    onTaskStatus: (callback: (event: { taskId: string; status: string; summary?: string }) => void) => {
+      const listener = (_: unknown, event: { taskId: string; status: string; summary?: string }) => callback(event);
+      ipcRenderer.on('scheduler:task-status', listener);
+      return () => ipcRenderer.removeListener('scheduler:task-status', listener);
+    },
   },
 
   // Automations
@@ -550,6 +564,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('memory:create-file', memoryDir, fileName, content ?? ''),
     deleteFile: (filePath: string) =>
       ipcRenderer.invoke('memory:delete-file', filePath),
+  },
+
+  // API
+  api: {
+    getToken: () => ipcRenderer.invoke('api:getToken') as Promise<string>,
   },
 
   // Platform info

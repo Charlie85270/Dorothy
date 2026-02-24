@@ -1,13 +1,14 @@
 import * as http from 'http';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as crypto from 'crypto';
 import * as pty from 'node-pty';
 import { app, BrowserWindow } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import TelegramBot from 'node-telegram-bot-api';
 import { App as SlackApp } from '@slack/bolt';
 import { AgentStatus, AppSettings, AgentCharacter } from '../types';
-import { API_PORT, VAULT_DIR } from '../constants';
+import { API_PORT, VAULT_DIR, API_TOKEN_FILE } from '../constants';
 import { isSuperAgent } from '../utils';
 import { agents, saveAgents, initAgentPty } from '../core/agent-manager';
 import { ptyProcesses } from '../core/pty-manager';
@@ -15,7 +16,70 @@ import { buildFullPath } from '../utils/path-builder';
 import { generateTaskFromPrompt } from '../utils/kanban-generate';
 import { getVaultDb } from './vault-db';
 
+import * as os from 'os';
+
 let apiServer: http.Server | null = null;
+let apiToken: string | null = null;
+
+/**
+ * Check if a file path is safe to send via Telegram.
+ * Blocks sensitive directories that could exfiltrate secrets.
+ */
+function isSafeTelegramPath(filePath: string): boolean {
+  const resolved = path.resolve(filePath);
+  const home = os.homedir();
+
+  // Must be within home directory
+  if (!resolved.startsWith(home + path.sep) && resolved !== home) {
+    return false;
+  }
+
+  // Block sensitive directories
+  const blockedDirs = [
+    path.join(home, '.ssh'),
+    path.join(home, '.gnupg'),
+    path.join(home, '.aws'),
+    path.join(home, '.claude'),
+    path.join(home, '.env'),
+  ];
+
+  for (const blocked of blockedDirs) {
+    if (resolved === blocked || resolved.startsWith(blocked + path.sep)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function initApiToken(): string {
+  // Reuse existing token if present
+  try {
+    if (fs.existsSync(API_TOKEN_FILE)) {
+      const existing = fs.readFileSync(API_TOKEN_FILE, 'utf-8').trim();
+      if (existing.length >= 32) {
+        apiToken = existing;
+        return existing;
+      }
+    }
+  } catch { /* regenerate */ }
+
+  const token = crypto.randomBytes(32).toString('hex');
+  const dir = path.dirname(API_TOKEN_FILE);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  fs.writeFileSync(API_TOKEN_FILE, token, { mode: 0o600 });
+  apiToken = token;
+  return token;
+}
+
+export function getApiToken(): string {
+  if (!apiToken) {
+    return initApiToken();
+  }
+  return apiToken;
+}
 
 export function startApiServer(
   mainWindow: BrowserWindow | null,
@@ -30,9 +94,13 @@ export function startApiServer(
 ) {
   if (apiServer) return;
 
+  // Ensure API token exists before starting server
+  initApiToken();
+
   apiServer = http.createServer(async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
     if (req.method === 'OPTIONS') {
       res.writeHead(200);
@@ -42,6 +110,16 @@ export function startApiServer(
 
     const url = new URL(req.url || '/', `http://localhost:${API_PORT}`);
     const pathname = url.pathname;
+
+    // Auth check: exempt /api/local-file (restricted by path validation instead)
+    if (pathname !== '/api/local-file') {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || authHeader !== `Bearer ${apiToken}`) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Unauthorized' }));
+        return;
+      }
+    }
 
     let body: Record<string, unknown> = {};
     if (req.method === 'POST') {
@@ -184,13 +262,17 @@ export function startApiServer(
         }
 
         if (agent.secondaryProjectPath) {
-          command += ` --add-dir '${agent.secondaryProjectPath}'`;
+          command += ` --add-dir '${agent.secondaryProjectPath.replace(/'/g, "'\\''")}'`;
         }
         if (skipPermissions !== undefined ? skipPermissions : agent.skipPermissions) {
           command += ' --dangerously-skip-permissions';
         }
         if (model) {
-          command += ` --model ${model}`;
+          if (!/^[a-zA-Z0-9._:/-]+$/.test(model)) {
+            sendJson({ error: 'Invalid model name' }, 400);
+            return;
+          }
+          command += ` --model '${model}'`;
         }
 
         // Build final prompt with skills directive if agent has skills
@@ -373,6 +455,10 @@ export function startApiServer(
           sendJson({ error: 'photo_path is required' }, 400);
           return;
         }
+        if (!isSafeTelegramPath(photo_path)) {
+          sendJson({ error: 'Access denied: path not allowed' }, 403);
+          return;
+        }
 
         const telegramBot = getTelegramBot();
         const targetChatId = appSettings.telegramChatId || appSettings.telegramAuthorizedChatIds?.[0];
@@ -406,6 +492,10 @@ export function startApiServer(
           sendJson({ error: 'video_path is required' }, 400);
           return;
         }
+        if (!isSafeTelegramPath(video_path)) {
+          sendJson({ error: 'Access denied: path not allowed' }, 403);
+          return;
+        }
 
         const telegramBot = getTelegramBot();
         const targetChatId = appSettings.telegramChatId || appSettings.telegramAuthorizedChatIds?.[0];
@@ -437,6 +527,10 @@ export function startApiServer(
         const { document_path, caption } = body as { document_path: string; caption?: string };
         if (!document_path) {
           sendJson({ error: 'document_path is required' }, 400);
+          return;
+        }
+        if (!isSafeTelegramPath(document_path)) {
+          sendJson({ error: 'Access denied: path not allowed' }, 403);
           return;
         }
 
@@ -616,6 +710,55 @@ export function startApiServer(
         }
 
         sendJson({ success: true });
+        return;
+      }
+
+      // POST /api/scheduler/status — Agent self-reports task status
+      if (pathname === '/api/scheduler/status' && req.method === 'POST') {
+        const { task_id, status, summary } = body as {
+          task_id: string;
+          status: 'running' | 'success' | 'error' | 'partial';
+          summary?: string;
+        };
+
+        if (!task_id || !status) {
+          sendJson({ error: 'task_id and status are required' }, 400);
+          return;
+        }
+
+        const validStatuses = ['running', 'success', 'error', 'partial'];
+        if (!validStatuses.includes(status)) {
+          sendJson({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` }, 400);
+          return;
+        }
+
+        try {
+          const metadataPath = path.join(os.homedir(), '.dorothy', 'scheduler-metadata.json');
+          let metadata: Record<string, Record<string, unknown>> = {};
+          if (fs.existsSync(metadataPath)) {
+            metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
+          }
+
+          if (!metadata[task_id]) {
+            metadata[task_id] = {};
+          }
+          metadata[task_id].lastRunStatus = status;
+          metadata[task_id].lastRun = new Date().toISOString();
+          if (summary) {
+            metadata[task_id].lastRunSummary = summary;
+          }
+
+          fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
+
+          // Emit to frontend
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('scheduler:task-status', { taskId: task_id, status, summary });
+          }
+
+          sendJson({ success: true });
+        } catch (err) {
+          sendJson({ error: `Failed to update status: ${err}` }, 500);
+        }
         return;
       }
 
@@ -1003,21 +1146,32 @@ export function startApiServer(
       // GET /api/local-file?path=... — serve local files (for vault image previews)
       if (pathname === '/api/local-file' && req.method === 'GET') {
         const filePath = url.searchParams.get('path');
-        if (!filePath || !fs.existsSync(filePath)) {
+        if (!filePath) {
+          sendJson({ error: 'File not found' }, 404);
+          return;
+        }
+        // Restrict to vault attachments directory to prevent arbitrary file read
+        const resolved = path.resolve(filePath);
+        const allowedDir = path.join(VAULT_DIR, 'attachments');
+        if (!resolved.startsWith(allowedDir + path.sep) && resolved !== allowedDir) {
+          sendJson({ error: 'Access denied: path outside allowed directory' }, 403);
+          return;
+        }
+        if (!fs.existsSync(resolved)) {
           sendJson({ error: 'File not found' }, 404);
           return;
         }
         try {
-          const ext = path.extname(filePath).toLowerCase();
+          const ext = path.extname(resolved).toLowerCase();
           const { MIME_TYPES } = require('../constants');
           const mimeType = MIME_TYPES[ext] || 'application/octet-stream';
-          const stat = fs.statSync(filePath);
+          const stat = fs.statSync(resolved);
           res.writeHead(200, {
             'Content-Type': mimeType,
             'Content-Length': stat.size,
             'Cache-Control': 'public, max-age=3600',
           });
-          fs.createReadStream(filePath).pipe(res);
+          fs.createReadStream(resolved).pipe(res);
         } catch (err) {
           sendJson({ error: String(err) }, 500);
         }

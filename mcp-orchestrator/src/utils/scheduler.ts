@@ -8,6 +8,19 @@ import * as path from "path";
 import * as os from "os";
 
 /**
+ * Escape a string for safe use inside bash double-quoted strings.
+ * Escapes characters that have special meaning in double quotes: " $ ` \ !
+ */
+export function escapeForBashDoubleQuotes(str: string): string {
+  return str
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\$/g, '\\$')
+    .replace(/`/g, '\\`')
+    .replace(/!/g, '\\!');
+}
+
+/**
  * Get the path to the claude CLI — reads user-configured path from app-settings first
  */
 export async function getClaudePath(): Promise<string> {
@@ -139,6 +152,10 @@ export async function createLaunchdJob(
   prompt: string,
   autonomous: boolean
 ): Promise<void> {
+  if (!fs.existsSync(projectPath)) {
+    throw new Error(`Project path does not exist: ${projectPath}`);
+  }
+
   const claudePath = await getClaudePath();
   const claudeDir = path.dirname(claudePath);
 
@@ -161,6 +178,7 @@ export async function createLaunchdJob(
   const flags = autonomous ? "--dangerously-skip-permissions" : "";
   const mcpConfigPath = path.join(os.homedir(), ".claude", "mcp.json");
   const homeDir = os.homedir();
+  const safeProjectPath = escapeForBashDoubleQuotes(projectPath);
 
   const scriptContent = `#!/bin/bash
 
@@ -180,7 +198,7 @@ elif [ -f "${homeDir}/.zshrc" ]; then
 fi
 
 export PATH="${claudeDir}:$PATH"
-cd "${projectPath}"
+cd "${safeProjectPath}"
 echo "=== Task started at $(date) ===" >> "${logPath}"
 "${claudePath}" ${flags} --mcp-config "${mcpConfigPath}" -p '${escapedPrompt}' >> "${logPath}" 2>&1
 echo "=== Task completed at $(date) ===" >> "${logPath}"
@@ -248,6 +266,10 @@ export async function createCronJob(
   prompt: string,
   autonomous: boolean
 ): Promise<void> {
+  if (!fs.existsSync(projectPath)) {
+    throw new Error(`Project path does not exist: ${projectPath}`);
+  }
+
   const claudePath = await getClaudePath();
   const claudeDir = path.dirname(claudePath);
 
@@ -267,6 +289,7 @@ export async function createCronJob(
   const flags = autonomous ? "--dangerously-skip-permissions" : "";
   const mcpConfigPath = path.join(os.homedir(), ".claude", "mcp.json");
   const homeDir = os.homedir();
+  const safeProjectPath = escapeForBashDoubleQuotes(projectPath);
 
   const scriptContent = `#!/bin/bash
 
@@ -286,7 +309,7 @@ elif [ -f "${homeDir}/.zshrc" ]; then
 fi
 
 export PATH="${claudeDir}:$PATH"
-cd "${projectPath}"
+cd "${safeProjectPath}"
 echo "=== Task started at $(date) ===" >> "${logPath}"
 "${claudePath}" ${flags} --mcp-config "${mcpConfigPath}" -p '${escapedPrompt}' >> "${logPath}" 2>&1
 echo "=== Task completed at $(date) ===" >> "${logPath}"

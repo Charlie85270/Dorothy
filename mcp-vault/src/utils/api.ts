@@ -1,22 +1,41 @@
 import * as http from "http";
+import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
 
 const API_PORT = 31415;
 const API_HOST = "127.0.0.1";
+const API_TOKEN_FILE = path.join(os.homedir(), ".dorothy", "api-token");
+
+function readApiToken(): string | null {
+  try {
+    if (fs.existsSync(API_TOKEN_FILE)) {
+      return fs.readFileSync(API_TOKEN_FILE, "utf-8").trim();
+    }
+  } catch { /* ignore */ }
+  return null;
+}
 
 export async function apiRequest(
   method: string,
-  path: string,
+  path_: string,
   body?: Record<string, unknown>
 ): Promise<unknown> {
   return new Promise((resolve, reject) => {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    const token = readApiToken();
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
     const options: http.RequestOptions = {
       hostname: API_HOST,
       port: API_PORT,
-      path,
+      path: path_,
       method,
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers,
     };
 
     const req = http.request(options, (res) => {

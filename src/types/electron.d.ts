@@ -436,7 +436,7 @@ export interface ElectronAPI {
         };
         createdAt: string;
         lastRun?: string;
-        lastRunStatus?: 'success' | 'error';
+        lastRunStatus?: 'success' | 'error' | 'running' | 'partial';
         nextRun?: string;
       }>;
     }>;
@@ -469,6 +469,10 @@ export interface ElectronAPI {
       error?: string;
     }>;
     fixMcpPaths: () => Promise<{ success: boolean; error?: string }>;
+    watchLogs: (taskId: string) => Promise<{ success: boolean; error?: string }>;
+    unwatchLogs: (taskId: string) => Promise<{ success: boolean; error?: string }>;
+    onLogData: (callback: (event: { taskId: string; data: string }) => void) => () => void;
+    onTaskStatus: (callback: (event: { taskId: string; status: string; summary?: string }) => void) => () => void;
   };
 
   // Automations
@@ -674,6 +678,11 @@ export interface ElectronAPI {
     writeFile: (filePath: string, content: string) => Promise<{ success: boolean; error?: string }>;
     createFile: (memoryDir: string, fileName: string, content?: string) => Promise<{ success: boolean; file?: MemoryFile; error?: string }>;
     deleteFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
+  };
+
+  // API
+  api?: {
+    getToken: () => Promise<string>;
   };
 
   // Get home path helper

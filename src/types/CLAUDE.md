@@ -9,4 +9,10 @@
 |----|------|---|-------|------|
 | #4166 | 5:04 PM | 🔵 | Electron Type Definitions for IPC Data Structures | ~552 |
 | #4165 | 5:03 PM | 🔵 | Agent Type Definitions with Status State Machine and Event Types | ~580 |
+
+### Feb 20, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #5336 | 11:26 AM | 🔵 | Dorothy Agent System Type Definitions | ~401 |
 </claude-mem-context>

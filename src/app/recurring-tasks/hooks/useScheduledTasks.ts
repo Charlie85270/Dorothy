@@ -53,6 +53,35 @@ export function useScheduledTasks(showToast: (msg: string, type: 'success' | 'er
     init();
   }, [loadTasks, loadAgents]);
 
+  // Listen for real-time task status updates from the API
+  useEffect(() => {
+    if (!isElectron()) return;
+
+    const cleanup = window.electronAPI?.scheduler?.onTaskStatus((event: { taskId: string; status: string; summary?: string }) => {
+      setTasks(prev => prev.map(task => {
+        if (task.id !== event.taskId) return task;
+        return {
+          ...task,
+          lastRunStatus: event.status as 'success' | 'error' | 'running' | 'partial',
+          lastRun: new Date().toISOString(),
+        };
+      }));
+
+      // Update running tasks set
+      if (event.status === 'running') {
+        setRunningTasks(prev => new Set([...prev, event.taskId]));
+      } else {
+        setRunningTasks(prev => {
+          const next = new Set(prev);
+          next.delete(event.taskId);
+          return next;
+        });
+      }
+    });
+
+    return () => { cleanup?.(); };
+  }, []);
+
   // Smart polling
   useEffect(() => {
     if (!isElectron() || tasks.length === 0) return;

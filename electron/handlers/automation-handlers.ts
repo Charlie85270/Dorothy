@@ -100,6 +100,16 @@ function generateId(): string {
   return Math.random().toString(36).substring(2, 10);
 }
 
+// Escape strings for safe interpolation inside bash double-quoted strings
+function escapeForBashDoubleQuotes(str: string): string {
+  return str
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\$/g, '\\$')
+    .replace(/`/g, '\\`')
+    .replace(/!/g, '\\!');
+}
+
 // Convert interval minutes to cron expression
 function intervalToCron(minutes: number): string {
   if (minutes < 60) {
@@ -222,6 +232,8 @@ async function createAutomationLaunchdJob(automation: Automation): Promise<void>
   const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
   const projectPath = automation.agent.projectPath || os.homedir();
   const homeDir = os.homedir();
+  const safeClaudeDir = escapeForBashDoubleQuotes(claudeDir);
+  const safeProjectPath = escapeForBashDoubleQuotes(projectPath);
 
   // Script sources bash profile for proper PATH (nvm, etc.)
   const scriptContent = `#!/bin/bash
@@ -242,9 +254,9 @@ elif [ -f "${homeDir}/.bash_profile" ]; then
 fi
 
 # Also add claude directory to PATH as fallback
-export PATH="${claudeDir}:$PATH"
+export PATH="${safeClaudeDir}:$PATH"
 
-cd "${projectPath}"
+cd "${safeProjectPath}"
 echo "=== Automation started at $(date) ===" >> "${logPath}"
 "${claudePath}" --dangerously-skip-permissions --mcp-config "${mcpConfigPath}" -p '${escapedPrompt}' >> "${logPath}" 2>&1
 echo "=== Automation completed at $(date) ===" >> "${logPath}"

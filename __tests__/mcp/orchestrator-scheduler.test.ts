@@ -310,4 +310,37 @@ echo "=== Task started ==="
       expect(defaultLines).toBe(50);
     });
   });
+
+  describe('update_scheduled_task_status', () => {
+    it('validates status enum values', () => {
+      const validStatuses = ['running', 'success', 'error', 'partial'];
+      expect(validStatuses).toContain('running');
+      expect(validStatuses).toContain('success');
+      expect(validStatuses).toContain('error');
+      expect(validStatuses).toContain('partial');
+      expect(validStatuses).not.toContain('pending');
+    });
+
+    it('formats success response with summary', () => {
+      const task_id = 'task-abc';
+      const status = 'success';
+      const summary = 'Completed 5 checks';
+      const text = `Task ${task_id} status updated to "${status}"${summary ? `: ${summary}` : ''}`;
+      expect(text).toBe('Task task-abc status updated to "success": Completed 5 checks');
+    });
+
+    it('formats success response without summary', () => {
+      const task_id = 'task-abc';
+      const status = 'running';
+      const summary: string | undefined = undefined;
+      const text = `Task ${task_id} status updated to "${status}"${summary ? `: ${summary}` : ''}`;
+      expect(text).toBe('Task task-abc status updated to "running"');
+    });
+
+    it('formats error response', () => {
+      const error = new Error('Network timeout');
+      const text = `Error updating task status: ${error instanceof Error ? error.message : String(error)}`;
+      expect(text).toBe('Error updating task status: Network timeout');
+    });
+  });
 });

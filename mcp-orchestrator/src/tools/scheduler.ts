@@ -18,6 +18,7 @@ import {
   deleteLaunchdJob,
   deleteCronJob,
 } from "../utils/scheduler.js";
+import { apiRequest } from "../utils/api.js";
 
 export function registerSchedulerTools(server: McpServer): void {
   // Tool: List scheduled tasks
@@ -429,6 +430,40 @@ export function registerSchedulerTools(server: McpServer): void {
             {
               type: "text",
               text: `Error getting logs: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Tool: Update scheduled task status
+  server.tool(
+    "update_scheduled_task_status",
+    "Update the status of a scheduled task. Call this when you start working (status='running') and when you finish (status='success', 'error', or 'partial').",
+    {
+      task_id: z.string().describe("The scheduled task ID"),
+      status: z.enum(["running", "success", "error", "partial"]).describe("Current task status"),
+      summary: z.string().optional().describe("Brief summary of what was done or what went wrong"),
+    },
+    async ({ task_id, status, summary }) => {
+      try {
+        await apiRequest("/api/scheduler/status", "POST", { task_id, status, summary });
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Task ${task_id} status updated to "${status}"${summary ? `: ${summary}` : ""}`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error updating task status: ${error instanceof Error ? error.message : String(error)}`,
             },
           ],
           isError: true,

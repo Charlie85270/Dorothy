@@ -4,12 +4,45 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { spawn } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
+import { getMainWindow } from '../core/window-manager';
 
 // ============================================
 // Scheduler IPC handlers (native implementation)
 // ============================================
 
 const SCHEDULER_METADATA_PATH = path.join(os.homedir(), '.dorothy', 'scheduler-metadata.json');
+
+// Active log file watchers for real-time streaming
+const logWatchers = new Map<string, { watcher: fs.FSWatcher; offset: number }>();
+
+/**
+ * Resolve the log file path for a task, checking plist for custom paths.
+ */
+function resolveLogPath(taskId: string): string {
+  const defaultPath = path.join(os.homedir(), '.claude', 'logs', `${taskId}.log`);
+
+  // Check for custom path in plist (legacy format)
+  const plistPath = path.join(os.homedir(), 'Library', 'LaunchAgents', `com.claude.schedule.${taskId}.plist`);
+  if (fs.existsSync(plistPath)) {
+    try {
+      const plistContent = fs.readFileSync(plistPath, 'utf-8');
+      const stdOutMatch = plistContent.match(/<key>StandardOutPath<\/key>\s*<string>([^<]+)<\/string>/);
+      if (stdOutMatch) return stdOutMatch[1];
+    } catch { /* use default */ }
+  }
+
+  // Also check dorothy plist format
+  const dorothyPlistPath = path.join(os.homedir(), 'Library', 'LaunchAgents', `com.dorothy.scheduler.${taskId}.plist`);
+  if (fs.existsSync(dorothyPlistPath)) {
+    try {
+      const plistContent = fs.readFileSync(dorothyPlistPath, 'utf-8');
+      const stdOutMatch = plistContent.match(/<key>StandardOutPath<\/key>\s*<string>([^<]+)<\/string>/);
+      if (stdOutMatch) return stdOutMatch[1];
+    } catch { /* use default */ }
+  }
+
+  return defaultPath;
+}
 
 interface SchedulerTaskMetadata {
   title?: string;
@@ -20,6 +53,9 @@ interface SchedulerTaskMetadata {
     slack: boolean;
   };
   createdAt: string;
+  lastRunStatus?: 'success' | 'error' | 'running' | 'partial';
+  lastRun?: string;
+  lastRunSummary?: string;
 }
 
 function loadSchedulerMetadata(): Record<string, SchedulerTaskMetadata> {
@@ -270,7 +306,9 @@ async function createLaunchdJob(
     fs.mkdirSync(scriptsDir, { recursive: true });
   }
 
-  const escapedPrompt = prompt.replace(/'/g, "'\\''");
+  const statusInstruction = `\n\n[IMPORTANT] Use the update_scheduled_task_status MCP tool to report your progress:\n1. At the START of your work, call it with task_id="${taskId}" and status="running"\n2. When FINISHED successfully, call it with status="success" and a brief summary\n3. If ERRORS occurred, use status="error" (total failure) or "partial" (some parts succeeded)`;
+  const promptWithStatus = prompt + statusInstruction;
+  const escapedPrompt = promptWithStatus.replace(/'/g, "'\\''");
   const flags = autonomous ? '--dangerously-skip-permissions' : '';
   const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
   const homeDir = os.homedir();
@@ -402,7 +440,9 @@ async function createCronJob(
     fs.mkdirSync(logsDir, { recursive: true });
   }
 
-  const escapedPrompt = prompt.replace(/'/g, "'\\''");
+  const statusInstruction = `\n\n[IMPORTANT] Use the update_scheduled_task_status MCP tool to report your progress:\n1. At the START of your work, call it with task_id="${taskId}" and status="running"\n2. When FINISHED successfully, call it with status="success" and a brief summary\n3. If ERRORS occurred, use status="error" (total failure) or "partial" (some parts succeeded)`;
+  const promptWithStatus = prompt + statusInstruction;
+  const escapedPrompt = promptWithStatus.replace(/'/g, "'\\''");
   const flags = autonomous ? '--dangerously-skip-permissions' : '';
   const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
   const homeDir = os.homedir();
@@ -497,7 +537,7 @@ export function registerSchedulerHandlers(): void {
         notifications: { telegram: boolean; slack: boolean };
         createdAt: string;
         lastRun?: string;
-        lastRunStatus?: 'success' | 'error';
+        lastRunStatus?: 'success' | 'error' | 'running' | 'partial';
         nextRun?: string;
       }> = [];
 
@@ -517,7 +557,17 @@ export function registerSchedulerHandlers(): void {
               };
 
               const logPath = path.join(os.homedir(), '.claude', 'logs', `${schedule.id}.log`);
-              const { lastRun, lastRunStatus } = getLastRunStatus(logPath);
+              const logStatus = getLastRunStatus(logPath);
+              let lastRun: string | undefined = logStatus.lastRun;
+              let lastRunStatus: 'success' | 'error' | 'running' | 'partial' | undefined = logStatus.lastRunStatus;
+
+              // Override with metadata status if agent reported it (more accurate)
+              if (taskMeta.lastRunStatus) {
+                lastRunStatus = taskMeta.lastRunStatus;
+              }
+              if (taskMeta.lastRun) {
+                lastRun = taskMeta.lastRun;
+              }
 
               const taskId = schedule.id || uuidv4();
               addedTaskIds.add(taskId);
@@ -565,7 +615,16 @@ export function registerSchedulerHandlers(): void {
                     };
 
                     const logPath = path.join(os.homedir(), '.claude', 'logs', `${schedule.id}.log`);
-                    const { lastRun, lastRunStatus } = getLastRunStatus(logPath);
+                    const logStatus2 = getLastRunStatus(logPath);
+                    let lastRun: string | undefined = logStatus2.lastRun;
+                    let lastRunStatus: 'success' | 'error' | 'running' | 'partial' | undefined = logStatus2.lastRunStatus;
+
+                    if (taskMeta.lastRunStatus) {
+                      lastRunStatus = taskMeta.lastRunStatus;
+                    }
+                    if (taskMeta.lastRun) {
+                      lastRun = taskMeta.lastRun;
+                    }
 
                     const projectPath = '/' + projectDir.replace(/-/g, '/');
                     const taskId = schedule.id || uuidv4();
@@ -702,13 +761,22 @@ export function registerSchedulerHandlers(): void {
                 else if (day !== undefined) cron = `${minuteStr} ${hourStr} ${day} * *`;
 
                 const logPath = path.join(os.homedir(), '.claude', 'logs', `${taskId}.log`);
-                const { lastRun, lastRunStatus } = getLastRunStatus(logPath);
+                const logStatus3 = getLastRunStatus(logPath);
+                let lastRun: string | undefined = logStatus3.lastRun;
+                let lastRunStatus: 'success' | 'error' | 'running' | 'partial' | undefined = logStatus3.lastRunStatus;
 
                 const plistStat = fs.statSync(plistPath);
                 const taskMeta = metadata[taskId] || {
                   notifications: { telegram: prompt.toLowerCase().includes('telegram'), slack: prompt.toLowerCase().includes('slack') },
                   createdAt: plistStat.birthtime.toISOString(),
                 };
+
+                if (taskMeta.lastRunStatus) {
+                  lastRunStatus = taskMeta.lastRunStatus;
+                }
+                if (taskMeta.lastRun) {
+                  lastRun = taskMeta.lastRun;
+                }
 
                 addedTaskIds.add(taskId);
                 tasks.push({
@@ -954,7 +1022,9 @@ export function registerSchedulerHandlers(): void {
       const logPath = path.join(os.homedir(), '.claude', 'logs', `${taskId}.log`);
       const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
       const homeDir = os.homedir();
-      const escapedPrompt = prompt.replace(/'/g, "'\\''");
+      const statusInstruction = `\n\n[IMPORTANT] Use the update_scheduled_task_status MCP tool to report your progress:\n1. At the START of your work, call it with task_id="${taskId}" and status="running"\n2. When FINISHED successfully, call it with status="success" and a brief summary\n3. If ERRORS occurred, use status="error" (total failure) or "partial" (some parts succeeded)`;
+      const promptWithStatus = prompt + statusInstruction;
+      const escapedPrompt = promptWithStatus.replace(/'/g, "'\\''");
       const flags = autonomous ? '--dangerously-skip-permissions' : '';
 
       const scriptPath = path.join(os.homedir(), '.dorothy', 'scripts', `${taskId}.sh`);
@@ -1186,5 +1256,67 @@ echo "=== Task completed at $(date) ===" >> "${logPath}"
       console.error('Error reading logs:', err);
       return { logs: '', runs: [], error: err instanceof Error ? err.message : 'Failed to read logs' };
     }
+  });
+
+  // Watch log file for real-time streaming
+  ipcMain.handle('scheduler:watchLogs', async (_event, taskId: string) => {
+    try {
+      // Clean up existing watcher for this task
+      const existing = logWatchers.get(taskId);
+      if (existing) {
+        existing.watcher.close();
+        logWatchers.delete(taskId);
+      }
+
+      const logPath = resolveLogPath(taskId);
+      if (!fs.existsSync(logPath)) {
+        return { success: true }; // No file yet — watcher will be created when it appears
+      }
+
+      const stat = fs.statSync(logPath);
+      let offset = stat.size; // Start from current end so we only stream new content
+
+      const watcher = fs.watch(logPath, (eventType) => {
+        if (eventType !== 'change') return;
+        try {
+          const currentStat = fs.statSync(logPath);
+          if (currentStat.size <= offset) {
+            // File was truncated or hasn't grown
+            if (currentStat.size < offset) offset = 0; // Reset on truncation
+            return;
+          }
+
+          const fd = fs.openSync(logPath, 'r');
+          const buffer = Buffer.alloc(currentStat.size - offset);
+          fs.readSync(fd, buffer, 0, buffer.length, offset);
+          fs.closeSync(fd);
+          offset = currentStat.size;
+
+          const data = buffer.toString('utf-8');
+          const mainWindow = getMainWindow();
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('scheduler:log-data', { taskId, data });
+          }
+        } catch {
+          // File may have been deleted or rotated
+        }
+      });
+
+      logWatchers.set(taskId, { watcher, offset });
+      return { success: true };
+    } catch (err) {
+      console.error('Error watching logs:', err);
+      return { success: false, error: err instanceof Error ? err.message : 'Failed to watch logs' };
+    }
+  });
+
+  // Stop watching log file
+  ipcMain.handle('scheduler:unwatchLogs', async (_event, taskId: string) => {
+    const existing = logWatchers.get(taskId);
+    if (existing) {
+      existing.watcher.close();
+      logWatchers.delete(taskId);
+    }
+    return { success: true };
   });
 }

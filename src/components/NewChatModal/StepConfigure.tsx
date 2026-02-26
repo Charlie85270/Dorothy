@@ -28,13 +28,47 @@ interface TasmaniaModel {
   architecture: string | null;
 }
 
+/** Model definition from provider */
+interface ProviderModel {
+  id: string;
+  name: string;
+  description: string;
+}
+
+/** Static model definitions per provider */
+const PROVIDER_MODELS: Record<string, ProviderModel[]> = {
+  claude: [
+    { id: 'sonnet', name: 'Sonnet', description: 'Balanced' },
+    { id: 'opus', name: 'Opus', description: 'Most capable' },
+    { id: 'haiku', name: 'Haiku', description: 'Fastest' },
+  ],
+  codex: [
+    { id: 'gpt-5.3-codex', name: 'GPT-5.3 Codex', description: 'Recommended' },
+    { id: 'gpt-5.2-codex', name: 'GPT-5.2 Codex', description: 'Balanced' },
+    { id: 'gpt-5.1-codex', name: 'GPT-5.1 Codex', description: 'Previous gen' },
+    { id: 'gpt-5-codex-mini', name: 'GPT-5 Codex Mini', description: 'Fast & efficient' },
+  ],
+  gemini: [
+    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', description: 'Most capable' },
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: 'Fast & balanced' },
+    { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite', description: 'Fastest' },
+  ],
+};
+
+/** Default model per provider */
+const PROVIDER_DEFAULT_MODEL: Record<string, string> = {
+  claude: 'sonnet',
+  codex: 'gpt-5.2-codex',
+  gemini: 'gemini-2.5-flash',
+};
+
 interface StepConfigureProps {
   projectPath: string;
   selectedSkills: string[];
   selectedSecondaryProject: string;
   customSecondaryPath: string;
-  model: 'sonnet' | 'opus' | 'haiku';
-  onModelChange: (model: 'sonnet' | 'opus' | 'haiku') => void;
+  model: string;
+  onModelChange: (model: string) => void;
   useWorktree: boolean;
   onToggleWorktree: () => void;
   branchName: string;
@@ -51,6 +85,7 @@ interface StepConfigureProps {
   localModel: string;
   onLocalModelChange: (model: string) => void;
   tasmaniaEnabled: boolean;
+  installedProviders?: Record<string, boolean>;
 }
 
 const StepConfigure = React.memo(function StepConfigure({
@@ -76,6 +111,7 @@ const StepConfigure = React.memo(function StepConfigure({
   localModel,
   onLocalModelChange,
   tasmaniaEnabled,
+  installedProviders,
 }: StepConfigureProps) {
   // Tasmania state for local provider
   const [tasmaniaStatus, setTasmaniaStatus] = useState<{
@@ -163,65 +199,88 @@ const StepConfigure = React.memo(function StepConfigure({
         initialCharacter={agentPersonaRef.current.character}
       />
 
-      {/* Provider Toggle — only shown when Tasmania is enabled */}
-      {tasmaniaEnabled && (
-        <div>
-          <label className="block text-sm font-medium mb-2">Provider</label>
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => onProviderChange('claude')}
-              className={`
-                p-3 rounded-none border transition-all text-center flex items-center justify-center gap-2
-                ${provider === 'claude'
-                  ? 'border-accent-blue bg-accent-blue/10'
-                  : 'border-border-primary hover:border-border-accent'
-                }
-              `}
-            >
-              <Cloud className={`w-4 h-4 ${provider === 'claude' ? 'text-accent-blue' : 'text-text-muted'}`} />
-              <span className="font-medium">Claude Code</span>
-            </button>
+      {/* Provider Selector */}
+      <div>
+        <label className="block text-sm font-medium mb-2">Provider</label>
+        <div className={`grid gap-3 ${tasmaniaEnabled ? 'grid-cols-4' : 'grid-cols-3'}`}>
+          {([
+            { id: 'claude' as const, label: 'Claude', Icon: Cloud, accent: 'accent-blue' },
+            { id: 'codex' as const, label: 'Codex', Icon: Zap, accent: 'accent-green' },
+            { id: 'gemini' as const, label: 'Gemini', Icon: Layers, accent: 'accent-purple' },
+          ] as const).map(({ id, label, Icon, accent }) => {
+            const installed = installedProviders?.[id] !== false;
+            return (
+              <button
+                key={id}
+                disabled={!installed}
+                onClick={() => {
+                  if (!installed) return;
+                  onProviderChange(id);
+                  onModelChange(PROVIDER_DEFAULT_MODEL[id]);
+                }}
+                className={`
+                  p-3 rounded-none border transition-all text-center flex flex-col items-center justify-center gap-1
+                  ${!installed
+                    ? 'opacity-40 cursor-not-allowed border-border-primary'
+                    : provider === id
+                      ? `border-${accent} bg-${accent}/10`
+                      : 'border-border-primary hover:border-border-accent'
+                  }
+                `}
+              >
+                <div className="flex items-center gap-2">
+                  <Icon className={`w-4 h-4 ${provider === id ? `text-${accent}` : 'text-text-muted'}`} />
+                  <span className="font-medium text-sm">{label}</span>
+                </div>
+                {!installed && (
+                  <span className="text-[10px] text-text-muted">Not installed</span>
+                )}
+              </button>
+            );
+          })}
+          {tasmaniaEnabled && (
             <button
               onClick={() => onProviderChange('local')}
               className={`
                 p-3 rounded-none border transition-all text-center flex items-center justify-center gap-2
                 ${provider === 'local'
-                  ? 'border-accent-green bg-accent-green/10'
+                  ? 'border-amber-500 bg-amber-500/10'
                   : 'border-border-primary hover:border-border-accent'
                 }
               `}
             >
-              <Cpu className={`w-4 h-4 ${provider === 'local' ? 'text-accent-green' : 'text-text-muted'}`} />
-              <span className="font-medium">Local LLM</span>
+              <Cpu className={`w-4 h-4 ${provider === 'local' ? 'text-amber-500' : 'text-text-muted'}`} />
+              <span className="font-medium text-sm">Local</span>
             </button>
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
-      {/* Model Selection — Claude models or Tasmania models */}
-      {provider === 'claude' ? (
+      {/* Model Selection — dynamic based on provider */}
+      {provider !== 'local' ? (
         <div>
           <label className="block text-sm font-medium mb-2">Model</label>
-          <div className="grid grid-cols-3 gap-3">
-            {(['sonnet', 'opus', 'haiku'] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => onModelChange(m)}
-                className={`
-                  p-3 rounded-none border transition-all text-center
-                  ${model === m
-                    ? 'border-accent-blue bg-accent-blue/10'
-                    : 'border-border-primary hover:border-border-accent'
-                  }
-                `}
-              >
-                <Zap className={`w-5 h-5 mx-auto mb-1 ${model === m ? 'text-accent-blue' : 'text-text-muted'}`} />
-                <span className="font-medium capitalize">{m}</span>
-                <p className="text-xs text-text-muted mt-0.5">
-                  {m === 'opus' ? 'Most capable' : m === 'sonnet' ? 'Balanced' : 'Fastest'}
-                </p>
-              </button>
-            ))}
+          <div className={`grid gap-3 ${(PROVIDER_MODELS[provider] || PROVIDER_MODELS.claude).length > 3 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+            {(PROVIDER_MODELS[provider] || PROVIDER_MODELS.claude).map((m) => {
+              const accentColor = provider === 'codex' ? 'accent-green' : provider === 'gemini' ? 'accent-purple' : 'accent-blue';
+              return (
+                <button
+                  key={m.id}
+                  onClick={() => onModelChange(m.id)}
+                  className={`
+                    p-3 rounded-none border transition-all text-center
+                    ${model === m.id
+                      ? `border-${accentColor} bg-${accentColor}/10`
+                      : 'border-border-primary hover:border-border-accent'
+                    }
+                  `}
+                >
+                  <Zap className={`w-5 h-5 mx-auto mb-1 ${model === m.id ? `text-${accentColor}` : 'text-text-muted'}`} />
+                  <span className="font-medium">{m.name}</span>
+                  <p className="text-xs text-text-muted mt-0.5">{m.description}</p>
+                </button>
+              );
+            })}
           </div>
         </div>
       ) : (
@@ -246,7 +305,6 @@ const StepConfigure = React.memo(function StepConfigure({
             </div>
           ) : (
             <div className="space-y-3">
-              {/* Currently loaded model */}
               {tasmaniaStatus.modelName && (
                 <div className="p-3 border border-accent-green/30 bg-accent-green/5 rounded-none">
                   <div className="flex items-center gap-2">
@@ -256,8 +314,6 @@ const StepConfigure = React.memo(function StepConfigure({
                   </div>
                 </div>
               )}
-
-              {/* Available models dropdown */}
               {tasmaniaModels.length > 0 && (
                 <div>
                   <select

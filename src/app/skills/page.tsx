@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles,
@@ -9,8 +9,6 @@ import {
   Package,
   CheckCircle,
   XCircle,
-  Filter,
-  ChevronDown,
   Terminal as TerminalIcon,
   Plus,
   X,
@@ -21,15 +19,22 @@ import {
 } from 'lucide-react';
 import { useClaude } from '@/hooks/useClaude';
 import { useElectronSkills } from '@/hooks/useElectron';
-import { SKILLS_DATABASE, SKILL_CATEGORIES, type Skill } from '@/lib/skills-database';
+import { SKILLS_DATABASE, type Skill } from '@/lib/skills-database';
 import SkillInstallDialog from '@/components/SkillInstallDialog';
+import ProviderBadge from '@/components/ProviderBadge';
+
+const COL_STYLES = {
+  rank: { width: '4%' },
+  skill: { width: '30%' },
+  repo: { width: '25%' },
+  installs: { width: '10%' },
+  status: { width: '31%' },
+} as const;
 
 export default function SkillsPage() {
   const { data, loading, error, refresh: refreshClaude } = useClaude();
-  const { installedSkills, installSkill, isElectron: hasElectron, refresh: refreshSkills } = useElectronSkills();
+  const { installedSkills, installedSkillsByProvider, isSkillInstalledOn, isElectron: hasElectron, linkToProvider, refresh: refreshSkills } = useElectronSkills();
   const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [copiedSkill, setCopiedSkill] = useState<string | null>(null);
   const [installingSkill, setInstallingSkill] = useState<string | null>(null);
   const [showToast, setShowToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
@@ -43,6 +48,22 @@ export default function SkillsPage() {
   const [showInstallTerminal, setShowInstallTerminal] = useState(false);
   const [currentInstallRepo, setCurrentInstallRepo] = useState('');
   const [currentInstallTitle, setCurrentInstallTitle] = useState('');
+
+  // Live skills data from skills.sh
+  const [liveSkills, setLiveSkills] = useState<Skill[] | null>(null);
+  const [loadingSkills, setLoadingSkills] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/skills/marketplace')
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data?.skills) setLiveSkills(data.skills);
+      })
+      .catch(() => {}) // fallback to hardcoded
+      .finally(() => setLoadingSkills(false));
+  }, []);
+
+  const skillsDatabase = liveSkills || SKILLS_DATABASE;
 
   const installedPlugins = data?.plugins || [];
   const installedSkillsFromClaude = data?.skills || [];
@@ -62,26 +83,21 @@ export default function SkillsPage() {
     return installedSkillNames.includes(skillName.toLowerCase());
   };
 
-  // Filter skills from database
+  // Filter skills
   const filteredSkills = useMemo(() => {
-    let skills = SKILLS_DATABASE;
+    let skills = skillsDatabase;
 
     if (search) {
       const q = search.toLowerCase();
       skills = skills.filter(
         (s) =>
           s.name.toLowerCase().includes(q) ||
-          s.repo.toLowerCase().includes(q) ||
-          s.category.toLowerCase().includes(q)
+          s.repo.toLowerCase().includes(q)
       );
     }
 
-    if (selectedCategory) {
-      skills = skills.filter((s) => s.category === selectedCategory);
-    }
-
     return skills;
-  }, [search, selectedCategory]);
+  }, [search, skillsDatabase]);
 
   // Install skill directly (Electron only)
   const handleDirectInstall = async (repo: string, skillName: string) => {
@@ -211,7 +227,8 @@ export default function SkillsPage() {
             </div>
           )}
           <div className="text-xs lg:text-sm text-muted-foreground">
-            <span className="font-medium">{SKILLS_DATABASE.length}</span> skills
+            <span className="font-medium">{skillsDatabase.length}</span> skills
+            {liveSkills && <span className="text-muted-foreground/60"> (live from skills.sh)</span>}
           </div>
         </div>
       </div>
@@ -336,8 +353,8 @@ export default function SkillsPage() {
         )}
       </AnimatePresence>
 
-      {/* Search & Filter */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      {/* Search */}
+      <div className="flex gap-3 mt-3">
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
@@ -348,155 +365,123 @@ export default function SkillsPage() {
             className="w-full pl-10 pr-4 py-2.5 rounded-none text-sm"
           />
         </div>
-
-        <div className="relative">
-          <button
-            onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-none bg-secondary text-muted-foreground hover:text-foreground transition-colors w-full sm:w-auto sm:min-w-[140px] text-sm"
-          >
-            <Filter className="w-4 h-4" />
-            {selectedCategory || 'All Categories'}
-            <ChevronDown className="w-4 h-4 ml-auto" />
-          </button>
-
-          <AnimatePresence>
-            {showCategoryDropdown && (
-              <motion.div
-                initial={{ opacity: 0, y: 5 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 5 }}
-                className="absolute top-full mt-2 right-0 w-48 bg-card border border-border rounded-none shadow-lg z-30 py-2 max-h-80 overflow-y-auto"
-              >
-                <button
-                  onClick={() => {
-                    setSelectedCategory(null);
-                    setShowCategoryDropdown(false);
-                  }}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-secondary ${!selectedCategory ? 'text-white' : 'text-muted-foreground'
-                    }`}
-                >
-                  All Categories
-                </button>
-                {SKILL_CATEGORIES.map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => {
-                      setSelectedCategory(cat);
-                      setShowCategoryDropdown(false);
-                    }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-secondary ${selectedCategory === cat ? 'text-white' : 'text-muted-foreground'
-                      }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
       </div>
 
       {/* Skills Table */}
       <div className="flex-1 border border-border bg-card overflow-hidden flex flex-col min-h-0 mt-4">
-        <table className="w-full">
-          <thead className="sticky top-0 z-10">
-            <tr className="border-b border-border bg-secondary">
-              <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">#</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Skill</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground hidden md:table-cell">Repository</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground hidden sm:table-cell">Category</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground hidden lg:table-cell">Installs</th>
-              <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground">Status</th>
-            </tr>
-          </thead>
-        </table>
-        <div className="flex-1 overflow-y-auto">
+        <div className="shrink-0">
           <table className="w-full">
-            <tbody>
-              {filteredSkills.map((skill) => {
-                const installed = isSkillInstalled(skill.name);
-                const justCopied = copiedSkill === skill.name;
-                const isInstalling = installingSkill === skill.name;
-
-                return (
-                  <tr
-                    key={`${skill.repo}-${skill.name}`}
-                    className="border-b border-border/50 hover:bg-secondary/50 transition-colors"
-                  >
-                    <td className="px-4 py-3 text-xs text-muted-foreground w-12">
-                      {skill.rank}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 flex items-center justify-center shrink-0 ${installed ? 'bg-primary/10' : 'bg-secondary'
-                          }`}>
-                          {installed ? (
-                            <CheckCircle className="w-4 h-4 text-primary" />
-                          ) : (
-                            <Package className="w-4 h-4 text-muted-foreground" />
-                          )}
-                        </div>
-                        <span className="font-medium text-sm">{skill.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 hidden md:table-cell">
-                      <span className="text-xs text-muted-foreground font-mono">{skill.repo}</span>
-                    </td>
-                    <td className="px-4 py-3 hidden sm:table-cell">
-                      <span className="text-xs px-2 py-1 bg-secondary text-muted-foreground">
-                        {skill.category}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 hidden lg:table-cell">
-                      <span className="text-xs text-muted-foreground">{skill.installs}</span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {installed ? (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary text-xs font-medium" style={{ borderRadius: 5 }}>
-                          <Check className="w-3 h-3" />
-                          Installed
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => handleDirectInstall(skill.repo, skill.name)}
-                          disabled={isInstalling}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${isInstalling
-                              ? 'bg-secondary text-muted-foreground'
-                              : justCopied
-                                ? 'bg-primary/10 text-primary'
-                                : 'bg-foreground text-background hover:bg-foreground/90'
-                            }`}
-                          style={{ borderRadius: 5 }}
-                        >
-                          {isInstalling ? (
-                            <>
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                              Installing...
-                            </>
-                          ) : justCopied ? (
-                            <>
-                              <Check className="w-3 h-3" />
-                              Copied!
-                            </>
-                          ) : hasElectron ? (
-                            <>
-                              <Download className="w-3 h-3" />
-                              Install
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3 h-3" />
-                              Copy
-                            </>
-                          )}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
+            <thead>
+              <tr className="border-b border-border bg-secondary">
+                <th style={COL_STYLES.rank} className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">#</th>
+                <th style={COL_STYLES.skill} className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Skill</th>
+                <th style={COL_STYLES.repo} className="text-left px-4 py-3 text-xs font-medium text-muted-foreground hidden md:table-cell">Repository</th>
+                <th style={COL_STYLES.installs} className="text-left px-4 py-3 text-xs font-medium text-muted-foreground hidden lg:table-cell">Installs</th>
+                <th style={COL_STYLES.status} className="text-right px-4 py-3 text-xs font-medium text-muted-foreground">Status</th>
+              </tr>
+            </thead>
           </table>
+        </div>
+        <div className="flex-1 overflow-y-auto overflow-x-hidden">
+          {loadingSkills && !liveSkills ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground mr-2" />
+              <span className="text-sm text-muted-foreground">Loading skills from skills.sh...</span>
+            </div>
+          ) : (
+            <table className="w-full">
+              <tbody>
+                {filteredSkills.map((skill) => {
+                  const installed = isSkillInstalled(skill.name);
+                  const justCopied = copiedSkill === skill.name;
+                  const isInstalling = installingSkill === skill.name;
+
+                  return (
+                    <tr
+                      key={`${skill.repo}-${skill.name}`}
+                      className="border-b border-border/50 hover:bg-secondary/50 transition-colors"
+                    >
+                      <td style={COL_STYLES.rank} className="px-4 py-3 text-xs text-muted-foreground">
+                        {skill.rank}
+                      </td>
+                      <td style={COL_STYLES.skill} className="px-4 py-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-8 h-8 flex items-center justify-center shrink-0 ${installed ? 'bg-primary/10' : 'bg-secondary'
+                            }`}>
+                            {installed ? (
+                              <CheckCircle className="w-4 h-4 text-primary" />
+                            ) : (
+                              <Package className="w-4 h-4 text-muted-foreground" />
+                            )}
+                          </div>
+                          <span className="font-medium text-sm truncate">{skill.name}</span>
+                        </div>
+                      </td>
+                      <td style={COL_STYLES.repo} className="px-4 py-3 hidden md:table-cell">
+                        <span className="text-xs text-muted-foreground font-mono truncate block">{skill.repo}</span>
+                      </td>
+                      <td style={COL_STYLES.installs} className="px-4 py-3 hidden lg:table-cell">
+                        <span className="text-xs text-muted-foreground">{skill.installs}</span>
+                      </td>
+                      <td style={COL_STYLES.status} className="px-4 py-3 text-right">
+                        {installed ? (
+                          <div className="inline-flex items-center gap-1">
+                            {isSkillInstalledOn(skill.name, 'claude') && (
+                              <ProviderBadge provider="claude" />
+                            )}
+                            {isSkillInstalledOn(skill.name, 'codex') && (
+                              <ProviderBadge provider="codex" />
+                            )}
+                            {isSkillInstalledOn(skill.name, 'gemini') && (
+                              <ProviderBadge provider="gemini" />
+                            )}
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary text-[10px] font-medium ml-1" style={{ borderRadius: 4 }}>
+                              <Check className="w-2.5 h-2.5" />
+                              Installed
+                            </span>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => handleDirectInstall(skill.repo, skill.name)}
+                            disabled={isInstalling}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${isInstalling
+                                ? 'bg-secondary text-muted-foreground'
+                                : justCopied
+                                  ? 'bg-primary/10 text-primary'
+                                  : 'bg-foreground text-background hover:bg-foreground/90'
+                              }`}
+                            style={{ borderRadius: 5 }}
+                          >
+                            {isInstalling ? (
+                              <>
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                                Installing...
+                              </>
+                            ) : justCopied ? (
+                              <>
+                                <Check className="w-3 h-3" />
+                                Copied!
+                              </>
+                            ) : hasElectron ? (
+                              <>
+                                <Download className="w-3 h-3" />
+                                Install
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3" />
+                                Copy
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 
@@ -506,6 +491,7 @@ export default function SkillsPage() {
         open={showInstallTerminal}
         repo={currentInstallRepo}
         title={currentInstallTitle}
+        availableProviders={['claude', 'codex', 'gemini']}
         onClose={(success) => {
           setShowInstallTerminal(false);
           setInstallingSkill(null);

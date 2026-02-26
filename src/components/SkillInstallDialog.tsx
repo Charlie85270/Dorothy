@@ -1,8 +1,9 @@
 'use client';
-import { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, CheckCircle, XCircle, X } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, X, Link2 } from 'lucide-react';
 import { isElectron } from '@/hooks/useElectron';
+import ProviderBadge, { PROVIDER_CONFIG } from '@/components/ProviderBadge';
 import 'xterm/css/xterm.css';
 
 interface SkillInstallDialogProps {
@@ -10,12 +11,15 @@ interface SkillInstallDialogProps {
   repo: string;
   title: string;
   onClose: (success?: boolean) => void;
+  availableProviders?: string[];
 }
 
-export default function SkillInstallDialog({ open, repo, title, onClose }: SkillInstallDialogProps) {
+export default function SkillInstallDialog({ open, repo, title, onClose, availableProviders = ['claude'] }: SkillInstallDialogProps) {
   const [installComplete, setInstallComplete] = useState(false);
   const [installExitCode, setInstallExitCode] = useState<number | null>(null);
   const [terminalReady, setTerminalReady] = useState(false);
+  const [selectedProviders, setSelectedProviders] = useState<Set<string>>(new Set(['claude']));
+  const [linkingStatus, setLinkingStatus] = useState<Record<string, 'pending' | 'done' | 'error'>>({});
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<import('xterm').Terminal | null>(null);
   const ptyIdRef = useRef<string | null>(null);
@@ -26,6 +30,8 @@ export default function SkillInstallDialog({ open, repo, title, onClose }: Skill
       setInstallComplete(false);
       setInstallExitCode(null);
       setTerminalReady(false);
+      setSelectedProviders(new Set(['claude']));
+      setLinkingStatus({});
     }
   }, [open, repo]);
 
@@ -150,7 +156,7 @@ export default function SkillInstallDialog({ open, repo, title, onClose }: Skill
     return unsubscribe;
   }, []);
 
-  // Listen for PTY exit
+  // Listen for PTY exit — link to additional providers on success
   useEffect(() => {
     if (!isElectron() || !window.electronAPI?.skill?.onPtyExit) return;
 
@@ -158,11 +164,46 @@ export default function SkillInstallDialog({ open, repo, title, onClose }: Skill
       if (id === ptyIdRef.current) {
         setInstallComplete(true);
         setInstallExitCode(exitCode);
+
+        // On success, symlink to additional providers
+        if (exitCode === 0) {
+          linkToAdditionalProviders();
+        }
       }
     });
 
     return unsubscribe;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const linkToAdditionalProviders = async () => {
+    // Extract skill name from repo (last segment after last /)
+    const parts = repo.split('/');
+    const skillName = parts.length >= 3 ? parts.slice(2).join('/') : parts[parts.length - 1];
+
+    const additionalProviders = Array.from(selectedProviders).filter(p => p !== 'claude');
+    if (additionalProviders.length === 0) return;
+
+    for (const providerId of additionalProviders) {
+      setLinkingStatus(prev => ({ ...prev, [providerId]: 'pending' }));
+      try {
+        const result = await window.electronAPI!.skill.linkToProvider({ skillName, providerId });
+        setLinkingStatus(prev => ({ ...prev, [providerId]: result.success ? 'done' : 'error' }));
+      } catch {
+        setLinkingStatus(prev => ({ ...prev, [providerId]: 'error' }));
+      }
+    }
+  };
+
+  const toggleProvider = (id: string) => {
+    if (id === 'claude') return; // Claude is always selected (primary installer)
+    setSelectedProviders(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const handleClose = () => {
     if (ptyIdRef.current && !installComplete) {
@@ -175,6 +216,8 @@ export default function SkillInstallDialog({ open, repo, title, onClose }: Skill
     }
     onClose(installComplete && installExitCode === 0);
   };
+
+  const nonClaudeProviders = availableProviders.filter(p => p !== 'claude');
 
   return (
     <AnimatePresence>
@@ -229,6 +272,50 @@ export default function SkillInstallDialog({ open, repo, title, onClose }: Skill
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {/* Provider Selector */}
+            {nonClaudeProviders.length > 0 && (
+              <div className="px-5 py-3 border-b border-border flex items-center gap-3">
+                <span className="text-xs text-muted-foreground">Install to:</span>
+                {availableProviders.map(id => {
+                  const config = PROVIDER_CONFIG[id];
+                  if (!config) return null;
+                  const isSelected = selectedProviders.has(id);
+                  const isClaude = id === 'claude';
+                  const status = linkingStatus[id];
+                  const icon = config.icon;
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => toggleProvider(id)}
+                      disabled={isClaude || installComplete}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium transition-colors ${
+                        isSelected
+                          ? 'bg-secondary text-foreground'
+                          : 'bg-secondary/50 text-muted-foreground hover:text-foreground'
+                      } ${isClaude ? 'opacity-90 cursor-default' : ''}`}
+                      style={{ borderRadius: 4 }}
+                    >
+                      {typeof icon === 'string' ? (
+                        <img src={icon} alt={config.label} className="w-3 h-3 object-contain" />
+                      ) : (
+                        React.createElement(icon, { className: 'w-3 h-3' })
+                      )}
+                      <span>{config.label}</span>
+                      {status === 'done' && <CheckCircle className="w-3 h-3" />}
+                      {status === 'error' && <XCircle className="w-3 h-3 text-red-400" />}
+                      {status === 'pending' && <Loader2 className="w-3 h-3 animate-spin" />}
+                    </button>
+                  );
+                })}
+                {installComplete && installExitCode === 0 && Object.keys(linkingStatus).length > 0 && (
+                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Link2 className="w-3 h-3" />
+                    Linked via symlink
+                  </span>
+                )}
+              </div>
+            )}
 
             <div className="p-4">
               <p className="text-xs text-muted-foreground mb-3">

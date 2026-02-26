@@ -47,6 +47,9 @@ export default function Home() {
           <a href="#download" className="hover:text-brown transition-colors">Download</a>
         </div>
         <div className="flex items-center gap-3">
+          <a href="https://x.com/aidorothy1" target="_blank" rel="noopener noreferrer" className="text-brown-light hover:text-brown transition-colors">
+            <svg className="w-[16px] h-[16px]" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+          </a>
           <a href="https://github.com/Charlie85270/Dorothy" target="_blank" rel="noopener noreferrer" className="text-brown-light hover:text-brown transition-colors">
             <Github className="w-[18px] h-[18px]" />
           </a>
@@ -230,6 +233,7 @@ export default function Home() {
           <img src="/dorothy/text.png" alt="Dorothy" width={64} height={64} className="w-16 h-auto bg-transparent object-contain opacity-60" />
         </div>
         <div className="flex items-center gap-6 text-[12px] text-brown-light">
+          <a href="https://x.com/aidorothy1" target="_blank" rel="noopener noreferrer" className="hover:text-brown transition-colors">X / Twitter</a>
           <a href="https://github.com/Charlie85270/Dorothy" target="_blank" rel="noopener noreferrer" className="hover:text-brown transition-colors">GitHub</a>
           <a href="https://github.com/Charlie85270/Dorothy/issues" target="_blank" rel="noopener noreferrer" className="hover:text-brown transition-colors">Issues</a>
           <a href="https://skills.sh" target="_blank" rel="noopener noreferrer" className="hover:text-brown transition-colors">skills.sh</a>

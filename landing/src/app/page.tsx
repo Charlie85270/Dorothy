@@ -69,15 +69,15 @@ export default function Home() {
         <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-16">
           {/* Left — text */}
           <div className="flex-1 text-center lg:text-left max-w-xl">
-            <p className="font-display italic text-teal text-lg mb-4">Your Dearest Claude</p>
+            <p className="font-display italic text-teal text-lg mb-4">Your AI Agents</p>
 
             <h1 className="font-display text-5xl md:text-7xl leading-[1.05] mb-6">
               Perfectly<br />Managed.
             </h1>
 
             <p className="text-brown-light text-[15px] leading-relaxed mb-8 max-w-md mx-auto lg:mx-0">
-              Claude is powerful but he can quickly become overwhelming.<br />
-              Thankfully, his wife Dorothy is here to keep everything under control.
+              AI agents are powerful but they can quickly become overwhelming.<br />
+              Dorothy is here to keep everything under control.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center gap-3 justify-center lg:justify-start">
@@ -136,7 +136,7 @@ export default function Home() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-10">
           {[
             { n: '01', title: 'Super Agent', desc: 'An orchestrator that coordinates all your agents. Give it a task and watch it delegate.' },
-            { n: '02', title: 'Multi-Agent Terminal', desc: 'Run multiple Claude agents side-by-side with full interactive terminal access.' },
+            { n: '02', title: 'Multi-Agent Terminal', desc: 'Run multiple AI agents side-by-side with full interactive terminal access.' },
             { n: '03', title: 'Kanban Board', desc: 'Visual task management with drag-and-drop. Agents auto-pick work by skill.' },
             { n: '04', title: '3D Agent World', desc: 'Watch your agents in a fun animated 3D office. Because why not.' },
             { n: '05', title: 'Skills & Plugins', desc: 'Install community skills from skills.sh with one click. Hundreds available.' },
@@ -146,6 +146,41 @@ export default function Home() {
               <span className="font-display text-teal text-sm">{f.n}</span>
               <h3 className="font-display text-xl mt-1 mb-2 group-hover:text-teal transition-colors">{f.title}</h3>
               <p className="text-sm text-brown-light leading-relaxed">{f.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ───────── SUPPORTED PROVIDERS ───────── */}
+      <section className="max-w-5xl mx-auto px-6 py-16 md:py-20">
+        <div className="text-center mb-12">
+          <p className="font-display italic text-teal text-base mb-2">Multi-provider</p>
+          <h2 className="font-display text-4xl md:text-5xl">Works with your favorite AI</h2>
+          <p className="text-brown-light text-[15px] mt-4 max-w-lg mx-auto">
+            Dorothy supports multiple AI coding agents. Run them side-by-side, mix and match per project.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-2xl mx-auto">
+          {[
+            { name: 'Claude', by: 'Anthropic', icon: '/claude-ai-icon.webp', iconType: 'img' as const },
+            { name: 'Codex', by: 'OpenAI', icon: '/chatgpt-icon.webp', iconType: 'img' as const },
+            { name: 'Gemini', by: 'Google', icon: 'gemini', iconType: 'svg' as const },
+          ].map((p) => (
+            <div key={p.name} className="flex flex-col items-center gap-3 p-6 rounded-xl border border-warm bg-white/60 hover:border-teal/30 transition-colors">
+              <div className="w-12 h-12 rounded-xl bg-cream-dark flex items-center justify-center">
+                {p.iconType === 'img' ? (
+                  <img src={p.icon} alt={p.name} className="w-7 h-7 object-contain" />
+                ) : (
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7 text-black">
+                    <path d="M12 0C12 6.627 6.627 12 0 12c6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12-6.627 0-12-5.373-12-12Z" />
+                  </svg>
+                )}
+              </div>
+              <div className="text-center">
+                <p className="font-display text-lg">{p.name}</p>
+                <p className="text-xs text-brown-light">{p.by}</p>
+              </div>
             </div>
           ))}
         </div>
@@ -177,7 +212,7 @@ export default function Home() {
       <section className="max-w-3xl mx-auto px-6 py-20 md:py-24 text-center">
         <div className="w-12 h-px bg-teal mx-auto mb-8" />
         <blockquote className="font-display italic text-2xl md:text-3xl leading-snug mb-6">
-          &ldquo;Dorothy makes managing Claude a breeze!&rdquo;
+          &ldquo;Dorothy makes managing AI agents a breeze!&rdquo;
         </blockquote>
         <p className="text-sm text-brown-light">— A Happy Developer</p>
         <div className="w-12 h-px bg-teal mx-auto mt-8" />
@@ -190,7 +225,7 @@ export default function Home() {
 
           <h2 className="font-display text-3xl md:text-5xl mb-3">Ready to meet Dorothy?</h2>
           <p className="text-white/70 text-[15px] mb-8 max-w-md mx-auto">
-            Free, open source, no account needed. Download and start managing your Claude agents today.
+            Free, open source, no account needed. Download and start managing your AI agents today.
           </p>
 
           <div className="flex items-center flex-col gap-4 justify-center">
@@ -238,7 +273,7 @@ export default function Home() {
           <a href="https://github.com/Charlie85270/Dorothy/issues" target="_blank" rel="noopener noreferrer" className="hover:text-brown transition-colors">Issues</a>
           <a href="https://skills.sh" target="_blank" rel="noopener noreferrer" className="hover:text-brown transition-colors">skills.sh</a>
         </div>
-        <p className="text-[11px] text-brown-light/50">Made with &#9829; for the Claude community</p>
+        <p className="text-[11px] text-brown-light/50">Made with &#9829; for the AI agents community</p>
       </footer>
     </main>
   );

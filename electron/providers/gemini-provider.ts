@@ -1,6 +1,7 @@
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
+import { execSync } from 'child_process';
 import type { AppSettings } from '../types';
 import type {
   CLIProvider,
@@ -206,6 +207,19 @@ export class GeminiProvider implements CLIProvider {
   }
 
   async registerMcpServer(name: string, command: string, args: string[]): Promise<void> {
+    // Try gemini mcp add first (proper CLI registration)
+    try {
+      const argsStr = args.map(a => `"${a}"`).join(' ');
+      execSync(`gemini mcp add -s user ${name} ${command} ${argsStr}`, {
+        encoding: 'utf-8',
+        stdio: 'pipe',
+      });
+      console.log(`[gemini] Registered MCP server ${name} via gemini mcp add`);
+      return;
+    } catch {
+      // Fallback: write to settings.json manually
+    }
+
     const settingsPath = path.join(this.configDir, 'settings.json');
 
     if (!fs.existsSync(this.configDir)) {
@@ -227,10 +241,21 @@ export class GeminiProvider implements CLIProvider {
 
     (settings.mcpServers as Record<string, unknown>)[name] = { command, args };
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
-    console.log(`[gemini] Registered MCP server ${name} in settings.json`);
+    console.log(`[gemini] Registered MCP server ${name} in settings.json (fallback)`);
   }
 
   async removeMcpServer(name: string): Promise<void> {
+    // Try gemini mcp remove first
+    try {
+      execSync(`gemini mcp remove -s user ${name} 2>&1`, {
+        encoding: 'utf-8',
+        stdio: 'pipe',
+      });
+    } catch {
+      // Ignore if doesn't exist
+    }
+
+    // Also clean settings.json fallback
     const settingsPath = path.join(this.configDir, 'settings.json');
     if (!fs.existsSync(settingsPath)) return;
 

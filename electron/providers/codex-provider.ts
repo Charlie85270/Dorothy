@@ -1,6 +1,7 @@
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
+import { execSync } from 'child_process';
 import type { AppSettings } from '../types';
 import type {
   CLIProvider,
@@ -125,6 +126,19 @@ export class CodexProvider implements CLIProvider {
   }
 
   async registerMcpServer(name: string, command: string, args: string[]): Promise<void> {
+    // Try codex mcp add first (proper CLI registration)
+    try {
+      const argsStr = args.map(a => `"${a}"`).join(' ');
+      execSync(`codex mcp add ${name} -- ${command} ${argsStr}`, {
+        encoding: 'utf-8',
+        stdio: 'pipe',
+      });
+      console.log(`[codex] Registered MCP server ${name} via codex mcp add`);
+      return;
+    } catch {
+      // Fallback: write to config.toml manually
+    }
+
     const configPath = path.join(this.configDir, 'config.toml');
 
     if (!fs.existsSync(this.configDir)) {
@@ -146,10 +160,21 @@ export class CodexProvider implements CLIProvider {
 
     content = content.trimEnd() + '\n' + section;
     fs.writeFileSync(configPath, content);
-    console.log(`[codex] Registered MCP server ${name} in config.toml`);
+    console.log(`[codex] Registered MCP server ${name} in config.toml (fallback)`);
   }
 
   async removeMcpServer(name: string): Promise<void> {
+    // Try codex mcp remove first
+    try {
+      execSync(`codex mcp remove ${name} 2>&1`, {
+        encoding: 'utf-8',
+        stdio: 'pipe',
+      });
+    } catch {
+      // Ignore if doesn't exist
+    }
+
+    // Also clean config.toml fallback
     const configPath = path.join(this.configDir, 'config.toml');
     if (!fs.existsSync(configPath)) return;
 
@@ -178,7 +203,8 @@ export class CodexProvider implements CLIProvider {
   private removeTomlSection(content: string, name: string): string {
     const sectionKey = this.escapeTomlKey(name);
     const escapedKey = sectionKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`\\n?\\[mcp_servers\\.${escapedKey}\\][^\\[]*`, 'g');
+    // Match section header + all lines until next section header (line starting with [) or EOF
+    const regex = new RegExp(`\\n?\\[mcp_servers\\.${escapedKey}\\]\\n(?:(?!\\[)[^\\n]*\\n?)*`, 'g');
     return content.replace(regex, '');
   }
 

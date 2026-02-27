@@ -12,6 +12,7 @@ export default defineConfig({
         'electron/utils/**',
         'electron/services/**',
         'electron/handlers/**',
+        'electron/providers/**',
         'mcp-orchestrator/src/utils/**',
         'mcp-orchestrator/src/tools/**',
         'mcp-telegram/src/**',

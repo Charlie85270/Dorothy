@@ -512,19 +512,19 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     const isSuperAgentCheck = agent.name?.toLowerCase().includes('super agent') ||
                       agent.name?.toLowerCase().includes('orchestrator');
 
-    // Resolve Super Agent-specific paths
+    // Resolve MCP config path — pass for ALL agents using flag strategy (Claude)
     let mcpConfigPath: string | undefined;
     let systemPromptFile: string | undefined;
-    if (isSuperAgentCheck) {
-      // Only pass --mcp-config flag for providers that use it (Claude)
-      // Codex/Gemini have MCPs in their config files — always available
-      if (cliProvider.getMcpConfigStrategy() === 'flag') {
-        const { app } = await import('electron');
-        const possibleMcpPath = path.join(app.getPath('home'), '.claude', 'mcp.json');
-        if (fs.existsSync(possibleMcpPath)) {
-          mcpConfigPath = possibleMcpPath;
-        }
+    if (cliProvider.getMcpConfigStrategy() === 'flag') {
+      const { app } = await import('electron');
+      const possibleMcpPath = path.join(app.getPath('home'), '.claude', 'mcp.json');
+      if (fs.existsSync(possibleMcpPath)) {
+        mcpConfigPath = possibleMcpPath;
       }
+    }
+
+    // Super Agent-specific: system prompt file
+    if (isSuperAgentCheck) {
       const { getSuperAgentInstructionsPath } = await import('../utils');
       const superAgentInstructionsPath = getSuperAgentInstructionsPath();
       if (fs.existsSync(superAgentInstructionsPath)) {

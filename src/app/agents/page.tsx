@@ -60,23 +60,26 @@ export default function AgentsPage() {
     projectFilter,
   });
 
+  // Get selected agent data
+  const selectedAgentData = agents.find((a) => a.id === selectedAgent);
+
   const { terminalReady, clearTerminal } = useAgentTerminal({
     selectedAgentId: selectedAgent,
     terminalRef,
+    provider: selectedAgentData?.provider,
   });
-
-  // Get selected agent data
-  const selectedAgentData = agents.find((a) => a.id === selectedAgent);
 
   // Handle agent selection - auto-start idle agents
   const handleSelectAgent = useCallback((agentId: string) => {
     setSelectedAgent(agentId);
     const agent = agents.find(a => a.id === agentId);
     if (agent && (agent.status === 'idle' || agent.status === 'completed' || agent.status === 'error') && !agent.pathMissing) {
-      // Auto-start the claude session
+      // Gemini CLI uses Ink which needs the terminal fully sized before launch.
+      // Give xterm.js time to initialize and send the resize to the PTY.
+      const delay = agent.provider === 'gemini' ? 800 : 100;
       setTimeout(() => {
         startAgent(agentId, '');
-      }, 100);
+      }, delay);
     }
   }, [agents, startAgent]);
 

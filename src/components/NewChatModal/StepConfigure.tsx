@@ -7,7 +7,6 @@ import {
   GitBranch,
   GitFork,
   Layers,
-  Cloud,
   Cpu,
   AlertCircle,
   Loader2,
@@ -49,9 +48,10 @@ const PROVIDER_MODELS: Record<string, ProviderModel[]> = {
     { id: 'gpt-5-codex-mini', name: 'GPT-5 Codex Mini', description: 'Fast & efficient' },
   ],
   gemini: [
-    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', description: 'Most capable' },
-    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: 'Fast & balanced' },
-    { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite', description: 'Fastest' },
+    { id: 'gemini-3-pro', name: 'Gemini 3 Pro', description: 'Most capable' },
+    { id: 'gemini-3-flash', name: 'Gemini 3 Flash', description: 'Fast & capable' },
+    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', description: 'Stable' },
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: 'Balanced' },
   ],
 };
 
@@ -59,7 +59,7 @@ const PROVIDER_MODELS: Record<string, ProviderModel[]> = {
 const PROVIDER_DEFAULT_MODEL: Record<string, string> = {
   claude: 'sonnet',
   codex: 'gpt-5.2-codex',
-  gemini: 'gemini-2.5-flash',
+  gemini: 'gemini-3-flash',
 };
 
 interface StepConfigureProps {
@@ -204,10 +204,10 @@ const StepConfigure = React.memo(function StepConfigure({
         <label className="block text-sm font-medium mb-2">Provider</label>
         <div className={`grid gap-3 ${tasmaniaEnabled ? 'grid-cols-4' : 'grid-cols-3'}`}>
           {([
-            { id: 'claude' as const, label: 'Claude', Icon: Cloud, accent: 'accent-blue' },
-            { id: 'codex' as const, label: 'Codex', Icon: Zap, accent: 'accent-green' },
-            { id: 'gemini' as const, label: 'Gemini', Icon: Layers, accent: 'accent-purple' },
-          ] as const).map(({ id, label, Icon, accent }) => {
+            { id: 'claude' as const, label: 'Claude', icon: '/claude-ai-icon.webp', accent: 'accent-blue' },
+            { id: 'codex' as const, label: 'Codex', icon: '/chatgpt-icon.webp', accent: 'accent-green' },
+            { id: 'gemini' as const, label: 'Gemini', icon: 'gemini-svg', accent: 'accent-purple' },
+          ] as const).map(({ id, label, icon, accent }) => {
             const installed = installedProviders?.[id] !== false;
             return (
               <button
@@ -229,7 +229,13 @@ const StepConfigure = React.memo(function StepConfigure({
                 `}
               >
                 <div className="flex items-center gap-2">
-                  <Icon className={`w-4 h-4 ${provider === id ? `text-${accent}` : 'text-text-muted'}`} />
+                  {icon === 'gemini-svg' ? (
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-black">
+                      <path d="M12 0C12 6.627 6.627 12 0 12c6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12-6.627 0-12-5.373-12-12Z" />
+                    </svg>
+                  ) : (
+                    <img src={icon} alt={label} className="w-4 h-4 object-contain" />
+                  )}
                   <span className="font-medium text-sm">{label}</span>
                 </div>
                 {!installed && (

@@ -1,12 +1,37 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { isElectron } from '@/hooks/useElectron';
+import type { AgentProvider } from '@/types/electron';
 
 interface UseAgentTerminalProps {
   selectedAgentId: string | null;
   terminalRef: React.RefObject<HTMLDivElement | null>;
+  provider?: AgentProvider;
 }
 
-export function useAgentTerminal({ selectedAgentId, terminalRef }: UseAgentTerminalProps) {
+/**
+ * Strip Ink/ANSI cursor movement sequences that break during output replay.
+ * Keeps colors and basic formatting but removes cursor positioning that
+ * only makes sense in a live render context.
+ */
+function stripCursorSequences(data: string): string {
+  return data
+    // Cursor movement: up/down/forward/back (\x1b[nA, \x1b[nB, etc.)
+    .replace(/\x1b\[\d*[ABCDEFGH]/g, '')
+    // Cursor position: \x1b[n;mH or \x1b[n;mf
+    .replace(/\x1b\[\d*;\d*[Hf]/g, '')
+    // Erase line: \x1b[nK
+    .replace(/\x1b\[\d*K/g, '')
+    // Erase display: \x1b[nJ
+    .replace(/\x1b\[\d*J/g, '')
+    // Save/restore cursor: \x1b[s, \x1b[u, \x1b7, \x1b8
+    .replace(/\x1b\[?[su78]/g, '')
+    // Hide/show cursor: \x1b[?25l, \x1b[?25h
+    .replace(/\x1b\[\?25[lh]/g, '')
+    // Alternate screen buffer: \x1b[?1049h/l
+    .replace(/\x1b\[\?1049[hl]/g, '');
+}
+
+export function useAgentTerminal({ selectedAgentId, terminalRef, provider }: UseAgentTerminalProps) {
   const xtermRef = useRef<import('xterm').Terminal | null>(null);
   const fitAddonRef = useRef<import('xterm-addon-fit').FitAddon | null>(null);
   const [terminalReady, setTerminalReady] = useState(false);
@@ -31,6 +56,11 @@ export function useAgentTerminal({ selectedAgentId, terminalRef }: UseAgentTermi
     const initTerminal = async () => {
       const { Terminal } = await import('xterm');
       const { FitAddon } = await import('xterm-addon-fit');
+
+      // Gemini CLI uses Ink (React for terminal) which relies on cursor movement
+      // sequences for in-place updates. convertEol can interfere with these.
+      // Claude/Codex work fine with convertEol so we only disable it for Gemini.
+      const isGemini = provider === 'gemini';
 
       const term = new Terminal({
         theme: {
@@ -61,7 +91,7 @@ export function useAgentTerminal({ selectedAgentId, terminalRef }: UseAgentTermi
         cursorBlink: true,
         cursorStyle: 'bar',
         scrollback: 10000,
-        convertEol: true,
+        convertEol: !isGemini,
       });
 
       const fitAddon = new FitAddon();
@@ -95,10 +125,18 @@ export function useAgentTerminal({ selectedAgentId, terminalRef }: UseAgentTermi
       container.addEventListener('click', handleClick);
 
       // Handle user input - send to agent PTY
-      // Filter out xterm focus in/out reports (\x1b[I / \x1b[O) that Claude Code
-      // requests via DECSET 1004 — these should not be forwarded as user input.
+      // Filter out terminal query responses that xterm.js emits automatically.
+      // These can arrive as full sequences (\x1b[?1;2c) or fragmented across
+      // data events (just "1;2c"). Filter both forms.
       term.onData(async (data) => {
-        const cleaned = data.replace(/\x1b\[(?:I|O)/g, '');
+        // Drop entire data event if it's purely DA response fragments (e.g. "1;2c1;2c1;2c")
+        if (/^(\x1b\[\?[\d;]*c|\d+;\d+c)+$/.test(data)) return;
+
+        const cleaned = data
+          .replace(/\x1b\[\?[\d;]*c/g, '')     // DA response: \x1b[?1;2c
+          .replace(/\x1b\[\d+;\d+R/g, '')       // CPR response: \x1b[row;colR
+          .replace(/\x1b\[(?:I|O)/g, '')         // Focus in/out: \x1b[I / \x1b[O
+          .replace(/\d+;\d+c/g, '');             // Bare DA fragments: 1;2c
         if (!cleaned) return;
         const agentId = selectedAgentIdRef.current;
         if (agentId && window.electronAPI?.agent?.sendInput) {
@@ -141,12 +179,21 @@ export function useAgentTerminal({ selectedAgentId, terminalRef }: UseAgentTermi
       if (window.electronAPI?.agent?.get) {
         try {
           const latestAgent = await window.electronAPI.agent.get(selectedAgentId);
-        
+
           if (latestAgent && latestAgent.output && latestAgent.output.length > 0) {
             term.writeln(`\x1b[33m--- Replaying ${latestAgent.output.length} previous output chunks ---\x1b[0m`);
-            latestAgent.output.forEach(line => {
-              term.write(line);
-            });
+            if (isGemini) {
+              // Gemini CLI uses Ink which emits cursor movement sequences for
+              // in-place updates. These don't replay correctly — strip them and
+              // only keep text content with colors.
+              latestAgent.output.forEach(line => {
+                term.write(stripCursorSequences(line));
+              });
+            } else {
+              latestAgent.output.forEach(line => {
+                term.write(line);
+              });
+            }
           } else {
             term.writeln('\x1b[90m(No previous output)\x1b[0m');
           }
@@ -174,7 +221,7 @@ export function useAgentTerminal({ selectedAgentId, terminalRef }: UseAgentTermi
       }
       setTerminalReady(false);
     };
-  }, [selectedAgentId, terminalRef]);
+  }, [selectedAgentId, terminalRef, provider]);
 
   // Listen for agent output events
   useEffect(() => {

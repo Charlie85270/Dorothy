@@ -2,7 +2,7 @@ import React from 'react';
 
 function GeminiLogo({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <svg viewBox="0 0 24 24" fill="currentColor" className={`${className} !text-black`}>
       <path d="M12 0C12 6.627 6.627 12 0 12c6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12-6.627 0-12-5.373-12-12Z" />
     </svg>
   );

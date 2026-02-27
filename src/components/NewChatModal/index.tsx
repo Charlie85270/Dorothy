@@ -335,7 +335,7 @@ export default function NewChatModal({
               ) : (
                 <button
                   onClick={handleSubmit}
-                  disabled={(!prompt.trim() && selectedSkills.length === 0) || (useWorktree && !branchName.trim())}
+                  disabled={useWorktree && !branchName.trim()}
                   className="flex items-center gap-2 px-4 py-2 bg-foreground text-background font-medium hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Play className="w-4 h-4" />

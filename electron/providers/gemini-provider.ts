@@ -19,8 +19,8 @@ export class GeminiProvider implements CLIProvider {
 
   getModels(): ProviderModel[] {
     return [
-      { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro', description: 'Most capable' },
-      { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', description: 'Fast & capable' },
+      { id: 'gemini-3-pro', name: 'Gemini 3 Pro', description: 'Most capable' },
+      { id: 'gemini-3-flash', name: 'Gemini 3 Flash', description: 'Fast & capable' },
       { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', description: 'Stable' },
       { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: 'Balanced' },
     ];

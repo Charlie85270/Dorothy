@@ -48,7 +48,7 @@ export default function Home() {
         </div>
         <div className="flex items-center gap-3">
           <a href="https://x.com/aidorothy1" target="_blank" rel="noopener noreferrer" className="text-brown-light hover:text-brown transition-colors">
-            <svg className="w-[16px] h-[16px]" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+            <svg className="w-[16px] h-[16px]" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>
           </a>
           <a href="https://github.com/Charlie85270/Dorothy" target="_blank" rel="noopener noreferrer" className="text-brown-light hover:text-brown transition-colors">
             <Github className="w-[18px] h-[18px]" />
@@ -161,11 +161,12 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-2xl mx-auto">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 max-w-3xl mx-auto">
           {[
             { name: 'Claude', by: 'Anthropic', icon: '/claude-ai-icon.webp', iconType: 'img' as const },
             { name: 'Codex', by: 'OpenAI', icon: '/chatgpt-icon.webp', iconType: 'img' as const },
             { name: 'Gemini', by: 'Google', icon: 'gemini', iconType: 'svg' as const },
+            { name: 'Ollama', by: 'Local LLMs', icon: '/ollama-icon.svg', iconType: 'img' as const },
           ].map((p) => (
             <div key={p.name} className="flex flex-col items-center gap-3 p-6 rounded-xl border border-warm bg-white/60 hover:border-teal/30 transition-colors">
               <div className="w-12 h-12 rounded-xl bg-cream-dark flex items-center justify-center">
@@ -241,22 +242,7 @@ export default function Home() {
               </p>
             )}
 
-            {/* macOS note */}
-            <div className="inline-block p-3 rounded-lg bg-white/10 border border-white/10 text-left max-w-sm">
-              <p className="text-[11px] text-white/50">
-                <span className="text-white/70 font-medium">macOS:</span> If &quot;app is damaged&quot;, run{' '}
-                <div className="flex items-center mt-4 gap-1">
-                  <code className="text-white/80 bg-black/10 px-1 py-0.5 rounded font-mono text-[11px]">xattr -cr /Applications/Dorothy.app</code>
-                  <button
-                    onClick={() => { navigator.clipboard.writeText('xattr -cr /Applications/Dorothy.app'); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-                    className="ml-1.5 inline-flex items-center align-middle text-white/40 hover:text-white/80 transition-colors"
-                    title="Copy command"
-                  >
-                    {copied ? <ClipboardCheck className="w-3 h-3 text-white/80" /> : <Copy className="w-3 h-3" />}
-                  </button>
-                </div>
-              </p>
-            </div>
+
           </div>
         </div>
       </section>

@@ -60,8 +60,11 @@ export const DEFAULT_APP_SETTINGS = {
   tasmaniaServerPath: '',
   verboseModeEnabled: false,
   autoCheckUpdates: true,
+  defaultProvider: 'claude',
   cliPaths: {
     claude: '',
+    codex: '',
+    gemini: '',
     gh: '',
     node: '',
     additionalPaths: [],

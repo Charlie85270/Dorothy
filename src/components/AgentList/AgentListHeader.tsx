@@ -19,9 +19,9 @@ export function AgentListHeader({
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 lg:mb-6">
       <div>
-        <h1 className="text-xl lg:text-2xl font-bold tracking-tight text-foreground">Claude Control Center</h1>
+        <h1 className="text-xl lg:text-2xl font-bold tracking-tight text-foreground">AI Agents Control Center</h1>
         <p className="text-muted-foreground text-xs lg:text-sm mt-1 hidden sm:block">
-          Dorothy is watching you Claude.
+          Dorothy is watching you AI Agents.
         </p>
       </div>
       <div className="flex items-center gap-2">
@@ -48,10 +48,10 @@ export function AgentListHeader({
               <Crown className={`w-4 h-4 ${superAgent ? 'text-amber-400' : ''}`} />
               {superAgent && (
                 <span className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-bg-tertiary ${superAgent.status === 'running' ? 'bg-green-400 animate-pulse' :
-                    superAgent.status === 'waiting' ? 'bg-amber-400 animate-pulse' :
-                      superAgent.status === 'error' ? 'bg-red-400' :
-                        superAgent.status === 'completed' ? 'bg-cyan-400' :
-                          'bg-zinc-500'
+                  superAgent.status === 'waiting' ? 'bg-amber-400 animate-pulse' :
+                    superAgent.status === 'error' ? 'bg-red-400' :
+                      superAgent.status === 'completed' ? 'bg-cyan-400' :
+                        'bg-zinc-500'
                   }`} />
               )}
             </div>

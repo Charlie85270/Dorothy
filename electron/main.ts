@@ -136,8 +136,11 @@ function loadAppSettings(): AppSettings {
     tasmaniaServerPath: '',
     verboseModeEnabled: false,
     autoCheckUpdates: true,
+    defaultProvider: 'claude',
     cliPaths: {
       claude: '',
+      codex: '',
+      gemini: '',
       gh: '',
       node: '',
       additionalPaths: [],
@@ -309,7 +312,10 @@ app.whenReady().then(async () => {
   // Register all IPC handlers
   const deps = createIpcDependencies();
   registerIpcHandlers(deps);
-  registerSchedulerHandlers();
+  registerSchedulerHandlers({
+    agents,
+    getAppSettings: () => appSettings,
+  });
   registerAutomationHandlers();
   registerMcpOrchestratorHandlers();
   registerCLIPathsHandlers({

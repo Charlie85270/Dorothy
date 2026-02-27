@@ -120,6 +120,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('skill:install-kill', params),
     listInstalled: () =>
       ipcRenderer.invoke('skill:list-installed'),
+    listInstalledAll: () =>
+      ipcRenderer.invoke('skill:list-installed-all'),
+    linkToProvider: (params: { skillName: string; providerId: string }) =>
+      ipcRenderer.invoke('skill:link-to-provider', params),
     onPtyData: (callback: (event: { id: string; data: string }) => void) => {
       const listener = (_: unknown, event: { id: string; data: string }) => callback(event);
       ipcRenderer.on('skill:pty-data', listener);

@@ -1,7 +1,7 @@
 {
   "name": "Dorothy",
   "short_name": "Dorothy",
-  "description": "Manage and monitor your Claude Code agents in real-time",
+  "description": "Manage and monitor your AI Agents in real-time",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#F0E8D5",

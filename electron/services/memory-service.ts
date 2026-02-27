@@ -20,17 +20,29 @@ export interface ProjectMemory {
   totalSize: number;
   lastModified: string;
   hasMemory: boolean;
+  provider: string;    // 'claude' | 'codex' | 'gemini'
 }
 
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 
+/** All provider memory directories to scan */
+const PROVIDER_MEMORY_DIRS: { provider: string; dir: string }[] = [
+  { provider: 'claude', dir: CLAUDE_PROJECTS_DIR },
+  // Codex and Gemini may store project memory in similar structures.
+  // These are checked only if they exist — no error if missing.
+  { provider: 'codex', dir: path.join(os.homedir(), '.codex', 'projects') },
+  { provider: 'gemini', dir: path.join(os.homedir(), '.gemini', 'projects') },
+];
+
 /**
- * Validate that a file path is within the Claude projects directory.
+ * Validate that a file path is within any provider's projects directory.
  * Uses path.resolve + startsWith to prevent traversal bypasses.
  */
 function isWithinProjectsDir(filePath: string): boolean {
   const resolved = path.resolve(filePath);
-  return resolved.startsWith(CLAUDE_PROJECTS_DIR + path.sep) || resolved === CLAUDE_PROJECTS_DIR;
+  return PROVIDER_MEMORY_DIRS.some(({ dir }) =>
+    resolved.startsWith(dir + path.sep) || resolved === dir
+  );
 }
 
 /**
@@ -100,58 +112,64 @@ function readMemoryFile(filePath: string): MemoryFile {
 }
 
 export function listProjectMemories(): ProjectMemory[] {
-  if (!fs.existsSync(CLAUDE_PROJECTS_DIR)) {
-    return [];
-  }
-
-  const entries = fs.readdirSync(CLAUDE_PROJECTS_DIR, { withFileTypes: true });
   const results: ProjectMemory[] = [];
 
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
+  for (const { provider, dir: projectsDir } of PROVIDER_MEMORY_DIRS) {
+    if (!fs.existsSync(projectsDir)) continue;
 
-    const memoryDir = path.join(CLAUDE_PROJECTS_DIR, entry.name, 'memory');
-    const decodedPath = decodePath(entry.name);
-    const projectName = getProjectName(decodedPath);
-
-    const project: ProjectMemory = {
-      id: entry.name,
-      projectName,
-      projectPath: decodedPath,
-      memoryDir,
-      files: [],
-      totalSize: 0,
-      lastModified: '',
-      hasMemory: false,
-    };
-
-    if (fs.existsSync(memoryDir)) {
-      try {
-        const mdFiles = fs.readdirSync(memoryDir)
-          .filter(f => f.endsWith('.md'))
-          .sort((a, b) => {
-            // MEMORY.md always first
-            if (a === 'MEMORY.md') return -1;
-            if (b === 'MEMORY.md') return 1;
-            return a.localeCompare(b);
-          });
-
-        const files = mdFiles.map(f => readMemoryFile(path.join(memoryDir, f)));
-        const totalSize = files.reduce((sum, f) => sum + f.size, 0);
-        const lastModified = files.reduce((latest, f) =>
-          f.lastModified > latest ? f.lastModified : latest, '');
-
-        project.files = files;
-        project.totalSize = totalSize;
-        project.lastModified = lastModified;
-        project.hasMemory = files.length > 0;
-      } catch {
-        // Skip unreadable directories
-      }
+    let entries;
+    try {
+      entries = fs.readdirSync(projectsDir, { withFileTypes: true });
+    } catch {
+      continue;
     }
 
-    // Include projects even without memory dir (they may have it created later)
-    results.push(project);
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+
+      const memoryDir = path.join(projectsDir, entry.name, 'memory');
+      const decodedPath = decodePath(entry.name);
+      const projectName = getProjectName(decodedPath);
+
+      const project: ProjectMemory = {
+        id: `${provider}:${entry.name}`,
+        projectName,
+        projectPath: decodedPath,
+        memoryDir,
+        files: [],
+        totalSize: 0,
+        lastModified: '',
+        hasMemory: false,
+        provider,
+      };
+
+      if (fs.existsSync(memoryDir)) {
+        try {
+          const mdFiles = fs.readdirSync(memoryDir)
+            .filter(f => f.endsWith('.md'))
+            .sort((a, b) => {
+              // MEMORY.md always first
+              if (a === 'MEMORY.md') return -1;
+              if (b === 'MEMORY.md') return 1;
+              return a.localeCompare(b);
+            });
+
+          const files = mdFiles.map(f => readMemoryFile(path.join(memoryDir, f)));
+          const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+          const lastModified = files.reduce((latest, f) =>
+            f.lastModified > latest ? f.lastModified : latest, '');
+
+          project.files = files;
+          project.totalSize = totalSize;
+          project.lastModified = lastModified;
+          project.hasMemory = files.length > 0;
+        } catch {
+          // Skip unreadable directories
+        }
+      }
+
+      results.push(project);
+    }
   }
 
   // Sort: projects with memory first, then by lastModified desc

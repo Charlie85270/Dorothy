@@ -402,11 +402,11 @@ export default function UsagePage() {
       {/* Header */}
       <div>
         <h1 className="text-xl lg:text-2xl font-bold tracking-tight">
-          <span className="hidden sm:inline">Usage & Cost Analytics</span>
-          <span className="sm:hidden">Usage & Costs</span>
+          <span className="hidden sm:inline">Claude Code Usage & Cost Analytics</span>
+          <span className="sm:hidden">Claude Code Usage</span>
         </h1>
         <p className="text-muted-foreground text-xs lg:text-sm mt-1 hidden sm:block">
-          Monitor your Claude API usage and estimated costs
+          Monitor your Claude Code API usage and estimated costs
         </p>
       </div>
 

@@ -1,5 +1,6 @@
 import { exec } from 'child_process';
 import { buildFullPath } from './path-builder';
+import { getProvider } from '../providers';
 
 interface GeneratedTask {
   title: string;
@@ -41,11 +42,13 @@ IMPORTANT: Respond with ONLY the JSON object, no markdown, no explanation, just 
 
   const fullPath = buildFullPath();
 
-  // Escape the prompt for shell
-  const escapedPrompt = claudePrompt.replace(/'/g, "'\\''");
-
-  // Call Claude CLI with -p flag for quick one-shot response using haiku for speed
-  const command = `claude -p --model haiku '${escapedPrompt}'`;
+  // Build one-shot command via provider (defaults to Claude)
+  const provider = getProvider('claude');
+  const command = provider.buildOneShotCommand({
+    binaryPath: provider.binaryName,
+    prompt: claudePrompt,
+    model: 'haiku',
+  });
 
   try {
     const claudeResult = await new Promise<string>((resolve, reject) => {

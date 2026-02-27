@@ -9,6 +9,7 @@ import { AGENTS_FILE, DATA_DIR } from '../constants';
 import { ensureDataDir, isSuperAgent } from '../utils';
 import { ptyProcesses } from './pty-manager';
 import { buildFullPath } from '../utils/path-builder';
+import { getProvider } from '../providers';
 
 export const agents: Map<string, AgentStatus> = new Map();
 
@@ -244,14 +245,10 @@ export async function initAgentPty(
       savedSettings = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'));
       const cliPaths = savedSettings.cliPaths as Record<string, unknown> | undefined;
       if (cliPaths) {
-        if (cliPaths.claude) {
-          cliExtraPaths.push(path.dirname(cliPaths.claude as string));
-        }
-        if (cliPaths.gh) {
-          cliExtraPaths.push(path.dirname(cliPaths.gh as string));
-        }
-        if (cliPaths.node) {
-          cliExtraPaths.push(path.dirname(cliPaths.node as string));
+        for (const key of ['claude', 'codex', 'gemini', 'gh', 'node']) {
+          if (cliPaths[key]) {
+            cliExtraPaths.push(path.dirname(cliPaths[key] as string));
+          }
         }
         if (cliPaths.additionalPaths) {
           cliExtraPaths.push(...(cliPaths.additionalPaths as string[]).filter(Boolean));
@@ -286,6 +283,10 @@ export async function initAgentPty(
     }
   }
 
+  // Get provider-specific env vars
+  const agentProvider = getProvider(agent.provider);
+  const providerEnvVars = agentProvider.getPtyEnvVars(agent.id, agent.projectPath, agent.skills);
+
   const ptyProcess = pty.spawn(shell, ['-l'], {
     name: 'xterm-256color',
     cols: 120,
@@ -294,9 +295,7 @@ export async function initAgentPty(
     env: {
       ...process.env as { [key: string]: string },
       PATH: fullPath,
-      CLAUDE_SKILLS: agent.skills.join(','),
-      CLAUDE_AGENT_ID: agent.id,
-      CLAUDE_PROJECT_PATH: agent.projectPath,
+      ...providerEnvVars,
       // Load CLAUDE.md from --add-dir directories (e.g. ~/.dorothy)
       CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD: '1',
       ...tasmaniaEnv,

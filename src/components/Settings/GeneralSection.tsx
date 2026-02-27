@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Settings, RefreshCw, Download, ExternalLink, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { Toggle } from './Toggle';
 import type { ClaudeInfo, AppSettings } from './types';
@@ -24,6 +24,19 @@ export const GeneralSection = ({ info, appSettings, onSaveAppSettings }: General
   const [updateState, setUpdateState] = useState<UpdateState>('idle');
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
+  const [installedProviders, setInstalledProviders] = useState<Record<string, boolean>>({ claude: true, codex: true, gemini: true });
+
+  useEffect(() => {
+    window.electronAPI?.cliPaths?.detect().then((paths) => {
+      if (paths) {
+        setInstalledProviders({
+          claude: !!paths.claude,
+          codex: !!paths.codex,
+          gemini: !!paths.gemini,
+        });
+      }
+    });
+  }, []);
 
   const handleCheckForUpdates = async () => {
     if (!window.electronAPI?.updates) return;
@@ -173,6 +186,29 @@ export const GeneralSection = ({ info, appSettings, onSaveAppSettings }: General
             Click &quot;Check for Updates&quot; to see if a newer version is available.
           </p>
         )}
+      </div>
+
+      {/* Default Provider */}
+      <div className="border border-border bg-card p-6">
+        <h3 className="font-medium mb-4">Default Provider</h3>
+        <p className="text-xs text-muted-foreground mb-4">
+          CLI provider used for scheduled tasks, automations, and Telegram-spawned agents when no specific agent is selected.
+        </p>
+        <select
+          value={appSettings.defaultProvider || 'claude'}
+          onChange={(e) => onSaveAppSettings({ defaultProvider: e.target.value })}
+          className="w-full sm:w-64 px-3 py-2 bg-background border border-border text-sm text-foreground focus:outline-none focus:border-foreground"
+        >
+          <option value="claude" disabled={!installedProviders.claude}>
+            Claude{!installedProviders.claude ? ' (not installed)' : ''}
+          </option>
+          <option value="codex" disabled={!installedProviders.codex}>
+            Codex{!installedProviders.codex ? ' (not installed)' : ''}
+          </option>
+          <option value="gemini" disabled={!installedProviders.gemini}>
+            Gemini{!installedProviders.gemini ? ' (not installed)' : ''}
+          </option>
+        </select>
       </div>
 
       {info && (

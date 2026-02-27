@@ -80,7 +80,43 @@ afterEach(() => {
 describe('scheduler-handlers', () => {
   async function registerHandlers() {
     const { registerSchedulerHandlers } = await import('../../../electron/handlers/scheduler-handlers');
-    registerSchedulerHandlers();
+    registerSchedulerHandlers({
+      agents: new Map(),
+      getAppSettings: () => ({
+        notificationsEnabled: true,
+        notifyOnWaiting: true,
+        notifyOnComplete: true,
+        notifyOnError: true,
+        telegramEnabled: false,
+        telegramBotToken: '',
+        telegramChatId: '',
+        telegramAuthToken: '',
+        telegramAuthorizedChatIds: [],
+        telegramRequireMention: false,
+        slackEnabled: false,
+        slackBotToken: '',
+        slackAppToken: '',
+        slackSigningSecret: '',
+        slackChannelId: '',
+        jiraEnabled: false,
+        jiraDomain: '',
+        jiraEmail: '',
+        jiraApiToken: '',
+        socialDataEnabled: false,
+        socialDataApiKey: '',
+        xPostingEnabled: false,
+        xApiKey: '',
+        xApiSecret: '',
+        xAccessToken: '',
+        xAccessTokenSecret: '',
+        tasmaniaEnabled: false,
+        tasmaniaServerPath: '',
+        verboseModeEnabled: false,
+        autoCheckUpdates: true,
+        defaultProvider: 'claude' as const,
+        cliPaths: { claude: '', codex: '', gemini: '', gh: '', node: '', additionalPaths: [] },
+      }),
+    });
   }
 
   describe('scheduler:listTasks', () => {

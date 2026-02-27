@@ -59,7 +59,7 @@ export default function SkillsPage() {
       .then(data => {
         if (data?.skills) setLiveSkills(data.skills);
       })
-      .catch(() => {}) // fallback to hardcoded
+      .catch(() => { }) // fallback to hardcoded
       .finally(() => setLoadingSkills(false));
   }, []);
 
@@ -202,7 +202,7 @@ export default function SkillsPage() {
             <h1 className="text-xl lg:text-2xl font-bold tracking-tight">Skills Marketplace</h1>
             <p className="text-muted-foreground text-xs lg:text-sm mt-1 hidden sm:block">
               {hasElectron
-                ? 'Install skills directly to enhance your Claude agents'
+                ? 'Install skills directly to enhance your AI Agents'
                 : 'Browse and copy install commands for skills'
               }
             </p>
@@ -241,10 +241,10 @@ export default function SkillsPage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             className={`p-4 border flex items-center justify-between ${showToast.type === 'success'
-                ? 'bg-primary/10 border-primary/30 text-primary'
-                : showToast.type === 'error'
-                  ? 'bg-red-500/10 border-red-500/30 text-red-400'
-                  : 'bg-white/10 border-white/30 text-white'
+              ? 'bg-primary/10 border-primary/30 text-primary'
+              : showToast.type === 'error'
+                ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                : 'bg-white/10 border-white/30 text-white'
               }`}
           >
             <div className="flex items-center gap-3">
@@ -445,10 +445,10 @@ export default function SkillsPage() {
                             onClick={() => handleDirectInstall(skill.repo, skill.name)}
                             disabled={isInstalling}
                             className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${isInstalling
-                                ? 'bg-secondary text-muted-foreground'
-                                : justCopied
-                                  ? 'bg-primary/10 text-primary'
-                                  : 'bg-foreground text-background hover:bg-foreground/90'
+                              ? 'bg-secondary text-muted-foreground'
+                              : justCopied
+                                ? 'bg-primary/10 text-primary'
+                                : 'bg-foreground text-background hover:bg-foreground/90'
                               }`}
                             style={{ borderRadius: 5 }}
                           >

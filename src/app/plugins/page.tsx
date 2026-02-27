@@ -559,6 +559,12 @@ export default function PluginsPage() {
           </a>
         </div>
 
+        {/* Claude-only banner */}
+        <div className="flex rounded-lg items-center gap-2 px-3 py-2 bg-blue-500/10 border border-blue-500/10 text-xs text-blue-600">
+          <Info className="w-3.5 h-3.5 shrink-0" />
+          <span>Plugins are only available for <strong>Claude Code</strong>. Codex and Gemini CLI do not support plugins.</span>
+        </div>
+
         {/* Stats row */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="text-xs lg:text-sm text-muted-foreground">

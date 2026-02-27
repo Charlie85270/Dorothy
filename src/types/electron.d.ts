@@ -73,6 +73,7 @@ export interface ProjectMemory {
   totalSize: number;
   lastModified: string;
   hasMemory: boolean;
+  provider: string;    // 'claude' | 'codex' | 'gemini'
 }
 
 export interface ImportPreview {
@@ -92,7 +93,7 @@ export interface WorktreeConfig {
 
 export type AgentCharacter = 'robot' | 'ninja' | 'wizard' | 'astronaut' | 'knight' | 'pirate' | 'alien' | 'viking' | 'frog';
 
-export type AgentProvider = 'claude' | 'local';
+export type AgentProvider = 'claude' | 'codex' | 'gemini' | 'local';
 
 export interface AgentStatus {
   id: string;
@@ -185,6 +186,8 @@ export interface ElectronAPI {
     installResize: (params: { id: string; cols: number; rows: number }) => Promise<{ success: boolean }>;
     installKill: (params: { id: string }) => Promise<{ success: boolean }>;
     listInstalled: () => Promise<string[]>;
+    listInstalledAll: () => Promise<Record<string, string[]>>;
+    linkToProvider: (params: { skillName: string; providerId: string }) => Promise<{ success: boolean; error?: string }>;
     onPtyData: (callback: (event: { id: string; data: string }) => void) => () => void;
     onPtyExit: (callback: (event: { id: string; exitCode: number }) => void) => () => void;
     onInstallOutput: (callback: (event: SkillInstallOutputEvent) => void) => () => void;
@@ -271,6 +274,7 @@ export interface ElectronAPI {
       socialDataApiKey: string;
       tasmaniaEnabled: boolean;
       tasmaniaServerPath: string;
+      defaultProvider?: string;
       cliPaths?: {
         claude: string;
         gh: string;
@@ -302,6 +306,7 @@ export interface ElectronAPI {
       socialDataApiKey?: string;
       tasmaniaEnabled?: boolean;
       tasmaniaServerPath?: string;
+      defaultProvider?: string;
       cliPaths?: {
         claude: string;
         gh: string;
@@ -531,17 +536,23 @@ export interface ElectronAPI {
   cliPaths?: {
     detect: () => Promise<{
       claude: string;
+      codex: string;
+      gemini: string;
       gh: string;
       node: string;
     }>;
     get: () => Promise<{
       claude: string;
+      codex: string;
+      gemini: string;
       gh: string;
       node: string;
       additionalPaths: string[];
     }>;
     save: (paths: {
       claude: string;
+      codex: string;
+      gemini: string;
       gh: string;
       node: string;
       additionalPaths: string[];

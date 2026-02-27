@@ -3,6 +3,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { spawn } from 'child_process';
+import { getProvider } from '../providers';
+import type { AgentProvider } from '../types';
 
 // ============================================
 // Automation IPC handlers
@@ -40,6 +42,7 @@ interface Automation {
     projectPath?: string;
     prompt: string;
     model?: string;
+    provider?: AgentProvider;
   };
   outputs: Array<{
     type: string;
@@ -100,6 +103,20 @@ function generateId(): string {
   return Math.random().toString(36).substring(2, 10);
 }
 
+/** Read defaultProvider from app-settings.json, falling back to 'claude' */
+function getDefaultProvider(): AgentProvider {
+  try {
+    const settingsFile = path.join(os.homedir(), '.dorothy', 'app-settings.json');
+    if (fs.existsSync(settingsFile)) {
+      const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'));
+      if (settings.defaultProvider && ['claude', 'codex', 'gemini'].includes(settings.defaultProvider)) {
+        return settings.defaultProvider as AgentProvider;
+      }
+    }
+  } catch { /* ignore */ }
+  return 'claude';
+}
+
 // Escape strings for safe interpolation inside bash double-quoted strings
 function escapeForBashDoubleQuotes(str: string): string {
   return str
@@ -128,15 +145,19 @@ function intervalToCron(minutes: number): string {
   }
 }
 
-// Get path to claude CLI — reads user-configured path from app-settings first
-async function getClaudePath(): Promise<string> {
+// Get path to a CLI binary — reads user-configured path from app-settings first
+async function getCLIPath(providerId: string = 'claude'): Promise<string> {
+  const provider = getProvider(providerId as import('../types').AgentProvider);
+  const binaryName = provider.binaryName;
+
   // Check user-configured path in app-settings.json
   try {
     const settingsFile = path.join(os.homedir(), '.dorothy', 'app-settings.json');
     if (fs.existsSync(settingsFile)) {
       const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'));
-      if (settings.cliPaths?.claude && fs.existsSync(settings.cliPaths.claude)) {
-        return settings.cliPaths.claude;
+      const configuredPath = settings.cliPaths?.[binaryName];
+      if (configuredPath && fs.existsSync(configuredPath)) {
+        return configuredPath;
       }
     }
   } catch {
@@ -145,7 +166,7 @@ async function getClaudePath(): Promise<string> {
 
   // Method 1: Run which with bash to get proper PATH (including nvm, etc.)
   const shellWhich = await new Promise<string | null>((resolve) => {
-    const proc = spawn('/bin/bash', ['-l', '-c', 'which claude'], {
+    const proc = spawn('/bin/bash', ['-l', '-c', `which ${binaryName}`], {
       env: { ...process.env, HOME: os.homedir() }
     });
     let output = '';
@@ -166,9 +187,9 @@ async function getClaudePath(): Promise<string> {
 
   // Method 2: Check common locations
   const commonPaths = [
-    '/usr/local/bin/claude',
-    '/opt/homebrew/bin/claude',
-    path.join(os.homedir(), '.local/bin/claude'),
+    `/usr/local/bin/${binaryName}`,
+    `/opt/homebrew/bin/${binaryName}`,
+    path.join(os.homedir(), `.local/bin/${binaryName}`),
   ];
 
   // Also check for any nvm node version
@@ -177,9 +198,9 @@ async function getClaudePath(): Promise<string> {
     try {
       const versions = fs.readdirSync(nvmDir);
       for (const version of versions) {
-        const claudePath = path.join(nvmDir, version, 'bin', 'claude');
-        if (fs.existsSync(claudePath)) {
-          return claudePath;
+        const binPath = path.join(nvmDir, version, 'bin', binaryName);
+        if (fs.existsSync(binPath)) {
+          return binPath;
         }
       }
     } catch {
@@ -194,12 +215,18 @@ async function getClaudePath(): Promise<string> {
   }
 
   // Fallback
-  return '/usr/local/bin/claude';
+  return `/usr/local/bin/${binaryName}`;
+}
+
+// Legacy alias for backward compatibility
+async function getClaudePath(): Promise<string> {
+  return getCLIPath('claude');
 }
 
 // Create launchd job for automation (macOS)
 async function createAutomationLaunchdJob(automation: Automation): Promise<void> {
-  const claudePath = await getClaudePath();
+  const automationProvider: AgentProvider = automation.agent.provider || getDefaultProvider();
+  const claudePath = await getCLIPath(automationProvider);
   const claudeDir = path.dirname(claudePath);
 
   // Convert schedule to cron
@@ -232,35 +259,19 @@ async function createAutomationLaunchdJob(automation: Automation): Promise<void>
   const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
   const projectPath = automation.agent.projectPath || os.homedir();
   const homeDir = os.homedir();
-  const safeClaudeDir = escapeForBashDoubleQuotes(claudeDir);
-  const safeProjectPath = escapeForBashDoubleQuotes(projectPath);
 
-  // Script sources bash profile for proper PATH (nvm, etc.)
-  const scriptContent = `#!/bin/bash
-
-# Source bash profile for proper PATH (nvm, homebrew, etc.)
-export HOME="${homeDir}"
-
-# Source nvm if available
-if [ -s "${homeDir}/.nvm/nvm.sh" ]; then
-  source "${homeDir}/.nvm/nvm.sh" 2>/dev/null || true
-fi
-
-# Source bashrc
-if [ -f "${homeDir}/.bashrc" ]; then
-  source "${homeDir}/.bashrc" 2>/dev/null || true
-elif [ -f "${homeDir}/.bash_profile" ]; then
-  source "${homeDir}/.bash_profile" 2>/dev/null || true
-fi
-
-# Also add claude directory to PATH as fallback
-export PATH="${safeClaudeDir}:$PATH"
-
-cd "${safeProjectPath}"
-echo "=== Automation started at $(date) ===" >> "${logPath}"
-"${claudePath}" --dangerously-skip-permissions --mcp-config "${mcpConfigPath}" -p '${escapedPrompt}' >> "${logPath}" 2>&1
-echo "=== Automation completed at $(date) ===" >> "${logPath}"
-`;
+  // Generate script via provider
+  const cliProvider = getProvider(automationProvider);
+  const scriptContent = cliProvider.buildScheduledScript({
+    binaryPath: claudePath,
+    binaryDir: claudeDir,
+    projectPath,
+    prompt: escapedPrompt,
+    autonomous: true,
+    mcpConfigPath,
+    logPath,
+    homeDir,
+  });
 
   fs.writeFileSync(scriptPath, scriptContent);
   fs.chmodSync(scriptPath, '755');
@@ -440,6 +451,7 @@ export function registerAutomationHandlers(): void {
           enabled: params.agentEnabled ?? false,
           projectPath: params.agentProjectPath,
           prompt: params.agentPrompt || '',
+          provider: getDefaultProvider(),
         },
         outputs,
       };

@@ -5,7 +5,7 @@ export interface WorktreeConfig {
 
 export type AgentCharacter = 'robot' | 'ninja' | 'wizard' | 'astronaut' | 'knight' | 'pirate' | 'alien' | 'viking';
 
-export type AgentProvider = 'claude' | 'local';
+export type AgentProvider = 'claude' | 'codex' | 'gemini' | 'local';
 
 export interface AgentStatus {
   id: string;
@@ -32,6 +32,8 @@ export interface AgentStatus {
 
 export interface CLIPaths {
   claude: string;
+  codex: string;
+  gemini: string;
   gh: string;
   node: string;
   additionalPaths: string[];
@@ -69,4 +71,5 @@ export interface AppSettings {
   verboseModeEnabled: boolean;
   autoCheckUpdates: boolean;
   cliPaths: CLIPaths;
+  defaultProvider?: AgentProvider;
 }

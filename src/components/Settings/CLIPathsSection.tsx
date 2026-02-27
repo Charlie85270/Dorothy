@@ -9,6 +9,8 @@ interface CLIPathsSectionProps {
 
 interface DetectedPaths {
   claude: string;
+  codex: string;
+  gemini: string;
   gh: string;
   node: string;
 }
@@ -18,11 +20,11 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings }: CLIPathsSect
   const [detectedPaths, setDetectedPaths] = useState<DetectedPaths | null>(null);
   const [newPath, setNewPath] = useState('');
   const [localPaths, setLocalPaths] = useState<CLIPaths>(
-    appSettings.cliPaths || { claude: '', gh: '', node: '', additionalPaths: [] }
+    appSettings.cliPaths || { claude: '', codex: '', gemini: '', gh: '', node: '', additionalPaths: [] }
   );
 
   useEffect(() => {
-    setLocalPaths(appSettings.cliPaths || { claude: '', gh: '', node: '', additionalPaths: [] });
+    setLocalPaths(appSettings.cliPaths || { claude: '', codex: '', gemini: '', gh: '', node: '', additionalPaths: [] });
   }, [appSettings.cliPaths]);
 
   const handleDetectPaths = async () => {
@@ -34,6 +36,8 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings }: CLIPathsSect
         // Auto-fill empty fields with detected values
         const updatedPaths = { ...localPaths };
         if (!updatedPaths.claude && paths.claude) updatedPaths.claude = paths.claude;
+        if (!updatedPaths.codex && paths.codex) updatedPaths.codex = paths.codex;
+        if (!updatedPaths.gemini && paths.gemini) updatedPaths.gemini = paths.gemini;
         if (!updatedPaths.gh && paths.gh) updatedPaths.gh = paths.gh;
         if (!updatedPaths.node && paths.node) updatedPaths.node = paths.node;
         setLocalPaths(updatedPaths);
@@ -69,7 +73,7 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings }: CLIPathsSect
     onSaveAppSettings({ cliPaths: localPaths });
   };
 
-  const hasChanges = JSON.stringify(localPaths) !== JSON.stringify(appSettings.cliPaths || { claude: '', gh: '', node: '', additionalPaths: [] });
+  const hasChanges = JSON.stringify(localPaths) !== JSON.stringify(appSettings.cliPaths || { claude: '', codex: '', gemini: '', gh: '', node: '', additionalPaths: [] });
 
   const renderPathInput = (
     label: string,
@@ -145,9 +149,11 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings }: CLIPathsSect
             </div>
             <ul className="text-xs space-y-1 ml-6">
               {detectedPaths.claude && <li>Claude: {detectedPaths.claude}</li>}
+              {detectedPaths.codex && <li>Codex: {detectedPaths.codex}</li>}
+              {detectedPaths.gemini && <li>Gemini: {detectedPaths.gemini}</li>}
               {detectedPaths.gh && <li>GitHub CLI: {detectedPaths.gh}</li>}
               {detectedPaths.node && <li>Node.js: {detectedPaths.node}</li>}
-              {!detectedPaths.claude && !detectedPaths.gh && !detectedPaths.node && (
+              {!detectedPaths.claude && !detectedPaths.codex && !detectedPaths.gemini && !detectedPaths.gh && !detectedPaths.node && (
                 <li className="text-yellow-400">No CLI tools found in common locations</li>
               )}
             </ul>
@@ -167,6 +173,20 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings }: CLIPathsSect
           'Path to the Claude CLI executable',
           'claude',
           '/usr/local/bin/claude or ~/.nvm/versions/node/v20/bin/claude'
+        )}
+
+        {renderPathInput(
+          'Codex CLI',
+          'Path to the OpenAI Codex CLI executable',
+          'codex',
+          '/usr/local/bin/codex or ~/.nvm/versions/node/v20/bin/codex'
+        )}
+
+        {renderPathInput(
+          'Gemini CLI',
+          'Path to the Google Gemini CLI executable',
+          'gemini',
+          '/usr/local/bin/gemini or ~/.nvm/versions/node/v20/bin/gemini'
         )}
 
         {renderPathInput(

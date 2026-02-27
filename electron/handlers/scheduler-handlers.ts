@@ -5,10 +5,22 @@ import * as os from 'os';
 import { spawn } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
 import { getMainWindow } from '../core/window-manager';
+import { getProvider } from '../providers';
+import type { AgentProvider, AgentStatus, AppSettings } from '../types';
 
 // ============================================
 // Scheduler IPC handlers (native implementation)
 // ============================================
+
+interface SchedulerDeps {
+  agents: Map<string, AgentStatus>;
+  getAppSettings: () => AppSettings;
+}
+
+/** Read the default provider from the deps or fall back to 'claude' */
+function resolveDefaultProvider(deps: SchedulerDeps): AgentProvider {
+  return deps.getAppSettings().defaultProvider || 'claude';
+}
 
 const SCHEDULER_METADATA_PATH = path.join(os.homedir(), '.dorothy', 'scheduler-metadata.json');
 
@@ -48,6 +60,7 @@ interface SchedulerTaskMetadata {
   title?: string;
   agentId?: string;
   agentName?: string;
+  provider?: AgentProvider;
   notifications: {
     telegram: boolean;
     slack: boolean;
@@ -209,15 +222,19 @@ function getNextRunTime(cron: string): string | undefined {
   }
 }
 
-// Get path to claude CLI — reads user-configured path from app-settings first
-async function getClaudePath(): Promise<string> {
+// Get path to a CLI binary — reads user-configured path from app-settings first, then detects via which
+async function getCLIPath(providerId: AgentProvider = 'claude'): Promise<string> {
+  const provider = getProvider(providerId);
+  const binaryName = provider.binaryName;
+
   // Check user-configured path in app-settings.json
   try {
     const settingsFile = path.join(os.homedir(), '.dorothy', 'app-settings.json');
     if (fs.existsSync(settingsFile)) {
       const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'));
-      if (settings.cliPaths?.claude && fs.existsSync(settings.cliPaths.claude)) {
-        return settings.cliPaths.claude;
+      const configuredPath = settings.cliPaths?.[binaryName];
+      if (configuredPath && fs.existsSync(configuredPath)) {
+        return configuredPath;
       }
     }
   } catch {
@@ -226,19 +243,24 @@ async function getClaudePath(): Promise<string> {
 
   // Fallback: try to detect via which
   return new Promise((resolve) => {
-    const proc = spawn('/bin/bash', ['-l', '-c', 'which claude'], {
+    const proc = spawn('/bin/bash', ['-l', '-c', `which ${binaryName}`], {
       env: { ...process.env, HOME: os.homedir() }
     });
     let output = '';
     proc.stdout.on('data', (data) => { output += data; });
     proc.on('close', () => {
-      const claudePath = output.trim() || '/usr/local/bin/claude';
-      resolve(claudePath);
+      const detectedPath = output.trim() || `/usr/local/bin/${binaryName}`;
+      resolve(detectedPath);
     });
     proc.on('error', () => {
-      resolve('/usr/local/bin/claude');
+      resolve(`/usr/local/bin/${binaryName}`);
     });
   });
+}
+
+// Legacy alias for backward compatibility
+async function getClaudePath(): Promise<string> {
+  return getCLIPath('claude');
 }
 
 // Fix MCP server paths in mcp.json
@@ -285,9 +307,10 @@ async function createLaunchdJob(
   schedule: string,
   projectPath: string,
   prompt: string,
-  autonomous: boolean
+  autonomous: boolean,
+  provider: AgentProvider = 'claude'
 ): Promise<void> {
-  const claudePath = await getClaudePath();
+  const claudePath = await getCLIPath(provider);
   const claudeDir = path.dirname(claudePath);
 
   const [minute, hour, dayOfMonth, , dayOfWeek] = schedule.split(' ');
@@ -309,34 +332,21 @@ async function createLaunchdJob(
   const statusInstruction = `\n\n[IMPORTANT] Use the update_scheduled_task_status MCP tool to report your progress:\n1. At the START of your work, call it with task_id="${taskId}" and status="running"\n2. When FINISHED successfully, call it with status="success" and a brief summary\n3. If ERRORS occurred, use status="error" (total failure) or "partial" (some parts succeeded)`;
   const promptWithStatus = prompt + statusInstruction;
   const escapedPrompt = promptWithStatus.replace(/'/g, "'\\''");
-  const flags = autonomous ? '--dangerously-skip-permissions' : '';
   const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
   const homeDir = os.homedir();
 
-  const scriptContent = `#!/bin/bash
-
-# Source shell profile for proper PATH (nvm, homebrew, etc.)
-export HOME="${homeDir}"
-
-if [ -s "${homeDir}/.nvm/nvm.sh" ]; then
-  source "${homeDir}/.nvm/nvm.sh" 2>/dev/null || true
-fi
-
-if [ -f "${homeDir}/.bashrc" ]; then
-  source "${homeDir}/.bashrc" 2>/dev/null || true
-elif [ -f "${homeDir}/.bash_profile" ]; then
-  source "${homeDir}/.bash_profile" 2>/dev/null || true
-elif [ -f "${homeDir}/.zshrc" ]; then
-  source "${homeDir}/.zshrc" 2>/dev/null || true
-fi
-
-export PATH="${claudeDir}:$PATH"
-cd "${projectPath}"
-echo "=== Task started at $(date) ===" >> "${logPath}"
-unset CLAUDECODE
-CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 "${claudePath}" ${flags} --output-format stream-json --verbose --mcp-config "${mcpConfigPath}" --add-dir "${homeDir}/.dorothy" -p '${escapedPrompt}' >> "${logPath}" 2>&1
-echo "=== Task completed at $(date) ===" >> "${logPath}"
-`;
+  // Generate script via provider
+  const cliProvider = getProvider(provider);
+  const scriptContent = cliProvider.buildScheduledScript({
+    binaryPath: claudePath,
+    binaryDir: claudeDir,
+    projectPath,
+    prompt: escapedPrompt,
+    autonomous,
+    mcpConfigPath,
+    logPath,
+    homeDir,
+  });
 
   fs.writeFileSync(scriptPath, scriptContent);
   fs.chmodSync(scriptPath, '755');
@@ -423,9 +433,10 @@ async function createCronJob(
   schedule: string,
   projectPath: string,
   prompt: string,
-  autonomous: boolean
+  autonomous: boolean,
+  provider: AgentProvider = 'claude'
 ): Promise<void> {
-  const claudePath = await getClaudePath();
+  const claudePath = await getCLIPath(provider);
   const claudeDir = path.dirname(claudePath);
 
   const scriptPath = path.join(os.homedir(), '.dorothy', 'scripts', `${taskId}.sh`);
@@ -443,34 +454,21 @@ async function createCronJob(
   const statusInstruction = `\n\n[IMPORTANT] Use the update_scheduled_task_status MCP tool to report your progress:\n1. At the START of your work, call it with task_id="${taskId}" and status="running"\n2. When FINISHED successfully, call it with status="success" and a brief summary\n3. If ERRORS occurred, use status="error" (total failure) or "partial" (some parts succeeded)`;
   const promptWithStatus = prompt + statusInstruction;
   const escapedPrompt = promptWithStatus.replace(/'/g, "'\\''");
-  const flags = autonomous ? '--dangerously-skip-permissions' : '';
   const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
   const homeDir = os.homedir();
 
-  const scriptContent = `#!/bin/bash
-
-# Source shell profile for proper PATH (nvm, homebrew, etc.)
-export HOME="${homeDir}"
-
-if [ -s "${homeDir}/.nvm/nvm.sh" ]; then
-  source "${homeDir}/.nvm/nvm.sh" 2>/dev/null || true
-fi
-
-if [ -f "${homeDir}/.bashrc" ]; then
-  source "${homeDir}/.bashrc" 2>/dev/null || true
-elif [ -f "${homeDir}/.bash_profile" ]; then
-  source "${homeDir}/.bash_profile" 2>/dev/null || true
-elif [ -f "${homeDir}/.zshrc" ]; then
-  source "${homeDir}/.zshrc" 2>/dev/null || true
-fi
-
-export PATH="${claudeDir}:$PATH"
-cd "${projectPath}"
-echo "=== Task started at $(date) ===" >> "${logPath}"
-unset CLAUDECODE
-CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 "${claudePath}" ${flags} --output-format stream-json --verbose --mcp-config "${mcpConfigPath}" --add-dir "${homeDir}/.dorothy" -p '${escapedPrompt}' >> "${logPath}" 2>&1
-echo "=== Task completed at $(date) ===" >> "${logPath}"
-`;
+  // Generate script via provider
+  const cliProvider = getProvider(provider);
+  const scriptContent = cliProvider.buildScheduledScript({
+    binaryPath: claudePath,
+    binaryDir: claudeDir,
+    projectPath,
+    prompt: escapedPrompt,
+    autonomous,
+    mcpConfigPath,
+    logPath,
+    homeDir,
+  });
 
   fs.writeFileSync(scriptPath, scriptContent);
   fs.chmodSync(scriptPath, '755');
@@ -508,7 +506,7 @@ echo "=== Task completed at $(date) ===" >> "${logPath}"
 /**
  * Register all scheduler IPC handlers
  */
-export function registerSchedulerHandlers(): void {
+export function registerSchedulerHandlers(deps: SchedulerDeps): void {
   // Fix MCP server paths
   ipcMain.handle('scheduler:fixMcpPaths', async () => {
     try {
@@ -857,12 +855,17 @@ export function registerSchedulerHandlers(): void {
       }
       fs.writeFileSync(globalSchedulesPath, JSON.stringify(schedules, null, 2));
 
+      // Resolve provider: agent's provider > default provider > 'claude'
+      const taskProvider: AgentProvider = (config.agentId && deps.agents.get(config.agentId)?.provider)
+        || resolveDefaultProvider(deps);
+
       // Save metadata
       const metadata = loadSchedulerMetadata();
       metadata[taskId] = {
         title: config.title,
         agentId: config.agentId,
         agentName: config.agentName,
+        provider: taskProvider,
         notifications: config.notifications || { telegram: false, slack: false },
         createdAt: new Date().toISOString(),
       };
@@ -870,9 +873,9 @@ export function registerSchedulerHandlers(): void {
 
       // Create platform-specific job
       if (os.platform() === 'darwin') {
-        await createLaunchdJob(taskId, schedule, config.projectPath, config.prompt, autonomous);
+        await createLaunchdJob(taskId, schedule, config.projectPath, config.prompt, autonomous, taskProvider);
       } else {
-        await createCronJob(taskId, schedule, config.projectPath, config.prompt, autonomous);
+        await createCronJob(taskId, schedule, config.projectPath, config.prompt, autonomous, taskProvider);
       }
 
       return { success: true, taskId };
@@ -1016,8 +1019,12 @@ export function registerSchedulerHandlers(): void {
       const autonomous = (task.autonomous as boolean) ?? true;
       const scheduleChanged = updates.schedule !== undefined;
 
-      // Always regenerate the shell script
-      const claudePath = await getClaudePath();
+      // Resolve provider from metadata
+      const meta = loadSchedulerMetadata();
+      const taskProvider: AgentProvider = meta[taskId]?.provider || resolveDefaultProvider(deps);
+
+      // Always regenerate the shell script using provider
+      const claudePath = await getCLIPath(taskProvider);
       const claudeDir = path.dirname(claudePath);
       const logPath = path.join(os.homedir(), '.claude', 'logs', `${taskId}.log`);
       const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
@@ -1025,7 +1032,6 @@ export function registerSchedulerHandlers(): void {
       const statusInstruction = `\n\n[IMPORTANT] Use the update_scheduled_task_status MCP tool to report your progress:\n1. At the START of your work, call it with task_id="${taskId}" and status="running"\n2. When FINISHED successfully, call it with status="success" and a brief summary\n3. If ERRORS occurred, use status="error" (total failure) or "partial" (some parts succeeded)`;
       const promptWithStatus = prompt + statusInstruction;
       const escapedPrompt = promptWithStatus.replace(/'/g, "'\\''");
-      const flags = autonomous ? '--dangerously-skip-permissions' : '';
 
       const scriptPath = path.join(os.homedir(), '.dorothy', 'scripts', `${taskId}.sh`);
       const scriptsDir = path.dirname(scriptPath);
@@ -1033,30 +1039,17 @@ export function registerSchedulerHandlers(): void {
         fs.mkdirSync(scriptsDir, { recursive: true });
       }
 
-      const scriptContent = `#!/bin/bash
-
-# Source shell profile for proper PATH (nvm, homebrew, etc.)
-export HOME="${homeDir}"
-
-if [ -s "${homeDir}/.nvm/nvm.sh" ]; then
-  source "${homeDir}/.nvm/nvm.sh" 2>/dev/null || true
-fi
-
-if [ -f "${homeDir}/.bashrc" ]; then
-  source "${homeDir}/.bashrc" 2>/dev/null || true
-elif [ -f "${homeDir}/.bash_profile" ]; then
-  source "${homeDir}/.bash_profile" 2>/dev/null || true
-elif [ -f "${homeDir}/.zshrc" ]; then
-  source "${homeDir}/.zshrc" 2>/dev/null || true
-fi
-
-export PATH="${claudeDir}:$PATH"
-cd "${projectPath}"
-echo "=== Task started at $(date) ===" >> "${logPath}"
-unset CLAUDECODE
-CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 "${claudePath}" ${flags} --output-format stream-json --verbose --mcp-config "${mcpConfigPath}" --add-dir "${homeDir}/.dorothy" -p '${escapedPrompt}' >> "${logPath}" 2>&1
-echo "=== Task completed at $(date) ===" >> "${logPath}"
-`;
+      const cliProvider = getProvider(taskProvider);
+      const scriptContent = cliProvider.buildScheduledScript({
+        binaryPath: claudePath,
+        binaryDir: claudeDir,
+        projectPath,
+        prompt: escapedPrompt,
+        autonomous,
+        mcpConfigPath,
+        logPath,
+        homeDir,
+      });
 
       fs.writeFileSync(scriptPath, scriptContent);
       fs.chmodSync(scriptPath, '755');
@@ -1084,7 +1077,7 @@ echo "=== Task completed at $(date) ===" >> "${logPath}"
           }
 
           // Create new launchd job with updated schedule
-          await createLaunchdJob(taskId, schedule, projectPath, prompt, autonomous);
+          await createLaunchdJob(taskId, schedule, projectPath, prompt, autonomous, taskProvider);
         } else {
           // Remove old cron entry
           await new Promise<void>((resolve) => {
@@ -1106,7 +1099,7 @@ echo "=== Task completed at $(date) ===" >> "${logPath}"
           });
 
           // Create new cron job
-          await createCronJob(taskId, schedule, projectPath, prompt, autonomous);
+          await createCronJob(taskId, schedule, projectPath, prompt, autonomous, taskProvider);
         }
       }
 
@@ -1143,6 +1136,11 @@ echo "=== Task completed at $(date) ===" >> "${logPath}"
         return { success: true };
       }
 
+      // Resolve provider from metadata
+      const meta = loadSchedulerMetadata();
+      const taskProvider: AgentProvider = meta[taskId]?.provider || resolveDefaultProvider(deps);
+      const binaryPath = await getCLIPath(taskProvider);
+
       const logPath = path.join(os.homedir(), '.claude', 'logs', `${taskId}.log`);
       const logsDir = path.dirname(logPath);
       if (!fs.existsSync(logsDir)) {
@@ -1150,7 +1148,7 @@ echo "=== Task completed at $(date) ===" >> "${logPath}"
       }
 
       const flags = task.autonomous ? '--dangerously-skip-permissions' : '';
-      const proc = spawn('bash', ['-c', `cd "${task.projectPath}" && claude ${flags} -p '${task.prompt?.replace(/'/g, "'\\''")}' >> "${logPath}" 2>&1`], {
+      const proc = spawn('bash', ['-c', `cd "${task.projectPath}" && "${binaryPath}" ${flags} -p '${task.prompt?.replace(/'/g, "'\\''")}' >> "${logPath}" 2>&1`], {
         detached: true,
         stdio: 'ignore',
       });

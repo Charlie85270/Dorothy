@@ -12,6 +12,7 @@ import { App as SlackApp, LogLevel } from '@slack/bolt';
 // Import types
 import type { AgentStatus, WorktreeConfig, AgentCharacter, AppSettings, AgentProvider } from '../types';
 import { buildFullPath } from '../utils/path-builder';
+import { getProvider, getAllProviders } from '../providers';
 
 // Dependencies interface for dependency injection
 export interface IpcHandlerDependencies {
@@ -239,14 +240,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     const currentSettings = getAppSettings();
     const cliExtraPaths: string[] = [];
     if (currentSettings.cliPaths) {
-      if (currentSettings.cliPaths.claude) {
-        cliExtraPaths.push(path.dirname(currentSettings.cliPaths.claude));
-      }
-      if (currentSettings.cliPaths.gh) {
-        cliExtraPaths.push(path.dirname(currentSettings.cliPaths.gh));
-      }
-      if (currentSettings.cliPaths.node) {
-        cliExtraPaths.push(path.dirname(currentSettings.cliPaths.node));
+      for (const key of ['claude', 'codex', 'gemini', 'gh', 'node'] as const) {
+        const val = (currentSettings.cliPaths as unknown as Record<string, string>)[key];
+        if (val) cliExtraPaths.push(path.dirname(val));
       }
       if (currentSettings.cliPaths.additionalPaths) {
         cliExtraPaths.push(...currentSettings.cliPaths.additionalPaths.filter(Boolean));
@@ -255,12 +251,17 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     const fullPath = buildFullPath(cliExtraPaths);
 
     // Create PTY for this agent
-    // Strip CLAUDECODE env var to prevent "nested session" errors when launching claude
+    // Strip nested-session env vars to prevent errors
     const cleanEnv = { ...process.env as { [key: string]: string } };
+    // Each provider may have env vars to delete; always delete CLAUDECODE for Claude
     delete cleanEnv['CLAUDECODE'];
 
     // Always include world-builder skill so agents can generate game zones
     const allSkills = [...new Set([...config.skills, 'world-builder'])];
+
+    // Get provider-specific env vars
+    const agentProvider = getProvider(config.provider);
+    const providerEnvVars = agentProvider.getPtyEnvVars(id, config.projectPath, allSkills);
 
     let ptyProcess: pty.IPty;
     try {
@@ -272,9 +273,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
         env: {
           ...cleanEnv,
           PATH: fullPath,
-          CLAUDE_SKILLS: allSkills.join(','),
-          CLAUDE_AGENT_ID: id,
-          CLAUDE_PROJECT_PATH: config.projectPath,
+          ...providerEnvVars,
         },
       });
       console.log(`PTY created successfully for agent ${id}, PID: ${ptyProcess.pid}`);
@@ -418,9 +417,10 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       const currentSettings = getAppSettings();
       const extraPaths: string[] = [];
       if (currentSettings.cliPaths) {
-        if (currentSettings.cliPaths.claude) extraPaths.push(path.dirname(currentSettings.cliPaths.claude));
-        if (currentSettings.cliPaths.gh) extraPaths.push(path.dirname(currentSettings.cliPaths.gh));
-        if (currentSettings.cliPaths.node) extraPaths.push(path.dirname(currentSettings.cliPaths.node));
+        for (const key of ['claude', 'codex', 'gemini', 'gh', 'node'] as const) {
+          const val = (currentSettings.cliPaths as unknown as Record<string, string>)[key];
+          if (val) extraPaths.push(path.dirname(val));
+        }
         if (currentSettings.cliPaths.additionalPaths) extraPaths.push(...currentSettings.cliPaths.additionalPaths.filter(Boolean));
       }
       const fullPathForLocal = buildFullPath(extraPaths);
@@ -431,6 +431,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       const workingDir = agent.worktreePath || agent.projectPath;
       const cwd = fs.existsSync(workingDir) ? workingDir : os.homedir();
 
+      // Local provider uses Claude provider env vars + Tasmania env vars
+      const localProviderEnvVars = getProvider('claude').getPtyEnvVars(agent.id, agent.projectPath, agent.skills);
+
       const newPty = pty.spawn('/bin/bash', ['-l'], {
         name: 'xterm-256color',
         cols: 120,
@@ -439,10 +442,8 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
         env: {
           ...cleanEnvLocal,
           PATH: fullPathForLocal,
-          CLAUDE_SKILLS: agent.skills.join(','),
-          CLAUDE_AGENT_ID: agent.id,
-          CLAUDE_PROJECT_PATH: agent.projectPath,
-          // Match Tasmania's env var pattern exactly:
+          ...localProviderEnvVars,
+          // Tasmania-specific env vars:
           // - ANTHROPIC_BASE_URL without /v1 (SDK appends /v1/messages)
           // - ANTHROPIC_MODEL with the raw local model name
           ANTHROPIC_BASE_URL: endpoint,
@@ -502,68 +503,49 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     const ptyProcess = ptyProcesses.get(agent.ptyId!);
     if (!ptyProcess) throw new Error('PTY not found');
 
-    // ── Claude Code CLI ──────────────────────────────────────────────
+    // ── Build CLI command via provider ─────────────────────────────
     const appSettingsForCommand = getAppSettings();
-    let command = (appSettingsForCommand.cliPaths?.claude) || 'claude';
+    const cliProvider = getProvider(provider);
+    const binaryPath = cliProvider.resolveBinaryPath(appSettingsForCommand);
 
     // Check if this is the Super Agent (orchestrator)
     const isSuperAgentCheck = agent.name?.toLowerCase().includes('super agent') ||
                       agent.name?.toLowerCase().includes('orchestrator');
 
-    // Add explicit MCP config for Super Agent to ensure orchestrator tools are loaded
-    if (isSuperAgentCheck) {
+    // Resolve MCP config path — pass for ALL agents using flag strategy (Claude)
+    let mcpConfigPath: string | undefined;
+    let systemPromptFile: string | undefined;
+    if (cliProvider.getMcpConfigStrategy() === 'flag') {
       const { app } = await import('electron');
-      const mcpConfigPath = path.join(app.getPath('home'), '.claude', 'mcp.json');
-      if (fs.existsSync(mcpConfigPath)) {
-        command += ` --mcp-config '${mcpConfigPath.replace(/'/g, "'\\''")}'`;
+      const possibleMcpPath = path.join(app.getPath('home'), '.claude', 'mcp.json');
+      if (fs.existsSync(possibleMcpPath)) {
+        mcpConfigPath = possibleMcpPath;
       }
-      // Add super agent instructions (read via Node.js, not cat - asar compatibility)
+    }
+
+    // Super Agent-specific: system prompt file
+    if (isSuperAgentCheck) {
       const { getSuperAgentInstructionsPath } = await import('../utils');
       const superAgentInstructionsPath = getSuperAgentInstructionsPath();
       if (fs.existsSync(superAgentInstructionsPath)) {
-        command += ` --append-system-prompt-file '${superAgentInstructionsPath.replace(/'/g, "'\\''")}'`;
+        systemPromptFile = superAgentInstructionsPath;
       }
     }
 
-    if (options?.model && provider !== 'local') {
-      if (!/^[a-zA-Z0-9._:/-]+$/.test(options.model)) {
-        throw new Error('Invalid model name');
-      }
-      command += ` --model '${options.model}'`;
-    }
-
-    // Add verbose flag if enabled in app settings
-    const currentAppSettings = getAppSettings();
-    if (currentAppSettings.verboseModeEnabled) {
-      command += ' --verbose';
-    }
-
-    // Add skip permissions flag if enabled
-    if (agent.skipPermissions) {
-      command += ' --dangerously-skip-permissions';
-    }
-
-    // Add secondary project path with --add-dir flag if set
-    if (agent.secondaryProjectPath) {
-      const escapedSecondaryPath = agent.secondaryProjectPath.replace(/'/g, "'\\''");
-      command += ` --add-dir '${escapedSecondaryPath}'`;
-    }
-
-    // Load Dorothy's CLAUDE.md for all agents via ~/.dorothy
-    command += ` --add-dir '${os.homedir()}/.dorothy'`;
-
-    // Build the final prompt with skills directive if agent has skills
-    // Always include world-builder skill so agents can generate game zones
     const allAgentSkills = [...new Set([...(agent.skills || []), 'world-builder'])];
-    let finalPrompt = prompt;
-    if (allAgentSkills.length > 0 && !isSuperAgentCheck) {
-      const skillsList = allAgentSkills.join(', ');
-      finalPrompt = `[IMPORTANT: Use these skills for this session: ${skillsList}. Invoke them with /<skill-name> when relevant to the task.] ${prompt}`;
-    }
 
-    // Add the prompt (escape single quotes)
-    const escapedPrompt = finalPrompt.replace(/'/g, "'\\''");
-    command += finalPrompt ? ` '${escapedPrompt}'` : '';
+    const command = cliProvider.buildInteractiveCommand({
+      binaryPath,
+      prompt,
+      model: (provider !== 'local') ? options?.model : undefined,
+      verbose: appSettingsForCommand.verboseModeEnabled,
+      skipPermissions: agent.skipPermissions,
+      secondaryProjectPath: agent.secondaryProjectPath,
+      mcpConfigPath,
+      systemPromptFile,
+      skills: allAgentSkills,
+      isSuperAgent: isSuperAgentCheck,
+    });
 
     // Update status
     agent.status = 'running';
@@ -873,7 +855,7 @@ function registerSkillHandlers(deps: IpcHandlerDependencies): void {
     return { success: true, message: 'Use skill:install-start for interactive installation' };
   });
 
-  // Get installed skills from Claude config
+  // Get installed skills from Claude config (backward compat — flat list)
   ipcMain.handle('skill:list-installed', async () => {
     try {
       const settingsPath = path.join(os.homedir(), '.claude', 'settings.json');
@@ -890,6 +872,62 @@ function registerSkillHandlers(deps: IpcHandlerDependencies): void {
       return [];
     } catch {
       return [];
+    }
+  });
+
+  // Get installed skills per provider
+  ipcMain.handle('skill:list-installed-all', async () => {
+    const providers = getAllProviders();
+    const result: Record<string, string[]> = {};
+    for (const p of providers) {
+      result[p.id] = p.getInstalledSkills();
+    }
+    return result;
+  });
+
+  // Symlink a skill from Claude's skill dir to another provider's skill dir
+  ipcMain.handle('skill:link-to-provider', async (_event, { skillName, providerId }: { skillName: string; providerId: string }) => {
+    try {
+      // Source: the first Claude skill dir that contains the skill
+      const claudeProvider = getProvider('claude');
+      let sourcePath: string | null = null;
+      for (const dir of claudeProvider.getSkillDirectories()) {
+        const candidate = path.join(dir, skillName);
+        if (fs.existsSync(candidate)) {
+          sourcePath = candidate;
+          break;
+        }
+      }
+
+      if (!sourcePath) {
+        return { success: false, error: `Skill "${skillName}" not found in Claude skill directories` };
+      }
+
+      const targetProvider = getProvider(providerId as any);
+      const targetDirs = targetProvider.getSkillDirectories();
+      if (!targetDirs.length) {
+        return { success: false, error: `Provider "${providerId}" has no skill directories` };
+      }
+
+      const targetDir = targetDirs[0];
+      const targetPath = path.join(targetDir, skillName);
+
+      // Skip if already exists
+      if (fs.existsSync(targetPath)) {
+        return { success: true };
+      }
+
+      // Ensure parent dir exists
+      fs.mkdirSync(targetDir, { recursive: true });
+
+      // Create symlink
+      fs.symlinkSync(sourcePath, targetPath, 'dir');
+      console.log(`Linked skill "${skillName}" to ${providerId} at ${targetPath}`);
+
+      return { success: true };
+    } catch (err) {
+      console.error(`Failed to link skill "${skillName}" to ${providerId}:`, err);
+      return { success: false, error: String(err) };
     }
   });
 }
@@ -1619,22 +1657,28 @@ function registerTasmaniaHandlers(deps: IpcHandlerDependencies): void {
     }
   });
 
-  // Check if Tasmania MCP is registered in Claude Code
+  // Check if Tasmania MCP is registered across all providers
   ipcMain.handle('tasmania:getMcpStatus', async () => {
     try {
-      const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
-      let configured = false;
+      const { getAllProviders } = await import('../providers');
+      const providers = getAllProviders();
+      const appSettings = getAppSettings();
+      const expectedPath = appSettings.tasmaniaServerPath || '';
 
-      if (fs.existsSync(mcpConfigPath)) {
+      // Check all providers — configured if registered in at least one
+      let configured = false;
+      for (const provider of providers) {
         try {
-          const mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
-          configured = mcpConfig?.mcpServers?.['tasmania'] !== undefined;
+          if (provider.isMcpServerRegistered('tasmania', expectedPath)) {
+            configured = true;
+            break;
+          }
         } catch {
-          // Ignore parse errors
+          // Skip provider on error
         }
       }
 
-      // Also check via claude mcp list if not found in mcp.json (async — never use execSync in main process)
+      // Fallback: also check via claude mcp list if not found
       if (!configured) {
         try {
           const { exec } = await import('child_process');
@@ -1655,7 +1699,7 @@ function registerTasmaniaHandlers(deps: IpcHandlerDependencies): void {
     }
   });
 
-  // Register Tasmania MCP with Claude Code
+  // Register Tasmania MCP with all providers
   ipcMain.handle('tasmania:setup', async () => {
     try {
       const appSettings = getAppSettings();
@@ -1669,74 +1713,37 @@ function registerTasmaniaHandlers(deps: IpcHandlerDependencies): void {
         return { success: false, error: `MCP server not found at ${serverPath}` };
       }
 
-      // Determine command based on file extension (.ts needs tsx, .js uses node)
       const command = serverPath.endsWith('.ts') ? 'npx' : 'node';
       const args = serverPath.endsWith('.ts') ? ['tsx', serverPath] : [serverPath];
 
-      // Remove existing first
-      try {
-        const { execFileSync: execFileSyncImport } = await import('child_process');
-        execFileSyncImport('claude', ['mcp', 'remove', '-s', 'user', 'tasmania'], { encoding: 'utf-8', stdio: 'pipe' });
-      } catch {
-        // Ignore if doesn't exist
+      const { getAllProviders } = await import('../providers');
+      const providers = getAllProviders();
+
+      for (const provider of providers) {
+        try {
+          await provider.registerMcpServer('tasmania', command, args);
+        } catch (err) {
+          console.error(`[${provider.id}] Failed to register Tasmania:`, err);
+        }
       }
 
-      // Add via claude mcp add
-      try {
-        const { execFileSync: execFileSyncImport } = await import('child_process');
-        execFileSyncImport('claude', ['mcp', 'add', '-s', 'user', 'tasmania', command, ...args], { encoding: 'utf-8', stdio: 'pipe' });
-        return { success: true };
-      } catch {
-        // Fallback: write to mcp.json
-        const claudeDir = path.join(os.homedir(), '.claude');
-        const mcpConfigPath = path.join(claudeDir, 'mcp.json');
-
-        if (!fs.existsSync(claudeDir)) {
-          fs.mkdirSync(claudeDir, { recursive: true });
-        }
-
-        let mcpConfig: { mcpServers?: Record<string, unknown> } = { mcpServers: {} };
-        if (fs.existsSync(mcpConfigPath)) {
-          try {
-            mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
-            if (!mcpConfig.mcpServers) mcpConfig.mcpServers = {};
-          } catch {
-            mcpConfig = { mcpServers: {} };
-          }
-        }
-
-        mcpConfig.mcpServers!['tasmania'] = { command, args };
-
-        fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
-        return { success: true };
-      }
+      return { success: true };
     } catch (err) {
       return { success: false, error: String(err) };
     }
   });
 
-  // Remove Tasmania MCP from Claude Code
+  // Remove Tasmania MCP from all providers
   ipcMain.handle('tasmania:remove', async () => {
     try {
-      // Remove from claude mcp
-      try {
-        const { execSync: execSyncImport } = await import('child_process');
-        execSyncImport('claude mcp remove -s user tasmania 2>&1', { encoding: 'utf-8', stdio: 'pipe' });
-      } catch {
-        // Ignore
-      }
+      const { getAllProviders } = await import('../providers');
+      const providers = getAllProviders();
 
-      // Also clean up mcp.json
-      const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
-      if (fs.existsSync(mcpConfigPath)) {
+      for (const provider of providers) {
         try {
-          const mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
-          if (mcpConfig?.mcpServers?.['tasmania']) {
-            delete mcpConfig.mcpServers['tasmania'];
-            fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
-          }
-        } catch {
-          // Ignore parse errors
+          await provider.removeMcpServer('tasmania');
+        } catch (err) {
+          console.error(`[${provider.id}] Failed to remove Tasmania:`, err);
         }
       }
 

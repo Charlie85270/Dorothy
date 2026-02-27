@@ -26,6 +26,8 @@ export interface Skill {
 
 export interface CLIPaths {
   claude: string;
+  codex: string;
+  gemini: string;
   gh: string;
   node: string;
   additionalPaths: string[];
@@ -63,6 +65,7 @@ export interface AppSettings {
   verboseModeEnabled: boolean;
   autoCheckUpdates: boolean;
   cliPaths: CLIPaths;
+  defaultProvider?: string;
 }
 
 export type SettingsSection = 'general' | 'git' | 'notifications' | 'telegram' | 'slack' | 'jira' | 'socialdata' | 'tasmania' | 'permissions' | 'skills' | 'cli' | 'system';

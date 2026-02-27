@@ -1,10 +1,11 @@
-// Top 100 Skills from skills.sh
+// Skills from skills.sh
 export interface Skill {
   rank: number;
   name: string;
   repo: string;
   installs: string;
-  category: string;
+  installsNum?: number;
+  category?: string;
   description?: string;
 }
 
@@ -112,7 +113,7 @@ export const SKILLS_DATABASE: Skill[] = [
 ];
 
 // Get unique categories
-export const SKILL_CATEGORIES = [...new Set(SKILLS_DATABASE.map(s => s.category))].sort();
+export const SKILL_CATEGORIES = [...new Set(SKILLS_DATABASE.map(s => s.category).filter((c): c is string => !!c))].sort();
 
 // Get skills by category
 export function getSkillsByCategory(category: string): Skill[] {
@@ -125,6 +126,6 @@ export function searchSkills(query: string): Skill[] {
   return SKILLS_DATABASE.filter(
     s => s.name.toLowerCase().includes(q) ||
          s.repo.toLowerCase().includes(q) ||
-         s.category.toLowerCase().includes(q)
+         (s.category || '').toLowerCase().includes(q)
   );
 }

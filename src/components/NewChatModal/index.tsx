@@ -35,12 +35,14 @@ export default function NewChatModal({
   const [selectedSecondaryProject, setSelectedSecondaryProject] = useState<string>('');
   const [customSecondaryPath, setCustomSecondaryPath] = useState('');
 
-  // Step 2: Skills
+  // Step 2: Configure (was step 3)
+  // Step 3: Skills (was step 2)
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [installedSkillsByProvider, setInstalledSkillsByProvider] = useState<Record<string, string[]>>({});
 
-  // Step 3: Configure & Start
+  // Configure & Start
   const [prompt, setPrompt] = useState('');
-  const [model, setModel] = useState<'sonnet' | 'opus' | 'haiku'>('sonnet');
+  const [model, setModel] = useState<string>('sonnet');
   const [useWorktree, setUseWorktree] = useState(false);
   const [branchName, setBranchName] = useState('');
   const [skipPermissions, setSkipPermissions] = useState(true);
@@ -48,20 +50,29 @@ export default function NewChatModal({
   const [provider, setProvider] = useState<AgentProvider>('claude');
   const [localModel, setLocalModel] = useState('');
   const [tasmaniaEnabled, setTasmaniaEnabled] = useState(false);
+  const [installedProviders, setInstalledProviders] = useState<Record<string, boolean>>({ claude: true, codex: true, gemini: true });
   const agentPersonaRef = useRef<AgentPersonaValues>({ character: 'robot', name: '' });
 
   const projectPath = selectedProject || customPath;
 
-  // Skill installation hook
-  const skillInstall = useSkillInstall(onRefreshSkills);
+  // Refresh both parent skills and local provider-skill map
+  const handleRefreshSkills = useCallback(() => {
+    onRefreshSkills?.();
+    window.electronAPI?.skill?.listInstalledAll().then((byProvider) => {
+      if (byProvider) setInstalledSkillsByProvider(byProvider);
+    });
+  }, [onRefreshSkills]);
 
-  // Pre-compute installed skill names as a Set
+  // Skill installation hook
+  const skillInstall = useSkillInstall(handleRefreshSkills);
+
+  // Pre-compute installed skill names for the selected provider
   const installedSkillSet = useMemo(() => {
     const set = new Set<string>();
-    for (const s of installedSkills) set.add(s.toLowerCase());
-    for (const s of allInstalledSkills) set.add(s.name.toLowerCase());
+    const providerSkills = installedSkillsByProvider[provider] || [];
+    for (const s of providerSkills) set.add(s.toLowerCase());
     return set;
-  }, [installedSkills, allInstalledSkills]);
+  }, [installedSkillsByProvider, provider]);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -85,8 +96,29 @@ export default function NewChatModal({
       window.electronAPI?.appSettings?.get().then((settings) => {
         setTasmaniaEnabled(settings?.tasmaniaEnabled || false);
       });
+
+      // Detect installed CLI providers
+      window.electronAPI?.cliPaths?.detect().then((paths) => {
+        if (paths) {
+          setInstalledProviders({
+            claude: !!paths.claude,
+            codex: !!paths.codex,
+            gemini: !!paths.gemini,
+          });
+        }
+      });
+
+      // Fetch per-provider installed skills
+      window.electronAPI?.skill?.listInstalledAll().then((byProvider) => {
+        if (byProvider) setInstalledSkillsByProvider(byProvider);
+      });
     }
   }, [open, initialProjectPath, initialStep]);
+
+  // Clear selected skills when provider changes
+  useEffect(() => {
+    setSelectedSkills([]);
+  }, [provider]);
 
   // Stable callbacks for child components
   const handleSelectProject = useCallback((path: string) => {
@@ -233,16 +265,6 @@ export default function NewChatModal({
             )}
 
             {step === 2 && (
-              <StepSkills
-                selectedSkills={selectedSkills}
-                onToggleSkill={toggleSkill}
-                allInstalledSkills={allInstalledSkills}
-                installedSkillSet={installedSkillSet}
-                onInstallSkill={skillInstall.handleInstallSkill}
-              />
-            )}
-
-            {step === 3 && (
               <StepConfigure
                 projectPath={projectPath}
                 selectedSkills={selectedSkills}
@@ -266,6 +288,19 @@ export default function NewChatModal({
                 localModel={localModel}
                 onLocalModelChange={setLocalModel}
                 tasmaniaEnabled={tasmaniaEnabled}
+                installedProviders={installedProviders}
+              />
+            )}
+
+            {step === 3 && (
+              <StepSkills
+                selectedSkills={selectedSkills}
+                onToggleSkill={toggleSkill}
+                allInstalledSkills={allInstalledSkills}
+                installedSkillSet={installedSkillSet}
+                onInstallSkill={skillInstall.handleInstallSkill}
+                provider={provider}
+                installedSkillsByProvider={installedSkillsByProvider}
               />
             )}
           </div>
@@ -300,7 +335,7 @@ export default function NewChatModal({
               ) : (
                 <button
                   onClick={handleSubmit}
-                  disabled={(!prompt.trim() && selectedSkills.length === 0) || (useWorktree && !branchName.trim())}
+                  disabled={useWorktree && !branchName.trim()}
                   className="flex items-center gap-2 px-4 py-2 bg-foreground text-background font-medium hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Play className="w-4 h-4" />

@@ -42,7 +42,11 @@ export const useSettings = () => {
         setSkills(claudeData.skills);
       }
       if (appSettingsData) {
-        setAppSettings(prev => ({ ...prev, ...appSettingsData }));
+        setAppSettings(prev => ({
+          ...prev,
+          ...appSettingsData,
+          cliPaths: { ...prev.cliPaths, ...appSettingsData.cliPaths },
+        }));
       }
       setError(null);
     } catch (err) {

@@ -170,6 +170,7 @@ export default function SettingsContent({ onExit }: InteriorContentProps) {
       case 'system':
         return [
           { id: 'verbose', name: 'Verbose Mode', description: 'Enable verbose logging output.', badge: appSettings.verboseModeEnabled ? 'ON' : 'OFF' },
+          { id: 'chrome', name: 'Chrome Sharing', description: 'Share your logged-in Chrome with agents.', badge: appSettings.chromeEnabled ? 'ON' : 'OFF' },
           { id: 'sys-platform', name: 'Platform', description: `${info?.platform || '?'} ${info?.arch || ''}`, badge: info?.platform || '?', badgeColor: '#888' },
           { id: 'sys-node', name: 'Node Version', description: info?.nodeVersion || 'Unknown', badge: info?.nodeVersion || '?', badgeColor: '#888' },
         ];
@@ -191,6 +192,7 @@ export default function SettingsContent({ onExit }: InteriorContentProps) {
       'slack-enabled': 'slackEnabled',
       'jira-enabled': 'jiraEnabled',
       'verbose': 'verboseModeEnabled',
+      'chrome': 'chromeEnabled',
     };
 
     const appKey = appToggles[itemId];
@@ -217,6 +219,7 @@ export default function SettingsContent({ onExit }: InteriorContentProps) {
     'slack-enabled',
     'jira-enabled',
     'verbose',
+    'chrome',
   ]);
 
   // ═══════════════════════════════════════════════════════════════════════════

@@ -62,6 +62,7 @@ export const DEFAULT_APP_SETTINGS = {
   tasmaniaEnabled: false,
   tasmaniaServerPath: '',
   verboseModeEnabled: false,
+  chromeEnabled: false,
   autoCheckUpdates: true,
   defaultProvider: 'claude',
   obsidianVaultPaths: [] as string[],

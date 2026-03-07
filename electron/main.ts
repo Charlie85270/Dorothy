@@ -136,6 +136,7 @@ function loadAppSettings(): AppSettings {
     tasmaniaEnabled: false,
     tasmaniaServerPath: '',
     verboseModeEnabled: false,
+    chromeEnabled: false,
     autoCheckUpdates: true,
     defaultProvider: 'claude',
     cliPaths: {

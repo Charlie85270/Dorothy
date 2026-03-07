@@ -63,6 +63,7 @@ export interface AppSettings {
   tasmaniaEnabled: boolean;
   tasmaniaServerPath: string;
   verboseModeEnabled: boolean;
+  chromeEnabled: boolean;
   autoCheckUpdates: boolean;
   cliPaths: CLIPaths;
   defaultProvider?: string;

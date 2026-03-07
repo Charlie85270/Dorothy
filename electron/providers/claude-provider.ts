@@ -59,6 +59,11 @@ export class ClaudeProvider implements CLIProvider {
       command += ' --verbose';
     }
 
+    // Chrome browser sharing (uses the user's logged-in Chrome via claude-in-chrome extension)
+    if (params.chrome) {
+      command += ' --chrome';
+    }
+
     // Skip permissions
     if (params.skipPermissions) {
       command += ' --dangerously-skip-permissions';

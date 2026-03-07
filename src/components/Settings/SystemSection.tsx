@@ -18,6 +18,10 @@ export const SystemSection = ({ info, appSettings, onSaveAppSettings }: SystemSe
     onSaveAppSettings({ verboseModeEnabled: !appSettings.verboseModeEnabled });
   };
 
+  const handleChromeToggle = () => {
+    onSaveAppSettings({ chromeEnabled: !appSettings.chromeEnabled });
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -44,6 +48,26 @@ export const SystemSection = ({ info, appSettings, onSaveAppSettings }: SystemSe
             <span
               className={`inline-block h-4 w-4 transform rounded-full bg-black transition-transform ${
                 appSettings.verboseModeEnabled ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+        <div className="flex items-center justify-between py-3 border-b border-border">
+          <div>
+            <span className="text-sm">Chrome Browser Sharing</span>
+            <p className="text-xs text-muted-foreground mt-1">
+              Share your logged-in Chrome browser with agents via --chrome flag
+            </p>
+          </div>
+          <button
+            onClick={handleChromeToggle}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              appSettings.chromeEnabled ? 'bg-white' : 'bg-white/20'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-black transition-transform ${
+                appSettings.chromeEnabled ? 'translate-x-6' : 'translate-x-1'
               }`}
             />
           </button>

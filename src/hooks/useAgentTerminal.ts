@@ -59,14 +59,25 @@ export function useAgentTerminal({ selectedAgentId, terminalRef, provider, termi
       fitAddonRef.current = null;
     }
 
+    // Abort flag prevents the async initTerminal from completing after cleanup
+    let cancelled = false;
+    let resizeObserver: ResizeObserver | null = null;
+    let clickContainer: HTMLElement | null = null;
+    let clickHandler: (() => void) | null = null;
+
     const initTerminal = async () => {
       const { Terminal } = await import('xterm');
       const { FitAddon } = await import('xterm-addon-fit');
+
+      if (cancelled) return;
 
       // Gemini CLI uses Ink (React for terminal) which relies on cursor movement
       // sequences for in-place updates. convertEol can interfere with these.
       // Claude/Codex work fine with convertEol so we only disable it for Gemini.
       const isGemini = provider === 'gemini';
+
+      const container = terminalRef.current;
+      if (!container || cancelled) return;
 
       const term = new Terminal({
         theme: getTerminalTheme(terminalTheme),
@@ -80,33 +91,35 @@ export function useAgentTerminal({ selectedAgentId, terminalRef, provider, termi
 
       const fitAddon = new FitAddon();
       term.loadAddon(fitAddon);
-      term.open(terminalRef.current!);
+      term.open(container);
+
+      if (cancelled) {
+        term.dispose();
+        return;
+      }
 
       xtermRef.current = term;
       fitAddonRef.current = fitAddon;
 
       // Fit after a short delay to ensure proper sizing
-      setTimeout(async () => {
+      setTimeout(() => {
+        if (cancelled) return;
         fitAddon.fit();
         term.focus();
         // Send initial resize to agent PTY (ignore errors if PTY not ready)
         if (window.electronAPI?.agent?.resize) {
-          try {
-            await window.electronAPI.agent.resize({
-              id: selectedAgentId,
-              cols: term.cols,
-              rows: term.rows,
-            });
-          } catch (err) {
-            console.warn('Failed to resize agent PTY:', err);
-          }
+          window.electronAPI.agent.resize({
+            id: selectedAgentId,
+            cols: term.cols,
+            rows: term.rows,
+          }).catch(() => {});
         }
       }, 100);
 
       // Focus terminal on click
-      const container = terminalRef.current!;
-      const handleClick = () => term.focus();
-      container.addEventListener('click', handleClick);
+      clickContainer = container;
+      clickHandler = () => term.focus();
+      container.addEventListener('click', clickHandler);
 
       // Handle user input - send to agent PTY
       // Filter out terminal query responses that xterm.js emits automatically.
@@ -136,7 +149,7 @@ export function useAgentTerminal({ selectedAgentId, terminalRef, provider, termi
       });
 
       // Handle resize
-      const resizeObserver = new ResizeObserver(() => {
+      resizeObserver = new ResizeObserver(() => {
         if (fitAddonRef.current) {
           fitAddonRef.current.fit();
           const agentId = selectedAgentIdRef.current;
@@ -151,7 +164,7 @@ export function useAgentTerminal({ selectedAgentId, terminalRef, provider, termi
           }
         }
       });
-      resizeObserver.observe(terminalRef.current!);
+      resizeObserver.observe(container);
 
       setTerminalReady(true);
       onReadyRef.current?.(selectedAgentId);
@@ -160,10 +173,14 @@ export function useAgentTerminal({ selectedAgentId, terminalRef, provider, termi
       term.writeln('\x1b[36m● Terminal connected to agent\x1b[0m');
       term.writeln('');
 
+      if (cancelled) return;
+
       // Fetch latest agent data from main process to get all stored output
       if (window.electronAPI?.agent?.get) {
         try {
           const latestAgent = await window.electronAPI.agent.get(selectedAgentId);
+
+          if (cancelled) return;
 
           if (latestAgent && latestAgent.output && latestAgent.output.length > 0) {
             term.writeln(`\x1b[33m--- Replaying ${latestAgent.output.length} previous output chunks ---\x1b[0m`);
@@ -184,21 +201,23 @@ export function useAgentTerminal({ selectedAgentId, terminalRef, provider, termi
           }
         } catch (err) {
           console.error('Failed to fetch agent data:', err);
-          term.writeln(`\x1b[31mFailed to fetch agent data: ${err}\x1b[0m`);
+          if (!cancelled) {
+            term.writeln(`\x1b[31mFailed to fetch agent data: ${err}\x1b[0m`);
+          }
         }
-      } else {
+      } else if (!cancelled) {
         term.writeln('\x1b[31mElectron API not available\x1b[0m');
       }
-
-      return () => {
-        resizeObserver.disconnect();
-        container.removeEventListener('click', handleClick);
-      };
     };
 
     initTerminal();
 
     return () => {
+      cancelled = true;
+      resizeObserver?.disconnect();
+      if (clickContainer && clickHandler) {
+        clickContainer.removeEventListener('click', clickHandler);
+      }
       if (xtermRef.current) {
         xtermRef.current.dispose();
         xtermRef.current = null;

@@ -39,7 +39,8 @@ export default function TerminalPanel({
   onContextMenu,
 }: TerminalPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const registeredRef = useRef(false);
+  const onRegisterRef = useRef(onRegisterContainer);
+  onRegisterRef.current = onRegisterContainer;
 
   // Make this panel a drop target for skills
   const { setNodeRef: setDropRef, isOver } = useDroppable({
@@ -47,16 +48,14 @@ export default function TerminalPanel({
     data: { type: 'terminal-panel', agentId: agent.id },
   });
 
-  // Register container for xterm mounting
+  // Register container for xterm mounting — only on mount or agent ID change.
+  // Uses a ref for the callback to avoid re-registering when the parent
+  // re-creates the callback (e.g. on agents poll or font size change).
   useEffect(() => {
-    if (containerRef.current && !registeredRef.current) {
-      registeredRef.current = true;
-      onRegisterContainer(agent.id, containerRef.current);
+    if (containerRef.current) {
+      onRegisterRef.current(agent.id, containerRef.current);
     }
-    return () => {
-      registeredRef.current = false;
-    };
-  }, [agent.id, onRegisterContainer]);
+  }, [agent.id]);
 
   const handleClick = useCallback(() => {
     onFocus(agent.id);

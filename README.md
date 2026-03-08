@@ -2,7 +2,7 @@
 
 ![Dorothy](screenshots/background-2.png)
 
-A beautiful desktop app to orchestrate your [Claude Code](https://claude.ai/code) agents. Deploy, monitor, and debug — all from one delightful interface. Free and open source.
+A beautiful desktop app to orchestrate your [Claude Code](https://claude.ai/code) ,[Codex](https://chatgpt.com/codex), [Gemini](https://geminicli.com/) and local agents. Deploy, monitor, and debug — all from one delightful interface. Free and open source.
 
 ![Dorothy Dashboard](screenshots/0.png)
 
@@ -30,7 +30,7 @@ A beautiful desktop app to orchestrate your [Claude Code](https://claude.ai/code
 
 ## Why Dorothy
 
-Claude Code is powerful — but it runs one agent at a time, in one terminal. Dorothy removes that limitation:
+AI CLI tools are powerful — but it runs one agent at a time, in one terminal. Dorothy removes that limitation:
 
 - **Run 10+ agents simultaneously** across different projects and codebases
 - **Automate agent workflows** — trigger agents on GitHub PRs, issues, and external events
@@ -45,7 +45,7 @@ Claude Code is powerful — but it runs one agent at a time, in one terminal. Do
 
 ### Parallel Agent Management
 
-Run multiple Claude Code agents simultaneously, each in its own isolated PTY terminal session. Agents operate independently across different projects, codebases, and tasks.
+Run multiple agents simultaneously, each in its own isolated PTY terminal session. Agents operate independently across different projects, codebases, and tasks.
 
 ![Agents View](screenshots/agetns.png)
 

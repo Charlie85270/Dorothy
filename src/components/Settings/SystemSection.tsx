@@ -72,6 +72,18 @@ export const SystemSection = ({ info, appSettings, onSaveAppSettings }: SystemSe
             />
           </button>
         </div>
+        <div className="mt-3 px-3 py-2 bg-muted/50 border border-border rounded text-xs text-muted-foreground">
+          Requires Claude Code v2.0.73 or later and the{' '}
+          <a
+            href="https://chromewebstore.google.com/detail/claude-in-chrome/ofnckddkabkmfmjkfgiofpofhpgjdlda"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-foreground"
+          >
+            Claude in Chrome
+          </a>{' '}
+          extension installed.
+        </div>
       </div>
 
       {info && (

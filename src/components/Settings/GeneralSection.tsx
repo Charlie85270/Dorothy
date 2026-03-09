@@ -164,7 +164,7 @@ export const GeneralSection = ({ info, appSettings, onSaveAppSettings }: General
           <div>
             <h3 className="font-medium">Dorothy</h3>
             <p className="text-sm text-muted-foreground">
-              Version {updateInfo?.currentVersion || '1.2.3'}
+              Version {updateInfo?.currentVersion || '1.2.4'}
             </p>
           </div>
         </div>

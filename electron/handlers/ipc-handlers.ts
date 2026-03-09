@@ -556,6 +556,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       systemPromptFile,
       skills: allAgentSkills,
       isSuperAgent: isSuperAgentCheck,
+      chrome: appSettingsForCommand.chromeEnabled,
     });
 
     // Update status

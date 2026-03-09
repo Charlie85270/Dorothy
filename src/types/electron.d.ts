@@ -290,6 +290,8 @@ export interface ElectronAPI {
       jiraDomain: string;
       jiraEmail: string;
       jiraApiToken: string;
+      linearEnabled: boolean;
+      linearApiKey: string;
       socialDataEnabled: boolean;
       socialDataApiKey: string;
       tasmaniaEnabled: boolean;
@@ -328,6 +330,8 @@ export interface ElectronAPI {
       jiraDomain?: string;
       jiraEmail?: string;
       jiraApiToken?: string;
+      linearEnabled?: boolean;
+      linearApiKey?: string;
       socialDataEnabled?: boolean;
       socialDataApiKey?: string;
       tasmaniaEnabled?: boolean;
@@ -365,6 +369,11 @@ export interface ElectronAPI {
 
   // JIRA
   jira?: {
+    test: () => Promise<{ success: boolean; displayName?: string; email?: string; error?: string }>;
+  };
+
+  // Linear
+  linear?: {
     test: () => Promise<{ success: boolean; displayName?: string; email?: string; error?: string }>;
   };
 
@@ -580,6 +589,14 @@ export interface ElectronAPI {
       logs: string;
       error?: string;
     }>;
+    startBacklog: (id: string) => Promise<{ success: boolean; error?: string; message?: string; backlogCount?: number }>;
+    getBacklogStatus: (id: string) => Promise<{
+      success: boolean;
+      error?: string;
+      kanban?: { backlog: number; planned: number; ongoing: number; done: number; total: number };
+      queue?: { total: number; pending: number; inProgress: number; completed: number; failed: number; skipped: number };
+    }>;
+    retryFailed: (id: string) => Promise<{ success: boolean; error?: string; retried?: number }>;
   };
 
   // CLI paths management

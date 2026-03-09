@@ -10,8 +10,8 @@ import * as os from "os";
 // TYPES
 // ============================================================================
 
-export type SourceType = "github" | "jira" | "pipedrive" | "twitter" | "rss" | "custom";
-export type OutputType = "telegram" | "slack" | "github_comment" | "email" | "discord" | "webhook" | "jira_comment" | "jira_transition";
+export type SourceType = "github" | "jira" | "pipedrive" | "twitter" | "rss" | "custom" | "linear";
+export type OutputType = "telegram" | "slack" | "github_comment" | "email" | "discord" | "webhook" | "jira_comment" | "jira_transition" | "linear_comment" | "linear_transition" | "linear_create_issue";
 
 export interface GitHubSourceConfig {
   repos: string[];
@@ -46,13 +46,21 @@ export interface CustomSourceConfig {
   command: string; // Shell command that outputs JSON
 }
 
+export interface LinearSourceConfig {
+  teamId?: string;
+  projectId?: string;
+  filter?: string;
+  apiKey?: string;
+}
+
 export type SourceConfig =
   | GitHubSourceConfig
   | JiraSourceConfig
   | PipedriveSourceConfig
   | TwitterSourceConfig
   | RssSourceConfig
-  | CustomSourceConfig;
+  | CustomSourceConfig
+  | LinearSourceConfig;
 
 export interface FilterRule {
   field: string;
@@ -68,6 +76,30 @@ export interface OutputConfig {
   channel?: string; // For Slack
   webhookUrl?: string; // For webhook output
   email?: string; // For email output
+}
+
+export interface QueueConfig {
+  mode: "parallel" | "sequential" | "concurrent";
+  maxConcurrent?: number; // For 'concurrent' mode, default 1
+  autoAdvance: boolean;   // Auto-move next item to planned when current finishes
+}
+
+export interface QueueItem {
+  automationId: string;
+  itemId: string;
+  linearIdentifier?: string;
+  kanbanTaskId?: string;
+  status: "pending" | "in_progress" | "completed" | "failed" | "skipped";
+  retryCount: number;
+  maxRetries: number; // default 2
+  error?: string;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+export interface QueueState {
+  items: QueueItem[];
+  lastUpdated: string;
 }
 
 export interface Automation {
@@ -110,6 +142,9 @@ export interface Automation {
 
   // Outputs
   outputs: OutputConfig[];
+
+  // Queue (for backlog processing)
+  queue?: QueueConfig;
 }
 
 export interface ProcessedItem {
@@ -437,4 +472,72 @@ export function isDue(automation: Automation): boolean {
 export function getAutomationsDue(): Automation[] {
   const automations = loadAutomations();
   return automations.filter(isDue);
+}
+
+// ============================================================================
+// QUEUE STATE
+// ============================================================================
+
+const QUEUE_STATE_FILE = path.join(AUTOMATIONS_DIR, "automation-queue.json");
+
+export function loadQueueState(): QueueState {
+  ensureDir();
+  if (!fs.existsSync(QUEUE_STATE_FILE)) {
+    return { items: [], lastUpdated: new Date().toISOString() };
+  }
+  try {
+    const data = fs.readFileSync(QUEUE_STATE_FILE, "utf-8");
+    return JSON.parse(data);
+  } catch {
+    return { items: [], lastUpdated: new Date().toISOString() };
+  }
+}
+
+export function saveQueueState(state: QueueState): void {
+  ensureDir();
+  state.lastUpdated = new Date().toISOString();
+  fs.writeFileSync(QUEUE_STATE_FILE, JSON.stringify(state, null, 2));
+}
+
+export function getQueueItemsForAutomation(automationId: string): QueueItem[] {
+  const state = loadQueueState();
+  return state.items.filter((i) => i.automationId === automationId);
+}
+
+export function updateQueueItem(automationId: string, itemId: string, updates: Partial<QueueItem>): void {
+  const state = loadQueueState();
+  const item = state.items.find((i) => i.automationId === automationId && i.itemId === itemId);
+  if (item) {
+    Object.assign(item, updates);
+  }
+  saveQueueState(state);
+}
+
+export function addQueueItem(item: QueueItem): void {
+  const state = loadQueueState();
+  // Avoid duplicates
+  const existing = state.items.find((i) => i.automationId === item.automationId && i.itemId === item.itemId);
+  if (!existing) {
+    state.items.push(item);
+    saveQueueState(state);
+  }
+}
+
+export function getQueueStats(automationId: string): {
+  total: number;
+  pending: number;
+  inProgress: number;
+  completed: number;
+  failed: number;
+  skipped: number;
+} {
+  const items = getQueueItemsForAutomation(automationId);
+  return {
+    total: items.length,
+    pending: items.filter((i) => i.status === "pending").length,
+    inProgress: items.filter((i) => i.status === "in_progress").length,
+    completed: items.filter((i) => i.status === "completed").length,
+    failed: items.filter((i) => i.status === "failed").length,
+    skipped: items.filter((i) => i.status === "skipped").length,
+  };
 }

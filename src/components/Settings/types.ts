@@ -55,6 +55,8 @@ export interface AppSettings {
   jiraDomain: string;
   jiraEmail: string;
   jiraApiToken: string;
+  linearEnabled: boolean;
+  linearApiKey: string;
   socialDataEnabled: boolean;
   socialDataApiKey: string;
   xPostingEnabled: boolean;
@@ -75,4 +77,4 @@ export interface AppSettings {
   terminalTheme?: 'dark' | 'light';
 }
 
-export type SettingsSection = 'general' | 'terminal' | 'git' | 'notifications' | 'telegram' | 'slack' | 'jira' | 'socialdata' | 'tasmania' | 'google-workspace' | 'obsidian' | 'permissions' | 'skills' | 'cli' | 'system';
+export type SettingsSection = 'general' | 'terminal' | 'git' | 'notifications' | 'telegram' | 'slack' | 'jira' | 'linear' | 'socialdata' | 'tasmania' | 'google-workspace' | 'obsidian' | 'permissions' | 'skills' | 'cli' | 'system';

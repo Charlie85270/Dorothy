@@ -1,9 +1,110 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import { KANBAN_FILE, DATA_DIR } from '../constants';
 import { generateTaskFromPrompt } from '../utils/kanban-generate';
+
+// Helper: sync kanban column transitions to Linear issue status
+async function syncKanbanToLinear(task: KanbanTask, targetColumn: KanbanColumn): Promise<void> {
+  const linearLabel = task.labels?.find(l => l.startsWith('linear:') && l !== 'linear');
+  if (!linearLabel) return;
+
+  const identifier = linearLabel.replace('linear:', '');
+
+  // Load Linear API key from app settings
+  let linearApiKey: string | null = null;
+  try {
+    const settingsFile = path.join(os.homedir(), '.dorothy', 'app-settings.json');
+    if (fs.existsSync(settingsFile)) {
+      const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'));
+      if (settings.linearEnabled && settings.linearApiKey) {
+        linearApiKey = settings.linearApiKey;
+      }
+    }
+  } catch {
+    return;
+  }
+
+  if (!linearApiKey) return;
+
+  // Map kanban column to Linear state
+  let targetState: string | null = null;
+  let comment: string | null = null;
+
+  switch (targetColumn) {
+    case 'ongoing':
+      targetState = 'In Progress';
+      break;
+    case 'done':
+      targetState = 'Done';
+      comment = `Task completed via Dorothy kanban board.${task.completionSummary ? `\n\n${task.completionSummary}` : ''}`;
+      break;
+    default:
+      return; // No sync needed for backlog/planned
+  }
+
+  try {
+    const [teamKey, numberStr] = identifier.split('-');
+    const issueNumber = parseInt(numberStr, 10);
+
+    // Find the issue ID
+    const lookupRes = await fetch('https://api.linear.app/graphql', {
+      method: 'POST',
+      headers: { 'Authorization': linearApiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `{ issueSearch(filter: { number: { eq: ${issueNumber} }, team: { key: { eq: "${teamKey}" } } }, first: 1) { nodes { id } } }`,
+      }),
+    });
+
+    if (!lookupRes.ok) return;
+    const lookupData = await lookupRes.json();
+    const issueId = lookupData.data?.issueSearch?.nodes?.[0]?.id;
+    if (!issueId) return;
+
+    // Transition if needed
+    if (targetState) {
+      const statesRes = await fetch('https://api.linear.app/graphql', {
+        method: 'POST',
+        headers: { 'Authorization': linearApiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `{ workflowStates(filter: { team: { key: { eq: "${teamKey}" } } }) { nodes { id name } } }`,
+        }),
+      });
+      if (statesRes.ok) {
+        const statesData = await statesRes.json();
+        const states = statesData.data?.workflowStates?.nodes || [];
+        const matchingState = states.find((s: { name: string }) =>
+          s.name.toLowerCase() === targetState!.toLowerCase()
+        );
+        if (matchingState) {
+          await fetch('https://api.linear.app/graphql', {
+            method: 'POST',
+            headers: { 'Authorization': linearApiKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              query: `mutation { issueUpdate(id: "${issueId}", input: { stateId: "${matchingState.id}" }) { success } }`,
+            }),
+          });
+        }
+      }
+    }
+
+    // Add comment if needed
+    if (comment) {
+      const escapedBody = comment.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
+      await fetch('https://api.linear.app/graphql', {
+        method: 'POST',
+        headers: { 'Authorization': linearApiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `mutation { commentCreate(input: { issueId: "${issueId}", body: "${escapedBody}" }) { success } }`,
+        }),
+      });
+    }
+  } catch (err) {
+    console.error('Failed to sync kanban status to Linear:', err);
+  }
+}
 
 // ============================================
 // Kanban Board IPC handlers
@@ -240,6 +341,13 @@ export function registerKanbanHandlers(dependencies: KanbanHandlerDependencies):
         task.assignedAgentId = null;
       }
 
+      // Sync kanban status to Linear (fire-and-forget for ongoing/done transitions)
+      if (targetColumn === 'ongoing' || targetColumn === 'done') {
+        syncKanbanToLinear(task, targetColumn).catch(err =>
+          console.error('Linear sync error:', err)
+        );
+      }
+
       // Set completedAt when moving to done and cleanup agent if needed
       if (targetColumn === 'done') {
         task.completedAt = new Date().toISOString();
@@ -252,6 +360,32 @@ export function registerKanbanHandlers(dependencies: KanbanHandlerDependencies):
             await deps.deleteAgent(task.assignedAgentId);
           } catch (deleteErr) {
             console.error('Failed to delete agent:', deleteErr);
+          }
+        }
+
+        // Queue auto-advance: if this is a Linear task, move next backlog item to planned
+        const linearLabelForQueue = task.labels?.find(l => l.startsWith('linear:') && l !== 'linear');
+        if (linearLabelForQueue) {
+          try {
+            const allTasks = loadTasks();
+            // Find other Linear backlog tasks from the same source (have 'linear' label)
+            const nextBacklogTask = allTasks
+              .filter(t => t.column === 'backlog' && t.labels?.includes('linear') && t.id !== task.id)
+              .sort((a, b) => a.order - b.order)[0];
+
+            if (nextBacklogTask) {
+              console.log(`Queue auto-advance: moving "${nextBacklogTask.title}" to planned`);
+              // Emit a synthetic move event via IPC (will be handled by the same move handler)
+              // Use setTimeout to avoid re-entrancy
+              setTimeout(() => {
+                deps?.getMainWindow()?.webContents.send('kanban:auto-advance', {
+                  taskId: nextBacklogTask.id,
+                  column: 'planned',
+                });
+              }, 2000);
+            }
+          } catch (queueErr) {
+            console.error('Queue auto-advance error:', queueErr);
           }
         }
       }
@@ -310,6 +444,36 @@ export function registerKanbanHandlers(dependencies: KanbanHandlerDependencies):
             prompt += '3. Look for directory names that match the JIRA project name, key, or related repository\n';
             prompt += '4. Use `ls` and `find` to locate the right project, then `cd` into it before starting work\n';
             prompt += '5. If you cannot find the project, proceed with the task in the current directory and note this in your completion summary\n';
+          }
+
+          // Add Linear-specific instructions
+          const linearLabel = task.labels?.find(l => l.startsWith('linear:') && l !== 'linear');
+          if (linearLabel) {
+            const linearIdentifier = linearLabel.replace('linear:', '');
+            prompt += '\n\n## Linear Integration\n';
+            prompt += `This task originates from Linear issue **${linearIdentifier}**.\n\n`;
+            prompt += `1. Call \`get_linear_issue\` with identifier "${linearIdentifier}" to read the full ticket details before starting.\n`;
+            prompt += '2. Work through the requirements described in the issue.\n';
+            prompt += `3. When done, call \`update_linear_issue\` with identifier "${linearIdentifier}" to:\n`;
+            prompt += '   - Add a comment summarizing what you accomplished\n';
+            prompt += '   - Transition the issue to "In Review" (stateName: "In Review")\n';
+
+            // Add git workflow instructions
+            const sanitizedId = linearIdentifier.toLowerCase();
+            const sanitizedTitle = task.title
+              .replace(/^\[.*?\]\s*/, '') // Remove [ENG-123] prefix
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, '-')
+              .replace(/^-|-$/g, '')
+              .slice(0, 40);
+            const branchName = `dorothy/${sanitizedId}-${sanitizedTitle}`;
+
+            prompt += '\n\n## Git Workflow\n';
+            prompt += `- Create a new branch: \`git checkout -b ${branchName}\`\n`;
+            prompt += `- Commit with clear messages referencing ${linearIdentifier}\n`;
+            prompt += `- When complete, create a PR: \`gh pr create --title "${linearIdentifier}: <short description>" --body "<summary of changes>"\`\n`;
+            prompt += `- Call \`update_linear_issue\` to transition to "In Review" and comment with the PR link\n`;
+            prompt += `- Call \`mark_task_done\` with the PR URL in the summary\n`;
           }
 
           // Add attachments section if there are any

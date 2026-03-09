@@ -63,6 +63,8 @@ export interface AppSettings {
   jiraDomain: string;
   jiraEmail: string;
   jiraApiToken: string;
+  linearEnabled: boolean;
+  linearApiKey: string;
   socialDataEnabled: boolean;
   socialDataApiKey: string;
   xPostingEnabled: boolean;

@@ -30,6 +30,7 @@ import {
   TicketCheck,
 } from 'lucide-react';
 import { isElectron } from '@/hooks/useElectron';
+import { LinearIcon } from '@/components/Settings/LinearIcon';
 
 // Slack Icon component
 const SlackIcon = ({ className }: { className?: string }) => (
@@ -96,6 +97,7 @@ function getSourceIcon(type: string): IconComponent {
   const icons: Record<string, IconComponent> = {
     github: Github,
     jira: TicketCheck,
+    linear: LinearIcon,
     pipedrive: Globe,
     twitter: MessageSquare,
     rss: Globe,
@@ -114,6 +116,134 @@ const SCHEDULE_PRESETS = [
   { value: '360', label: 'Every 6 hours', minutes: 360 },
   { value: '1440', label: 'Daily', minutes: 1440 },
 ];
+
+// Backlog Progress component for Linear automations
+function BacklogProgress({ automationId }: { automationId: string }) {
+  const [status, setStatus] = useState<{
+    kanban?: { backlog: number; planned: number; ongoing: number; done: number; total: number };
+    queue?: { total: number; pending: number; inProgress: number; completed: number; failed: number; skipped: number };
+  } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+
+  const fetchStatus = useCallback(async () => {
+    if (!isElectron()) return;
+    try {
+      const result = await window.electronAPI?.automation?.getBacklogStatus?.(automationId);
+      if (result?.success) {
+        setStatus({ kanban: result.kanban, queue: result.queue });
+      }
+    } catch {
+      // Ignore
+    }
+  }, [automationId]);
+
+  useEffect(() => {
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 10000); // Refresh every 10s
+    return () => clearInterval(interval);
+  }, [fetchStatus]);
+
+  const handleStartBacklog = async () => {
+    if (!isElectron()) return;
+    setStarting(true);
+    try {
+      await window.electronAPI?.automation?.startBacklog?.(automationId);
+      setTimeout(fetchStatus, 3000); // Refresh after poll completes
+    } catch {
+      // Ignore
+    }
+    setStarting(false);
+  };
+
+  const handleRetryFailed = async () => {
+    if (!isElectron()) return;
+    setRetrying(true);
+    try {
+      await window.electronAPI?.automation?.retryFailed?.(automationId);
+      await fetchStatus();
+    } catch {
+      // Ignore
+    }
+    setRetrying(false);
+  };
+
+  const kanban = status?.kanban;
+  const queue = status?.queue;
+  const total = kanban?.total || 0;
+  const done = kanban?.done || 0;
+  const progressPct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+          <LinearIcon className="w-3 h-3" />
+          Backlog Progress
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={handleStartBacklog}
+            disabled={starting}
+            className="px-2 py-0.5 text-[10px] bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 rounded transition-colors disabled:opacity-50"
+          >
+            {starting ? 'Polling...' : 'Start Backlog'}
+          </button>
+          {(queue?.failed || 0) > 0 && (
+            <button
+              onClick={handleRetryFailed}
+              disabled={retrying}
+              className="px-2 py-0.5 text-[10px] bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 rounded transition-colors disabled:opacity-50"
+            >
+              {retrying ? 'Retrying...' : `Retry ${queue?.failed} failed`}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {total > 0 && (
+        <>
+          {/* Progress bar */}
+          <div className="w-full h-2 bg-secondary rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+
+          {/* Stats */}
+          <div className="flex flex-wrap gap-3 text-[10px]">
+            <span className="text-muted-foreground">
+              {done}/{total} ({progressPct}%)
+            </span>
+            {(kanban?.backlog || 0) > 0 && (
+              <span className="text-zinc-400">Backlog: {kanban?.backlog}</span>
+            )}
+            {(kanban?.planned || 0) > 0 && (
+              <span className="text-blue-400">Planned: {kanban?.planned}</span>
+            )}
+            {(kanban?.ongoing || 0) > 0 && (
+              <span className="text-yellow-400">Ongoing: {kanban?.ongoing}</span>
+            )}
+            {(kanban?.done || 0) > 0 && (
+              <span className="text-green-400">Done: {kanban?.done}</span>
+            )}
+            {(queue?.failed || 0) > 0 && (
+              <span className="text-red-400">Failed: {queue?.failed}</span>
+            )}
+          </div>
+        </>
+      )}
+
+      {total === 0 && !loading && (
+        <div className="text-[10px] text-muted-foreground/50">
+          No Linear tasks in kanban yet. Click &quot;Start Backlog&quot; to poll and populate.
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function AutomationsPage() {
   const [automations, setAutomations] = useState<Automation[]>([]);
@@ -155,7 +285,17 @@ export default function AutomationsPage() {
     outputJiraComment: false,
     outputJiraTransition: false,
     jiraTransitionTarget: 'Done',
+    outputLinearComment: false,
+    outputLinearTransition: false,
+    linearTransitionTarget: 'Done',
+    outputLinearCreateIssue: false,
+    linearTeamKey: '',
+    linearProjectName: '',
+    linearFilter: '',
     outputTemplate: '',
+    queueEnabled: false,
+    queueMode: 'sequential' as 'parallel' | 'sequential' | 'concurrent',
+    queueMaxConcurrent: 1,
   });
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -207,6 +347,12 @@ export default function AutomationsPage() {
           projectKeys: formData.jiraProjectKeys.split(',').map(k => k.trim()).filter(Boolean),
           jql: formData.jiraJql || undefined,
         };
+      } else if (formData.sourceType === 'linear') {
+        sourceConfig = {
+          teamId: formData.linearTeamKey || undefined,
+          projectId: formData.linearProjectName || undefined,
+          filter: formData.linearFilter || undefined,
+        };
       } else {
         sourceConfig = {
           repos: formData.repos.split(',').map(r => r.trim()).filter(Boolean),
@@ -214,8 +360,8 @@ export default function AutomationsPage() {
         };
       }
 
-      // For JIRA, don't send GitHub-specific event types - use empty array to match all
-      const eventTypes = formData.sourceType === 'jira' ? [] : formData.eventTypes;
+      // For JIRA/Linear, don't send GitHub-specific event types - use empty array to match all
+      const eventTypes = (formData.sourceType === 'jira' || formData.sourceType === 'linear') ? [] : formData.eventTypes;
 
       const result = await window.electronAPI?.automation?.create({
         name: formData.name,
@@ -233,7 +379,13 @@ export default function AutomationsPage() {
         outputGitHubComment: formData.outputGitHubComment,
         outputJiraComment: formData.outputJiraComment,
         outputJiraTransition: formData.outputJiraTransition ? formData.jiraTransitionTarget : undefined,
+        outputLinearComment: formData.outputLinearComment,
+        outputLinearTransition: formData.outputLinearTransition ? formData.linearTransitionTarget : undefined,
+        outputLinearCreateIssue: formData.outputLinearCreateIssue,
         outputTemplate: formData.outputTemplate || undefined,
+        queueMode: formData.queueEnabled ? formData.queueMode : undefined,
+        queueMaxConcurrent: formData.queueEnabled && formData.queueMode === 'concurrent' ? formData.queueMaxConcurrent : undefined,
+        queueAutoAdvance: formData.queueEnabled ? true : undefined,
       } as Record<string, unknown>);
 
       if (result?.success) {
@@ -258,7 +410,17 @@ export default function AutomationsPage() {
           outputJiraComment: false,
           outputJiraTransition: false,
           jiraTransitionTarget: 'Done',
+          outputLinearComment: false,
+          outputLinearTransition: false,
+          linearTransitionTarget: 'Done',
+          outputLinearCreateIssue: false,
+          linearTeamKey: '',
+          linearProjectName: '',
+          linearFilter: '',
           outputTemplate: '',
+          queueEnabled: false,
+          queueMode: 'sequential',
+          queueMaxConcurrent: 1,
         });
         await loadAutomations();
         setToast({ message: 'Automation created successfully', type: 'success' });
@@ -733,6 +895,11 @@ export default function AutomationsPage() {
                               </div>
                             )}
 
+                            {/* Linear Backlog Progress */}
+                            {automation.source.type === 'linear' && (
+                              <BacklogProgress automationId={automation.id} />
+                            )}
+
                             {/* Metadata */}
                             <div className="flex flex-wrap gap-4 text-[10px] text-muted-foreground/60 pt-2 border-t border-border/30">
                               <span>ID: {automation.id}</span>
@@ -815,6 +982,7 @@ export default function AutomationsPage() {
                   >
                     <option value="github">GitHub</option>
                     <option value="jira">JIRA</option>
+                      <option value="linear">Linear</option>
                     <option value="pipedrive" disabled>Pipedrive (coming soon)</option>
                   </select>
                 </div>
@@ -917,6 +1085,113 @@ export default function AutomationsPage() {
                   </>
                 )}
 
+                {/* Linear-specific config */}
+                {formData.sourceType === 'linear' && (
+                  <>
+                    <div className="flex items-start gap-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                      <AlertCircle className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+                      <div className="text-sm">
+                        <span className="text-blue-500 font-medium">Requires Linear API key</span>
+                        <p className="text-muted-foreground mt-0.5">
+                          Configure your API key in{' '}
+                          <span className="font-medium text-foreground">Settings &gt; Linear</span> first.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Team Key (optional)</label>
+                      <input
+                        type="text"
+                        value={formData.linearTeamKey}
+                        onChange={(e) => setFormData({ ...formData, linearTeamKey: e.target.value })}
+                        placeholder="ENG"
+                        className="w-full px-3 py-2 bg-secondary border border-border rounded-lg font-mono text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Filter by team key (e.g., ENG, PROD). Leave empty to poll all teams.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Project Name (optional)</label>
+                      <input
+                        type="text"
+                        value={formData.linearProjectName}
+                        onChange={(e) => setFormData({ ...formData, linearProjectName: e.target.value })}
+                        placeholder="My Project"
+                        className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Filter by project name. Leave empty to poll all projects.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Custom Filter (optional)</label>
+                      <input
+                        type="text"
+                        value={formData.linearFilter}
+                        onChange={(e) => setFormData({ ...formData, linearFilter: e.target.value })}
+                        placeholder='state: { name: { neq: "Done" } }'
+                        className="w-full px-3 py-2 bg-secondary border border-border rounded-lg font-mono text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Linear GraphQL filter expression. Overrides team/project filters.
+                      </p>
+                    </div>
+                  </>
+                )}
+
+                {/* Queue Config (for Linear source) */}
+                {formData.sourceType === 'linear' && (
+                  <div className="space-y-3 p-3 bg-secondary/50 rounded-lg">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.queueEnabled}
+                        onChange={(e) => setFormData({ ...formData, queueEnabled: e.target.checked })}
+                        className="rounded"
+                      />
+                      <span className="text-sm font-medium">Enable Queue Mode</span>
+                    </label>
+                    <p className="text-xs text-muted-foreground">
+                      Queue mode processes backlog items sequentially via the kanban board, auto-advancing to the next item when one completes.
+                    </p>
+
+                    {formData.queueEnabled && (
+                      <>
+                        <div>
+                          <label className="block text-xs font-medium mb-1.5">Processing Mode</label>
+                          <select
+                            value={formData.queueMode}
+                            onChange={(e) => setFormData({ ...formData, queueMode: e.target.value as typeof formData.queueMode })}
+                            className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm"
+                          >
+                            <option value="sequential">Sequential (one at a time)</option>
+                            <option value="concurrent">Concurrent (multiple agents)</option>
+                            <option value="parallel">Parallel (all at once)</option>
+                          </select>
+                        </div>
+
+                        {formData.queueMode === 'concurrent' && (
+                          <div>
+                            <label className="block text-xs font-medium mb-1.5">Max Concurrent Agents</label>
+                            <input
+                              type="number"
+                              min={1}
+                              max={5}
+                              value={formData.queueMaxConcurrent}
+                              onChange={(e) => setFormData({ ...formData, queueMaxConcurrent: parseInt(e.target.value) || 1 })}
+                              className="w-24 px-3 py-2 bg-secondary border border-border rounded-lg text-sm"
+                            />
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
                 {/* Schedule */}
                 <div>
                   <label className="block text-sm font-medium mb-2">Poll Interval</label>
@@ -964,6 +1239,8 @@ Post the tweet as a comment.`}
                         <p className="text-xs text-muted-foreground mt-1">
                           {formData.sourceType === 'jira'
                             ? <>Variables: {'{{key}}'}, {'{{summary}}'}, {'{{status}}'}, {'{{issueType}}'}, {'{{priority}}'}, {'{{assignee}}'}, {'{{reporter}}'}, {'{{url}}'}</>
+                            : formData.sourceType === 'linear'
+                            ? <>Variables: {'{{identifier}}'}, {'{{title}}'}, {'{{state}}'}, {'{{priority}}'}, {'{{assignee}}'}, {'{{creator}}'}, {'{{url}}'}</>
                             : <>Variables: {'{{number}}'}, {'{{title}}'}, {'{{repo}}'}, {'{{author}}'}, {'{{url}}'}</>
                           }
                         </p>
@@ -1041,6 +1318,39 @@ Post the tweet as a comment.`}
                       <TicketCheck className="w-4 h-4 text-green-400" />
                       <span className="text-sm">JIRA Transition</span>
                     </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.outputLinearComment}
+                        onChange={(e) => setFormData({ ...formData, outputLinearComment: e.target.checked })}
+                        className="w-4 h-4 rounded border-border"
+                      />
+                      <LinearIcon className="w-4 h-4 text-indigo-400" />
+                      <span className="text-sm">Linear Comment</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.outputLinearTransition}
+                        onChange={(e) => setFormData({ ...formData, outputLinearTransition: e.target.checked })}
+                        className="w-4 h-4 rounded border-border"
+                      />
+                      <LinearIcon className="w-4 h-4 text-green-400" />
+                      <span className="text-sm">Linear Transition</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.outputLinearCreateIssue}
+                        onChange={(e) => setFormData({ ...formData, outputLinearCreateIssue: e.target.checked })}
+                        className="w-4 h-4 rounded border-border"
+                      />
+                      <LinearIcon className="w-4 h-4 text-blue-400" />
+                      <span className="text-sm">Linear Create Issue</span>
+                    </label>
                   </div>
 
                   {/* JIRA transition target */}
@@ -1056,6 +1366,23 @@ Post the tweet as a comment.`}
                       />
                       <p className="text-xs text-muted-foreground mt-1">
                         The target JIRA status name (e.g., &quot;Done&quot;, &quot;In Review&quot;, &quot;Closed&quot;)
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Linear transition target */}
+                  {formData.outputLinearTransition && (
+                    <div className="mt-3">
+                      <label className="block text-sm font-medium mb-2">Linear Transition To Status</label>
+                      <input
+                        type="text"
+                        value={formData.linearTransitionTarget}
+                        onChange={(e) => setFormData({ ...formData, linearTransitionTarget: e.target.value })}
+                        placeholder="Done"
+                        className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        The target Linear status name (e.g., &quot;Done&quot;, &quot;In Review&quot;, &quot;Cancelled&quot;)
                       </p>
                     </div>
                   )}

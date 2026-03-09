@@ -31,10 +31,18 @@ import {
   generateId,
   saveLastRunTime,
   getAutomationsDue,
+  loadQueueState,
+  saveQueueState,
+  getQueueItemsForAutomation,
+  updateQueueItem,
+  addQueueItem,
+  getQueueStats,
   Automation,
   AutomationRun,
+  QueueItem,
   GitHubSourceConfig,
   JiraSourceConfig,
+  LinearSourceConfig,
   OutputConfig,
 } from "../utils/automations.js";
 import { apiRequest } from "../utils/api.js";
@@ -355,6 +363,109 @@ function loadJiraCredentials(config: JiraSourceConfig): { domain: string; email:
   return null;
 }
 
+// Kanban task creation helper for Linear items
+function createKanbanTaskFromLinearItem(
+  item: PollResult["items"][0],
+  automation: Automation
+): void {
+  try {
+    let tasks: Array<Record<string, unknown>> = [];
+    if (fs.existsSync(KANBAN_FILE)) {
+      tasks = JSON.parse(fs.readFileSync(KANBAN_FILE, "utf-8"));
+    }
+
+    // Check if a task with this Linear identifier already exists (avoid duplicates)
+    const identifier = item.raw.identifier as string;
+    const existingTask = tasks.find(
+      (t) => t.labels && Array.isArray(t.labels) && (t.labels as string[]).includes(`linear:${identifier}`)
+    );
+    if (existingTask) {
+      return; // Already exists
+    }
+
+    // Find max order in backlog
+    const backlogTasks = tasks.filter((t) => t.column === "backlog");
+    const maxOrder = backlogTasks.length > 0
+      ? Math.max(...backlogTasks.map((t) => (t.order as number) || 0))
+      : -1;
+
+    // Map Linear priority to kanban priority
+    const priorityNum = item.raw.priorityNumber as number;
+    let priority: "low" | "medium" | "high" = "medium";
+    if (priorityNum === 1 || priorityNum === 2) {
+      priority = "high";
+    } else if (priorityNum === 4 || priorityNum === 0) {
+      priority = "low";
+    }
+
+    // Resolve project path
+    let projectPath = automation.agent.projectPath || os.homedir();
+    if (!path.isAbsolute(projectPath)) {
+      projectPath = path.join(os.homedir(), projectPath);
+    } else if (!fs.existsSync(projectPath) && fs.existsSync(path.join(os.homedir(), projectPath.replace(/^\//, "")))) {
+      projectPath = path.join(os.homedir(), projectPath.replace(/^\//, ""));
+    }
+
+    const linearLabels = (item.raw.labels as string[]) || [];
+    const issueTitle = item.raw.title as string || item.title;
+
+    const newTask = {
+      id: generateId() + generateId(),
+      title: `[${identifier}] ${issueTitle}`,
+      description: `**Linear Issue:** ${item.url}\n**State:** ${item.raw.state}\n**Priority:** ${item.raw.priority}\n**Assignee:** ${item.raw.assignee}\n**Creator:** ${item.raw.creator}\n\n${item.raw.description || "No description"}`,
+      column: "backlog",
+      projectId: identifier,
+      projectPath,
+      assignedAgentId: null,
+      agentCreatedForTask: false,
+      requiredSkills: [],
+      priority,
+      progress: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      order: maxOrder + 1,
+      labels: [`linear:${identifier}`, "linear", ...linearLabels],
+      attachments: [],
+    };
+
+    tasks.push(newTask);
+
+    const dir = path.dirname(KANBAN_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(KANBAN_FILE, JSON.stringify(tasks, null, 2));
+  } catch (error) {
+    console.error("Failed to create kanban task from Linear item:", error);
+  }
+}
+
+function loadLinearApiKey(config: LinearSourceConfig): string | null {
+  if (config.apiKey) return config.apiKey;
+  try {
+    if (fs.existsSync(APP_SETTINGS_FILE)) {
+      const settings = JSON.parse(fs.readFileSync(APP_SETTINGS_FILE, "utf-8"));
+      if (settings.linearEnabled && settings.linearApiKey) {
+        return settings.linearApiKey;
+      }
+    }
+  } catch {
+    // Ignore
+  }
+  return null;
+}
+
+function linearPriorityLabel(priority: number): string {
+  switch (priority) {
+    case 0: return "No priority";
+    case 1: return "Urgent";
+    case 2: return "High";
+    case 3: return "Medium";
+    case 4: return "Low";
+    default: return "Unknown";
+  }
+}
+
 function jiraAuthHeaders(email: string, apiToken: string): Record<string, string> {
   const auth = Buffer.from(`${email}:${apiToken}`).toString("base64");
   return {
@@ -452,12 +563,117 @@ async function pollJira(config: JiraSourceConfig, automation: Automation): Promi
   }
 }
 
+async function pollLinear(config: LinearSourceConfig, automation: Automation): Promise<PollResult> {
+  const apiKey = loadLinearApiKey(config);
+  if (!apiKey) {
+    return { items: [], error: "Linear API key not configured. Set it in Settings > Linear or in the automation source config." };
+  }
+
+  const items: PollResult["items"] = [];
+
+  try {
+    // Build filter
+    const filters: string[] = [];
+    if (config.teamId) {
+      filters.push(`team: { key: { eq: "${config.teamId}" } }`);
+    }
+    if (config.projectId) {
+      filters.push(`project: { name: { eq: "${config.projectId}" } }`);
+    }
+    if (config.filter) {
+      filters.push(config.filter);
+    }
+
+    const filterClause = filters.length > 0 ? `filter: { ${filters.join(", ")} }, ` : "";
+
+    const query = `{
+      issues(${filterClause}first: 20, orderBy: updatedAt) {
+        nodes {
+          id
+          identifier
+          title
+          description
+          state { name }
+          priority
+          assignee { name }
+          creator { name }
+          url
+          labels { nodes { name } }
+          updatedAt
+          createdAt
+        }
+      }
+    }`;
+
+    const res = await fetch("https://api.linear.app/graphql", {
+      method: "POST",
+      headers: {
+        "Authorization": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      return { items: [], error: `Linear API error (${res.status}): ${text.slice(0, 300)}` };
+    }
+
+    const data = await res.json();
+
+    if (data.errors) {
+      return { items: [], error: `Linear GraphQL error: ${data.errors[0]?.message || "Unknown error"}` };
+    }
+
+    const issues = data.data?.issues?.nodes || [];
+
+    for (const issue of issues) {
+      const hash = hashContent(issue.updatedAt || "");
+      const teamKey = issue.identifier?.split("-")[0] || config.teamId || "unknown";
+      const labelNames = issue.labels?.nodes?.map((l: { name: string }) => l.name) || [];
+
+      items.push({
+        id: createItemId("linear", teamKey, "issue", issue.identifier),
+        type: "issue",
+        title: issue.identifier,
+        url: issue.url,
+        author: issue.creator?.name || "Unknown",
+        body: issue.description || "",
+        labels: labelNames,
+        createdAt: issue.createdAt || "",
+        updatedAt: issue.updatedAt || "",
+        hash,
+        raw: {
+          issueId: issue.id,
+          identifier: issue.identifier,
+          title: issue.title,
+          description: issue.description || "",
+          state: issue.state?.name || "Unknown",
+          priority: linearPriorityLabel(issue.priority),
+          priorityNumber: issue.priority,
+          assignee: issue.assignee?.name || "Unassigned",
+          creator: issue.creator?.name || "Unknown",
+          url: issue.url,
+          labels: labelNames,
+          teamKey,
+        },
+      });
+    }
+
+    return { items };
+  } catch (error) {
+    return { items: [], error: `Linear polling failed: ${error}` };
+  }
+}
+
 async function pollSource(automation: Automation): Promise<PollResult> {
   switch (automation.source.type) {
     case "github":
       return pollGitHub(automation.source.config as GitHubSourceConfig, automation);
     case "jira":
       return pollJira(automation.source.config as JiraSourceConfig, automation);
+    case "linear":
+      return pollLinear(automation.source.config as LinearSourceConfig, automation);
     case "pipedrive":
       return { items: [], error: "Pipedrive polling not yet implemented" };
     case "twitter":
@@ -550,6 +766,107 @@ async function sendOutput(output: OutputConfig, message: string, variables: Reco
                 method: "POST",
                 headers: jiraHeaders,
                 body: JSON.stringify({ transition: { id: transition.id } }),
+              });
+            }
+          }
+        }
+      }
+      break;
+    }
+    case "linear_comment": {
+      const { issueId: commentIssueId } = variables as { issueId?: string };
+      if (commentIssueId) {
+        const linearApiKey = loadLinearApiKey({} as LinearSourceConfig);
+        if (linearApiKey) {
+          const escapedBody = finalMessage.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
+          await fetch("https://api.linear.app/graphql", {
+            method: "POST",
+            headers: {
+              "Authorization": linearApiKey,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              query: `mutation { commentCreate(input: { issueId: "${commentIssueId}", body: "${escapedBody}" }) { success } }`,
+            }),
+          });
+        }
+      }
+      break;
+    }
+    case "linear_transition": {
+      const { issueId: transIssueId, teamKey: transTeamKey } = variables as { issueId?: string; teamKey?: string };
+      const targetState = output.template || "Done";
+      if (transIssueId) {
+        const linearApiKey = loadLinearApiKey({} as LinearSourceConfig);
+        if (linearApiKey) {
+          // First, find the state ID by querying workflow states
+          const teamFilter = transTeamKey ? `filter: { team: { key: { eq: "${transTeamKey}" } } }` : "";
+          const statesRes = await fetch("https://api.linear.app/graphql", {
+            method: "POST",
+            headers: {
+              "Authorization": linearApiKey,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              query: `{ workflowStates(${teamFilter}) { nodes { id name } } }`,
+            }),
+          });
+          if (statesRes.ok) {
+            const statesData = await statesRes.json();
+            const states = statesData.data?.workflowStates?.nodes || [];
+            const matchingState = states.find((s: { name: string }) =>
+              s.name.toLowerCase() === targetState.toLowerCase()
+            );
+            if (matchingState) {
+              await fetch("https://api.linear.app/graphql", {
+                method: "POST",
+                headers: {
+                  "Authorization": linearApiKey,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  query: `mutation { issueUpdate(id: "${transIssueId}", input: { stateId: "${matchingState.id}" }) { success } }`,
+                }),
+              });
+            } else {
+              console.error(`Linear: Could not find state "${targetState}" for transition`);
+            }
+          }
+        }
+      }
+      break;
+    }
+    case "linear_create_issue": {
+      const { teamKey: createTeamKey } = variables as { teamKey?: string };
+      if (createTeamKey) {
+        const linearApiKey = loadLinearApiKey({} as LinearSourceConfig);
+        if (linearApiKey) {
+          // Get team ID from team key
+          const teamRes = await fetch("https://api.linear.app/graphql", {
+            method: "POST",
+            headers: {
+              "Authorization": linearApiKey,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              query: `{ teams(filter: { key: { eq: "${createTeamKey}" } }) { nodes { id } } }`,
+            }),
+          });
+          if (teamRes.ok) {
+            const teamData = await teamRes.json();
+            const teamId = teamData.data?.teams?.nodes?.[0]?.id;
+            if (teamId) {
+              const escapedTitle = finalMessage.split("\n")[0].replace(/"/g, '\\"');
+              const escapedDesc = finalMessage.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
+              await fetch("https://api.linear.app/graphql", {
+                method: "POST",
+                headers: {
+                  "Authorization": linearApiKey,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  query: `mutation { issueCreate(input: { teamId: "${teamId}", title: "${escapedTitle}", description: "${escapedDesc}" }) { success issue { id identifier url } } }`,
+                }),
               });
             }
           }
@@ -653,8 +970,46 @@ async function runAutomation(automation: Automation): Promise<AutomationRun> {
       return true;
     });
 
+    // Queue-aware item limiting
+    let effectiveItems = itemsToProcess;
+    if (automation.queue) {
+      const queueMode = automation.queue.mode;
+      const maxConcurrent = automation.queue.maxConcurrent || 1;
+
+      // Track all items in the queue
+      for (const item of itemsToProcess) {
+        const identifier = item.raw.identifier as string | undefined;
+        addQueueItem({
+          automationId: automation.id,
+          itemId: item.id,
+          linearIdentifier: identifier,
+          status: "pending",
+          retryCount: 0,
+          maxRetries: 2,
+        });
+      }
+
+      if (queueMode === "sequential") {
+        // Only process the first unprocessed item
+        const queueItems = getQueueItemsForAutomation(automation.id);
+        const inProgress = queueItems.filter((q) => q.status === "in_progress");
+        if (inProgress.length > 0) {
+          effectiveItems = []; // Something is already running
+        } else {
+          effectiveItems = itemsToProcess.slice(0, 1);
+        }
+      } else if (queueMode === "concurrent") {
+        // Process up to maxConcurrent items
+        const queueItems = getQueueItemsForAutomation(automation.id);
+        const inProgress = queueItems.filter((q) => q.status === "in_progress");
+        const slotsAvailable = Math.max(0, maxConcurrent - inProgress.length);
+        effectiveItems = itemsToProcess.slice(0, slotsAvailable);
+      }
+      // "parallel" mode: no limiting, process all
+    }
+
     // Process each item
-    for (const item of itemsToProcess) {
+    for (const item of effectiveItems) {
       const variables: Record<string, unknown> = {
         ...item.raw,
         number: item.raw.number,
@@ -682,7 +1037,30 @@ async function runAutomation(automation: Automation): Promise<AutomationRun> {
         createKanbanTaskFromJiraItem(item, automation);
       }
 
+      // Add Linear-specific template variables
+      if (automation.source.type === "linear") {
+        variables.identifier = item.raw.identifier;
+        variables.issueId = item.raw.issueId;
+        variables.state = item.raw.state;
+        variables.priority = item.raw.priority;
+        variables.assignee = item.raw.assignee;
+        variables.creator = item.raw.creator;
+        variables.teamKey = item.raw.teamKey;
+
+        // Create kanban task from Linear issue
+        createKanbanTaskFromLinearItem(item, automation);
+      }
+
+      // Update queue item to in_progress
+      if (automation.queue) {
+        updateQueueItem(automation.id, item.id, {
+          status: "in_progress",
+          startedAt: new Date().toISOString(),
+        });
+      }
+
       let agentOutput = "";
+      let itemFailed = false;
 
       // Run agent if enabled
       if (automation.agent.enabled && automation.agent.prompt) {
@@ -708,6 +1086,18 @@ async function runAutomation(automation: Automation): Promise<AutomationRun> {
               const issueKey = variables.key as string;
               const targetStatus = output.template || "Done";
               outputInstructions.push(`- Transition JIRA issue ${issueKey} to "${targetStatus}" by calling the update_jira_issue MCP tool with transitionName: "${targetStatus}"`);
+            }
+            if (output.type === "linear_comment") {
+              const identifier = variables.identifier as string;
+              outputInstructions.push(`- Post your result as a comment on Linear issue ${identifier} by calling the update_linear_issue MCP tool with a comment containing your results`);
+            }
+            if (output.type === "linear_transition") {
+              const identifier = variables.identifier as string;
+              const targetStatus = output.template || "Done";
+              outputInstructions.push(`- Transition Linear issue ${identifier} to "${targetStatus}" by calling the update_linear_issue MCP tool with stateName: "${targetStatus}"`);
+            }
+            if (output.type === "linear_create_issue") {
+              outputInstructions.push(`- Create a new Linear issue with your results by calling the create_linear_issue MCP tool`);
             }
           }
         }
@@ -739,7 +1129,9 @@ ${outputInstructions.length > 0 ? outputInstructions.join("\n") : "- Output your
           });
 
           // Wait for agent to complete (with timeout)
-          const timeout = automation.agent.timeout || 300000; // 5 min default
+          // Queue mode gets longer timeout (30 min) since code tasks take more time
+          const defaultTimeout = automation.queue ? 1800000 : 300000;
+          const timeout = automation.agent.timeout || defaultTimeout;
           const startTime = Date.now();
           let status = "running";
 
@@ -755,6 +1147,7 @@ ${outputInstructions.length > 0 ? outputInstructions.join("\n") : "- Output your
           }
         } catch (error) {
           agentOutput = `Agent error: ${error}`;
+          itemFailed = true;
           // If agent failed, try to send error notification
           for (const output of automation.outputs) {
             if (output.enabled && output.type === "telegram") {
@@ -781,6 +1174,15 @@ ${outputInstructions.length > 0 ? outputInstructions.join("\n") : "- Output your
 
       // Note: Output sending is now handled by the agent using MCP tools (send_telegram, gh pr comment, etc.)
       // The agent is instructed to use these tools directly in its prompt
+
+      // Update queue item status
+      if (automation.queue) {
+        updateQueueItem(automation.id, item.id, {
+          status: itemFailed ? "failed" : "completed",
+          completedAt: new Date().toISOString(),
+          error: itemFailed ? agentOutput : undefined,
+        });
+      }
 
       // Mark as processed
       markItemProcessed({
@@ -938,7 +1340,7 @@ ${runsFormatted}`,
     {
       name: z.string().describe("Name for the automation"),
       description: z.string().optional().describe("Description of what this automation does"),
-      sourceType: z.enum(["github", "jira", "pipedrive", "twitter", "rss", "custom"]).describe("Type of source to poll"),
+      sourceType: z.enum(["github", "jira", "linear", "pipedrive", "twitter", "rss", "custom"]).describe("Type of source to poll"),
       sourceConfig: z.string().describe("JSON string of source configuration (e.g., {\"repos\": [\"owner/repo\"], \"pollFor\": [\"pull_requests\"]})"),
       scheduleMinutes: z.number().optional().describe("Poll interval in minutes (default: 30)"),
       scheduleCron: z.string().optional().describe("Cron expression for schedule (alternative to scheduleMinutes)"),
@@ -954,6 +1356,9 @@ ${runsFormatted}`,
       outputGitHubComment: z.boolean().optional().describe("Post output as GitHub comment"),
       outputJiraComment: z.boolean().optional().describe("Post output as JIRA comment on the issue"),
       outputJiraTransition: z.string().optional().describe("Transition JIRA issue to this status (e.g., 'Done')"),
+      outputLinearComment: z.boolean().optional().describe("Post output as a comment on the Linear issue"),
+      outputLinearTransition: z.string().optional().describe("Transition Linear issue to this status (e.g., 'Done')"),
+      outputLinearCreateIssue: z.boolean().optional().describe("Create a new Linear issue with the output"),
       outputTemplate: z.string().optional().describe("Custom output message template"),
     },
     async ({
@@ -975,6 +1380,9 @@ ${runsFormatted}`,
       outputGitHubComment,
       outputJiraComment,
       outputJiraTransition,
+      outputLinearComment,
+      outputLinearTransition,
+      outputLinearCreateIssue,
       outputTemplate,
     }) => {
       try {
@@ -1003,6 +1411,15 @@ ${runsFormatted}`,
         }
         if (outputJiraTransition) {
           outputs.push({ type: "jira_transition", enabled: true, template: outputJiraTransition });
+        }
+        if (outputLinearComment) {
+          outputs.push({ type: "linear_comment", enabled: true, template: outputTemplate });
+        }
+        if (outputLinearTransition) {
+          outputs.push({ type: "linear_transition", enabled: true, template: outputLinearTransition });
+        }
+        if (outputLinearCreateIssue) {
+          outputs.push({ type: "linear_create_issue", enabled: true, template: outputTemplate });
         }
 
         const automation = createAutomation({
@@ -1396,6 +1813,396 @@ ${run.agentOutput ? `Output: ${run.agentOutput.slice(0, 200)}...` : ""}`,
       } catch (error) {
         return {
           content: [{ type: "text", text: `Error updating JIRA issue: ${error}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Tool: Update Linear issue (for agents to call)
+  server.tool(
+    "update_linear_issue",
+    "Update a Linear issue by adding a comment and/or transitioning its status. At least one of comment or stateName is required.",
+    {
+      issueId: z.string().optional().describe("The Linear issue UUID (internal ID)"),
+      identifier: z.string().optional().describe("The Linear issue identifier (e.g., ENG-123)"),
+      comment: z.string().optional().describe("Comment text to add to the issue"),
+      stateName: z.string().optional().describe("Target workflow state name to transition to (e.g., 'In Progress', 'Done', 'In Review')"),
+    },
+    async ({ issueId, identifier, comment, stateName }) => {
+      try {
+        if (!comment && !stateName) {
+          return {
+            content: [{ type: "text", text: "At least one of 'comment' or 'stateName' is required." }],
+            isError: true,
+          };
+        }
+
+        const linearApiKey = loadLinearApiKey({} as LinearSourceConfig);
+        if (!linearApiKey) {
+          return {
+            content: [{ type: "text", text: "Linear API key not configured. Set it in Settings > Linear." }],
+            isError: true,
+          };
+        }
+
+        // Resolve issueId from identifier if needed
+        let resolvedIssueId = issueId;
+        if (!resolvedIssueId && identifier) {
+          const lookupRes = await fetch("https://api.linear.app/graphql", {
+            method: "POST",
+            headers: { "Authorization": linearApiKey, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              query: `{ issueSearch(filter: { number: { eq: ${parseInt(identifier.split("-")[1], 10)} }, team: { key: { eq: "${identifier.split("-")[0]}" } } }, first: 1) { nodes { id } } }`,
+            }),
+          });
+          if (lookupRes.ok) {
+            const lookupData = await lookupRes.json();
+            resolvedIssueId = lookupData.data?.issueSearch?.nodes?.[0]?.id;
+          }
+        }
+
+        if (!resolvedIssueId) {
+          return {
+            content: [{ type: "text", text: `Could not resolve Linear issue. Provide a valid issueId or identifier.` }],
+            isError: true,
+          };
+        }
+
+        const results: string[] = [];
+
+        // Add comment if requested
+        if (comment) {
+          const escapedBody = comment.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
+          const commentRes = await fetch("https://api.linear.app/graphql", {
+            method: "POST",
+            headers: { "Authorization": linearApiKey, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              query: `mutation { commentCreate(input: { issueId: "${resolvedIssueId}", body: "${escapedBody}" }) { success } }`,
+            }),
+          });
+          if (commentRes.ok) {
+            const commentData = await commentRes.json();
+            if (commentData.data?.commentCreate?.success) {
+              results.push(`Added comment to ${identifier || resolvedIssueId}`);
+            } else {
+              results.push(`Failed to add comment: ${JSON.stringify(commentData.errors || "unknown error")}`);
+            }
+          } else {
+            results.push(`Failed to add comment: HTTP ${commentRes.status}`);
+          }
+        }
+
+        // Transition if requested
+        if (stateName) {
+          // Find the state ID by querying workflow states
+          const teamKey = identifier?.split("-")[0];
+          const teamFilter = teamKey ? `filter: { team: { key: { eq: "${teamKey}" } } }` : "";
+          const statesRes = await fetch("https://api.linear.app/graphql", {
+            method: "POST",
+            headers: { "Authorization": linearApiKey, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              query: `{ workflowStates(${teamFilter}) { nodes { id name } } }`,
+            }),
+          });
+          if (statesRes.ok) {
+            const statesData = await statesRes.json();
+            const states = statesData.data?.workflowStates?.nodes || [];
+            const matchingState = states.find((s: { name: string }) =>
+              s.name.toLowerCase() === stateName.toLowerCase()
+            );
+            if (matchingState) {
+              const updateRes = await fetch("https://api.linear.app/graphql", {
+                method: "POST",
+                headers: { "Authorization": linearApiKey, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  query: `mutation { issueUpdate(id: "${resolvedIssueId}", input: { stateId: "${matchingState.id}" }) { success } }`,
+                }),
+              });
+              if (updateRes.ok) {
+                const updateData = await updateRes.json();
+                if (updateData.data?.issueUpdate?.success) {
+                  results.push(`Transitioned ${identifier || resolvedIssueId} to "${stateName}"`);
+                } else {
+                  results.push(`Failed to transition: ${JSON.stringify(updateData.errors || "unknown error")}`);
+                }
+              } else {
+                results.push(`Failed to transition: HTTP ${updateRes.status}`);
+              }
+            } else {
+              const available = states.map((s: { name: string }) => s.name).join(", ") || "none";
+              results.push(`State "${stateName}" not found. Available: ${available}`);
+            }
+          } else {
+            results.push(`Failed to fetch workflow states`);
+          }
+        }
+
+        return {
+          content: [{ type: "text", text: results.join("\n") || "No action taken" }],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text", text: `Error updating Linear issue: ${error}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Tool: Create Linear issue (for agents to call)
+  server.tool(
+    "create_linear_issue",
+    "Create a new Linear issue in a specified team.",
+    {
+      teamKey: z.string().describe("The team key (e.g., 'ENG', 'PROD')"),
+      title: z.string().describe("Issue title"),
+      description: z.string().optional().describe("Issue description (markdown supported)"),
+      priority: z.number().min(0).max(4).optional().describe("Priority: 0=No priority, 1=Urgent, 2=High, 3=Medium, 4=Low"),
+      labelNames: z.array(z.string()).optional().describe("Label names to apply to the issue"),
+    },
+    async ({ teamKey, title, description, priority, labelNames }) => {
+      try {
+        const linearApiKey = loadLinearApiKey({} as LinearSourceConfig);
+        if (!linearApiKey) {
+          return {
+            content: [{ type: "text", text: "Linear API key not configured. Set it in Settings > Linear." }],
+            isError: true,
+          };
+        }
+
+        // Get team ID from team key
+        const teamRes = await fetch("https://api.linear.app/graphql", {
+          method: "POST",
+          headers: { "Authorization": linearApiKey, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `{ teams(filter: { key: { eq: "${teamKey}" } }) { nodes { id } } }`,
+          }),
+        });
+
+        if (!teamRes.ok) {
+          return {
+            content: [{ type: "text", text: `Failed to look up team "${teamKey}": HTTP ${teamRes.status}` }],
+            isError: true,
+          };
+        }
+
+        const teamData = await teamRes.json();
+        const teamId = teamData.data?.teams?.nodes?.[0]?.id;
+        if (!teamId) {
+          return {
+            content: [{ type: "text", text: `Team "${teamKey}" not found.` }],
+            isError: true,
+          };
+        }
+
+        // Build input
+        const input: Record<string, unknown> = { teamId, title };
+        if (description) input.description = description;
+        if (priority !== undefined) input.priority = priority;
+
+        // Resolve label IDs if provided
+        if (labelNames && labelNames.length > 0) {
+          const labelsRes = await fetch("https://api.linear.app/graphql", {
+            method: "POST",
+            headers: { "Authorization": linearApiKey, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              query: `{ issueLabels { nodes { id name } } }`,
+            }),
+          });
+          if (labelsRes.ok) {
+            const labelsData = await labelsRes.json();
+            const allLabels = labelsData.data?.issueLabels?.nodes || [];
+            const labelIds = labelNames
+              .map((name: string) => allLabels.find((l: { name: string }) => l.name.toLowerCase() === name.toLowerCase()))
+              .filter(Boolean)
+              .map((l: { id: string }) => l.id);
+            if (labelIds.length > 0) {
+              input.labelIds = labelIds;
+            }
+          }
+        }
+
+        // Create the issue using variables for safe escaping
+        const createRes = await fetch("https://api.linear.app/graphql", {
+          method: "POST",
+          headers: { "Authorization": linearApiKey, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `mutation CreateIssue($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { id identifier url title } } }`,
+            variables: { input },
+          }),
+        });
+
+        if (!createRes.ok) {
+          const errText = await createRes.text();
+          return {
+            content: [{ type: "text", text: `Failed to create issue: HTTP ${createRes.status} - ${errText.slice(0, 300)}` }],
+            isError: true,
+          };
+        }
+
+        const createData = await createRes.json();
+        if (createData.errors) {
+          return {
+            content: [{ type: "text", text: `GraphQL error: ${createData.errors[0]?.message || "Unknown"}` }],
+            isError: true,
+          };
+        }
+
+        const issue = createData.data?.issueCreate?.issue;
+        if (issue) {
+          return {
+            content: [{ type: "text", text: `Created ${issue.identifier}: ${issue.title}\nURL: ${issue.url}` }],
+          };
+        }
+
+        return {
+          content: [{ type: "text", text: "Issue creation returned no data." }],
+          isError: true,
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text", text: `Error creating Linear issue: ${error}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Tool: Get Linear issue details (for agents to call)
+  server.tool(
+    "get_linear_issue",
+    "Fetch detailed information about a Linear issue by its identifier (e.g., ENG-123).",
+    {
+      identifier: z.string().describe("The Linear issue identifier (e.g., ENG-123)"),
+    },
+    async ({ identifier }) => {
+      try {
+        const linearApiKey = loadLinearApiKey({} as LinearSourceConfig);
+        if (!linearApiKey) {
+          return {
+            content: [{ type: "text", text: "Linear API key not configured. Set it in Settings > Linear." }],
+            isError: true,
+          };
+        }
+
+        const parts = identifier.split("-");
+        if (parts.length !== 2) {
+          return {
+            content: [{ type: "text", text: `Invalid identifier format. Expected "TEAM-123", got "${identifier}"` }],
+            isError: true,
+          };
+        }
+
+        const [teamKey, numberStr] = parts;
+        const issueNumber = parseInt(numberStr, 10);
+
+        const res = await fetch("https://api.linear.app/graphql", {
+          method: "POST",
+          headers: { "Authorization": linearApiKey, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `{
+              issueSearch(
+                filter: {
+                  number: { eq: ${issueNumber} }
+                  team: { key: { eq: "${teamKey}" } }
+                }
+                first: 1
+              ) {
+                nodes {
+                  id
+                  identifier
+                  title
+                  description
+                  state { name type }
+                  priority
+                  assignee { name email }
+                  creator { name }
+                  url
+                  labels { nodes { name } }
+                  comments(first: 10) { nodes { body createdAt user { name } } }
+                  createdAt
+                  updatedAt
+                  project { name }
+                  cycle { name number }
+                  estimate
+                  dueDate
+                  parent { identifier title }
+                  children { nodes { identifier title state { name } } }
+                }
+              }
+            }`,
+          }),
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          return {
+            content: [{ type: "text", text: `Linear API error (${res.status}): ${text.slice(0, 300)}` }],
+            isError: true,
+          };
+        }
+
+        const data = await res.json();
+        if (data.errors) {
+          return {
+            content: [{ type: "text", text: `GraphQL error: ${data.errors[0]?.message || "Unknown"}` }],
+            isError: true,
+          };
+        }
+
+        const issue = data.data?.issueSearch?.nodes?.[0];
+        if (!issue) {
+          return {
+            content: [{ type: "text", text: `Issue ${identifier} not found.` }],
+            isError: true,
+          };
+        }
+
+        const labels = issue.labels?.nodes?.map((l: { name: string }) => l.name) || [];
+        const comments = issue.comments?.nodes || [];
+        const children = issue.children?.nodes || [];
+
+        let text = `**${issue.identifier}: ${issue.title}**
+URL: ${issue.url}
+State: ${issue.state?.name || "Unknown"} (${issue.state?.type || ""})
+Priority: ${linearPriorityLabel(issue.priority)}
+Assignee: ${issue.assignee?.name || "Unassigned"}${issue.assignee?.email ? ` (${issue.assignee.email})` : ""}
+Creator: ${issue.creator?.name || "Unknown"}
+Created: ${issue.createdAt}
+Updated: ${issue.updatedAt}`;
+
+        if (issue.project) text += `\nProject: ${issue.project.name}`;
+        if (issue.cycle) text += `\nCycle: ${issue.cycle.name} (#${issue.cycle.number})`;
+        if (issue.estimate) text += `\nEstimate: ${issue.estimate}`;
+        if (issue.dueDate) text += `\nDue: ${issue.dueDate}`;
+        if (issue.parent) text += `\nParent: ${issue.parent.identifier} - ${issue.parent.title}`;
+        if (labels.length > 0) text += `\nLabels: ${labels.join(", ")}`;
+
+        if (issue.description) {
+          text += `\n\n## Description\n${issue.description}`;
+        }
+
+        if (children.length > 0) {
+          text += `\n\n## Sub-issues`;
+          for (const child of children) {
+            text += `\n- ${child.identifier}: ${child.title} [${child.state?.name || "?"}]`;
+          }
+        }
+
+        if (comments.length > 0) {
+          text += `\n\n## Recent Comments`;
+          for (const c of comments) {
+            text += `\n\n**${c.user?.name || "Unknown"}** (${c.createdAt}):\n${c.body}`;
+          }
+        }
+
+        return {
+          content: [{ type: "text", text }],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text", text: `Error fetching Linear issue: ${error}` }],
           isError: true,
         };
       }

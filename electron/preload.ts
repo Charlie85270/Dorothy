@@ -248,6 +248,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('jira:test'),
   },
 
+  // Linear
+  linear: {
+    test: () =>
+      ipcRenderer.invoke('linear:test'),
+  },
+
   // SocialData (Twitter/X)
   socialData: {
     test: () =>
@@ -422,6 +428,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('automation:run', id),
     getLogs: (id: string) =>
       ipcRenderer.invoke('automation:getLogs', id),
+    startBacklog: (id: string) =>
+      ipcRenderer.invoke('automation:startBacklog', id),
+    getBacklogStatus: (id: string) =>
+      ipcRenderer.invoke('automation:getBacklogStatus', id),
+    retryFailed: (id: string) =>
+      ipcRenderer.invoke('automation:retryFailed', id),
   },
 
   // Kanban Board

@@ -246,6 +246,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('jira:test'),
   },
 
+  // Linear
+  linear: {
+    test: () =>
+      ipcRenderer.invoke('linear:test'),
+  },
+
   // SocialData (Twitter/X)
   socialData: {
     test: () =>

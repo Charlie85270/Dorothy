@@ -395,6 +395,9 @@ export function registerAutomationHandlers(): void {
     outputGitHubComment?: boolean;
     outputJiraComment?: boolean;
     outputJiraTransition?: string; // Target status name, e.g., "Done"
+    outputLinearComment?: boolean;
+    outputLinearTransition?: string; // Target status name
+    outputLinearCreateIssue?: boolean;
     outputTemplate?: string;
   }) => {
     try {
@@ -429,6 +432,15 @@ export function registerAutomationHandlers(): void {
       }
       if (params.outputJiraTransition) {
         outputs.push({ type: 'jira_transition', enabled: true, template: params.outputJiraTransition });
+      }
+      if (params.outputLinearComment) {
+        outputs.push({ type: 'linear_comment', enabled: true, template: params.outputTemplate });
+      }
+      if (params.outputLinearTransition) {
+        outputs.push({ type: 'linear_transition', enabled: true, template: params.outputLinearTransition });
+      }
+      if (params.outputLinearCreateIssue) {
+        outputs.push({ type: 'linear_create_issue', enabled: true, template: params.outputTemplate });
       }
 
       const newAutomation: Automation = {

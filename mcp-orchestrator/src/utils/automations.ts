@@ -10,8 +10,8 @@ import * as os from "os";
 // TYPES
 // ============================================================================
 
-export type SourceType = "github" | "jira" | "pipedrive" | "twitter" | "rss" | "custom";
-export type OutputType = "telegram" | "slack" | "github_comment" | "email" | "discord" | "webhook" | "jira_comment" | "jira_transition";
+export type SourceType = "github" | "jira" | "pipedrive" | "twitter" | "rss" | "custom" | "linear";
+export type OutputType = "telegram" | "slack" | "github_comment" | "email" | "discord" | "webhook" | "jira_comment" | "jira_transition" | "linear_comment" | "linear_transition" | "linear_create_issue";
 
 export interface GitHubSourceConfig {
   repos: string[];
@@ -46,13 +46,21 @@ export interface CustomSourceConfig {
   command: string; // Shell command that outputs JSON
 }
 
+export interface LinearSourceConfig {
+  teamId?: string;
+  projectId?: string;
+  filter?: string;
+  apiKey?: string;
+}
+
 export type SourceConfig =
   | GitHubSourceConfig
   | JiraSourceConfig
   | PipedriveSourceConfig
   | TwitterSourceConfig
   | RssSourceConfig
-  | CustomSourceConfig;
+  | CustomSourceConfig
+  | LinearSourceConfig;
 
 export interface FilterRule {
   field: string;

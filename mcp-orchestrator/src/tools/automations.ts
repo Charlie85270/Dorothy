@@ -35,6 +35,7 @@ import {
   AutomationRun,
   GitHubSourceConfig,
   JiraSourceConfig,
+  LinearSourceConfig,
   OutputConfig,
 } from "../utils/automations.js";
 import { apiRequest } from "../utils/api.js";
@@ -355,6 +356,32 @@ function loadJiraCredentials(config: JiraSourceConfig): { domain: string; email:
   return null;
 }
 
+function loadLinearApiKey(config: LinearSourceConfig): string | null {
+  if (config.apiKey) return config.apiKey;
+  try {
+    if (fs.existsSync(APP_SETTINGS_FILE)) {
+      const settings = JSON.parse(fs.readFileSync(APP_SETTINGS_FILE, "utf-8"));
+      if (settings.linearEnabled && settings.linearApiKey) {
+        return settings.linearApiKey;
+      }
+    }
+  } catch {
+    // Ignore
+  }
+  return null;
+}
+
+function linearPriorityLabel(priority: number): string {
+  switch (priority) {
+    case 0: return "No priority";
+    case 1: return "Urgent";
+    case 2: return "High";
+    case 3: return "Medium";
+    case 4: return "Low";
+    default: return "Unknown";
+  }
+}
+
 function jiraAuthHeaders(email: string, apiToken: string): Record<string, string> {
   const auth = Buffer.from(`${email}:${apiToken}`).toString("base64");
   return {
@@ -452,12 +479,117 @@ async function pollJira(config: JiraSourceConfig, automation: Automation): Promi
   }
 }
 
+async function pollLinear(config: LinearSourceConfig, automation: Automation): Promise<PollResult> {
+  const apiKey = loadLinearApiKey(config);
+  if (!apiKey) {
+    return { items: [], error: "Linear API key not configured. Set it in Settings > Linear or in the automation source config." };
+  }
+
+  const items: PollResult["items"] = [];
+
+  try {
+    // Build filter
+    const filters: string[] = [];
+    if (config.teamId) {
+      filters.push(`team: { key: { eq: "${config.teamId}" } }`);
+    }
+    if (config.projectId) {
+      filters.push(`project: { name: { eq: "${config.projectId}" } }`);
+    }
+    if (config.filter) {
+      filters.push(config.filter);
+    }
+
+    const filterClause = filters.length > 0 ? `filter: { ${filters.join(", ")} }, ` : "";
+
+    const query = `{
+      issues(${filterClause}first: 20, orderBy: updatedAt) {
+        nodes {
+          id
+          identifier
+          title
+          description
+          state { name }
+          priority
+          assignee { name }
+          creator { name }
+          url
+          labels { nodes { name } }
+          updatedAt
+          createdAt
+        }
+      }
+    }`;
+
+    const res = await fetch("https://api.linear.app/graphql", {
+      method: "POST",
+      headers: {
+        "Authorization": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      return { items: [], error: `Linear API error (${res.status}): ${text.slice(0, 300)}` };
+    }
+
+    const data = await res.json();
+
+    if (data.errors) {
+      return { items: [], error: `Linear GraphQL error: ${data.errors[0]?.message || "Unknown error"}` };
+    }
+
+    const issues = data.data?.issues?.nodes || [];
+
+    for (const issue of issues) {
+      const hash = hashContent(issue.updatedAt || "");
+      const teamKey = issue.identifier?.split("-")[0] || config.teamId || "unknown";
+      const labelNames = issue.labels?.nodes?.map((l: { name: string }) => l.name) || [];
+
+      items.push({
+        id: createItemId("linear", teamKey, "issue", issue.identifier),
+        type: "issue",
+        title: issue.identifier,
+        url: issue.url,
+        author: issue.creator?.name || "Unknown",
+        body: issue.description || "",
+        labels: labelNames,
+        createdAt: issue.createdAt || "",
+        updatedAt: issue.updatedAt || "",
+        hash,
+        raw: {
+          issueId: issue.id,
+          identifier: issue.identifier,
+          title: issue.title,
+          description: issue.description || "",
+          state: issue.state?.name || "Unknown",
+          priority: linearPriorityLabel(issue.priority),
+          priorityNumber: issue.priority,
+          assignee: issue.assignee?.name || "Unassigned",
+          creator: issue.creator?.name || "Unknown",
+          url: issue.url,
+          labels: labelNames,
+          teamKey,
+        },
+      });
+    }
+
+    return { items };
+  } catch (error) {
+    return { items: [], error: `Linear polling failed: ${error}` };
+  }
+}
+
 async function pollSource(automation: Automation): Promise<PollResult> {
   switch (automation.source.type) {
     case "github":
       return pollGitHub(automation.source.config as GitHubSourceConfig, automation);
     case "jira":
       return pollJira(automation.source.config as JiraSourceConfig, automation);
+    case "linear":
+      return pollLinear(automation.source.config as LinearSourceConfig, automation);
     case "pipedrive":
       return { items: [], error: "Pipedrive polling not yet implemented" };
     case "twitter":
@@ -550,6 +682,107 @@ async function sendOutput(output: OutputConfig, message: string, variables: Reco
                 method: "POST",
                 headers: jiraHeaders,
                 body: JSON.stringify({ transition: { id: transition.id } }),
+              });
+            }
+          }
+        }
+      }
+      break;
+    }
+    case "linear_comment": {
+      const { issueId: commentIssueId } = variables as { issueId?: string };
+      if (commentIssueId) {
+        const linearApiKey = loadLinearApiKey({} as LinearSourceConfig);
+        if (linearApiKey) {
+          const escapedBody = finalMessage.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
+          await fetch("https://api.linear.app/graphql", {
+            method: "POST",
+            headers: {
+              "Authorization": linearApiKey,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              query: `mutation { commentCreate(input: { issueId: "${commentIssueId}", body: "${escapedBody}" }) { success } }`,
+            }),
+          });
+        }
+      }
+      break;
+    }
+    case "linear_transition": {
+      const { issueId: transIssueId, teamKey: transTeamKey } = variables as { issueId?: string; teamKey?: string };
+      const targetState = output.template || "Done";
+      if (transIssueId) {
+        const linearApiKey = loadLinearApiKey({} as LinearSourceConfig);
+        if (linearApiKey) {
+          // First, find the state ID by querying workflow states
+          const teamFilter = transTeamKey ? `filter: { team: { key: { eq: "${transTeamKey}" } } }` : "";
+          const statesRes = await fetch("https://api.linear.app/graphql", {
+            method: "POST",
+            headers: {
+              "Authorization": linearApiKey,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              query: `{ workflowStates(${teamFilter}) { nodes { id name } } }`,
+            }),
+          });
+          if (statesRes.ok) {
+            const statesData = await statesRes.json();
+            const states = statesData.data?.workflowStates?.nodes || [];
+            const matchingState = states.find((s: { name: string }) =>
+              s.name.toLowerCase() === targetState.toLowerCase()
+            );
+            if (matchingState) {
+              await fetch("https://api.linear.app/graphql", {
+                method: "POST",
+                headers: {
+                  "Authorization": linearApiKey,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  query: `mutation { issueUpdate(id: "${transIssueId}", input: { stateId: "${matchingState.id}" }) { success } }`,
+                }),
+              });
+            } else {
+              console.error(`Linear: Could not find state "${targetState}" for transition`);
+            }
+          }
+        }
+      }
+      break;
+    }
+    case "linear_create_issue": {
+      const { teamKey: createTeamKey } = variables as { teamKey?: string };
+      if (createTeamKey) {
+        const linearApiKey = loadLinearApiKey({} as LinearSourceConfig);
+        if (linearApiKey) {
+          // Get team ID from team key
+          const teamRes = await fetch("https://api.linear.app/graphql", {
+            method: "POST",
+            headers: {
+              "Authorization": linearApiKey,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              query: `{ teams(filter: { key: { eq: "${createTeamKey}" } }) { nodes { id } } }`,
+            }),
+          });
+          if (teamRes.ok) {
+            const teamData = await teamRes.json();
+            const teamId = teamData.data?.teams?.nodes?.[0]?.id;
+            if (teamId) {
+              const escapedTitle = finalMessage.split("\n")[0].replace(/"/g, '\\"');
+              const escapedDesc = finalMessage.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
+              await fetch("https://api.linear.app/graphql", {
+                method: "POST",
+                headers: {
+                  "Authorization": linearApiKey,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  query: `mutation { issueCreate(input: { teamId: "${teamId}", title: "${escapedTitle}", description: "${escapedDesc}" }) { success issue { id identifier url } } }`,
+                }),
               });
             }
           }
@@ -682,6 +915,17 @@ async function runAutomation(automation: Automation): Promise<AutomationRun> {
         createKanbanTaskFromJiraItem(item, automation);
       }
 
+      // Add Linear-specific template variables
+      if (automation.source.type === "linear") {
+        variables.identifier = item.raw.identifier;
+        variables.issueId = item.raw.issueId;
+        variables.state = item.raw.state;
+        variables.priority = item.raw.priority;
+        variables.assignee = item.raw.assignee;
+        variables.creator = item.raw.creator;
+        variables.teamKey = item.raw.teamKey;
+      }
+
       let agentOutput = "";
 
       // Run agent if enabled
@@ -708,6 +952,18 @@ async function runAutomation(automation: Automation): Promise<AutomationRun> {
               const issueKey = variables.key as string;
               const targetStatus = output.template || "Done";
               outputInstructions.push(`- Transition JIRA issue ${issueKey} to "${targetStatus}" by calling the update_jira_issue MCP tool with transitionName: "${targetStatus}"`);
+            }
+            if (output.type === "linear_comment") {
+              const identifier = variables.identifier as string;
+              outputInstructions.push(`- Post your result as a comment on Linear issue ${identifier} by calling the update_linear_issue MCP tool with a comment containing your results`);
+            }
+            if (output.type === "linear_transition") {
+              const identifier = variables.identifier as string;
+              const targetStatus = output.template || "Done";
+              outputInstructions.push(`- Transition Linear issue ${identifier} to "${targetStatus}" by calling the update_linear_issue MCP tool with stateName: "${targetStatus}"`);
+            }
+            if (output.type === "linear_create_issue") {
+              outputInstructions.push(`- Create a new Linear issue with your results by calling the create_linear_issue MCP tool`);
             }
           }
         }
@@ -938,7 +1194,7 @@ ${runsFormatted}`,
     {
       name: z.string().describe("Name for the automation"),
       description: z.string().optional().describe("Description of what this automation does"),
-      sourceType: z.enum(["github", "jira", "pipedrive", "twitter", "rss", "custom"]).describe("Type of source to poll"),
+      sourceType: z.enum(["github", "jira", "linear", "pipedrive", "twitter", "rss", "custom"]).describe("Type of source to poll"),
       sourceConfig: z.string().describe("JSON string of source configuration (e.g., {\"repos\": [\"owner/repo\"], \"pollFor\": [\"pull_requests\"]})"),
       scheduleMinutes: z.number().optional().describe("Poll interval in minutes (default: 30)"),
       scheduleCron: z.string().optional().describe("Cron expression for schedule (alternative to scheduleMinutes)"),
@@ -954,6 +1210,9 @@ ${runsFormatted}`,
       outputGitHubComment: z.boolean().optional().describe("Post output as GitHub comment"),
       outputJiraComment: z.boolean().optional().describe("Post output as JIRA comment on the issue"),
       outputJiraTransition: z.string().optional().describe("Transition JIRA issue to this status (e.g., 'Done')"),
+      outputLinearComment: z.boolean().optional().describe("Post output as a comment on the Linear issue"),
+      outputLinearTransition: z.string().optional().describe("Transition Linear issue to this status (e.g., 'Done')"),
+      outputLinearCreateIssue: z.boolean().optional().describe("Create a new Linear issue with the output"),
       outputTemplate: z.string().optional().describe("Custom output message template"),
     },
     async ({
@@ -975,6 +1234,9 @@ ${runsFormatted}`,
       outputGitHubComment,
       outputJiraComment,
       outputJiraTransition,
+      outputLinearComment,
+      outputLinearTransition,
+      outputLinearCreateIssue,
       outputTemplate,
     }) => {
       try {
@@ -1003,6 +1265,15 @@ ${runsFormatted}`,
         }
         if (outputJiraTransition) {
           outputs.push({ type: "jira_transition", enabled: true, template: outputJiraTransition });
+        }
+        if (outputLinearComment) {
+          outputs.push({ type: "linear_comment", enabled: true, template: outputTemplate });
+        }
+        if (outputLinearTransition) {
+          outputs.push({ type: "linear_transition", enabled: true, template: outputLinearTransition });
+        }
+        if (outputLinearCreateIssue) {
+          outputs.push({ type: "linear_create_issue", enabled: true, template: outputTemplate });
         }
 
         const automation = createAutomation({

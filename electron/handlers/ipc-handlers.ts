@@ -1460,6 +1460,46 @@ function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
       return { success: false, error: String(err) };
     }
   });
+
+  // ============== Linear IPC Handlers ==============
+
+  ipcMain.handle('linear:test', async () => {
+    const appSettings = getAppSettings();
+    if (!appSettings.linearApiKey) {
+      return { success: false, error: 'Linear API key is required' };
+    }
+
+    try {
+      const res = await fetch('https://api.linear.app/graphql', {
+        method: 'POST',
+        headers: {
+          'Authorization': appSettings.linearApiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: '{ viewer { id name email } }',
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.data?.viewer) {
+          return {
+            success: true,
+            displayName: data.data.viewer.name,
+            email: data.data.viewer.email,
+          };
+        }
+        return { success: false, error: data.errors?.[0]?.message || 'Unknown error' };
+      } else {
+        const text = await res.text();
+        return { success: false, error: `HTTP ${res.status}: ${text.slice(0, 200)}` };
+      }
+    } catch (err) {
+      console.error('Linear test failed:', err);
+      return { success: false, error: String(err) };
+    }
+  });
 }
 
 // ============== Update Checker IPC Handlers ==============

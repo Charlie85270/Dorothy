@@ -16,6 +16,7 @@ import {
   TelegramSection,
   SlackSection,
   JiraSection,
+  LinearSection,
   SocialDataSection,
   TasmaniaSection,
   GoogleWorkspaceSection,
@@ -103,6 +104,14 @@ function SettingsPageInner() {
       case 'jira':
         return (
           <JiraSection
+            appSettings={appSettings}
+            onSaveAppSettings={handleSaveAppSettings}
+            onUpdateLocalSettings={updateLocalAppSettings}
+          />
+        );
+      case 'linear':
+        return (
+          <LinearSection
             appSettings={appSettings}
             onSaveAppSettings={handleSaveAppSettings}
             onUpdateLocalSettings={updateLocalAppSettings}

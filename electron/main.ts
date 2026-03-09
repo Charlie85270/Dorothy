@@ -126,6 +126,8 @@ function loadAppSettings(): AppSettings {
     jiraDomain: '',
     jiraEmail: '',
     jiraApiToken: '',
+    linearEnabled: false,
+    linearApiKey: '',
     socialDataEnabled: false,
     socialDataApiKey: '',
     xPostingEnabled: false,

@@ -289,6 +289,8 @@ export interface ElectronAPI {
       jiraDomain: string;
       jiraEmail: string;
       jiraApiToken: string;
+      linearEnabled: boolean;
+      linearApiKey: string;
       socialDataEnabled: boolean;
       socialDataApiKey: string;
       tasmaniaEnabled: boolean;
@@ -327,6 +329,8 @@ export interface ElectronAPI {
       jiraDomain?: string;
       jiraEmail?: string;
       jiraApiToken?: string;
+      linearEnabled?: boolean;
+      linearApiKey?: string;
       socialDataEnabled?: boolean;
       socialDataApiKey?: string;
       tasmaniaEnabled?: boolean;
@@ -364,6 +368,11 @@ export interface ElectronAPI {
 
   // JIRA
   jira?: {
+    test: () => Promise<{ success: boolean; displayName?: string; email?: string; error?: string }>;
+  };
+
+  // Linear
+  linear?: {
     test: () => Promise<{ success: boolean; displayName?: string; email?: string; error?: string }>;
   };
 

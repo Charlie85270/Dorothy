@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { SlackIcon } from './SlackIcon';
 import { JiraIcon } from './JiraIcon';
+import { LinearIcon } from './LinearIcon';
 import { TasmaniaIcon } from './TasmaniaIcon';
 import { ObsidianIcon } from './ObsidianIcon';
 import type { SettingsSection } from './types';
@@ -25,6 +26,7 @@ export const SECTIONS: { id: SettingsSection; label: string; icon: React.Compone
   { id: 'telegram', label: 'Telegram', icon: Send },
   { id: 'slack', label: 'Slack', icon: SlackIcon },
   { id: 'jira', label: 'JIRA', icon: JiraIcon },
+  { id: 'linear', label: 'Linear', icon: LinearIcon },
   { id: 'socialdata', label: 'X (Twitter)', icon: Twitter },
   { id: 'tasmania', label: 'Tasmania', icon: TasmaniaIcon },
   { id: 'google-workspace', label: 'Google Workspace', icon: Cloud },
@@ -54,6 +56,8 @@ export const DEFAULT_APP_SETTINGS = {
   jiraDomain: '',
   jiraEmail: '',
   jiraApiToken: '',
+  linearEnabled: false,
+  linearApiKey: '',
   socialDataEnabled: false,
   socialDataApiKey: '',
   xPostingEnabled: false,

@@ -30,6 +30,7 @@ import {
   TicketCheck,
 } from 'lucide-react';
 import { isElectron } from '@/hooks/useElectron';
+import { LinearIcon } from '@/components/Settings/LinearIcon';
 
 // Slack Icon component
 const SlackIcon = ({ className }: { className?: string }) => (
@@ -96,6 +97,7 @@ function getSourceIcon(type: string): IconComponent {
   const icons: Record<string, IconComponent> = {
     github: Github,
     jira: TicketCheck,
+    linear: LinearIcon,
     pipedrive: Globe,
     twitter: MessageSquare,
     rss: Globe,
@@ -155,6 +157,13 @@ export default function AutomationsPage() {
     outputJiraComment: false,
     outputJiraTransition: false,
     jiraTransitionTarget: 'Done',
+    outputLinearComment: false,
+    outputLinearTransition: false,
+    linearTransitionTarget: 'Done',
+    outputLinearCreateIssue: false,
+    linearTeamKey: '',
+    linearProjectName: '',
+    linearFilter: '',
     outputTemplate: '',
   });
   const [isCreating, setIsCreating] = useState(false);
@@ -207,6 +216,12 @@ export default function AutomationsPage() {
           projectKeys: formData.jiraProjectKeys.split(',').map(k => k.trim()).filter(Boolean),
           jql: formData.jiraJql || undefined,
         };
+      } else if (formData.sourceType === 'linear') {
+        sourceConfig = {
+          teamId: formData.linearTeamKey || undefined,
+          projectId: formData.linearProjectName || undefined,
+          filter: formData.linearFilter || undefined,
+        };
       } else {
         sourceConfig = {
           repos: formData.repos.split(',').map(r => r.trim()).filter(Boolean),
@@ -214,8 +229,8 @@ export default function AutomationsPage() {
         };
       }
 
-      // For JIRA, don't send GitHub-specific event types - use empty array to match all
-      const eventTypes = formData.sourceType === 'jira' ? [] : formData.eventTypes;
+      // For JIRA/Linear, don't send GitHub-specific event types - use empty array to match all
+      const eventTypes = (formData.sourceType === 'jira' || formData.sourceType === 'linear') ? [] : formData.eventTypes;
 
       const result = await window.electronAPI?.automation?.create({
         name: formData.name,
@@ -233,6 +248,9 @@ export default function AutomationsPage() {
         outputGitHubComment: formData.outputGitHubComment,
         outputJiraComment: formData.outputJiraComment,
         outputJiraTransition: formData.outputJiraTransition ? formData.jiraTransitionTarget : undefined,
+        outputLinearComment: formData.outputLinearComment,
+        outputLinearTransition: formData.outputLinearTransition ? formData.linearTransitionTarget : undefined,
+        outputLinearCreateIssue: formData.outputLinearCreateIssue,
         outputTemplate: formData.outputTemplate || undefined,
       } as Record<string, unknown>);
 
@@ -258,6 +276,13 @@ export default function AutomationsPage() {
           outputJiraComment: false,
           outputJiraTransition: false,
           jiraTransitionTarget: 'Done',
+          outputLinearComment: false,
+          outputLinearTransition: false,
+          linearTransitionTarget: 'Done',
+          outputLinearCreateIssue: false,
+          linearTeamKey: '',
+          linearProjectName: '',
+          linearFilter: '',
           outputTemplate: '',
         });
         await loadAutomations();
@@ -815,6 +840,7 @@ export default function AutomationsPage() {
                   >
                     <option value="github">GitHub</option>
                     <option value="jira">JIRA</option>
+                      <option value="linear">Linear</option>
                     <option value="pipedrive" disabled>Pipedrive (coming soon)</option>
                   </select>
                 </div>
@@ -917,6 +943,64 @@ export default function AutomationsPage() {
                   </>
                 )}
 
+                {/* Linear-specific config */}
+                {formData.sourceType === 'linear' && (
+                  <>
+                    <div className="flex items-start gap-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                      <AlertCircle className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+                      <div className="text-sm">
+                        <span className="text-blue-500 font-medium">Requires Linear API key</span>
+                        <p className="text-muted-foreground mt-0.5">
+                          Configure your API key in{' '}
+                          <span className="font-medium text-foreground">Settings &gt; Linear</span> first.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Team Key (optional)</label>
+                      <input
+                        type="text"
+                        value={formData.linearTeamKey}
+                        onChange={(e) => setFormData({ ...formData, linearTeamKey: e.target.value })}
+                        placeholder="ENG"
+                        className="w-full px-3 py-2 bg-secondary border border-border rounded-lg font-mono text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Filter by team key (e.g., ENG, PROD). Leave empty to poll all teams.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Project Name (optional)</label>
+                      <input
+                        type="text"
+                        value={formData.linearProjectName}
+                        onChange={(e) => setFormData({ ...formData, linearProjectName: e.target.value })}
+                        placeholder="My Project"
+                        className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Filter by project name. Leave empty to poll all projects.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Custom Filter (optional)</label>
+                      <input
+                        type="text"
+                        value={formData.linearFilter}
+                        onChange={(e) => setFormData({ ...formData, linearFilter: e.target.value })}
+                        placeholder='state: { name: { neq: "Done" } }'
+                        className="w-full px-3 py-2 bg-secondary border border-border rounded-lg font-mono text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Linear GraphQL filter expression. Overrides team/project filters.
+                      </p>
+                    </div>
+                  </>
+                )}
+
                 {/* Schedule */}
                 <div>
                   <label className="block text-sm font-medium mb-2">Poll Interval</label>
@@ -964,6 +1048,8 @@ Post the tweet as a comment.`}
                         <p className="text-xs text-muted-foreground mt-1">
                           {formData.sourceType === 'jira'
                             ? <>Variables: {'{{key}}'}, {'{{summary}}'}, {'{{status}}'}, {'{{issueType}}'}, {'{{priority}}'}, {'{{assignee}}'}, {'{{reporter}}'}, {'{{url}}'}</>
+                            : formData.sourceType === 'linear'
+                            ? <>Variables: {'{{identifier}}'}, {'{{title}}'}, {'{{state}}'}, {'{{priority}}'}, {'{{assignee}}'}, {'{{creator}}'}, {'{{url}}'}</>
                             : <>Variables: {'{{number}}'}, {'{{title}}'}, {'{{repo}}'}, {'{{author}}'}, {'{{url}}'}</>
                           }
                         </p>
@@ -1041,6 +1127,39 @@ Post the tweet as a comment.`}
                       <TicketCheck className="w-4 h-4 text-green-400" />
                       <span className="text-sm">JIRA Transition</span>
                     </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.outputLinearComment}
+                        onChange={(e) => setFormData({ ...formData, outputLinearComment: e.target.checked })}
+                        className="w-4 h-4 rounded border-border"
+                      />
+                      <LinearIcon className="w-4 h-4 text-indigo-400" />
+                      <span className="text-sm">Linear Comment</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.outputLinearTransition}
+                        onChange={(e) => setFormData({ ...formData, outputLinearTransition: e.target.checked })}
+                        className="w-4 h-4 rounded border-border"
+                      />
+                      <LinearIcon className="w-4 h-4 text-green-400" />
+                      <span className="text-sm">Linear Transition</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.outputLinearCreateIssue}
+                        onChange={(e) => setFormData({ ...formData, outputLinearCreateIssue: e.target.checked })}
+                        className="w-4 h-4 rounded border-border"
+                      />
+                      <LinearIcon className="w-4 h-4 text-blue-400" />
+                      <span className="text-sm">Linear Create Issue</span>
+                    </label>
                   </div>
 
                   {/* JIRA transition target */}
@@ -1056,6 +1175,23 @@ Post the tweet as a comment.`}
                       />
                       <p className="text-xs text-muted-foreground mt-1">
                         The target JIRA status name (e.g., &quot;Done&quot;, &quot;In Review&quot;, &quot;Closed&quot;)
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Linear transition target */}
+                  {formData.outputLinearTransition && (
+                    <div className="mt-3">
+                      <label className="block text-sm font-medium mb-2">Linear Transition To Status</label>
+                      <input
+                        type="text"
+                        value={formData.linearTransitionTarget}
+                        onChange={(e) => setFormData({ ...formData, linearTransitionTarget: e.target.value })}
+                        placeholder="Done"
+                        className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        The target Linear status name (e.g., &quot;Done&quot;, &quot;In Review&quot;, &quot;Cancelled&quot;)
                       </p>
                     </div>
                   )}

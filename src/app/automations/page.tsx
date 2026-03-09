@@ -117,6 +117,134 @@ const SCHEDULE_PRESETS = [
   { value: '1440', label: 'Daily', minutes: 1440 },
 ];
 
+// Backlog Progress component for Linear automations
+function BacklogProgress({ automationId }: { automationId: string }) {
+  const [status, setStatus] = useState<{
+    kanban?: { backlog: number; planned: number; ongoing: number; done: number; total: number };
+    queue?: { total: number; pending: number; inProgress: number; completed: number; failed: number; skipped: number };
+  } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+
+  const fetchStatus = useCallback(async () => {
+    if (!isElectron()) return;
+    try {
+      const result = await window.electronAPI?.automation?.getBacklogStatus?.(automationId);
+      if (result?.success) {
+        setStatus({ kanban: result.kanban, queue: result.queue });
+      }
+    } catch {
+      // Ignore
+    }
+  }, [automationId]);
+
+  useEffect(() => {
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 10000); // Refresh every 10s
+    return () => clearInterval(interval);
+  }, [fetchStatus]);
+
+  const handleStartBacklog = async () => {
+    if (!isElectron()) return;
+    setStarting(true);
+    try {
+      await window.electronAPI?.automation?.startBacklog?.(automationId);
+      setTimeout(fetchStatus, 3000); // Refresh after poll completes
+    } catch {
+      // Ignore
+    }
+    setStarting(false);
+  };
+
+  const handleRetryFailed = async () => {
+    if (!isElectron()) return;
+    setRetrying(true);
+    try {
+      await window.electronAPI?.automation?.retryFailed?.(automationId);
+      await fetchStatus();
+    } catch {
+      // Ignore
+    }
+    setRetrying(false);
+  };
+
+  const kanban = status?.kanban;
+  const queue = status?.queue;
+  const total = kanban?.total || 0;
+  const done = kanban?.done || 0;
+  const progressPct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+          <LinearIcon className="w-3 h-3" />
+          Backlog Progress
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={handleStartBacklog}
+            disabled={starting}
+            className="px-2 py-0.5 text-[10px] bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 rounded transition-colors disabled:opacity-50"
+          >
+            {starting ? 'Polling...' : 'Start Backlog'}
+          </button>
+          {(queue?.failed || 0) > 0 && (
+            <button
+              onClick={handleRetryFailed}
+              disabled={retrying}
+              className="px-2 py-0.5 text-[10px] bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 rounded transition-colors disabled:opacity-50"
+            >
+              {retrying ? 'Retrying...' : `Retry ${queue?.failed} failed`}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {total > 0 && (
+        <>
+          {/* Progress bar */}
+          <div className="w-full h-2 bg-secondary rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+
+          {/* Stats */}
+          <div className="flex flex-wrap gap-3 text-[10px]">
+            <span className="text-muted-foreground">
+              {done}/{total} ({progressPct}%)
+            </span>
+            {(kanban?.backlog || 0) > 0 && (
+              <span className="text-zinc-400">Backlog: {kanban?.backlog}</span>
+            )}
+            {(kanban?.planned || 0) > 0 && (
+              <span className="text-blue-400">Planned: {kanban?.planned}</span>
+            )}
+            {(kanban?.ongoing || 0) > 0 && (
+              <span className="text-yellow-400">Ongoing: {kanban?.ongoing}</span>
+            )}
+            {(kanban?.done || 0) > 0 && (
+              <span className="text-green-400">Done: {kanban?.done}</span>
+            )}
+            {(queue?.failed || 0) > 0 && (
+              <span className="text-red-400">Failed: {queue?.failed}</span>
+            )}
+          </div>
+        </>
+      )}
+
+      {total === 0 && !loading && (
+        <div className="text-[10px] text-muted-foreground/50">
+          No Linear tasks in kanban yet. Click &quot;Start Backlog&quot; to poll and populate.
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AutomationsPage() {
   const [automations, setAutomations] = useState<Automation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -165,6 +293,9 @@ export default function AutomationsPage() {
     linearProjectName: '',
     linearFilter: '',
     outputTemplate: '',
+    queueEnabled: false,
+    queueMode: 'sequential' as 'parallel' | 'sequential' | 'concurrent',
+    queueMaxConcurrent: 1,
   });
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -252,6 +383,9 @@ export default function AutomationsPage() {
         outputLinearTransition: formData.outputLinearTransition ? formData.linearTransitionTarget : undefined,
         outputLinearCreateIssue: formData.outputLinearCreateIssue,
         outputTemplate: formData.outputTemplate || undefined,
+        queueMode: formData.queueEnabled ? formData.queueMode : undefined,
+        queueMaxConcurrent: formData.queueEnabled && formData.queueMode === 'concurrent' ? formData.queueMaxConcurrent : undefined,
+        queueAutoAdvance: formData.queueEnabled ? true : undefined,
       } as Record<string, unknown>);
 
       if (result?.success) {
@@ -284,6 +418,9 @@ export default function AutomationsPage() {
           linearProjectName: '',
           linearFilter: '',
           outputTemplate: '',
+          queueEnabled: false,
+          queueMode: 'sequential',
+          queueMaxConcurrent: 1,
         });
         await loadAutomations();
         setToast({ message: 'Automation created successfully', type: 'success' });
@@ -758,6 +895,11 @@ export default function AutomationsPage() {
                               </div>
                             )}
 
+                            {/* Linear Backlog Progress */}
+                            {automation.source.type === 'linear' && (
+                              <BacklogProgress automationId={automation.id} />
+                            )}
+
                             {/* Metadata */}
                             <div className="flex flex-wrap gap-4 text-[10px] text-muted-foreground/60 pt-2 border-t border-border/30">
                               <span>ID: {automation.id}</span>
@@ -999,6 +1141,55 @@ export default function AutomationsPage() {
                       </p>
                     </div>
                   </>
+                )}
+
+                {/* Queue Config (for Linear source) */}
+                {formData.sourceType === 'linear' && (
+                  <div className="space-y-3 p-3 bg-secondary/50 rounded-lg">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.queueEnabled}
+                        onChange={(e) => setFormData({ ...formData, queueEnabled: e.target.checked })}
+                        className="rounded"
+                      />
+                      <span className="text-sm font-medium">Enable Queue Mode</span>
+                    </label>
+                    <p className="text-xs text-muted-foreground">
+                      Queue mode processes backlog items sequentially via the kanban board, auto-advancing to the next item when one completes.
+                    </p>
+
+                    {formData.queueEnabled && (
+                      <>
+                        <div>
+                          <label className="block text-xs font-medium mb-1.5">Processing Mode</label>
+                          <select
+                            value={formData.queueMode}
+                            onChange={(e) => setFormData({ ...formData, queueMode: e.target.value as typeof formData.queueMode })}
+                            className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm"
+                          >
+                            <option value="sequential">Sequential (one at a time)</option>
+                            <option value="concurrent">Concurrent (multiple agents)</option>
+                            <option value="parallel">Parallel (all at once)</option>
+                          </select>
+                        </div>
+
+                        {formData.queueMode === 'concurrent' && (
+                          <div>
+                            <label className="block text-xs font-medium mb-1.5">Max Concurrent Agents</label>
+                            <input
+                              type="number"
+                              min={1}
+                              max={5}
+                              value={formData.queueMaxConcurrent}
+                              onChange={(e) => setFormData({ ...formData, queueMaxConcurrent: parseInt(e.target.value) || 1 })}
+                              className="w-24 px-3 py-2 bg-secondary border border-border rounded-lg text-sm"
+                            />
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
                 )}
 
                 {/* Schedule */}

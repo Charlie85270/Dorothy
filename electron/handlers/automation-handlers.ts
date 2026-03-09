@@ -49,6 +49,11 @@ interface Automation {
     enabled: boolean;
     template?: string;
   }>;
+  queue?: {
+    mode: 'parallel' | 'sequential' | 'concurrent';
+    maxConcurrent?: number;
+    autoAdvance: boolean;
+  };
 }
 
 interface AutomationRun {
@@ -399,6 +404,9 @@ export function registerAutomationHandlers(): void {
     outputLinearTransition?: string; // Target status name
     outputLinearCreateIssue?: boolean;
     outputTemplate?: string;
+    queueMode?: 'parallel' | 'sequential' | 'concurrent';
+    queueMaxConcurrent?: number;
+    queueAutoAdvance?: boolean;
   }) => {
     try {
       const automations = loadAutomations();
@@ -466,6 +474,13 @@ export function registerAutomationHandlers(): void {
           provider: getDefaultProvider(),
         },
         outputs,
+        ...(params.queueMode ? {
+          queue: {
+            mode: params.queueMode,
+            maxConcurrent: params.queueMaxConcurrent || 1,
+            autoAdvance: params.queueAutoAdvance ?? true,
+          },
+        } : {}),
       };
 
       automations.push(newAutomation);
@@ -572,6 +587,131 @@ export function registerAutomationHandlers(): void {
     } catch (err) {
       console.error('Error running automation:', err);
       return { success: false, error: err instanceof Error ? err.message : 'Failed to run automation' };
+    }
+  });
+
+  // Start backlog processing: poll + populate kanban + move first N items to planned
+  ipcMain.handle('automation:startBacklog', async (_event, id: string) => {
+    try {
+      const automations = loadAutomations();
+      const automation = automations.find(a => a.id === id);
+      if (!automation) {
+        return { success: false, error: 'Automation not found' };
+      }
+
+      // Run the automation script to poll and populate kanban
+      const scriptPath = path.join(os.homedir(), '.dorothy', 'scripts', `automation-${id}.sh`);
+      if (!fs.existsSync(scriptPath)) {
+        return { success: false, error: 'Automation script not found. Save the automation first.' };
+      }
+
+      // Execute the poll synchronously to populate kanban
+      const pollProc = spawn('bash', [scriptPath], {
+        detached: true,
+        stdio: 'ignore',
+      });
+      pollProc.unref();
+
+      // Read kanban tasks to count Linear items
+      const kanbanFile = path.join(os.homedir(), '.dorothy', 'kanban-tasks.json');
+      let linearBacklogCount = 0;
+      if (fs.existsSync(kanbanFile)) {
+        try {
+          const tasks = JSON.parse(fs.readFileSync(kanbanFile, 'utf-8'));
+          linearBacklogCount = tasks.filter(
+            (t: { column: string; labels?: string[] }) =>
+              t.column === 'backlog' && t.labels?.includes('linear')
+          ).length;
+        } catch {
+          // Ignore
+        }
+      }
+
+      return {
+        success: true,
+        message: 'Backlog poll triggered. Items will appear on the kanban board.',
+        backlogCount: linearBacklogCount,
+      };
+    } catch (err) {
+      console.error('Error starting backlog:', err);
+      return { success: false, error: err instanceof Error ? err.message : 'Failed to start backlog' };
+    }
+  });
+
+  // Get backlog status for an automation
+  ipcMain.handle('automation:getBacklogStatus', async (_event, id: string) => {
+    try {
+      const kanbanFile = path.join(os.homedir(), '.dorothy', 'kanban-tasks.json');
+      const queueFile = path.join(os.homedir(), '.dorothy', 'automation-queue.json');
+
+      let tasks: Array<{ column: string; labels?: string[]; title: string; assignedAgentId: string | null }> = [];
+      if (fs.existsSync(kanbanFile)) {
+        tasks = JSON.parse(fs.readFileSync(kanbanFile, 'utf-8'));
+      }
+
+      const linearTasks = tasks.filter(t => t.labels?.includes('linear'));
+      const backlog = linearTasks.filter(t => t.column === 'backlog').length;
+      const planned = linearTasks.filter(t => t.column === 'planned').length;
+      const ongoing = linearTasks.filter(t => t.column === 'ongoing').length;
+      const done = linearTasks.filter(t => t.column === 'done').length;
+
+      // Read queue state if available
+      let queueStats = { total: 0, pending: 0, inProgress: 0, completed: 0, failed: 0, skipped: 0 };
+      if (fs.existsSync(queueFile)) {
+        try {
+          const queueState = JSON.parse(fs.readFileSync(queueFile, 'utf-8'));
+          const items = (queueState.items || []).filter((i: { automationId: string }) => i.automationId === id);
+          queueStats = {
+            total: items.length,
+            pending: items.filter((i: { status: string }) => i.status === 'pending').length,
+            inProgress: items.filter((i: { status: string }) => i.status === 'in_progress').length,
+            completed: items.filter((i: { status: string }) => i.status === 'completed').length,
+            failed: items.filter((i: { status: string }) => i.status === 'failed').length,
+            skipped: items.filter((i: { status: string }) => i.status === 'skipped').length,
+          };
+        } catch {
+          // Ignore
+        }
+      }
+
+      return {
+        success: true,
+        kanban: { backlog, planned, ongoing, done, total: linearTasks.length },
+        queue: queueStats,
+      };
+    } catch (err) {
+      console.error('Error getting backlog status:', err);
+      return { success: false, error: err instanceof Error ? err.message : 'Failed to get backlog status' };
+    }
+  });
+
+  // Retry failed queue items
+  ipcMain.handle('automation:retryFailed', async (_event, id: string) => {
+    try {
+      const queueFile = path.join(os.homedir(), '.dorothy', 'automation-queue.json');
+      if (!fs.existsSync(queueFile)) {
+        return { success: true, retried: 0 };
+      }
+
+      const queueState = JSON.parse(fs.readFileSync(queueFile, 'utf-8'));
+      let retried = 0;
+
+      for (const item of queueState.items) {
+        if (item.automationId === id && item.status === 'failed' && item.retryCount < (item.maxRetries || 2)) {
+          item.status = 'pending';
+          item.retryCount = (item.retryCount || 0) + 1;
+          item.error = undefined;
+          retried++;
+        }
+      }
+
+      queueState.lastUpdated = new Date().toISOString();
+      fs.writeFileSync(queueFile, JSON.stringify(queueState, null, 2));
+
+      return { success: true, retried };
+    } catch (err) {
+      console.error('Error retrying failed items:', err);
+      return { success: false, error: err instanceof Error ? err.message : 'Failed to retry' };
     }
   });
 

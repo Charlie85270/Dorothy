@@ -612,6 +612,17 @@ button, a, input, textarea, select {
 }
 
 /* ============================================
+   WINDOW DRAG REGIONS (macOS titleBarStyle: hiddenInset)
+   ============================================ */
+.window-drag {
+  -webkit-app-region: drag;
+}
+
+.window-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* ============================================
    XTERM TERMINAL SIZING
    ============================================ */
 /* Let xterm + FitAddon manage their own dimensions.

@@ -69,8 +69,10 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
         transition={{ duration: 0.2, ease: 'easeInOut' }}
         className="fixed left-0 top-0 h-screen bg-card border-r-2 border-r-primary/30 flex-col z-50 hidden lg:flex"
       >
-        {/* Logo - mt-7 accounts for macOS window controls */}
-        <div className="h-16 flex items-center px-4 border-b border-border mt-7">
+        {/* Drag region - covers macOS traffic light area */}
+        <div className="window-drag h-7 shrink-0" />
+        {/* Logo */}
+        <div className="h-16 flex items-center px-4 border-b border-border">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0">
               <img src="/dorothy-without-text.png" alt="Dorothy" className="w-full h-full object-cover scale-150" />

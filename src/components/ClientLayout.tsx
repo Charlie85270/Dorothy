@@ -157,6 +157,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         transition={{ duration: 0.2, ease: 'easeInOut' }}
         className="min-h-screen pt-16 lg:pt-0 p-4 lg:p-6 pb-6"
       >
+        {/* Top drag bar for window dragging (desktop only) */}
+        <div className="window-drag hidden lg:block h-7 -mx-6 -mt-6 mb-0" />
         {children}
       </motion.main>
 

@@ -77,7 +77,8 @@ export function startApiServer(
   slackResponseThreadTs: string | null,
   handleStatusChangeNotificationCallback: (agent: AgentStatus, newStatus: string) => void,
   sendNotificationCallback: (title: string, body: string, agentId?: string) => void,
-  initAgentPtyCallback: (agent: AgentStatus) => Promise<string>
+  initAgentPtyCallback: (agent: AgentStatus) => Promise<string>,
+  getAppSettings?: () => AppSettings
 ) {
   if (apiServer) return;
 
@@ -87,6 +88,7 @@ export function startApiServer(
   const ctx: RouteContext = {
     mainWindow,
     appSettings,
+    getAppSettings: getAppSettings || (() => appSettings),
     getTelegramBot,
     getSlackApp,
     slackResponseChannel,

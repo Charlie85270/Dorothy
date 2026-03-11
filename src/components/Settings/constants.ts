@@ -9,6 +9,7 @@ import {
   Terminal,
   Twitter,
   Cloud,
+  Plug,
 } from 'lucide-react';
 import { SlackIcon } from './SlackIcon';
 import { JiraIcon } from './JiraIcon';
@@ -30,6 +31,7 @@ export const SECTIONS: { id: SettingsSection; label: string; icon: React.Compone
   { id: 'google-workspace', label: 'Google Workspace', icon: Cloud },
   { id: 'permissions', label: 'Permissions', icon: Shield },
   { id: 'skills', label: 'Skills & Plugins', icon: Sparkles },
+  { id: 'mcp', label: 'Custom MCP', icon: Plug },
   { id: 'cli', label: 'CLI Paths', icon: Terminal },
   { id: 'system', label: 'System', icon: Monitor },
 ];
@@ -38,6 +40,7 @@ export const DEFAULT_APP_SETTINGS = {
   notificationsEnabled: true,
   notifyOnWaiting: true,
   notifyOnComplete: true,
+  notifyOnStop: true,
   notifyOnError: true,
   telegramEnabled: false,
   telegramBotToken: '',
@@ -71,6 +74,9 @@ export const DEFAULT_APP_SETTINGS = {
   obsidianVaultPaths: [] as string[],
   terminalFontSize: 11,
   terminalTheme: 'dark' as const,
+  statusLineEnabled: false,
+  favoriteProjects: [] as string[],
+  hiddenProjects: [] as string[],
   cliPaths: {
     claude: '',
     codex: '',

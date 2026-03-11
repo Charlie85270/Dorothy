@@ -48,6 +48,11 @@ import {
   writeProgrammaticInput,
 } from './core/pty-manager';
 
+import { initTray, destroyTray } from './core/tray-manager';
+import { broadcastToAllWindows } from './utils/broadcast';
+import { extractStatusLine } from './utils/ansi';
+import { scheduleTick } from './utils/agents-tick';
+
 // Services
 import { startApiServer } from './services/api-server';
 import {
@@ -110,6 +115,7 @@ function loadAppSettings(): AppSettings {
     notificationsEnabled: true,
     notifyOnWaiting: true,
     notifyOnComplete: true,
+    notifyOnStop: true,
     notifyOnError: true,
     telegramEnabled: false,
     telegramBotToken: '',
@@ -281,7 +287,8 @@ function initApiServer() {
       getMainWindow(),
       handleStatusChangeNotificationWrapper,
       saveAgents
-    )
+    ),
+    () => appSettings
   );
 }
 
@@ -313,6 +320,9 @@ app.whenReady().then(async () => {
 
   // Set the main window reference in utils
   setUtilsMainWindow(getMainWindow());
+
+  // Initialize macOS menu bar tray with custom popup panel
+  initTray();
 
   // Register all IPC handlers
   const deps = createIpcDependencies();
@@ -348,7 +358,7 @@ app.whenReady().then(async () => {
         agent.lastActivity = new Date().toISOString();
         saveAgents();
 
-        getMainWindow()?.webContents.send('agent:status', {
+        broadcastToAllWindows('agent:status', {
           type: 'status',
           agentId,
           status: 'idle',
@@ -445,14 +455,16 @@ app.whenReady().then(async () => {
         if (agent) {
           agent.output.push(data);
           agent.lastActivity = new Date().toISOString();
+          agent.statusLine = extractStatusLine(agent.output);
         }
-        getMainWindow()?.webContents.send('agent:output', {
+        broadcastToAllWindows('agent:output', {
           type: 'output',
           agentId: id,
           ptyId,
           data,
           timestamp: new Date().toISOString(),
         });
+        scheduleTick();
       });
 
       ptyProcess.onExit(({ exitCode }) => {
@@ -465,19 +477,20 @@ app.whenReady().then(async () => {
         }
         ptyProcesses.delete(ptyId);
         // Emit status event so kanban sync can detect completion
-        getMainWindow()?.webContents.send('agent:status', {
+        broadcastToAllWindows('agent:status', {
           type: 'status',
           agentId: id,
           status: exitCode === 0 ? 'completed' : 'error',
           timestamp: new Date().toISOString(),
         });
-        getMainWindow()?.webContents.send('agent:complete', {
+        broadcastToAllWindows('agent:complete', {
           type: 'complete',
           agentId: id,
           ptyId,
           exitCode,
           timestamp: new Date().toISOString(),
         });
+        scheduleTick();
       });
 
       return status;
@@ -584,6 +597,7 @@ app.on('activate', () => {
 // Save agents and kill all PTY processes before quitting
 app.on('before-quit', () => {
   console.log('App quitting, saving agents and killing all PTY processes...');
+  destroyTray();
   saveAgents();
   killAllPty();
   closeVaultDb();

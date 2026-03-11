@@ -5,6 +5,7 @@ import Sidebar from './Sidebar';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, Download, ExternalLink, RotateCw, Loader2 } from 'lucide-react';
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -59,6 +60,17 @@ function loadVaultReadDocs(): Set<string> {
 }
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+
+  // Tray panel is a standalone Electron popup — render without sidebar/chrome
+  if (pathname?.startsWith('/tray-panel')) {
+    return <>{children}</>;
+  }
+
+  return <ClientLayoutInner>{children}</ClientLayoutInner>;
+}
+
+function ClientLayoutInner({ children }: { children: React.ReactNode }) {
   const { sidebarCollapsed, mobileMenuOpen, setMobileMenuOpen, darkMode, setDarkMode, setVaultUnreadCount } = useStore();
   const isMobile = useIsMobile();
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);

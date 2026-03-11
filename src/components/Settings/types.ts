@@ -39,6 +39,7 @@ export interface AppSettings {
   notificationsEnabled: boolean;
   notifyOnWaiting: boolean;
   notifyOnComplete: boolean;
+  notifyOnStop: boolean;
   notifyOnError: boolean;
   telegramEnabled: boolean;
   telegramBotToken: string;
@@ -71,8 +72,18 @@ export interface AppSettings {
   cliPaths: CLIPaths;
   defaultProvider?: string;
   obsidianVaultPaths?: string[];
+  notificationSounds?: {
+    waiting?: string;
+    complete?: string;
+    stop?: string;
+    error?: string;
+  };
   terminalFontSize?: number;
   terminalTheme?: 'dark' | 'light';
+  statusLineEnabled?: boolean;
+  favoriteProjects?: string[];
+  hiddenProjects?: string[];
+  defaultProjectPath?: string;
 }
 
-export type SettingsSection = 'general' | 'terminal' | 'git' | 'notifications' | 'telegram' | 'slack' | 'jira' | 'socialdata' | 'tasmania' | 'google-workspace' | 'obsidian' | 'permissions' | 'skills' | 'cli' | 'system';
+export type SettingsSection = 'general' | 'terminal' | 'git' | 'notifications' | 'telegram' | 'slack' | 'jira' | 'socialdata' | 'tasmania' | 'google-workspace' | 'obsidian' | 'permissions' | 'skills' | 'mcp' | 'cli' | 'system';

@@ -18,6 +18,8 @@ API_URL="http://127.0.0.1:31415"
 # Get agent ID from environment or use session ID
 AGENT_ID="${CLAUDE_AGENT_ID:-$SESSION_ID}"
 
+echo "[$(date)] NOTIFICATION hook. AGENT_ID=${CLAUDE_AGENT_ID:-unset} TYPE=$NOTIFICATION_TYPE" >> /tmp/dorothy-hooks.log
+
 # Skip if no notification type
 if [ -z "$NOTIFICATION_TYPE" ]; then
   echo '{"continue":true,"suppressOutput":true}'
@@ -31,22 +33,18 @@ if ! curl -s --connect-timeout 1 "$API_URL/api/health" > /dev/null 2>&1; then
 fi
 
 # Forward notification to our API
-curl -s -X POST "$API_URL/api/hooks/notification" \
+curl -s --max-time 3 -X POST "$API_URL/api/hooks/notification" \
   -H "Content-Type: application/json" \
   -d "{\"agent_id\": \"$AGENT_ID\", \"session_id\": \"$SESSION_ID\", \"type\": \"$NOTIFICATION_TYPE\", \"title\": $(echo "$TITLE" | jq -Rs .), \"message\": $(echo "$MESSAGE" | jq -Rs .)}" \
-  > /dev/null 2>&1 &
+  > /dev/null 2>&1
 
-# If it's a permission prompt or idle prompt, update status to indicate waiting
-if [ "$NOTIFICATION_TYPE" = "permission_prompt" ]; then
-  curl -s -X POST "$API_URL/api/hooks/status" \
-    -H "Content-Type: application/json" \
-    -d "{\"agent_id\": \"$AGENT_ID\", \"session_id\": \"$SESSION_ID\", \"status\": \"waiting\", \"waiting_reason\": \"permission\"}" \
-    > /dev/null 2>&1 &
-elif [ "$NOTIFICATION_TYPE" = "idle_prompt" ]; then
-  curl -s -X POST "$API_URL/api/hooks/status" \
+# Permission prompts are handled by the dedicated PermissionRequest hook.
+# Idle prompts still set waiting here since there's no dedicated hook for them.
+if [ "$NOTIFICATION_TYPE" = "idle_prompt" ]; then
+  curl -s --max-time 3 -X POST "$API_URL/api/hooks/status" \
     -H "Content-Type: application/json" \
     -d "{\"agent_id\": \"$AGENT_ID\", \"session_id\": \"$SESSION_ID\", \"status\": \"waiting\", \"waiting_reason\": \"idle\"}" \
-    > /dev/null 2>&1 &
+    > /dev/null 2>&1
 fi
 
 # Output hook response

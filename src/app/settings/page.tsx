@@ -21,6 +21,7 @@ import {
   GoogleWorkspaceSection,
   PermissionsSection,
   SkillsSection,
+  McpSection,
   CLIPathsSection,
   SystemSection,
   SECTIONS,
@@ -136,6 +137,8 @@ function SettingsPageInner() {
         return <PermissionsSection settings={settings} />;
       case 'skills':
         return <SkillsSection skills={skills} />;
+      case 'mcp':
+        return <McpSection />;
       case 'cli':
         return (
           <CLIPathsSection

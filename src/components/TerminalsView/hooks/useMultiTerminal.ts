@@ -7,6 +7,7 @@ import type { AgentStatus } from '@/types/electron';
 import { isElectron } from '@/hooks/useElectron';
 import { TERMINAL_CONFIG } from '../constants';
 import { getTerminalTheme } from '@/components/AgentWorld/constants';
+import { attachShiftEnterHandler } from '@/lib/terminal';
 
 interface TerminalEntry {
   terminal: Terminal;
@@ -189,11 +190,22 @@ export function useMultiTerminal({ agents, initialFontSize, onFontSizeChange, th
       setTimeout(() => safeFit(agentId, entry), 50);
       setTimeout(() => safeFit(agentId, entry), 200);
 
+      attachShiftEnterHandler(term, (data) => {
+        if (isElectron()) {
+          window.electronAPI!.agent.sendInput({ id: agentId, input: data }).catch(() => {});
+        }
+      });
+
       // Forward keyboard input from xterm to PTY
-      // Filter out xterm focus in/out reports (\x1b[I / \x1b[O) that Claude Code
-      // requests via DECSET 1004 — these should not be forwarded as user input.
+      // Filter out terminal query responses (DA, CPR, focus) that xterm.js emits
+      // automatically — these must not be forwarded as user input.
       term.onData((data) => {
-        const cleaned = data.replace(/\x1b\[(?:I|O)/g, '');
+        if (/^(\x1b\[\?[\d;]*c|\d+;\d+c)+$/.test(data)) return;
+        const cleaned = data
+          .replace(/\x1b\[\?[\d;]*c/g, '')     // DA response: \x1b[?1;2c
+          .replace(/\x1b\[\d+;\d+R/g, '')       // CPR response: \x1b[row;colR
+          .replace(/\x1b\[(?:I|O)/g, '')         // Focus in/out: \x1b[I / \x1b[O
+          .replace(/\d+;\d+c/g, '');             // Bare DA fragments: 1;2c
         if (!cleaned) return;
         if (isElectron()) {
           window.electronAPI!.agent.sendInput({ id: agentId, input: cleaned }).catch(() => {});

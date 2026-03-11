@@ -80,6 +80,8 @@ export default function NewChatModal({
   open,
   onClose,
   onSubmit,
+  onUpdate,
+  editAgent,
   projects,
   onBrowseFolder,
   installedSkills = [],
@@ -88,6 +90,7 @@ export default function NewChatModal({
   initialProjectPath,
   initialStep,
 }: NewChatModalProps) {
+  const isEditMode = !!editAgent;
   // Step navigation
   const [step, setStep] = useState(initialStep || 1);
 
@@ -97,6 +100,9 @@ export default function NewChatModal({
   const [showSecondaryProject, setShowSecondaryProject] = useState(false);
   const [selectedSecondaryProject, setSelectedSecondaryProject] = useState<string>('');
   const [customSecondaryPath, setCustomSecondaryPath] = useState('');
+  const [favoriteProjects, setFavoriteProjects] = useState<string[]>([]);
+  const [hiddenProjects, setHiddenProjects] = useState<string[]>([]);
+  const [defaultProjectPath, setDefaultProjectPath] = useState<string>('');
 
   // Step 2: Model
   const [provider, setProvider] = useState<AgentProvider>('claude');
@@ -141,29 +147,67 @@ export default function NewChatModal({
     return set;
   }, [installedSkillsByProvider, provider]);
 
-  // Reset form when modal opens
+  // Reset form when modal opens (or pre-populate in edit mode)
   useEffect(() => {
     if (open) {
-      setStep(initialStep || 1);
-      setSelectedProject(initialProjectPath || '');
-      setCustomPath('');
-      setSelectedSkills([]);
-      setPrompt('');
-      setUseWorktree(false);
-      setBranchName('');
-      agentPersonaRef.current = { character: 'robot', name: '' };
-      setShowSecondaryProject(false);
-      setSelectedSecondaryProject('');
-      setCustomSecondaryPath('');
-      setSkipPermissions(false);
-      setProvider('claude');
-      setLocalModel('');
-      setSelectedObsidianVaults([]);
-      setDetectedVault(null);
+      if (editAgent) {
+        // Edit mode: pre-populate from existing agent
+        setStep(initialStep || 1);
+        setSelectedProject(editAgent.projectPath);
+        setCustomPath('');
+        setSelectedSkills(editAgent.skills || []);
+        setPrompt('');
+        setUseWorktree(!!editAgent.branchName);
+        setBranchName(editAgent.branchName || '');
+        agentPersonaRef.current = {
+          character: editAgent.character || 'robot',
+          name: editAgent.name || '',
+        };
+        setShowSecondaryProject(!!editAgent.secondaryProjectPath);
+        setSelectedSecondaryProject(editAgent.secondaryProjectPath || '');
+        setCustomSecondaryPath('');
+        setSkipPermissions(editAgent.skipPermissions || false);
+        setProvider(editAgent.provider || 'claude');
+        setLocalModel(editAgent.localModel || '');
+        setSelectedObsidianVaults(editAgent.obsidianVaultPaths || []);
+        setDetectedVault(null);
+      } else {
+        // Create mode: reset everything
+        setStep(initialStep || 1);
+        setSelectedProject(initialProjectPath || '');
+        setCustomPath('');
+        setSelectedSkills([]);
+        setPrompt('');
+        setUseWorktree(false);
+        setBranchName('');
+        agentPersonaRef.current = { character: 'robot', name: '' };
+        setShowSecondaryProject(false);
+        setSelectedSecondaryProject('');
+        setCustomSecondaryPath('');
+        setSkipPermissions(false);
+        setProvider('claude');
+        setLocalModel('');
+        setSelectedObsidianVaults([]);
+        setDetectedVault(null);
+      }
 
-      // Check if Tasmania is enabled in app settings
+      // Load app settings (Tasmania, favorites, default project)
       window.electronAPI?.appSettings?.get().then((settings) => {
         setTasmaniaEnabled(settings?.tasmaniaEnabled || false);
+        if (Array.isArray(settings?.favoriteProjects)) {
+          setFavoriteProjects(settings.favoriteProjects);
+        }
+        if (Array.isArray(settings?.hiddenProjects)) {
+          setHiddenProjects(settings.hiddenProjects);
+        }
+        // Store default project path for sorting
+        if (settings?.defaultProjectPath) {
+          setDefaultProjectPath(settings.defaultProjectPath);
+        }
+        // Auto-select default project if no project pre-selected
+        if (!initialProjectPath && !editAgent && settings?.defaultProjectPath) {
+          setSelectedProject(settings.defaultProjectPath);
+        }
       });
 
       // Load registered obsidian vaults
@@ -187,7 +231,7 @@ export default function NewChatModal({
         if (byProvider) setInstalledSkillsByProvider(byProvider);
       });
     }
-  }, [open, initialProjectPath, initialStep]);
+  }, [open, initialProjectPath, initialStep, editAgent]);
 
   // Clear selected skills when provider changes
   useEffect(() => {
@@ -269,15 +313,28 @@ export default function NewChatModal({
     if (!projectPath) return;
     if (useWorktree && !branchName.trim()) return;
 
-    const finalPrompt = prompt.trim()
-      || (selectedSkills.length > 0 ? `Use the following skills: ${selectedSkills.join(', ')}` : '');
-    const worktreeConfig = useWorktree ? { enabled: true, branchName: branchName.trim() } : undefined;
-
     const { character: agentCharacter, name: agentName } = agentPersonaRef.current;
     const projectName = projectPath.split('/').pop() || 'project';
     const finalName = agentName.trim() || `${CHARACTER_OPTIONS.find(c => c.id === agentCharacter)?.name || 'Agent'} on ${projectName}`;
-
     const secondaryPath = showSecondaryProject ? (selectedSecondaryProject || customSecondaryPath) : undefined;
+
+    if (isEditMode && editAgent && onUpdate) {
+      // Edit mode: update existing agent
+      onUpdate(editAgent.id, {
+        skills: selectedSkills,
+        secondaryProjectPath: secondaryPath || null,
+        skipPermissions,
+        name: finalName,
+        character: agentCharacter,
+      });
+      onClose();
+      return;
+    }
+
+    // Create mode
+    const finalPrompt = prompt.trim()
+      || (selectedSkills.length > 0 ? `Use the following skills: ${selectedSkills.join(', ')}` : '');
+    const worktreeConfig = useWorktree ? { enabled: true, branchName: branchName.trim() } : undefined;
 
     onSubmit(projectPath, selectedSkills, finalPrompt, model, worktreeConfig, agentCharacter, finalName, secondaryPath, skipPermissions, provider, localModel, selectedObsidianVaults.length > 0 ? selectedObsidianVaults : undefined);
 
@@ -297,7 +354,7 @@ export default function NewChatModal({
     setProvider('claude');
     setLocalModel('');
     setSelectedObsidianVaults([]);
-  }, [projectPath, prompt, selectedSkills, useWorktree, branchName, showSecondaryProject, selectedSecondaryProject, customSecondaryPath, model, skipPermissions, provider, localModel, selectedObsidianVaults, onSubmit]);
+  }, [projectPath, prompt, selectedSkills, useWorktree, branchName, showSecondaryProject, selectedSecondaryProject, customSecondaryPath, model, skipPermissions, provider, localModel, selectedObsidianVaults, onSubmit, isEditMode, editAgent, onUpdate, onClose]);
 
   // Can proceed from current step?
   const canContinue = step === 1 ? !!projectPath : true;
@@ -352,6 +409,9 @@ export default function NewChatModal({
                 customSecondaryPath={customSecondaryPath}
                 onCustomSecondaryPathChange={handleCustomSecondaryPathChange}
                 onClearSecondary={handleClearSecondary}
+                favoriteProjects={favoriteProjects}
+                hiddenProjects={hiddenProjects}
+                defaultProjectPath={defaultProjectPath}
               />
             )}
 
@@ -438,10 +498,23 @@ export default function NewChatModal({
                 <button
                   onClick={handleSubmit}
                   disabled={!canStart}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-accent-green text-white font-medium hover:bg-accent-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                    isEditMode
+                      ? 'bg-foreground text-background hover:bg-foreground/90'
+                      : 'bg-accent-green text-white hover:bg-accent-green/90'
+                  }`}
                 >
-                  <Play className="w-4 h-4" />
-                  Start Agent
+                  {isEditMode ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Save Changes
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-4 h-4" />
+                      Start Agent
+                    </>
+                  )}
                 </button>
               )}
             </div>

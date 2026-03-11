@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, RefreshCw, Download, ExternalLink, CheckCircle, AlertCircle, Loader2, RotateCw } from 'lucide-react';
+import { Settings, RefreshCw, Download, ExternalLink, CheckCircle, AlertCircle, Loader2, RotateCw, BarChart3 } from 'lucide-react';
 import { Toggle } from './Toggle';
 import type { ClaudeInfo, AppSettings } from './types';
 
@@ -178,6 +178,22 @@ export const GeneralSection = ({ info, appSettings, onSaveAppSettings }: General
             <Toggle
               enabled={appSettings.autoCheckUpdates !== false}
               onChange={() => onSaveAppSettings({ autoCheckUpdates: !appSettings.autoCheckUpdates })}
+            />
+          </div>
+
+          <div className="flex items-center justify-between pt-4 border-t border-border">
+            <div className="flex items-start gap-3">
+              <BarChart3 className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Status Line</p>
+                <p className="text-xs text-muted-foreground">
+                  Show a real-time status bar in Claude Code with model, context usage, git branch, session time, and token stats
+                </p>
+              </div>
+            </div>
+            <Toggle
+              enabled={appSettings.statusLineEnabled === true}
+              onChange={() => onSaveAppSettings({ statusLineEnabled: !appSettings.statusLineEnabled })}
             />
           </div>
         </div>

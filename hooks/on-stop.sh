@@ -11,6 +11,8 @@ TRANSCRIPT_PATH=$(echo "$INPUT" | jq -r '.transcript_path // empty')
 STOP_HOOK_ACTIVE=$(echo "$INPUT" | jq -r '.stop_hook_active // false')
 CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
 
+echo "[$(date)] STOP hook. AGENT_ID=${CLAUDE_AGENT_ID:-unset} SESSION_ID=$SESSION_ID STOP_ACTIVE=$STOP_HOOK_ACTIVE" >> /tmp/dorothy-hooks.log
+
 # Don't process if stop hook is already active (prevents loops)
 if [ "$STOP_HOOK_ACTIVE" = "true" ]; then
   echo '{"continue":true,"suppressOutput":true}'
@@ -29,11 +31,18 @@ if ! curl -s --connect-timeout 1 "$API_URL/api/health" > /dev/null 2>&1; then
   exit 0
 fi
 
-# Update agent status to "waiting" (Claude finished responding, waiting for user input)
-curl -s -X POST "$API_URL/api/hooks/status" \
+# Update agent status to "idle" (Claude finished responding, ready for next prompt)
+# "waiting" is reserved for permission prompts / idle prompts that need immediate attention
+RESULT=$(curl -s --max-time 3 -X POST "$API_URL/api/hooks/status" \
   -H "Content-Type: application/json" \
-  -d "{\"agent_id\": \"$AGENT_ID\", \"session_id\": \"$SESSION_ID\", \"status\": \"waiting\"}" \
-  > /dev/null 2>&1 &
+  -d "{\"agent_id\": \"$AGENT_ID\", \"session_id\": \"$SESSION_ID\", \"status\": \"idle\"}" 2>&1)
+echo "[$(date)] STOP curl result: $RESULT" >> /tmp/dorothy-hooks.log
+
+# Send notification that agent finished a response (respects user settings)
+curl -s --max-time 3 -X POST "$API_URL/api/hooks/agent-stopped" \
+  -H "Content-Type: application/json" \
+  -d "{\"agent_id\": \"$AGENT_ID\", \"session_id\": \"$SESSION_ID\"}" \
+  > /dev/null 2>&1
 
 # Capture clean output from transcript for MCP tools
 if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
@@ -45,10 +54,10 @@ if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
     head -c 4000)
 
   if [ -n "$LAST_ASSISTANT_MSG" ]; then
-    curl -s -X POST "$API_URL/api/hooks/output" \
+    curl -s --max-time 3 -X POST "$API_URL/api/hooks/output" \
       -H "Content-Type: application/json" \
       -d "{\"agent_id\": \"$AGENT_ID\", \"session_id\": \"$SESSION_ID\", \"output\": $(echo "$LAST_ASSISTANT_MSG" | jq -Rs .)}" \
-      > /dev/null 2>&1 &
+      > /dev/null 2>&1
   fi
 fi
 

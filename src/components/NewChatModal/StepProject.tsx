@@ -9,6 +9,8 @@ import {
   X,
   Layers,
   Search,
+  Star,
+  Pin,
 } from 'lucide-react';
 import type { Project } from './types';
 
@@ -29,6 +31,9 @@ interface StepProjectProps {
   customSecondaryPath: string;
   onCustomSecondaryPathChange: (path: string) => void;
   onClearSecondary: () => void;
+  favoriteProjects?: string[];
+  hiddenProjects?: string[];
+  defaultProjectPath?: string;
 }
 
 const StepProject = React.memo(function StepProject({
@@ -46,17 +51,38 @@ const StepProject = React.memo(function StepProject({
   customSecondaryPath,
   onCustomSecondaryPathChange,
   onClearSecondary,
+  favoriteProjects = [],
+  hiddenProjects = [],
+  defaultProjectPath,
 }: StepProjectProps) {
   const [search, setSearch] = useState('');
   const [showAll, setShowAll] = useState(false);
 
+  const isFavorite = (project: Project) => favoriteProjects.includes(project.path);
+
   const filteredProjects = useMemo(() => {
-    if (!search) return projects;
-    const q = search.toLowerCase();
-    return projects.filter(
-      (p) => p.name.toLowerCase().includes(q) || p.path.toLowerCase().includes(q)
-    );
-  }, [projects, search]);
+    const checkFav = (p: Project) => favoriteProjects.includes(p.path);
+    const isDefault = (p: Project) => defaultProjectPath === p.path;
+
+    // Filter out hidden projects
+    let list = hiddenProjects.length > 0
+      ? projects.filter(p => !hiddenProjects.includes(p.path))
+      : projects;
+
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter(
+        (p) => p.name.toLowerCase().includes(q) || p.path.toLowerCase().includes(q)
+      );
+    }
+    // Sort: default first, then favorites, then rest
+    list = [...list].sort((a, b) => {
+      const aRank = isDefault(a) ? 0 : checkFav(a) ? 1 : 2;
+      const bRank = isDefault(b) ? 0 : checkFav(b) ? 1 : 2;
+      return aRank - bRank;
+    });
+    return list;
+  }, [projects, search, favoriteProjects, hiddenProjects, defaultProjectPath]);
 
   // When searching, show all results; otherwise cap at INITIAL_VISIBLE unless expanded
   const visibleProjects = search
@@ -109,7 +135,13 @@ const StepProject = React.memo(function StepProject({
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
-                <FolderOpen className="w-4 h-4 text-accent-purple" />
+                {defaultProjectPath === project.path ? (
+                  <Pin className="w-4 h-4 text-yellow-400" />
+                ) : isFavorite(project) ? (
+                  <Star className="w-4 h-4 text-yellow-400 fill-current" />
+                ) : (
+                  <FolderOpen className="w-4 h-4 text-accent-purple" />
+                )}
                 <span className="font-medium">{project.name}</span>
               </div>
               {selectedProject === project.path && (

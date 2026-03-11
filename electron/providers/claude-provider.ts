@@ -190,6 +190,9 @@ export class ClaudeProvider implements CLIProvider {
       { type: 'SessionStart', file: 'session-start.sh', matcher: '*' },
       { type: 'SessionEnd', file: 'session-end.sh', matcher: '*' },
       { type: 'Notification', file: 'notification.sh', matcher: '*' },
+      { type: 'PermissionRequest', file: 'permission-request.sh', matcher: undefined },
+      { type: 'TaskCompleted', file: 'task-completed.sh', matcher: undefined },
+      { type: 'UserPromptSubmit', file: 'user-prompt-submit.sh', matcher: undefined },
     ];
 
     let updated = false;

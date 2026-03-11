@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { X, FolderOpen, Plus, Minus, Sparkles, Wand2, ListTodo, Loader2, Paperclip, FileImage, FileText, File } from 'lucide-react';
+import { X, FolderOpen, Plus, Minus, Sparkles, Wand2, ListTodo, Loader2, Paperclip, FileImage, FileText, File, Star } from 'lucide-react';
 import type { KanbanTaskCreate, TaskAttachment } from '@/types/kanban';
 import { isElectron } from '@/hooks/useElectron';
 
@@ -76,21 +76,46 @@ export function NewTaskModal({ onClose, onCreate }: NewTaskModalProps) {
   const [labelInput, setLabelInput] = useState('');
   const [selectedProjectPath, setSelectedProjectPath] = useState('');
   const [projects, setProjects] = useState<Project[]>([]);
+  const [favoriteProjects, setFavoriteProjects] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Load projects
+  // Load projects + favorites + hidden + default project
   useEffect(() => {
     const loadProjects = async () => {
       if (isElectron() && window.electronAPI?.fs?.listProjects) {
         const projectList = await window.electronAPI.fs.listProjects();
-        setProjects(projectList);
-        if (projectList.length > 0) {
-          setSelectedProjectPath(projectList[0].path);
+
+        // Load app settings for favorites, hidden, and default project
+        const settings = await window.electronAPI?.appSettings?.get();
+        const hidden: string[] = Array.isArray(settings?.hiddenProjects) ? settings.hiddenProjects : [];
+        if (Array.isArray(settings?.favoriteProjects)) {
+          setFavoriteProjects(settings.favoriteProjects);
+        }
+
+        // Filter out hidden projects
+        const favorites: string[] = Array.isArray(settings?.favoriteProjects) ? settings.favoriteProjects : [];
+        const defaultPath = settings?.defaultProjectPath || '';
+        const visibleProjects = projectList
+          .filter((p: Project) => !hidden.includes(p.path))
+          .sort((a: Project, b: Project) => {
+            const aRank = a.path === defaultPath ? 0 : favorites.includes(a.path) ? 1 : 2;
+            const bRank = b.path === defaultPath ? 0 : favorites.includes(b.path) ? 1 : 2;
+            return aRank - bRank;
+          });
+        setProjects(visibleProjects);
+
+        // Use default project if set, otherwise first visible project
+        if (settings?.defaultProjectPath && visibleProjects.some((p: Project) => p.path === settings.defaultProjectPath)) {
+          setSelectedProjectPath(settings.defaultProjectPath);
+        } else if (visibleProjects.length > 0) {
+          setSelectedProjectPath(visibleProjects[0].path);
         }
       }
     };
     loadProjects();
   }, []);
+
+  const isFavoriteProject = (path: string) => favoriteProjects.includes(path);
 
   const handleAddSkill = () => {
     if (skillInput.trim() && !requiredSkills.includes(skillInput.trim())) {
@@ -504,6 +529,30 @@ export function NewTaskModal({ onClose, onCreate }: NewTaskModalProps) {
                 <label className="block text-sm font-medium text-foreground mb-1">
                   Project <span className="text-red-400">*</span>
                 </label>
+
+                {/* Favorite project quick-select badges */}
+                {favoriteProjects.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {projects
+                      .filter((p) => isFavoriteProject(p.path))
+                      .map((p) => (
+                        <button
+                          key={p.path}
+                          type="button"
+                          onClick={() => setSelectedProjectPath(p.path)}
+                          className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-colors ${
+                            selectedProjectPath === p.path
+                              ? 'border-yellow-500/50 bg-yellow-500/10 text-yellow-300'
+                              : 'border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-yellow-500/30'
+                          }`}
+                        >
+                          <Star className="w-3 h-3 text-yellow-400 fill-current" />
+                          {p.name}
+                        </button>
+                      ))}
+                  </div>
+                )}
+
                 <div className="flex gap-2">
                   <select
                     value={selectedProjectPath}
@@ -515,7 +564,7 @@ export function NewTaskModal({ onClose, onCreate }: NewTaskModalProps) {
                     )}
                     {projects.map((p) => (
                       <option key={p.path} value={p.path}>
-                        {p.name}
+                        {isFavoriteProject(p.path) ? `⭐ ${p.name}` : p.name}
                       </option>
                     ))}
                   </select>

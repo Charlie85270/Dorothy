@@ -1,6 +1,6 @@
 #!/bin/bash
 # Session start hook for dorothy
-# Sets agent status to "running" and injects memory context
+# Registers session ID and injects memory context (does NOT set running — that's UserPromptSubmit's job)
 
 # Read JSON input from stdin
 INPUT=$(cat)
@@ -9,6 +9,8 @@ INPUT=$(cat)
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
 CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
 SOURCE=$(echo "$INPUT" | jq -r '.source // "startup"')
+
+echo "[$(date)] SESSION_START hook. AGENT_ID=${CLAUDE_AGENT_ID:-unset} SESSION_ID=$SESSION_ID" >> /tmp/dorothy-hooks.log
 
 # API endpoint
 API_URL="http://127.0.0.1:31415"
@@ -24,11 +26,11 @@ if ! curl -s --connect-timeout 1 "$API_URL/api/health" > /dev/null 2>&1; then
   exit 0
 fi
 
-# Update agent status to "running"
-curl -s -X POST "$API_URL/api/hooks/status" \
+# Register session ID with the agent (keep idle — only UserPromptSubmit sets running)
+RESULT=$(curl -s --max-time 3 -X POST "$API_URL/api/hooks/status" \
   -H "Content-Type: application/json" \
-  -d "{\"agent_id\": \"$AGENT_ID\", \"session_id\": \"$SESSION_ID\", \"status\": \"running\", \"source\": \"$SOURCE\"}" \
-  > /dev/null 2>&1 &
+  -d "{\"agent_id\": \"$AGENT_ID\", \"session_id\": \"$SESSION_ID\", \"status\": \"idle\", \"source\": \"$SOURCE\"}" 2>&1)
+echo "[$(date)] SESSION_START curl result: $RESULT" >> /tmp/dorothy-hooks.log
 
 # Get memory context for this agent/project
 CONTEXT=$(curl -s --connect-timeout 2 "$API_URL/api/memory/context?agent_id=$AGENT_ID&project_path=$PROJECT_PATH" 2>/dev/null)

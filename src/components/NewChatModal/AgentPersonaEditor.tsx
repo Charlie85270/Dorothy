@@ -8,13 +8,15 @@ const AgentPersonaEditor = React.memo(function AgentPersonaEditor({
   projectPath,
   onChange,
   initialCharacter,
+  initialName,
 }: {
   projectPath: string;
   onChange: (v: AgentPersonaValues) => void;
   initialCharacter?: AgentCharacter;
+  initialName?: string;
 }) {
   const [character, setCharacter] = useState<AgentCharacter>(initialCharacter || 'robot');
-  const [name, setName] = useState('');
+  const [name, setName] = useState(initialName || '');
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 

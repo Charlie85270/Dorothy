@@ -8,11 +8,19 @@ import {
 import type { AgentStatus } from '@/types/electron';
 
 export const STATUS_COLORS: Record<AgentStatus['status'], { bg: string; text: string; icon: typeof Circle }> = {
-  idle: { bg: 'bg-white/10', text: 'text-muted-foreground', icon: Circle },
+  idle: { bg: 'bg-emerald-500/15', text: 'text-emerald-700', icon: Circle },
   running: { bg: 'bg-primary/10', text: 'text-primary', icon: Activity },
   completed: { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: CheckCircle },
   error: { bg: 'bg-red-500/20', text: 'text-red-400', icon: AlertCircle },
-  waiting: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', icon: Pause },
+  waiting: { bg: 'bg-amber-500/20', text: 'text-amber-700', icon: Pause },
+};
+
+export const STATUS_LABELS: Record<AgentStatus['status'], string> = {
+  idle: 'ready to work',
+  running: 'working',
+  completed: 'done',
+  error: 'error',
+  waiting: 'waiting for inputs',
 };
 
 export const CHARACTER_FACES: Record<string, string> = {
@@ -69,6 +77,13 @@ Say hello and list the current agents.`;
 export const isSuperAgentCheck = (agent: AgentStatus) => {
   const name = agent.name?.toLowerCase() || '';
   return name.includes('super agent') || name.includes('orchestrator');
+};
+
+export const PROVIDER_LABELS: Record<string, string> = {
+  claude: 'Claude',
+  codex: 'Codex',
+  gemini: 'Gemini',
+  local: 'Local',
 };
 
 export const getStatusPriority = (status: string) => {

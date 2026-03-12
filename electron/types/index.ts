@@ -5,7 +5,7 @@ export interface WorktreeConfig {
 
 export type AgentCharacter = 'robot' | 'ninja' | 'wizard' | 'astronaut' | 'knight' | 'pirate' | 'alien' | 'viking';
 
-export type AgentProvider = 'claude' | 'codex' | 'gemini' | 'local';
+export type AgentProvider = 'claude' | 'codex' | 'gemini' | 'opencode' | 'local';
 
 export interface AgentStatus {
   id: string;
@@ -36,6 +36,7 @@ export interface CLIPaths {
   claude: string;
   codex: string;
   gemini: string;
+  opencode: string;
   gws: string;
   gcloud: string;
   gh: string;
@@ -77,6 +78,8 @@ export interface AppSettings {
   verboseModeEnabled: boolean;
   autoCheckUpdates: boolean;
   cliPaths: CLIPaths;
+  opencodeEnabled: boolean;
+  opencodeDefaultModel: string;
   defaultProvider?: AgentProvider;
   obsidianVaultPaths?: string[];
   terminalFontSize?: number;

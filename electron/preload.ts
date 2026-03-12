@@ -50,7 +50,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       name?: string;
       secondaryProjectPath?: string;
       skipPermissions?: boolean;
-      provider?: 'claude' | 'local';
+      provider?: string;
       localModel?: string;
       obsidianVaultPaths?: string[];
     }) => ipcRenderer.invoke('agent:create', config),
@@ -62,7 +62,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       name?: string;
       character?: string;
     }) => ipcRenderer.invoke('agent:update', params),
-    start: (params: { id: string; prompt: string; options?: { model?: string; resume?: boolean; provider?: 'claude' | 'local'; localModel?: string } }) =>
+    start: (params: { id: string; prompt: string; options?: { model?: string; resume?: boolean; provider?: string; localModel?: string } }) =>
       ipcRenderer.invoke('agent:start', params),
     get: (id: string) =>
       ipcRenderer.invoke('agent:get', id),

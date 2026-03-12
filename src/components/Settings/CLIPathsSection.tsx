@@ -11,6 +11,7 @@ interface DetectedPaths {
   claude: string;
   codex: string;
   gemini: string;
+  opencode: string;
   gws: string;
   gcloud: string;
   gh: string;
@@ -22,11 +23,11 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings }: CLIPathsSect
   const [detectedPaths, setDetectedPaths] = useState<DetectedPaths | null>(null);
   const [newPath, setNewPath] = useState('');
   const [localPaths, setLocalPaths] = useState<CLIPaths>(
-    appSettings.cliPaths || { claude: '', codex: '', gemini: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] }
+    appSettings.cliPaths || { claude: '', codex: '', gemini: '', opencode: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] }
   );
 
   useEffect(() => {
-    setLocalPaths(appSettings.cliPaths || { claude: '', codex: '', gemini: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] });
+    setLocalPaths(appSettings.cliPaths || { claude: '', codex: '', gemini: '', opencode: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] });
   }, [appSettings.cliPaths]);
 
   const handleDetectPaths = async () => {
@@ -40,6 +41,7 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings }: CLIPathsSect
         if (!updatedPaths.claude && paths.claude) updatedPaths.claude = paths.claude;
         if (!updatedPaths.codex && paths.codex) updatedPaths.codex = paths.codex;
         if (!updatedPaths.gemini && paths.gemini) updatedPaths.gemini = paths.gemini;
+        if (!updatedPaths.opencode && paths.opencode) updatedPaths.opencode = paths.opencode;
         if (!updatedPaths.gws && paths.gws) updatedPaths.gws = paths.gws;
         if (!updatedPaths.gcloud && paths.gcloud) updatedPaths.gcloud = paths.gcloud;
         if (!updatedPaths.gh && paths.gh) updatedPaths.gh = paths.gh;
@@ -77,7 +79,7 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings }: CLIPathsSect
     onSaveAppSettings({ cliPaths: localPaths });
   };
 
-  const hasChanges = JSON.stringify(localPaths) !== JSON.stringify(appSettings.cliPaths || { claude: '', codex: '', gemini: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] });
+  const hasChanges = JSON.stringify(localPaths) !== JSON.stringify(appSettings.cliPaths || { claude: '', codex: '', gemini: '', opencode: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] });
 
   const renderPathInput = (
     label: string,
@@ -155,11 +157,12 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings }: CLIPathsSect
               {detectedPaths.claude && <li>Claude: {detectedPaths.claude}</li>}
               {detectedPaths.codex && <li>Codex: {detectedPaths.codex}</li>}
               {detectedPaths.gemini && <li>Gemini: {detectedPaths.gemini}</li>}
+              {detectedPaths.opencode && <li>OpenCode: {detectedPaths.opencode}</li>}
               {detectedPaths.gws && <li>GWS: {detectedPaths.gws}</li>}
               {detectedPaths.gcloud && <li>gcloud: {detectedPaths.gcloud}</li>}
               {detectedPaths.gh && <li>GitHub CLI: {detectedPaths.gh}</li>}
               {detectedPaths.node && <li>Node.js: {detectedPaths.node}</li>}
-              {!detectedPaths.claude && !detectedPaths.codex && !detectedPaths.gemini && !detectedPaths.gws && !detectedPaths.gcloud && !detectedPaths.gh && !detectedPaths.node && (
+              {!detectedPaths.claude && !detectedPaths.codex && !detectedPaths.gemini && !detectedPaths.opencode && !detectedPaths.gws && !detectedPaths.gcloud && !detectedPaths.gh && !detectedPaths.node && (
                 <li className="text-yellow-400">No CLI tools found in common locations</li>
               )}
             </ul>
@@ -193,6 +196,13 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings }: CLIPathsSect
           'Path to the Google Gemini CLI executable',
           'gemini',
           '/usr/local/bin/gemini or ~/.nvm/versions/node/v20/bin/gemini'
+        )}
+
+        {renderPathInput(
+          'OpenCode CLI',
+          'Path to the OpenCode CLI executable (opencode.ai)',
+          'opencode',
+          '/usr/local/bin/opencode or ~/.local/bin/opencode'
         )}
 
         {renderPathInput(

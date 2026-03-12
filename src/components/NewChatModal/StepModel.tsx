@@ -50,6 +50,13 @@ const PROVIDER_MODELS: Record<string, ProviderModel[]> = {
     { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', description: 'Stable' },
     { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: 'Balanced' },
   ],
+  opencode: [
+    { id: 'default', name: 'Default', description: 'Use configured default' },
+    { id: 'anthropic/claude-sonnet-4-20250514', name: 'Claude Sonnet', description: 'Anthropic' },
+    { id: 'anthropic/claude-opus-4-20250514', name: 'Claude Opus', description: 'Anthropic' },
+    { id: 'openai/gpt-4o', name: 'GPT-4o', description: 'OpenAI' },
+    { id: 'google/gemini-2.5-pro', name: 'Gemini 2.5 Pro', description: 'Google' },
+  ],
 };
 
 /** Default model per provider */
@@ -57,6 +64,7 @@ const PROVIDER_DEFAULT_MODEL: Record<string, string> = {
   claude: 'default',
   codex: 'gpt-5.2-codex',
   gemini: 'gemini-3-flash',
+  opencode: 'default',
 };
 
 interface StepModelProps {
@@ -132,11 +140,12 @@ const StepModel = React.memo(function StepModel({
       {/* Provider Selector */}
       <div>
         <label className="block text-sm font-medium mb-2">Provider</label>
-        <div className={`grid gap-3 ${tasmaniaEnabled ? 'grid-cols-4' : 'grid-cols-3'}`}>
+        <div className={`grid gap-3 ${tasmaniaEnabled ? 'grid-cols-5' : 'grid-cols-4'}`}>
           {([
             { id: 'claude' as const, label: 'Claude', icon: '/claude-ai-icon.webp', accent: 'accent-blue' },
             { id: 'codex' as const, label: 'Codex', icon: '/chatgpt-icon.webp', accent: 'accent-green' },
             { id: 'gemini' as const, label: 'Gemini', icon: 'gemini-svg', accent: 'accent-purple' },
+            { id: 'opencode' as const, label: 'OpenCode', icon: 'opencode-text', accent: 'accent-cyan' },
           ] as const).map(({ id, label, icon, accent }) => {
             const installed = installedProviders?.[id] !== false;
             return (
@@ -163,6 +172,8 @@ const StepModel = React.memo(function StepModel({
                     <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-black">
                       <path d="M12 0C12 6.627 6.627 12 0 12c6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12-6.627 0-12-5.373-12-12Z" />
                     </svg>
+                  ) : icon === 'opencode-text' ? (
+                    <Cpu className="w-4 h-4 text-cyan-500" />
                   ) : (
                     <img src={icon} alt={label} className="w-4 h-4 object-contain" />
                   )}

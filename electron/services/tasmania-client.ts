@@ -30,7 +30,7 @@ export async function tasmaniaFetch(endpoint: string, options: RequestInit = {})
   return fetch(`${TASMANIA_API_BASE}${endpoint}`, {
     ...options,
     headers,
-    signal: AbortSignal.timeout(5000),
+    signal: (AbortSignal as any).timeout(5000),
   });
 }
 

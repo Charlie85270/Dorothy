@@ -110,7 +110,7 @@ export interface WorktreeConfig {
 
 export type AgentCharacter = 'robot' | 'ninja' | 'wizard' | 'astronaut' | 'knight' | 'pirate' | 'alien' | 'viking' | 'frog';
 
-export type AgentProvider = 'claude' | 'codex' | 'gemini' | 'local';
+export type AgentProvider = 'claude' | 'codex' | 'gemini' | 'opencode' | 'local';
 
 export interface AgentStatus {
   id: string;
@@ -301,6 +301,7 @@ export interface ElectronAPI {
         claude: string;
         codex: string;
         gemini: string;
+        opencode: string;
         gws: string;
         gcloud: string;
         gh: string;
@@ -339,6 +340,7 @@ export interface ElectronAPI {
         claude: string;
         codex: string;
         gemini: string;
+        opencode: string;
         gws: string;
         gcloud: string;
         gh: string;
@@ -588,6 +590,7 @@ export interface ElectronAPI {
       claude: string;
       codex: string;
       gemini: string;
+      opencode: string;
       gws: string;
       gcloud: string;
       gh: string;
@@ -597,6 +600,7 @@ export interface ElectronAPI {
       claude: string;
       codex: string;
       gemini: string;
+      opencode: string;
       gws: string;
       gcloud: string;
       gh: string;
@@ -607,6 +611,7 @@ export interface ElectronAPI {
       claude: string;
       codex: string;
       gemini: string;
+      opencode: string;
       gws: string;
       gcloud: string;
       gh: string;

@@ -70,6 +70,9 @@ export function AgentCard({ agent, isSelected, onSelect, onEdit }: AgentCardProp
                 const p = agent.provider && agent.provider !== 'local' ? agent.provider : 'claude';
                 const icon = PROVIDER_ICONS[p];
                 if (icon) return <img src={icon.src} alt={icon.alt} title={icon.alt} className="w-4 h-4 object-contain shrink-0" />;
+                if (p === 'opencode') return (
+                  <span title="OpenCode" className="shrink-0 inline-flex text-cyan-500 text-[10px] font-bold">OC</span>
+                );
                 if (p === 'gemini') return (
                   <span title="Gemini" className="shrink-0 inline-flex">
                     <svg viewBox="0 0 24 24" className="w-4 h-4 text-black" fill="currentColor">

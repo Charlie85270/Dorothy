@@ -153,6 +153,7 @@ function loadAppSettings(): AppSettings {
       codex: '',
       gemini: '',
       opencode: '',
+      pi: '',
       gws: '',
       gcloud: '',
       gh: '',

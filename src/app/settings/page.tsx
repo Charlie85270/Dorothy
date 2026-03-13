@@ -19,6 +19,7 @@ import {
   SocialDataSection,
   TasmaniaSection,
   OpenCodeSection,
+  PiTerminalSection,
   GoogleWorkspaceSection,
   PermissionsSection,
   SkillsSection,
@@ -129,6 +130,14 @@ function SettingsPageInner() {
       case 'opencode':
         return (
           <OpenCodeSection
+            appSettings={appSettings}
+            onSaveAppSettings={handleSaveAppSettings}
+            onUpdateLocalSettings={updateLocalAppSettings}
+          />
+        );
+      case 'pi':
+        return (
+          <PiTerminalSection
             appSettings={appSettings}
             onSaveAppSettings={handleSaveAppSettings}
             onUpdateLocalSettings={updateLocalAppSettings}

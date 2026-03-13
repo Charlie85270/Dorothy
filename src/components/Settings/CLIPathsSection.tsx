@@ -12,6 +12,7 @@ interface DetectedPaths {
   codex: string;
   gemini: string;
   opencode: string;
+  pi: string;
   gws: string;
   gcloud: string;
   gh: string;
@@ -23,11 +24,11 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings }: CLIPathsSect
   const [detectedPaths, setDetectedPaths] = useState<DetectedPaths | null>(null);
   const [newPath, setNewPath] = useState('');
   const [localPaths, setLocalPaths] = useState<CLIPaths>(
-    appSettings.cliPaths || { claude: '', codex: '', gemini: '', opencode: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] }
+    appSettings.cliPaths || { claude: '', codex: '', gemini: '', opencode: '', pi: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] }
   );
 
   useEffect(() => {
-    setLocalPaths(appSettings.cliPaths || { claude: '', codex: '', gemini: '', opencode: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] });
+    setLocalPaths(appSettings.cliPaths || { claude: '', codex: '', gemini: '', opencode: '', pi: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] });
   }, [appSettings.cliPaths]);
 
   const handleDetectPaths = async () => {
@@ -42,6 +43,7 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings }: CLIPathsSect
         if (!updatedPaths.codex && paths.codex) updatedPaths.codex = paths.codex;
         if (!updatedPaths.gemini && paths.gemini) updatedPaths.gemini = paths.gemini;
         if (!updatedPaths.opencode && paths.opencode) updatedPaths.opencode = paths.opencode;
+        if (!updatedPaths.pi && (paths as DetectedPaths).pi) updatedPaths.pi = (paths as DetectedPaths).pi;
         if (!updatedPaths.gws && paths.gws) updatedPaths.gws = paths.gws;
         if (!updatedPaths.gcloud && paths.gcloud) updatedPaths.gcloud = paths.gcloud;
         if (!updatedPaths.gh && paths.gh) updatedPaths.gh = paths.gh;
@@ -79,7 +81,7 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings }: CLIPathsSect
     onSaveAppSettings({ cliPaths: localPaths });
   };
 
-  const hasChanges = JSON.stringify(localPaths) !== JSON.stringify(appSettings.cliPaths || { claude: '', codex: '', gemini: '', opencode: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] });
+  const hasChanges = JSON.stringify(localPaths) !== JSON.stringify(appSettings.cliPaths || { claude: '', codex: '', gemini: '', opencode: '', pi: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] });
 
   const renderPathInput = (
     label: string,
@@ -158,11 +160,12 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings }: CLIPathsSect
               {detectedPaths.codex && <li>Codex: {detectedPaths.codex}</li>}
               {detectedPaths.gemini && <li>Gemini: {detectedPaths.gemini}</li>}
               {detectedPaths.opencode && <li>OpenCode: {detectedPaths.opencode}</li>}
+              {detectedPaths.pi && <li>Pi Terminal: {detectedPaths.pi}</li>}
               {detectedPaths.gws && <li>GWS: {detectedPaths.gws}</li>}
               {detectedPaths.gcloud && <li>gcloud: {detectedPaths.gcloud}</li>}
               {detectedPaths.gh && <li>GitHub CLI: {detectedPaths.gh}</li>}
               {detectedPaths.node && <li>Node.js: {detectedPaths.node}</li>}
-              {!detectedPaths.claude && !detectedPaths.codex && !detectedPaths.gemini && !detectedPaths.opencode && !detectedPaths.gws && !detectedPaths.gcloud && !detectedPaths.gh && !detectedPaths.node && (
+              {!detectedPaths.claude && !detectedPaths.codex && !detectedPaths.gemini && !detectedPaths.opencode && !detectedPaths.pi && !detectedPaths.gws && !detectedPaths.gcloud && !detectedPaths.gh && !detectedPaths.node && (
                 <li className="text-yellow-400">No CLI tools found in common locations</li>
               )}
             </ul>
@@ -203,6 +206,13 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings }: CLIPathsSect
           'Path to the OpenCode CLI executable (opencode.ai)',
           'opencode',
           '/usr/local/bin/opencode or ~/.local/bin/opencode'
+        )}
+
+        {renderPathInput(
+          'Pi Terminal',
+          'Path to the Pi coding agent CLI executable',
+          'pi',
+          '/usr/local/bin/pi or ~/.nvm/versions/node/v20/bin/pi'
         )}
 
         {renderPathInput(

@@ -29,6 +29,7 @@ export interface CLIPaths {
   codex: string;
   gemini: string;
   opencode: string;
+  pi: string;
   gws: string;
   gcloud: string;
   gh: string;
@@ -89,4 +90,4 @@ export interface AppSettings {
   defaultProjectPath?: string;
 }
 
-export type SettingsSection = 'general' | 'terminal' | 'git' | 'notifications' | 'telegram' | 'slack' | 'jira' | 'socialdata' | 'tasmania' | 'opencode' | 'google-workspace' | 'obsidian' | 'permissions' | 'skills' | 'cli' | 'system';
+export type SettingsSection = 'general' | 'terminal' | 'git' | 'notifications' | 'telegram' | 'slack' | 'jira' | 'socialdata' | 'tasmania' | 'opencode' | 'pi' | 'google-workspace' | 'obsidian' | 'permissions' | 'skills' | 'mcp' | 'cli' | 'system';

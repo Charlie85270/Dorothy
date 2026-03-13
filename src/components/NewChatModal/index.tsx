@@ -109,7 +109,7 @@ export default function NewChatModal({
   const [model, setModel] = useState<string>('default');
   const [localModel, setLocalModel] = useState('');
   const [tasmaniaEnabled, setTasmaniaEnabled] = useState(false);
-  const [installedProviders, setInstalledProviders] = useState<Record<string, boolean>>({ claude: true, codex: true, gemini: true, opencode: true });
+  const [installedProviders, setInstalledProviders] = useState<Record<string, boolean>>({ claude: true, codex: true, gemini: true, opencode: true, pi: true });
   const agentPersonaRef = useRef<AgentPersonaValues>({ character: 'robot', name: '' });
 
   // Step 3: Tools
@@ -223,6 +223,7 @@ export default function NewChatModal({
             codex: !!paths.codex,
             gemini: !!paths.gemini,
             opencode: !!(paths as Record<string, string>).opencode,
+            pi: !!(paths as Record<string, string>).pi,
           });
         }
       });

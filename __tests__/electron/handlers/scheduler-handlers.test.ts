@@ -116,10 +116,10 @@ describe('scheduler-handlers', () => {
         gwsSkillsInstalled: false,
         verboseModeEnabled: false,
         autoCheckUpdates: true,
-        defaultProvider: 'claude' as const,
         opencodeEnabled: false,
         opencodeDefaultModel: '',
-        cliPaths: { claude: '', codex: '', gemini: '', opencode: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] },
+        defaultProvider: 'claude' as const,
+        cliPaths: { claude: '', codex: '', gemini: '', opencode: '', pi: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] },
       }),
     });
   }

@@ -1,12 +1,13 @@
 'use client';
 
-import { Loader2, AlertTriangle, GitBranch, Pencil, Crown } from 'lucide-react';
+import { Loader2, AlertTriangle, GitBranch, Pencil, Crown, Cpu } from 'lucide-react';
 import type { AgentStatus } from '@/types/electron';
 import { STATUS_COLORS, STATUS_LABELS, CHARACTER_FACES, getProjectColor, isSuperAgentCheck } from '@/app/agents/constants';
 
 const PROVIDER_ICONS: Record<string, { src: string; alt: string }> = {
   claude: { src: '/claude-ai-icon.webp', alt: 'Claude' },
   codex: { src: '/chatgpt-icon.webp', alt: 'ChatGPT' },
+  pi: { src: '', alt: 'Pi Terminal' },
 };
 
 interface AgentCardProps {
@@ -72,6 +73,11 @@ export function AgentCard({ agent, isSelected, onSelect, onEdit }: AgentCardProp
                 if (icon) return <img src={icon.src} alt={icon.alt} title={icon.alt} className="w-4 h-4 object-contain shrink-0" />;
                 if (p === 'opencode') return (
                   <span title="OpenCode" className="shrink-0 inline-flex text-cyan-500 text-[10px] font-bold">OC</span>
+                );
+                if (p === 'pi') return (
+                  <span title="Pi Terminal" className="shrink-0 inline-flex">
+                    <Cpu className="w-4 h-4 text-cyan-500" />
+                  </span>
                 );
                 if (p === 'gemini') return (
                   <span title="Gemini" className="shrink-0 inline-flex">

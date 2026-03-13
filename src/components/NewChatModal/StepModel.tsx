@@ -52,6 +52,9 @@ const PROVIDER_MODELS: Record<string, ProviderModel[]> = {
   ],
   opencode: [
     { id: 'default', name: 'Default', description: 'Use configured default' },
+  ],
+  pi: [
+    { id: 'default', name: 'Default', description: 'Use configured model' },
     { id: 'anthropic/claude-sonnet-4-20250514', name: 'Claude Sonnet', description: 'Anthropic' },
     { id: 'anthropic/claude-opus-4-20250514', name: 'Claude Opus', description: 'Anthropic' },
     { id: 'openai/gpt-4o', name: 'GPT-4o', description: 'OpenAI' },
@@ -65,6 +68,7 @@ const PROVIDER_DEFAULT_MODEL: Record<string, string> = {
   codex: 'gpt-5.2-codex',
   gemini: 'gemini-3-flash',
   opencode: 'default',
+  pi: 'default',
 };
 
 interface StepModelProps {
@@ -146,6 +150,7 @@ const StepModel = React.memo(function StepModel({
             { id: 'codex' as const, label: 'Codex', icon: '/chatgpt-icon.webp', accent: 'accent-green' },
             { id: 'gemini' as const, label: 'Gemini', icon: 'gemini-svg', accent: 'accent-purple' },
             { id: 'opencode' as const, label: 'OpenCode', icon: 'opencode-text', accent: 'accent-cyan' },
+            { id: 'pi' as const, label: 'Pi', icon: 'pi-icon', accent: 'accent-cyan' },
           ] as const).map(({ id, label, icon, accent }) => {
             const installed = installedProviders?.[id] !== false;
             return (
@@ -173,6 +178,8 @@ const StepModel = React.memo(function StepModel({
                       <path d="M12 0C12 6.627 6.627 12 0 12c6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12-6.627 0-12-5.373-12-12Z" />
                     </svg>
                   ) : icon === 'opencode-text' ? (
+                    <span className="text-cyan-500 font-bold text-xs">OC</span>
+                  ) : icon === 'pi-icon' ? (
                     <Cpu className="w-4 h-4 text-cyan-500" />
                   ) : (
                     <img src={icon} alt={label} className="w-4 h-4 object-contain" />
@@ -209,7 +216,7 @@ const StepModel = React.memo(function StepModel({
           <label className="block text-sm font-medium mb-2">Model</label>
           <div className={`grid gap-3 ${(PROVIDER_MODELS[provider] || PROVIDER_MODELS.claude).length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
             {(PROVIDER_MODELS[provider] || PROVIDER_MODELS.claude).map((m) => {
-              const accentColor = provider === 'codex' ? 'accent-green' : provider === 'gemini' ? 'accent-purple' : 'accent-blue';
+              const accentColor = provider === 'codex' ? 'accent-green' : provider === 'gemini' ? 'accent-purple' : provider === 'pi' ? 'cyan-500' : 'accent-blue';
               return (
                 <button
                   key={m.id}

@@ -20,9 +20,9 @@ export interface CLIPathsHandlerDependencies {
 /**
  * Detect CLI paths from the system
  */
-async function detectCLIPaths(): Promise<{ claude: string; codex: string; gemini: string; opencode: string; gws: string; gcloud: string; gh: string; node: string }> {
+async function detectCLIPaths(): Promise<{ claude: string; codex: string; gemini: string; opencode: string; pi: string; gws: string; gcloud: string; gh: string; node: string }> {
   const homeDir = os.homedir();
-  const paths = { claude: '', codex: '', gemini: '', opencode: '', gws: '', gcloud: '', gh: '', node: '' };
+  const paths = { claude: '', codex: '', gemini: '', opencode: '', pi: '', gws: '', gcloud: '', gh: '', node: '' };
 
   // Common locations to check
   const commonPaths = [
@@ -130,6 +130,29 @@ async function detectCLIPaths(): Promise<{ claude: string; codex: string; gemini
       });
       if (stdout.trim()) {
         paths.opencode = stdout.trim();
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  // Check for pi
+  for (const dir of commonPaths) {
+    const piPath = path.join(dir, 'pi');
+    if (fs.existsSync(piPath)) {
+      paths.pi = piPath;
+      break;
+    }
+  }
+
+  // Try which command for pi
+  if (!paths.pi) {
+    try {
+      const { stdout } = await execAsync('which pi', {
+        env: { ...process.env, PATH: `${commonPaths.join(':')}:${process.env.PATH}` },
+      });
+      if (stdout.trim()) {
+        paths.pi = stdout.trim();
       }
     } catch {
       // Ignore
@@ -312,7 +335,7 @@ export function registerCLIPathsHandlers(deps: CLIPathsHandlerDependencies): voi
   // Get CLI paths from app settings
   ipcMain.handle('cliPaths:get', async () => {
     const settings = getAppSettings();
-    return settings.cliPaths || { claude: '', codex: '', gemini: '', opencode: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] };
+    return settings.cliPaths || { claude: '', codex: '', gemini: '', opencode: '', pi: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] };
   });
 
   // Save CLI paths
@@ -368,6 +391,7 @@ export function getCLIPathsConfig(): CLIPaths & { fullPath: string } {
     codex: '',
     gemini: '',
     opencode: '',
+    pi: '',
     gws: '',
     gcloud: '',
     gh: '',

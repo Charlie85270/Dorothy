@@ -144,6 +144,7 @@ function loadAppSettings(): AppSettings {
       claude: '',
       codex: '',
       gemini: '',
+      pi: '',
       gws: '',
       gcloud: '',
       gh: '',

@@ -18,6 +18,7 @@ import {
   JiraSection,
   SocialDataSection,
   TasmaniaSection,
+  PiTerminalSection,
   GoogleWorkspaceSection,
   PermissionsSection,
   SkillsSection,
@@ -119,6 +120,14 @@ function SettingsPageInner() {
       case 'tasmania':
         return (
           <TasmaniaSection
+            appSettings={appSettings}
+            onSaveAppSettings={handleSaveAppSettings}
+            onUpdateLocalSettings={updateLocalAppSettings}
+          />
+        );
+      case 'pi':
+        return (
+          <PiTerminalSection
             appSettings={appSettings}
             onSaveAppSettings={handleSaveAppSettings}
             onUpdateLocalSettings={updateLocalAppSettings}

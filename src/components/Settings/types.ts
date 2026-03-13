@@ -28,6 +28,7 @@ export interface CLIPaths {
   claude: string;
   codex: string;
   gemini: string;
+  pi: string;
   gws: string;
   gcloud: string;
   gh: string;
@@ -75,4 +76,4 @@ export interface AppSettings {
   terminalTheme?: 'dark' | 'light';
 }
 
-export type SettingsSection = 'general' | 'terminal' | 'git' | 'notifications' | 'telegram' | 'slack' | 'jira' | 'socialdata' | 'tasmania' | 'google-workspace' | 'obsidian' | 'permissions' | 'skills' | 'cli' | 'system';
+export type SettingsSection = 'general' | 'terminal' | 'git' | 'notifications' | 'telegram' | 'slack' | 'jira' | 'socialdata' | 'tasmania' | 'pi' | 'google-workspace' | 'obsidian' | 'permissions' | 'skills' | 'cli' | 'system';

@@ -116,7 +116,7 @@ describe('scheduler-handlers', () => {
         verboseModeEnabled: false,
         autoCheckUpdates: true,
         defaultProvider: 'claude' as const,
-        cliPaths: { claude: '', codex: '', gemini: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] },
+        cliPaths: { claude: '', codex: '', gemini: '', pi: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] },
       }),
     });
   }

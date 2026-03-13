@@ -3,6 +3,7 @@ import type { CLIProvider } from './cli-provider';
 import { ClaudeProvider } from './claude-provider';
 import { CodexProvider } from './codex-provider';
 import { GeminiProvider } from './gemini-provider';
+import { PiProvider } from './pi-provider';
 
 export type { CLIProvider } from './cli-provider';
 export type {
@@ -17,6 +18,7 @@ const providers: Record<string, CLIProvider> = {
   claude: new ClaudeProvider(),
   codex: new CodexProvider(),
   gemini: new GeminiProvider(),
+  pi: new PiProvider(),
 };
 
 /**

@@ -15,6 +15,7 @@ export interface InteractiveCommandParams {
   systemPromptFile?: string;
   skills?: string[];
   isSuperAgent?: boolean;
+  chrome?: boolean;
 }
 
 /**

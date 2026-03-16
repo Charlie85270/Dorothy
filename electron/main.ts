@@ -144,6 +144,7 @@ function loadAppSettings(): AppSettings {
     gwsEnabled: false,
     gwsSkillsInstalled: false,
     verboseModeEnabled: false,
+    chromeEnabled: false,
     autoCheckUpdates: true,
     defaultProvider: 'claude',
     cliPaths: {

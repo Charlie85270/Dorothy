@@ -6,6 +6,12 @@ vi.mock('../../../../electron/core/agent-manager', () => ({
   saveAgents: vi.fn(),
 }));
 
+vi.mock('electron', () => ({
+  BrowserWindow: {
+    getAllWindows: vi.fn(() => []),
+  },
+}));
+
 import { registerHooksRoutes } from '../../../../electron/services/api-routes/hooks-routes';
 import { agents, saveAgents } from '../../../../electron/core/agent-manager';
 import { RouteApp, RouteContext, RouteRequest, SendJson } from '../../../../electron/services/api-routes/types';
@@ -44,9 +50,11 @@ let ctx: RouteContext;
 beforeEach(() => {
   agents.clear();
   vi.mocked(saveAgents).mockClear();
+  const appSettings = { notifyOnWaiting: true } as AppSettings;
   ctx = {
     mainWindow: { isDestroyed: () => false, webContents: { send: vi.fn() } } as any,
-    appSettings: { notifyOnWaiting: true } as AppSettings,
+    appSettings,
+    getAppSettings: () => appSettings,
     getTelegramBot: () => null,
     getSlackApp: () => null,
     slackResponseChannel: null,
@@ -157,7 +165,7 @@ describe('hooks-routes', () => {
       const sendJson = vi.fn();
       await handler(makeReq({ agent_id: 'a1', session_id: 'sess', type: 'permission_prompt', title: 'Test', message: 'help' }), sendJson, ctx);
 
-      expect(ctx.sendNotificationCallback).toHaveBeenCalledWith('MyAgent needs permission', 'help', 'a1');
+      expect(ctx.sendNotificationCallback).toHaveBeenCalledWith('MyAgent needs permission', 'help', 'a1', expect.objectContaining({ notifyOnWaiting: true }));
       expect(sendJson).toHaveBeenCalledWith({ success: true });
     });
 

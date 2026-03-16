@@ -289,6 +289,7 @@ const StepModel = React.memo(function StepModel({
         projectPath={projectPath}
         onChange={(v) => { agentPersonaRef.current = v; }}
         initialCharacter={agentPersonaRef.current.character}
+        initialName={agentPersonaRef.current.name}
       />
     </div>
   );

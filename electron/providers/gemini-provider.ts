@@ -176,6 +176,7 @@ export class GeminiProvider implements CLIProvider {
       { type: 'SessionStart', file: 'session-start.sh', matcher: '*' },
       { type: 'SessionEnd', file: 'session-end.sh', matcher: '*' },
       { type: 'Notification', file: 'notification.sh', matcher: '*' },
+      { type: 'UserPromptSubmit', file: 'user-prompt-submit.sh', matcher: undefined },
     ];
 
     let updated = false;

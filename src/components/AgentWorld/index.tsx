@@ -605,7 +605,7 @@ export default function AgentWorld() {
             {waitingCount > 0 && (
               <span className="flex items-center gap-1.5 text-amber-400 font-medium">
                 <AlertCircle className="w-4 h-4" />
-                {waitingCount} waiting
+                {waitingCount} waiting for inputs
               </span>
             )}
           </div>
@@ -628,10 +628,10 @@ export default function AgentWorld() {
               <h3 className="font-semibold text-text-primary">Active Agents</h3>
             </div>
             <div className="text-xs text-text-muted">
-              {runningCount} running
+              {runningCount} working
               {waitingCount > 0 && (
                 <span className="ml-2 text-amber-500 font-medium">
-                  {waitingCount} waiting!
+                  {waitingCount} waiting for inputs
                 </span>
               )}
             </div>

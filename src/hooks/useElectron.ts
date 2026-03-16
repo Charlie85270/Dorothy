@@ -128,21 +128,13 @@ export function useElectronAgents() {
   useEffect(() => {
     if (!isElectron()) return;
 
-    const unsubOutput = window.electronAPI!.agent.onOutput((event: AgentEvent) => {
-      setAgents(prev => prev.map(a =>
-        a.id === event.agentId
-          ? { ...a, output: [...a.output, event.data], lastActivity: event.timestamp }
-          : a
-      ));
-    });
+    // Output and error events are handled directly by xterm.js terminals.
+    // We do NOT update React state here — doing so on every output chunk
+    // causes "Maximum update depth exceeded" because high-frequency PTY
+    // output triggers a re-render cascade.
+    const unsubOutput = window.electronAPI!.agent.onOutput(() => {});
 
-    const unsubError = window.electronAPI!.agent.onError((event: AgentEvent) => {
-      setAgents(prev => prev.map(a =>
-        a.id === event.agentId
-          ? { ...a, output: [...a.output, `[error] ${event.data}`], lastActivity: event.timestamp }
-          : a
-      ));
-    });
+    const unsubError = window.electronAPI!.agent.onError(() => {});
 
     const unsubComplete = window.electronAPI!.agent.onComplete(() => {
       fetchAgents();
@@ -151,9 +143,29 @@ export function useElectronAgents() {
     const unsubStatus = window.electronAPI!.agent.onStatus?.((event: { agentId: string; status: string; timestamp: string }) => {
       setAgents(prev => prev.map(a =>
         a.id === event.agentId
-          ? { ...a, status: event.status as AgentStatus['status'], lastActivity: event.timestamp }
+          ? { ...a, status: event.status as AgentStatus['status'], lastActivity: event.timestamp || new Date().toISOString() }
           : a
       ));
+    });
+
+    // Also subscribe to agents:tick for reliable live status updates
+    // (proven to reach all windows — tray panel uses this successfully)
+    const unsubTick = window.electronAPI!.agent.onTick?.((tickAgents) => {
+      setAgents(prev => {
+        if (prev.length !== tickAgents.length) return prev;
+        const hasStatusChange = tickAgents.some(t => {
+          const existing = prev.find(a => a.id === t.id);
+          return existing && existing.status !== t.status;
+        });
+        if (!hasStatusChange) return prev;
+        return prev.map(a => {
+          const tick = tickAgents.find(t => t.id === a.id);
+          if (tick && a.status !== tick.status) {
+            return { ...a, status: tick.status as AgentStatus['status'], lastActivity: tick.lastActivity };
+          }
+          return a;
+        });
+      });
     });
 
     return () => {
@@ -161,6 +173,7 @@ export function useElectronAgents() {
       unsubError();
       unsubComplete();
       unsubStatus?.();
+      unsubTick?.();
     };
   }, [fetchAgents]);
 

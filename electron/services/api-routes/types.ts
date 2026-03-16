@@ -7,13 +7,14 @@ import { AgentStatus, AppSettings } from '../../types';
 
 export interface RouteContext {
   mainWindow: BrowserWindow | null;
-  appSettings: AppSettings;
+  appSettings: AppSettings;          // Initial snapshot — prefer getAppSettings() for live values
+  getAppSettings: () => AppSettings; // Always returns the current appSettings
   getTelegramBot: () => TelegramBot | null;
   getSlackApp: () => SlackApp | null;
   slackResponseChannel: string | null;
   slackResponseThreadTs: string | null;
   handleStatusChangeNotificationCallback: (agent: AgentStatus, newStatus: string) => void;
-  sendNotificationCallback: (title: string, body: string, agentId?: string) => void;
+  sendNotificationCallback: (title: string, body: string, agentId?: string, appSettings?: { notificationsEnabled: boolean; notificationSounds?: Record<string, string> }) => void;
   initAgentPtyCallback: (agent: AgentStatus) => Promise<string>;
   agentStatusEmitter: EventEmitter;
 }

@@ -16,22 +16,30 @@ if [ -z "$TOOL_NAME" ]; then
   exit 0
 fi
 
-# Memory API endpoint
-API_URL="http://127.0.0.1:31415/api/memory/remember"
+# API endpoint
+BASE_URL="http://127.0.0.1:31415"
+API_URL="$BASE_URL/api/memory/remember"
 
 # Get agent ID from environment or use session ID
 AGENT_ID="${CLAUDE_AGENT_ID:-$SESSION_ID}"
 PROJECT_PATH="${CLAUDE_PROJECT_PATH:-$CWD}"
+
+# Update agent status to "running" — this hook fires after each tool use,
+# which signals Claude is actively working (e.g. after permission is granted)
+curl -s --connect-timeout 1 --max-time 3 -X POST "$BASE_URL/api/hooks/status" \
+  -H "Content-Type: application/json" \
+  -d "{\"agent_id\": \"$AGENT_ID\", \"session_id\": \"$SESSION_ID\", \"status\": \"running\"}" \
+  > /dev/null 2>&1
 
 # Function to store observation
 store_observation() {
   local content="$1"
   local type="$2"
 
-  curl -s -X POST "$API_URL" \
+  curl -s --max-time 3 -X POST "$API_URL" \
     -H "Content-Type: application/json" \
     -d "{\"agent_id\": \"$AGENT_ID\", \"project_path\": \"$PROJECT_PATH\", \"content\": \"$content\", \"type\": \"$type\"}" \
-    > /dev/null 2>&1 &
+    > /dev/null 2>&1
 }
 
 case "$TOOL_NAME" in

@@ -23,6 +23,10 @@ import {
   GitBranch,
   RefreshCw,
   Search,
+  EyeOff,
+  Eye,
+  Pin,
+  PinOff,
 } from 'lucide-react';
 import { useClaude, useSessionMessages } from '@/hooks/useClaude';
 import { useElectronAgents, useElectronFS, useElectronSkills, isElectron } from '@/hooks/useElectron';
@@ -46,8 +50,7 @@ const getProjectColor = (name: string) => {
   return colors[hash % colors.length];
 };
 
-// Storage keys
-const FAVORITES_KEY = 'dorothy-favorite-projects';
+// Storage key (custom projects still use localStorage, favorites/hidden use app settings)
 const CUSTOM_PROJECTS_KEY = 'dorothy-custom-projects';
 
 interface CustomProject {
@@ -90,15 +93,19 @@ export default function ProjectsPage() {
   const { installedSkills, refresh: refreshSkills } = useElectronSkills();
   const [selectedProject, setSelectedProject] = useState<ClaudeProject | null>(null);
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'all' | 'favorites'>('all');
+  const [activeTab, setActiveTab] = useState<'favorites' | 'active' | 'hidden'>('active');
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [hiddenProjects, setHiddenProjects] = useState<string[]>([]);
   const [customProjects, setCustomProjects] = useState<CustomProject[]>([]);
   const [gitBranch, setGitBranch] = useState<string | null>(null);
   const [gitLoading, setGitLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [defaultProjectPath, setDefaultProjectPath] = useState<string>('');
 
   // Agent dialog state
   const [showAgentDialog, setShowAgentDialog] = useState(false);
+  // Default project confirmation dialog
+  const [pendingDefaultPath, setPendingDefaultPath] = useState<string | null>(null);
 
   // Load git branch for selected project
   const loadGitBranch = useCallback(async (projectPath: string) => {
@@ -191,39 +198,98 @@ export default function ProjectsPage() {
     return customProjects.some(p => p.path === projectPath);
   };
 
-  // Load favorites from localStorage
+  // Load favorites & hidden from app settings (file-based, persists across restarts)
   useEffect(() => {
+    if (typeof window === 'undefined' || !window.electronAPI?.appSettings?.get) return;
+    window.electronAPI.appSettings.get().then((settings: Record<string, unknown>) => {
+      if (Array.isArray(settings?.favoriteProjects)) setFavorites(settings.favoriteProjects as string[]);
+      if (Array.isArray(settings?.hiddenProjects)) setHiddenProjects(settings.hiddenProjects as string[]);
+      if (typeof settings?.defaultProjectPath === 'string') setDefaultProjectPath(settings.defaultProjectPath);
+    }).catch(() => {});
+    // Also migrate from localStorage if present
     try {
-      const stored = localStorage.getItem(FAVORITES_KEY);
+      const stored = localStorage.getItem('dorothy-favorite-projects');
       if (stored) {
-        setFavorites(JSON.parse(stored));
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setFavorites(prev => {
+            const merged = Array.from(new Set([...prev, ...parsed]));
+            window.electronAPI?.appSettings?.save({ favoriteProjects: merged });
+            return merged;
+          });
+          localStorage.removeItem('dorothy-favorite-projects');
+        }
       }
-    } catch (err) {
-      console.error('Failed to load favorites:', err);
-    }
+    } catch {}
   }, []);
 
-  // Save favorites
+  // Save favorites to app settings
   const saveFavorites = (newFavorites: string[]) => {
     setFavorites(newFavorites);
-    try {
-      localStorage.setItem(FAVORITES_KEY, JSON.stringify(newFavorites));
-    } catch (err) {
-      console.error('Failed to save favorites:', err);
-    }
+    window.electronAPI?.appSettings?.save({ favoriteProjects: newFavorites });
   };
 
-  // Toggle favorite
-  const toggleFavorite = (projectId: string, e: React.MouseEvent) => {
+  // Save hidden to app settings
+  const saveHidden = (newHidden: string[]) => {
+    setHiddenProjects(newHidden);
+    window.electronAPI?.appSettings?.save({ hiddenProjects: newHidden });
+  };
+
+  // Toggle favorite (stored by path for cross-component compatibility)
+  const toggleFavorite = (projectPath: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (favorites.includes(projectId)) {
-      saveFavorites(favorites.filter(id => id !== projectId));
+    if (favorites.includes(projectPath)) {
+      saveFavorites(favorites.filter(p => p !== projectPath));
     } else {
-      saveFavorites([...favorites, projectId]);
+      saveFavorites([...favorites, projectPath]);
     }
   };
 
-  const isFavorite = (projectId: string) => favorites.includes(projectId);
+  // Toggle hidden (stored by path for cross-component compatibility)
+  const toggleHidden = (projectPath: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (hiddenProjects.includes(projectPath)) {
+      saveHidden(hiddenProjects.filter(p => p !== projectPath));
+    } else {
+      saveHidden([...hiddenProjects, projectPath]);
+      // Also remove from favorites if hiding
+      if (favorites.includes(projectPath)) {
+        saveFavorites(favorites.filter(p => p !== projectPath));
+      }
+    }
+  };
+
+  const isFavorite = (projectPath: string) => favorites.includes(projectPath);
+  const isHidden = (projectPath: string) => hiddenProjects.includes(projectPath);
+
+  // Set default project (with confirmation if replacing)
+  const handleSetDefault = (projectPath: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    // Unpin if already default
+    if (defaultProjectPath === projectPath) {
+      setDefaultProjectPath('');
+      window.electronAPI?.appSettings?.save({ defaultProjectPath: '' });
+      return;
+    }
+    // If another default exists, ask for confirmation
+    if (defaultProjectPath) {
+      setPendingDefaultPath(projectPath);
+      return;
+    }
+    // No existing default, just set it
+    setDefaultProjectPath(projectPath);
+    window.electronAPI?.appSettings?.save({ defaultProjectPath: projectPath });
+  };
+
+  const confirmSetDefault = () => {
+    if (pendingDefaultPath) {
+      setDefaultProjectPath(pendingDefaultPath);
+      window.electronAPI?.appSettings?.save({ defaultProjectPath: pendingDefaultPath });
+      setPendingDefaultPath(null);
+    }
+  };
+
+  const isDefaultProject = (projectPath: string) => defaultProjectPath === projectPath;
 
   // Normalize path for comparison
   const normalizePath = (path: string) => {
@@ -324,9 +390,19 @@ export default function ProjectsPage() {
 
   // Filter projects based on active tab and search query
   const projects = useMemo(() => {
-    let filtered = activeTab === 'favorites'
-      ? allProjects.filter(p => favorites.includes(p.id))
-      : allProjects;
+    let filtered: typeof allProjects;
+    switch (activeTab) {
+      case 'favorites':
+        filtered = allProjects.filter(p => favorites.includes(p.path) && !hiddenProjects.includes(p.path));
+        break;
+      case 'hidden':
+        filtered = allProjects.filter(p => hiddenProjects.includes(p.path));
+        break;
+      case 'active':
+      default:
+        filtered = allProjects.filter(p => !hiddenProjects.includes(p.path));
+        break;
+    }
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
@@ -337,9 +413,11 @@ export default function ProjectsPage() {
     }
 
     return filtered;
-  }, [allProjects, activeTab, favorites, searchQuery]);
+  }, [allProjects, activeTab, favorites, hiddenProjects, searchQuery]);
 
-  const favoritesCount = allProjects.filter(p => favorites.includes(p.id)).length;
+  const favoritesCount = allProjects.filter(p => favorites.includes(p.path) && !hiddenProjects.includes(p.path)).length;
+  const activeCount = allProjects.filter(p => !hiddenProjects.includes(p.path)).length;
+  const hiddenCount = allProjects.filter(p => hiddenProjects.includes(p.path)).length;
 
   const formatDate = (date: Date) => {
     const d = new Date(date);
@@ -425,23 +503,6 @@ export default function ProjectsPage() {
       <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setActiveTab('all')}
-              className={`
-                flex items-center gap-2 px-3 py-2 text-sm font-medium transition-all
-                ${activeTab === 'all'
-                  ? 'bg-foreground text-background'
-                  : 'bg-secondary text-muted-foreground hover:text-foreground border border-border'
-                }
-              `}
-            >
-              <Layers className="w-4 h-4" />
-              All
-              <span className={`px-1.5 py-0.5 text-xs ${activeTab === 'all' ? 'bg-black/10' : 'bg-white/10'
-                }`}>
-                {allProjects.length}
-              </span>
-            </button>
-            <button
               onClick={() => setActiveTab('favorites')}
               className={`
                 flex items-center gap-2 px-3 py-2 text-sm font-medium transition-all
@@ -457,6 +518,42 @@ export default function ProjectsPage() {
                 }`}>
                 {favoritesCount}
               </span>
+            </button>
+            <button
+              onClick={() => setActiveTab('active')}
+              className={`
+                flex items-center gap-2 px-3 py-2 text-sm font-medium transition-all
+                ${activeTab === 'active'
+                  ? 'bg-foreground text-background'
+                  : 'bg-secondary text-muted-foreground hover:text-foreground border border-border'
+                }
+              `}
+            >
+              <Layers className="w-4 h-4" />
+              Active
+              <span className={`px-1.5 py-0.5 text-xs ${activeTab === 'active' ? 'bg-black/10' : 'bg-white/10'
+                }`}>
+                {activeCount}
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab('hidden')}
+              className={`
+                flex items-center gap-2 px-3 py-2 text-sm font-medium transition-all
+                ${activeTab === 'hidden'
+                  ? 'bg-foreground text-background'
+                  : 'bg-secondary text-muted-foreground hover:text-foreground border border-border'
+                }
+              `}
+            >
+              <EyeOff className="w-4 h-4" />
+              Hidden
+              {hiddenCount > 0 && (
+                <span className={`px-1.5 py-0.5 text-xs ${activeTab === 'hidden' ? 'bg-black/10' : 'bg-white/10'
+                  }`}>
+                  {hiddenCount}
+                </span>
+              )}
             </button>
           </div>
 
@@ -480,6 +577,30 @@ export default function ProjectsPage() {
             )}
           </div>
         </div>
+
+      {/* Default Project Banner */}
+      <div className="border border-border bg-card p-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Pin className="w-4 h-4 text-yellow-400 shrink-0" />
+          <div>
+            <p className="text-sm font-medium">Default Project</p>
+            <p className="text-xs text-muted-foreground">
+              {defaultProjectPath
+                ? <>Auto-selected when creating agents or tasks &mdash; <span className="text-foreground font-mono">{defaultProjectPath.split('/').pop()}</span></>
+                : 'Pin a project to auto-select it when creating agents or kanban tasks'}
+            </p>
+          </div>
+        </div>
+        {defaultProjectPath && (
+          <button
+            onClick={() => { setDefaultProjectPath(''); window.electronAPI?.appSettings?.save({ defaultProjectPath: '' }); }}
+            className="px-3 py-1.5 text-xs border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors flex items-center gap-1.5"
+          >
+            <PinOff className="w-3 h-3" />
+            Unpin
+          </button>
+        )}
+      </div>
 
       {/* Projects Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -539,7 +660,7 @@ export default function ProjectsPage() {
 
                 {/* Project Info */}
                 <div className="text-center space-y-1">
-                  <h3 className="font-medium text-sm truncate" title={project.name}>
+                  <h3 className="font-normal text-sm truncate font-sans" title={project.name}>
                     {project.name}
                   </h3>
                   <p className="text-[10px] text-muted-foreground font-mono truncate" title={project.path}>
@@ -552,26 +673,63 @@ export default function ProjectsPage() {
                   </div>
                 </div>
 
-                {/* Favorite Star */}
+                {/* Pin + Favorite buttons */}
+                <div className="absolute top-2 right-2 flex items-center gap-0.5">
+                  <button
+                    onClick={(e) => handleSetDefault(project.path, e)}
+                    className={`
+                      p-1.5 transition-all
+                      ${isDefaultProject(project.path)
+                        ? 'opacity-100 text-yellow-400'
+                        : 'opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-yellow-400'
+                      }
+                    `}
+                    title={isDefaultProject(project.path) ? 'Unpin default' : 'Set as default project'}
+                  >
+                    <Pin className={`w-3.5 h-3.5 ${isDefaultProject(project.path) ? 'fill-current' : ''}`} />
+                  </button>
+                  <button
+                    onClick={(e) => toggleFavorite(project.path, e)}
+                    className={`
+                      p-1.5 transition-all
+                      ${isFavorite(project.path)
+                        ? 'opacity-100 text-yellow-400'
+                        : 'opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-yellow-400'
+                      }
+                    `}
+                  >
+                    <Star className={`w-4 h-4 ${isFavorite(project.path) ? 'fill-current' : ''}`} />
+                  </button>
+                </div>
+
+                {/* Hide / Unhide */}
                 <button
-                  onClick={(e) => toggleFavorite(project.id, e)}
+                  onClick={(e) => toggleHidden(project.path, e)}
                   className={`
-                    absolute top-2 right-2 p-1.5 transition-all
-                    ${isFavorite(project.id)
-                      ? 'opacity-100 text-yellow-400'
-                      : 'opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-yellow-400'
+                    absolute top-2 left-2 p-1.5 transition-all
+                    ${isHidden(project.path)
+                      ? 'opacity-100 text-muted-foreground hover:text-foreground'
+                      : 'opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground'
                     }
                   `}
+                  title={isHidden(project.path) ? 'Unhide project' : 'Hide project'}
                 >
-                  <Star className={`w-4 h-4 ${isFavorite(project.id) ? 'fill-current' : ''}`} />
+                  {isHidden(project.path) ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                 </button>
 
-                {/* Custom badge */}
-                {isCustomProject(project.path) && (
-                  <div className="absolute top-2 left-2">
-                    <span className="text-[9px] px-1.5 py-0.5 bg-purple-500/20 text-purple-400">
-                      Custom
-                    </span>
+                {/* Badges */}
+                {(isDefaultProject(project.path) || isCustomProject(project.path)) && (
+                  <div className="flex items-center justify-center gap-1 mt-1">
+                    {isDefaultProject(project.path) && (
+                      <span className="text-[9px] px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400">
+                        Default
+                      </span>
+                    )}
+                    {isCustomProject(project.path) && (
+                      <span className="text-[9px] px-1.5 py-0.5 bg-purple-500/20 text-purple-400">
+                        Custom
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
@@ -602,12 +760,14 @@ export default function ProjectsPage() {
         <div className="flex flex-col items-center justify-center py-20">
           <FolderKanban className="w-16 h-16 text-muted-foreground/30 mb-4" />
           <h3 className="font-medium text-lg mb-2">
-            {activeTab === 'favorites' ? 'No favorite projects' : 'No projects found'}
+            {activeTab === 'favorites' ? 'No favorite projects' : activeTab === 'hidden' ? 'No hidden projects' : 'No projects found'}
           </h3>
           <p className="text-muted-foreground text-sm">
             {activeTab === 'favorites'
-              ? 'Click the star icon to add favorites'
-              : 'Start using Claude Code to see projects here'}
+              ? 'Click the star icon on a project to add it to favorites'
+              : activeTab === 'hidden'
+                ? 'Hidden projects will appear here'
+                : 'Start using Claude Code to see projects here'}
           </p>
         </div>
       )}
@@ -706,6 +866,19 @@ export default function ProjectsPage() {
                     </button>
                   )}
                 </div>
+
+                {/* Set as default */}
+                <button
+                  onClick={() => handleSetDefault(selectedProject.path)}
+                  className={`w-full px-4 py-2 text-sm flex items-center justify-center gap-2 border transition-colors ${
+                    isDefaultProject(selectedProject.path)
+                      ? 'border-yellow-500/50 bg-yellow-500/10 text-yellow-400'
+                      : 'border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-yellow-500/30'
+                  }`}
+                >
+                  <Pin className={`w-4 h-4 ${isDefaultProject(selectedProject.path) ? 'fill-current text-yellow-400' : ''}`} />
+                  {isDefaultProject(selectedProject.path) ? 'Default Project' : 'Pin as Default'}
+                </button>
 
                 {/* Stats */}
                 <div className="grid grid-cols-3 gap-3">
@@ -890,6 +1063,52 @@ export default function ProjectsPage() {
                     Remove Project
                   </button>
                 )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Replace Default Project Confirmation Dialog */}
+      <AnimatePresence>
+        {pendingDefaultPath && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setPendingDefaultPath(null)}
+              className="fixed inset-0 bg-black/60 z-[60]"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[60] w-full max-w-sm"
+            >
+              <div className="bg-card border border-border p-6 space-y-4">
+                <div className="flex items-center gap-3">
+                  <Pin className="w-5 h-5 text-yellow-400" />
+                  <h3 className="font-medium">Replace Default Project?</h3>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  <span className="text-foreground font-mono">{defaultProjectPath.split('/').pop()}</span> is currently the default project. Replace it with{' '}
+                  <span className="text-foreground font-mono">{pendingDefaultPath.split('/').pop()}</span>?
+                </p>
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setPendingDefaultPath(null)}
+                    className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmSetDefault}
+                    className="px-4 py-2 bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors"
+                  >
+                    Replace
+                  </button>
+                </div>
               </div>
             </motion.div>
           </>

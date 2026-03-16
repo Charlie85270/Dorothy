@@ -1,6 +1,7 @@
 import { app, Notification, BrowserWindow } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
+import { execFile } from 'child_process';
 import { AgentStatus } from '../types';
 import { TG_CHARACTER_FACES, SLACK_CHARACTER_FACES, DATA_DIR, OLD_DATA_DIR } from '../constants';
 
@@ -131,18 +132,38 @@ export function migrateFromClaudeManager() {
   }
 }
 
+type NotificationSoundKey = 'waiting' | 'complete' | 'stop' | 'error';
+
+// Resolve which sound key to use based on notification title heuristics
+function inferSoundKey(title: string): NotificationSoundKey | undefined {
+  const t = title.toLowerCase();
+  if (t.includes('permission') || t.includes('waiting') || t.includes('attention')) return 'waiting';
+  if (t.includes('finished') || t.includes('response')) return 'stop';
+  if (t.includes('completed') || t.includes('done')) return 'complete';
+  if (t.includes('error')) return 'error';
+  return undefined;
+}
+
 export function sendNotification(
   title: string,
   body: string,
   agentId?: string,
-  appSettings?: { notificationsEnabled: boolean }
+  appSettings?: { notificationsEnabled: boolean; notificationSounds?: Record<string, string> },
 ) {
   if (!appSettings?.notificationsEnabled) return;
+
+  const soundKey = inferSoundKey(title);
+  const soundFilePath = soundKey ? appSettings.notificationSounds?.[soundKey] : undefined;
+  const fileExists = soundFilePath ? fs.existsSync(soundFilePath) : false;
+  const hasCustomSound = !!(soundFilePath && fileExists);
+
+  console.log(`[notification] title="${title}" soundKey=${soundKey} soundFilePath=${soundFilePath} fileExists=${fileExists} hasCustomSound=${hasCustomSound}`);
+  console.log(`[notification] appSettings.notificationSounds=`, JSON.stringify(appSettings?.notificationSounds));
 
   const notification = new Notification({
     title,
     body,
-    silent: false,
+    silent: hasCustomSound, // silence system sound if we're playing a custom one
   });
 
   notification.on('click', () => {
@@ -156,6 +177,32 @@ export function sendNotification(
   });
 
   notification.show();
+
+  if (hasCustomSound) {
+    playSound(soundFilePath!);
+  }
+}
+
+function playSound(filePath: string): void {
+  if (process.platform === 'darwin') {
+    execFile('afplay', [filePath], (err) => {
+      if (err) console.error('Failed to play notification sound:', err.message);
+    });
+  } else if (process.platform === 'win32') {
+    // PowerShell one-liner to play audio on Windows
+    execFile('powershell', ['-c', `(New-Object Media.SoundPlayer '${filePath}').PlaySync()`], (err) => {
+      if (err) console.error('Failed to play notification sound:', err.message);
+    });
+  } else {
+    // Linux — try common players
+    execFile('paplay', [filePath], (err) => {
+      if (err) {
+        execFile('aplay', [filePath], (err2) => {
+          if (err2) console.error('Failed to play notification sound:', err2.message);
+        });
+      }
+    });
+  }
 }
 
 export function isSuperAgent(agent: AgentStatus): boolean {

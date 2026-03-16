@@ -59,7 +59,14 @@ export default function SidebarAgentList({
             {/* Avatar */}
             <div className="relative">
               <span className="text-sm">{emoji}</span>
-              <span className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ${status.dot}`} />
+              {agent.status === 'running' ? (
+                <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-600" />
+                </span>
+              ) : (
+                <span className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ${status.dot}`} />
+              )}
             </div>
 
             {/* Info */}

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { isElectron } from '@/hooks/useElectron';
 import type { AgentProvider } from '@/types/electron';
 import { getTerminalTheme } from '@/components/AgentWorld/constants';
+import { attachShiftEnterHandler } from '@/lib/terminal';
 
 interface UseAgentTerminalProps {
   selectedAgentId: string | null;
@@ -120,6 +121,13 @@ export function useAgentTerminal({ selectedAgentId, terminalRef, provider, termi
       clickContainer = container;
       clickHandler = () => term.focus();
       container.addEventListener('click', clickHandler);
+
+      attachShiftEnterHandler(term, (data) => {
+        const agentId = selectedAgentIdRef.current;
+        if (agentId && window.electronAPI?.agent?.sendInput) {
+          window.electronAPI.agent.sendInput({ id: agentId, input: data }).catch(() => {});
+        }
+      });
 
       // Handle user input - send to agent PTY
       // Filter out terminal query responses that xterm.js emits automatically.

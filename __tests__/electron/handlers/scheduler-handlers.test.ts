@@ -86,6 +86,7 @@ describe('scheduler-handlers', () => {
         notificationsEnabled: true,
         notifyOnWaiting: true,
         notifyOnComplete: true,
+        notifyOnStop: true,
         notifyOnError: true,
         telegramEnabled: false,
         telegramBotToken: '',

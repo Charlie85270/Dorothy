@@ -1,8 +1,10 @@
-import { ipcMain, dialog, shell } from 'electron';
+import { ipcMain, dialog, shell, app } from 'electron';
 import { checkForUpdates, downloadUpdate, quitAndInstall } from '../services/update-checker';
 import { registerMemoryHandlers } from './memory-handlers';
 import { registerObsidianHandlers } from './obsidian-handlers';
 import { registerGwsHandlers } from './gws-handlers';
+import { registerMcpConfigHandlers } from './mcp-config-handlers';
+import { broadcastToAllWindows } from '../utils/broadcast';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -17,6 +19,8 @@ import { buildFullPath } from '../utils/path-builder';
 import { decodeProjectPath } from '../utils/decode-project-path';
 import { getProvider, getAllProviders } from '../providers';
 import { writeProgrammaticInput } from '../core/pty-manager';
+import { extractStatusLine } from '../utils/ansi';
+import { scheduleTick } from '../utils/agents-tick';
 
 // Dependencies interface for dependency injection
 export interface IpcHandlerDependencies {
@@ -73,7 +77,9 @@ export function registerIpcHandlers(deps: IpcHandlerDependencies): void {
   registerMemoryHandlers();
   registerObsidianHandlers({ getAppSettings: deps.getAppSettings, setAppSettings: deps.setAppSettings, saveAppSettings: deps.saveAppSettings });
   registerGwsHandlers({ getAppSettings: deps.getAppSettings, setAppSettings: deps.setAppSettings, saveAppSettings: deps.saveAppSettings });
+  registerMcpConfigHandlers();
   registerApiTokenHandler();
+  registerTrayHandlers(deps);
 }
 
 // ============== API Token IPC Handler ==============
@@ -82,6 +88,26 @@ function registerApiTokenHandler(): void {
   ipcMain.handle('api:getToken', async () => {
     const { getApiToken } = await import('../services/api-server');
     return getApiToken();
+  });
+}
+
+// ============== Tray Panel IPC Handlers ==============
+
+function registerTrayHandlers(deps: IpcHandlerDependencies): void {
+  const { getMainWindow } = deps;
+
+  ipcMain.handle('tray:showMainWindow', async () => {
+    const win = getMainWindow();
+    if (win) {
+      win.show();
+      win.focus();
+    }
+    return { success: true };
+  });
+
+  ipcMain.handle('tray:quit', async () => {
+    app.quit();
+    return { success: true };
   });
 }
 
@@ -334,6 +360,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
 
       agent.output.push(data);
       agent.lastActivity = new Date().toISOString();
+      agent.statusLine = extractStatusLine(agent.output);
 
       // Capture Super Agent output for Telegram
       if (getSuperAgentTelegramTask() && isSuperAgent(agent)) {
@@ -344,13 +371,14 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
         }
       }
 
-      getMainWindow()?.webContents.send('agent:output', {
+      broadcastToAllWindows('agent:output', {
         type: 'output',
         agentId: id,
         ptyId,
         data,
         timestamp: new Date().toISOString(),
       });
+      scheduleTick();
     });
 
     ptyProcess.onExit(({ exitCode }) => {
@@ -362,7 +390,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
         agent.status = newStatus;
         agent.lastActivity = new Date().toISOString();
         handleStatusChangeNotification(agent, newStatus);
-        getMainWindow()?.webContents.send('agent:complete', {
+        broadcastToAllWindows('agent:complete', {
           type: 'complete',
           agentId: id,
           ptyId,
@@ -371,6 +399,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
         });
       }
       ptyProcesses.delete(ptyId);
+      scheduleTick();
     });
 
     return { ...status, ptyId };
@@ -472,6 +501,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
         if (agentData) {
           agentData.output.push(data);
           agentData.lastActivity = new Date().toISOString();
+          agentData.statusLine = extractStatusLine(agentData.output);
           if (getSuperAgentTelegramTask() && isSuperAgent(agentData)) {
             const buffer = getSuperAgentOutputBuffer();
             buffer.push(data);
@@ -480,13 +510,14 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
             }
           }
         }
-        getMainWindow()?.webContents.send('agent:output', {
+        broadcastToAllWindows('agent:output', {
           type: 'output',
           agentId: id,
           ptyId: newPtyId,
           data,
           timestamp: new Date().toISOString(),
         });
+        scheduleTick();
       });
 
       newPty.onExit(({ exitCode }) => {
@@ -499,13 +530,14 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
           handleStatusChangeNotification(agentData, newStatus);
         }
         ptyProcesses.delete(newPtyId);
-        getMainWindow()?.webContents.send('agent:complete', {
+        broadcastToAllWindows('agent:complete', {
           type: 'complete',
           agentId: id,
           ptyId: newPtyId,
           exitCode,
           timestamp: new Date().toISOString(),
         });
+        scheduleTick();
       });
     }
 
@@ -562,6 +594,13 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     agent.status = 'running';
     agent.currentTask = prompt.slice(0, 100);
     agent.lastActivity = new Date().toISOString();
+    broadcastToAllWindows('agent:status', {
+      type: 'status',
+      agentId: id,
+      status: 'running',
+      timestamp: agent.lastActivity,
+    });
+    scheduleTick();
 
     // First cd to the appropriate directory (worktree if exists, otherwise project), then run claude
     const workingPath = (agent.worktreePath || agent.projectPath).replace(/'/g, "'\\''");
@@ -668,13 +707,14 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       (agent as AgentStatus & { _manuallyStoppedAt?: number })._manuallyStoppedAt = Date.now();
       saveAgents();
 
-      // Send status change notification to frontend immediately
-      getMainWindow()?.webContents.send('agent:status', {
+      // Send status change notification to all windows
+      broadcastToAllWindows('agent:status', {
         type: 'status',
         agentId: id,
         status: 'idle',
         timestamp: new Date().toISOString(),
       });
+      scheduleTick();
     }
     return { success: true };
   });
@@ -1209,6 +1249,16 @@ function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
         initSlackBot();
       }
 
+      // Toggle Claude Code statusline
+      if (newSettings.statusLineEnabled !== undefined) {
+        const { enableStatusLine, disableStatusLine } = await import('../utils/statusline');
+        if (newSettings.statusLineEnabled) {
+          enableStatusLine();
+        } else {
+          disableStatusLine();
+        }
+      }
+
       return { success: true };
     } catch (err) {
       console.error('Failed to save app settings:', err);
@@ -1566,6 +1616,17 @@ function registerFileSystemHandlers(deps: IpcHandlerDependencies): void {
       ],
     });
     return result.filePaths || [];
+  });
+
+  // Open audio file dialog (for notification sounds)
+  ipcMain.handle('dialog:open-audio', async () => {
+    const result = await dialog.showOpenDialog(getMainWindow()!, {
+      properties: ['openFile'],
+      filters: [
+        { name: 'Audio Files', extensions: ['mp3', 'wav', 'ogg', 'aac', 'm4a', 'flac'] },
+      ],
+    });
+    return result.filePaths[0] || null;
   });
 }
 

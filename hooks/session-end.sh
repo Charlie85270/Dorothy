@@ -1,6 +1,6 @@
 #!/bin/bash
 # Session end hook for dorothy
-# Sets agent status to "idle" when session terminates and captures final output
+# Sets agent status to "completed" when session terminates and captures final output
 
 # Read JSON input from stdin
 INPUT=$(cat)
@@ -10,6 +10,8 @@ SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
 TRANSCRIPT_PATH=$(echo "$INPUT" | jq -r '.transcript_path // empty')
 CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
 REASON=$(echo "$INPUT" | jq -r '.reason // "other"')
+
+echo "[$(date)] SESSION_END hook. AGENT_ID=${CLAUDE_AGENT_ID:-unset} SESSION_ID=$SESSION_ID" >> /tmp/dorothy-hooks.log
 
 # API endpoint
 API_URL="http://127.0.0.1:31415"
@@ -32,18 +34,18 @@ if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
     head -c 4000)
 
   if [ -n "$LAST_ASSISTANT_MSG" ]; then
-    curl -s -X POST "$API_URL/api/hooks/output" \
+    curl -s --max-time 3 -X POST "$API_URL/api/hooks/output" \
       -H "Content-Type: application/json" \
       -d "{\"agent_id\": \"$AGENT_ID\", \"session_id\": \"$SESSION_ID\", \"output\": $(echo "$LAST_ASSISTANT_MSG" | jq -Rs .)}" \
-      > /dev/null 2>&1 &
+      > /dev/null 2>&1
   fi
 fi
 
-# Update agent status to "idle" (session ended)
-curl -s -X POST "$API_URL/api/hooks/status" \
+# Update agent status to "completed" (session ended)
+curl -s --max-time 3 -X POST "$API_URL/api/hooks/status" \
   -H "Content-Type: application/json" \
-  -d "{\"agent_id\": \"$AGENT_ID\", \"session_id\": \"$SESSION_ID\", \"status\": \"idle\", \"reason\": \"$REASON\"}" \
-  > /dev/null 2>&1 &
+  -d "{\"agent_id\": \"$AGENT_ID\", \"session_id\": \"$SESSION_ID\", \"status\": \"completed\", \"reason\": \"$REASON\"}" \
+  > /dev/null 2>&1
 
 # Output hook response
 echo '{"continue":true,"suppressOutput":true}'

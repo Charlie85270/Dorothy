@@ -18,7 +18,10 @@ import {
   Sun,
   Archive,
   Brain,
+  Gift,
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { LATEST_RELEASE, WHATS_NEW_STORAGE_KEY } from '@/data/changelog';
 
 // Custom icon component for Pallet Town using the pokemon logo
 const PalletTownIcon = ({ className }: { className?: string }) => (
@@ -47,9 +50,26 @@ interface SidebarProps {
   isMobile?: boolean;
 }
 
+function useWhatsNewBadge() {
+  const [hasNew, setHasNew] = useState(false);
+
+  useEffect(() => {
+    const check = () => {
+      const lastSeen = Number(localStorage.getItem(WHATS_NEW_STORAGE_KEY) || '0');
+      setHasNew(LATEST_RELEASE.id > lastSeen);
+    };
+    check();
+    window.addEventListener('whats-new-seen', check);
+    return () => window.removeEventListener('whats-new-seen', check);
+  }, []);
+
+  return hasNew;
+}
+
 export default function Sidebar({ isMobile = false }: SidebarProps) {
   const pathname = usePathname();
   const { sidebarCollapsed, toggleSidebar, mobileMenuOpen, setMobileMenuOpen, darkMode, toggleDarkMode, vaultUnreadCount } = useStore();
+  const whatsNewHasNew = useWhatsNewBadge();
 
   // For mobile, sidebar is always expanded (240px) when open
   const sidebarWidth = isMobile ? 240 : (sidebarCollapsed ? 72 : 240);
@@ -128,18 +148,60 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
           })}
         </nav>
 
-        {/* Status indicator */}
-        {showLabels && (
-          <div className="px-4 py-3 border-t border-border">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-              </span>
-              <span>Connected</span>
-            </div>
-          </div>
-        )}
+        {/* What's New + Status indicator */}
+        <div className="border-t border-border">
+          {showLabels && (
+            <>
+              <Link
+                href="/whats-new"
+                className={`flex items-center gap-3 px-5 py-3 transition-colors ${
+                  pathname === '/whats-new'
+                    ? 'bg-primary/20 text-primary border-l-2 border-primary'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+                }`}
+              >
+                <div className="relative">
+                  <Gift className="w-5 h-5" />
+                  {whatsNewHasNew && (
+                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
+                  )}
+                </div>
+                <span className="text-sm flex-1">What&apos;s New</span>
+                {whatsNewHasNew && (
+                  <span className="min-w-[20px] h-[20px] flex items-center justify-center text-[10px] font-bold bg-red-500 text-white rounded-full px-1">
+                    1
+                  </span>
+                )}
+              </Link>
+              <div className="px-4 py-3 border-t border-border">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                  </span>
+                  <span>Connected</span>
+                </div>
+              </div>
+            </>
+          )}
+          {!showLabels && (
+            <Link
+              href="/whats-new"
+              className={`flex items-center justify-center py-3 transition-colors ${
+                pathname === '/whats-new'
+                  ? 'bg-primary/20 text-primary'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+              }`}
+            >
+              <div className="relative">
+                <Gift className="w-5 h-5" />
+                {whatsNewHasNew && (
+                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
+                )}
+              </div>
+            </Link>
+          )}
+        </div>
 
         {/* Settings & Collapse */}
         <div className="border-t border-border">
@@ -238,14 +300,38 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
             })}
           </nav>
 
-          {/* Status indicator */}
-          <div className="px-4 py-3 border-t border-border">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-              </span>
-              <span>Connected</span>
+          {/* What's New + Status indicator */}
+          <div className="border-t border-border">
+            <Link
+              href="/whats-new"
+              onClick={handleNavClick}
+              className={`flex items-center gap-3 px-5 py-3 transition-colors ${
+                pathname === '/whats-new'
+                  ? 'bg-primary/20 text-primary border-l-2 border-primary'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+              }`}
+            >
+              <div className="relative">
+                <Gift className="w-5 h-5" />
+                {whatsNewHasNew && (
+                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
+                )}
+              </div>
+              <span className="text-sm flex-1">What&apos;s New</span>
+              {whatsNewHasNew && (
+                <span className="min-w-[20px] h-[20px] flex items-center justify-center text-[10px] font-bold bg-red-500 text-white rounded-full px-1">
+                  1
+                </span>
+              )}
+            </Link>
+            <div className="px-4 py-3 border-t border-border">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                </span>
+                <span>Connected</span>
+              </div>
             </div>
           </div>
 

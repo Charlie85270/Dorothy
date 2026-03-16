@@ -677,7 +677,7 @@ export default function PokemonGame() {
     // Auto-start idle agents — same as agents/page.tsx handleSelectAgent
     if (electronAgents) {
       const agent = electronAgents.agents.find((a: any) => a.id === agentId);
-      if (agent && (agent.status === 'idle' || agent.status === 'completed' || agent.status === 'error') && !agent.pathMissing) {
+      if (agent && (agent.status === 'idle' || agent.status === 'completed' || agent.status === 'error') && !agent.pathMissing && !agent.ptyId) {
         setTimeout(() => {
           electronAgents.startAgent(agentId, '');
         }, 100);

@@ -16,6 +16,20 @@ export interface WorktreeConfig {
   branchName: string;
 }
 
+export interface EditAgentData {
+  id: string;
+  name?: string;
+  character?: AgentCharacter;
+  projectPath: string;
+  secondaryProjectPath?: string;
+  skills: string[];
+  skipPermissions?: boolean;
+  provider?: AgentProvider;
+  localModel?: string;
+  branchName?: string;
+  obsidianVaultPaths?: string[];
+}
+
 export interface NewChatModalProps {
   open: boolean;
   onClose: () => void;
@@ -33,6 +47,14 @@ export interface NewChatModalProps {
     localModel?: string,
     obsidianVaultPaths?: string[],
   ) => void;
+  onUpdate?: (id: string, updates: {
+    skills?: string[];
+    secondaryProjectPath?: string | null;
+    skipPermissions?: boolean;
+    name?: string;
+    character?: AgentCharacter;
+  }) => void;
+  editAgent?: EditAgentData | null;
   projects: Project[];
   onBrowseFolder?: () => Promise<string | null>;
   installedSkills?: string[];

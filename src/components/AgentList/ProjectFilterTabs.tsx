@@ -25,21 +25,21 @@ export function ProjectFilterTabs({
   if (uniqueProjects.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-2">
+    <div className="flex items-center gap-1 mb-3 overflow-x-auto pb-1">
       {/* All tab */}
       <button
         onClick={() => onFilterChange(null)}
         className={`
-          flex items-center gap-2 px-3 py-2 text-sm font-medium transition-all whitespace-nowrap
+          flex items-center gap-1.5 px-2 py-1 text-xs font-medium transition-all whitespace-nowrap
           ${projectFilter === null
             ? 'bg-foreground text-background'
             : 'bg-secondary text-muted-foreground hover:text-foreground border border-border'
           }
         `}
       >
-        <Layers className="w-4 h-4" />
+        <Layers className="w-3 h-3" />
         All Projects
-        <span className={`px-1.5 py-0.5 text-xs ${
+        <span className={`px-1 py-px text-[10px] ${
           projectFilter === null ? 'bg-black/10' : 'bg-white/10'
         }`}>
           {totalAgentCount}
@@ -56,7 +56,7 @@ export function ProjectFilterTabs({
             key={path}
             onClick={() => onFilterChange(path)}
             className={`
-              flex items-center gap-2 px-3 py-2 text-sm font-medium transition-all whitespace-nowrap
+              flex items-center gap-1.5 px-2 py-1 text-xs font-medium transition-all whitespace-nowrap
               ${isActive
                 ? 'bg-foreground text-background'
                 : 'bg-secondary text-muted-foreground hover:text-foreground border border-border'
@@ -64,9 +64,9 @@ export function ProjectFilterTabs({
             `}
             title={path}
           >
-            <FolderOpen className="w-4 h-4" />
-            <span className="truncate max-w-[150px]">{name}</span>
-            <span className={`px-1.5 py-0.5 text-xs ${
+            <FolderOpen className="w-3 h-3" />
+            <span className="truncate max-w-[120px]">{name}</span>
+            <span className={`px-1 py-px text-[10px] ${
               isActive ? 'bg-black/10' : 'bg-white/10'
             }`}>
               {agentCount}

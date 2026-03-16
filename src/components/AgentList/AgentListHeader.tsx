@@ -30,7 +30,7 @@ export function AgentListHeader({
           onClick={onSuperAgentClick}
           disabled={isCreatingSuperAgent}
           className={`
-            flex items-center justify-center gap-2 px-3 lg:px-4 py-2 font-medium rounded-none transition-all text-sm lg:text-base
+            flex items-center justify-center gap-1.5 px-3 py-1.5 font-medium rounded-none transition-all text-sm
             ${superAgent
               ? superAgent.status === 'running' || superAgent.status === 'waiting'
                 ? 'bg-green-500/20 border border-green-500/50 text-green-700 hover:bg-green-500/30 shadow-lg shadow-green-500/20'
@@ -42,10 +42,10 @@ export function AgentListHeader({
           title={superAgent ? `Super Agent (${superAgent.status})` : 'Create Super Agent'}
         >
           {isCreatingSuperAgent ? (
-            <Loader2 className="w-4 h-4 animate-spin text-green-500" />
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-green-500" />
           ) : (
             <div className="relative">
-              <Crown className={`w-4 h-4 ${superAgent ? 'text-amber-400' : ''}`} />
+              <Crown className={`w-3.5 h-3.5 ${superAgent ? 'text-amber-400' : ''}`} />
               {superAgent && (
                 <span className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-bg-tertiary ${superAgent.status === 'running' ? 'bg-green-400 animate-pulse' :
                   superAgent.status === 'waiting' ? 'bg-amber-400 animate-pulse' :
@@ -64,9 +64,9 @@ export function AgentListHeader({
         {/* New Agent Button */}
         <button
           onClick={onNewAgentClick}
-          className="flex items-center justify-center gap-2 px-4 py-2 bg-foreground text-background font-medium hover:bg-foreground/90 transition-colors text-sm lg:text-base"
+          className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-foreground text-background font-medium hover:bg-foreground/90 transition-colors text-sm"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">New Agent</span>
           <span className="sm:hidden">New</span>
         </button>

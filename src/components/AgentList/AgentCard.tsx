@@ -2,7 +2,7 @@
 
 import { Loader2, AlertTriangle, GitBranch, Pencil, Crown } from 'lucide-react';
 import type { AgentStatus } from '@/types/electron';
-import { STATUS_COLORS, CHARACTER_FACES, getProjectColor, isSuperAgentCheck } from '@/app/agents/constants';
+import { STATUS_COLORS, STATUS_LABELS, CHARACTER_FACES, getProjectColor, isSuperAgentCheck } from '@/app/agents/constants';
 
 const PROVIDER_ICONS: Record<string, { src: string; alt: string }> = {
   claude: { src: '/claude-ai-icon.webp', alt: 'Claude' },
@@ -99,7 +99,7 @@ export function AgentCard({ agent, isSelected, onSelect, onEdit }: AgentCardProp
                   ? 'bg-amber-500/20 text-amber-400'
                   : `${statusConfig.bg} ${statusConfig.text}`
               }`}>
-                {agent.status}
+                {STATUS_LABELS[agent.status]}
               </span>
             </div>
           </div>
@@ -110,7 +110,7 @@ export function AgentCard({ agent, isSelected, onSelect, onEdit }: AgentCardProp
                 Path not found
               </span>
             ) : (
-              agent.currentTask || 'Waiting for task...'
+              agent.currentTask || 'Ready to work'
             )}
           </p>
           {/* Project badge and branch */}

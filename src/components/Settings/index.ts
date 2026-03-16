@@ -29,5 +29,6 @@ export { OpenCodeSection } from './OpenCodeSection';
 export { GoogleWorkspaceSection } from './GoogleWorkspaceSection';
 export { PermissionsSection } from './PermissionsSection';
 export { SkillsSection } from './SkillsSection';
+export { McpSection } from './McpSection';
 export { CLIPathsSection } from './CLIPathsSection';
 export { SystemSection } from './SystemSection';

@@ -5,11 +5,14 @@ import * as pty from 'node-pty';
 import { v4 as uuidv4 } from 'uuid';
 import { BrowserWindow, Notification } from 'electron';
 import { AgentStatus, AppSettings } from '../types';
+import { broadcastToAllWindows } from '../utils/broadcast';
 import { AGENTS_FILE, DATA_DIR } from '../constants';
 import { ensureDataDir, isSuperAgent } from '../utils';
 import { ptyProcesses } from './pty-manager';
 import { buildFullPath } from '../utils/path-builder';
 import { getProvider } from '../providers';
+import { extractStatusLine } from '../utils/ansi';
+import { scheduleTick } from '../utils/agents-tick';
 
 export const agents: Map<string, AgentStatus> = new Map();
 
@@ -310,6 +313,7 @@ export async function initAgentPty(
     if (agentData) {
       agentData.output.push(data);
       agentData.lastActivity = new Date().toISOString();
+      agentData.statusLine = extractStatusLine(agentData.output);
 
       if (superAgentTelegramTask && isSuperAgent(agentData)) {
         superAgentOutputBuffer.push(data);
@@ -318,15 +322,14 @@ export async function initAgentPty(
         }
       }
     }
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('agent:output', {
-        type: 'output',
-        agentId: agent.id,
-        ptyId,
-        data,
-        timestamp: new Date().toISOString(),
-      });
-    }
+    broadcastToAllWindows('agent:output', {
+      type: 'output',
+      agentId: agent.id,
+      ptyId,
+      data,
+      timestamp: new Date().toISOString(),
+    });
+    scheduleTick();
   });
 
   ptyProcess.onExit(({ exitCode }) => {
@@ -340,15 +343,14 @@ export async function initAgentPty(
       saveAgentsCallback();
     }
     ptyProcesses.delete(ptyId);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('agent:complete', {
-        type: 'complete',
-        agentId: agent.id,
-        ptyId,
-        exitCode,
-        timestamp: new Date().toISOString(),
-      });
-    }
+    broadcastToAllWindows('agent:complete', {
+      type: 'complete',
+      agentId: agent.id,
+      ptyId,
+      exitCode,
+      timestamp: new Date().toISOString(),
+    });
+    scheduleTick();
   });
 
   return ptyId;

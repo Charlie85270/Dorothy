@@ -208,8 +208,10 @@ export default function TerminalsView() {
   }, [multiTerminal]);
 
   const handleStartAll = useCallback(async () => {
-    const idle = filteredAgents.filter(a => a.status === 'idle' || a.status === 'completed');
-    for (const agent of idle) {
+    const needsStart = filteredAgents.filter(a =>
+      (a.status === 'idle' || a.status === 'completed') && !a.ptyId
+    );
+    for (const agent of needsStart) {
       await startAgent(agent.id, '', { resume: true });
     }
   }, [filteredAgents, startAgent]);
@@ -266,13 +268,17 @@ export default function TerminalsView() {
     setShowNewChatModal(false);
   }, [createAgent, tabManager]);
 
-  // Auto-start all idle agents when the Terminals view opens
+  // Auto-start agents that have no PTY (freshly loaded from disk).
+  // Skip agents that already have a live PTY — they're idle but have an
+  // active Claude session waiting for the next prompt.
   const autoStartedRef = useRef(false);
   useEffect(() => {
     if (isLoading || autoStartedRef.current) return;
     autoStartedRef.current = true;
-    const idle = agents.filter(a => a.status === 'idle' || a.status === 'completed');
-    for (const agent of idle) {
+    const needsStart = agents.filter(a =>
+      (a.status === 'idle' || a.status === 'completed') && !a.ptyId
+    );
+    for (const agent of needsStart) {
       startAgent(agent.id, '', { resume: true }).catch(() => { });
     }
   }, [isLoading, agents, startAgent]);

@@ -39,14 +39,15 @@ export function killAllPty(): void {
 
 /**
  * Write a command to a PTY and submit it.
- * Sends plain text + carriage return. The receiving shell (bash/zsh) parses it
- * as a normal command line.
+ * Sends plain text, then a carriage return after a short delay so that
+ * interactive TUI programs (e.g. Claude Code) finish processing the pasted
+ * text before receiving the submit keystroke.
  *
  * DO NOT use this for raw keystroke passthrough from xterm.js UI terminals.
  */
 export function writeProgrammaticInput(ptyProcess: pty.IPty, data: string): void {
   ptyProcess.write(data);
-  ptyProcess.write('\r');
+  setTimeout(() => ptyProcess.write('\r'), 100);
 }
 
 export function writeToPty(ptyId: string, data: string, isQuick = false): boolean {

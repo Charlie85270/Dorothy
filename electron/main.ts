@@ -394,10 +394,20 @@ app.whenReady().then(async () => {
   });
 
   // Initialize vault database
-  initVaultDb();
+  try {
+    initVaultDb();
+    console.log('[Dorothy] Vault database initialized successfully');
+  } catch (err) {
+    console.error('[Dorothy] Failed to initialize vault database:', err);
+  }
 
   // Register vault handlers
-  registerVaultHandlers({ getMainWindow });
+  try {
+    registerVaultHandlers({ getMainWindow });
+    console.log('[Dorothy] Vault handlers registered successfully');
+  } catch (err) {
+    console.error('[Dorothy] Failed to register vault handlers:', err);
+  }
 
   // Register world (generative zone) handlers
   registerWorldHandlers({ getMainWindow });

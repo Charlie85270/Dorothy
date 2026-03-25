@@ -29,6 +29,7 @@ import { SimpleMarkdown } from './MarkdownRenderer';
 
 interface DocumentEditorProps {
   document?: VaultDocumentElectron | null;
+  localFile?: { filePath: string; filename: string; content: string } | null;
   folders: VaultFolderElectron[];
   defaultFolderId?: string | null;
   onSave: (data: {
@@ -92,19 +93,20 @@ function getFileName(filepath: string): string {
   return filepath.split('/').pop()?.split('\\').pop() || 'file';
 }
 
-export default function DocumentEditor({ document, folders, defaultFolderId, onSave, onCancel }: DocumentEditorProps) {
-  const [title, setTitle] = useState(document?.title || '');
-  const [content, setContent] = useState(document?.content || '');
+export default function DocumentEditor({ document, localFile, folders, defaultFolderId, onSave, onCancel }: DocumentEditorProps) {
+  const isLocalFile = !!localFile;
+  const [title, setTitle] = useState(localFile?.filename || document?.title || '');
+  const [content, setContent] = useState(localFile?.content || document?.content || '');
   const [tagsInput, setTagsInput] = useState(document ? parseTags(document.tags).join(', ') : '');
   const [folderId, setFolderId] = useState<string | null>(document?.folder_id || defaultFolderId || null);
   const [activeTab, setActiveTab] = useState<EditorTab>('write');
   const [pendingFiles, setPendingFiles] = useState<string[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const isNew = !document;
+  const isNew = !document && !localFile;
 
   const handleSave = () => {
-    if (!title.trim()) return;
+    if (!isLocalFile && !title.trim()) return;
     const tags = tagsInput.split(',').map(t => t.trim()).filter(Boolean);
     onSave({ title: title.trim(), content, tags, folder_id: folderId, pendingFiles });
   };
@@ -243,8 +245,13 @@ export default function DocumentEditor({ document, folders, defaultFolderId, onS
             <ArrowLeft className="w-4 h-4" />
           </button>
           <h2 className="font-semibold text-foreground">
-            {isNew ? 'New Document' : 'Edit Document'}
+            {isLocalFile ? 'Edit File' : isNew ? 'New Document' : 'Edit Document'}
           </h2>
+          {isLocalFile && localFile && (
+            <span className="text-xs text-muted-foreground truncate max-w-[300px]" title={localFile.filePath}>
+              {localFile.filePath}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -256,11 +263,11 @@ export default function DocumentEditor({ document, folders, defaultFolderId, onS
           </button>
           <button
             onClick={handleSave}
-            disabled={!title.trim()}
+            disabled={!isLocalFile && !title.trim()}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-foreground text-background rounded hover:bg-foreground/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <Save className="w-3.5 h-3.5" />
-            {isNew ? 'Create' : 'Save'}
+            {isLocalFile ? 'Save' : isNew ? 'Create' : 'Save'}
           </button>
         </div>
       </div>
@@ -268,17 +275,20 @@ export default function DocumentEditor({ document, folders, defaultFolderId, onS
       {/* Editor form */}
       <div className="flex-1 overflow-y-auto">
         <div className="px-4 lg:px-6 py-5 space-y-4">
-          {/* Title */}
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Document title..."
-            className="w-full text-sm bg-secondary border border-border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary"
-            autoFocus
-          />
+          {/* Title — hidden for local files */}
+          {!isLocalFile && (
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Document title..."
+              className="w-full text-sm bg-secondary border border-border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary"
+              autoFocus
+            />
+          )}
 
-          {/* Meta row: folder + tags */}
+          {/* Meta row: folder + tags — hidden for local files */}
+          {!isLocalFile && (
           <div className="flex items-center gap-4 pb-4 border-b border-border">
             <div className="flex items-center gap-2 min-w-0">
               <FolderOpen className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -305,6 +315,7 @@ export default function DocumentEditor({ document, folders, defaultFolderId, onS
               />
             </div>
           </div>
+          )}
 
           {/* Markdown editor */}
           <div className="border border-border rounded-lg overflow-hidden">
@@ -413,7 +424,7 @@ export default function DocumentEditor({ document, folders, defaultFolderId, onS
           </div>
 
           {/* Pending files indicator */}
-          {pendingFiles.length > 0 && (
+          {!isLocalFile && pendingFiles.length > 0 && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground px-1">
               <Paperclip className="w-3 h-3" />
               <span>{pendingFiles.length} file{pendingFiles.length !== 1 ? 's' : ''} will be attached on save</span>

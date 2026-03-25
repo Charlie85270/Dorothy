@@ -9,6 +9,7 @@ import {
   X,
   Archive,
   Loader2,
+  FileEdit,
 } from 'lucide-react';
 import type { VaultDocumentElectron, VaultFolderElectron, VaultAttachmentElectron } from '@/types/electron';
 
@@ -23,7 +24,7 @@ function isElectron(): boolean {
   return typeof window !== 'undefined' && !!window.electronAPI?.vault;
 }
 
-type ViewMode = 'list' | 'view' | 'edit' | 'search';
+type ViewMode = 'list' | 'view' | 'edit' | 'search' | 'edit-local';
 
 const READ_DOCS_KEY = 'vault-read-docs';
 
@@ -61,6 +62,7 @@ export default function VaultView({ embedded }: { embedded?: boolean } = {}) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [localFile, setLocalFile] = useState<{ filePath: string; filename: string; content: string } | null>(null);
   const setVaultUnreadCount = useStore(s => s.setVaultUnreadCount);
 
   // Sync unread count to global store for sidebar badge
@@ -279,6 +281,53 @@ export default function VaultView({ embedded }: { embedded?: boolean } = {}) {
     }
   };
 
+  // Open local file for editing
+  const handleOpenLocalFile = async () => {
+    if (!isElectron()) return;
+    try {
+      const filePaths = await window.electronAPI!.dialog.openFiles();
+      if (!filePaths || filePaths.length === 0) return;
+      const filePath = filePaths[0];
+      const result = await window.electronAPI!.vault!.readLocalFile(filePath);
+      if (result.error) {
+        alert(result.error);
+        return;
+      }
+      if (result.content === undefined) {
+        return;
+      }
+      setLocalFile({
+        filePath: result.filePath || filePath,
+        filename: result.filename || filePath.split('/').pop() || 'file',
+        content: result.content,
+      });
+      setSelectedDoc(null);
+      setViewMode('edit-local');
+    } catch (err) {
+      console.error('Failed to open local file:', err);
+    }
+  };
+
+  // Save local file
+  const handleSaveLocalFile = async (data: { content: string }) => {
+    if (!isElectron() || !localFile) return;
+    try {
+      const result = await window.electronAPI!.vault!.writeLocalFile({
+        filePath: localFile.filePath,
+        content: data.content,
+      });
+      if (result.success) {
+        setLocalFile(prev => prev ? { ...prev, content: data.content } : null);
+        setViewMode('list');
+        setLocalFile(null);
+      } else {
+        console.error('Failed to save file:', result.error);
+      }
+    } catch (err) {
+      console.error('Failed to save local file:', err);
+    }
+  };
+
   // Delete document
   const handleDeleteDocument = async (id: string) => {
     if (!isElectron()) return;
@@ -372,6 +421,15 @@ export default function VaultView({ embedded }: { embedded?: boolean } = {}) {
                 </button>
               )}
             </div>
+
+            {/* Open local file button */}
+            <button
+              onClick={handleOpenLocalFile}
+              className="flex items-center gap-1.5 px-3 lg:px-4 py-2 text-sm bg-secondary text-foreground border border-border rounded hover:bg-secondary/80 transition-colors shrink-0"
+            >
+              <FileEdit className="w-4 h-4" />
+              <span className="hidden sm:inline">Open File</span>
+            </button>
 
             {/* New document button */}
             <button
@@ -492,6 +550,26 @@ export default function VaultView({ embedded }: { embedded?: boolean } = {}) {
                     onSave={selectedDoc ? handleUpdateDocument : handleCreateDocument}
                     onCancel={() => {
                       setViewMode(selectedDoc ? 'view' : 'list');
+                    }}
+                  />
+                </motion.div>
+              )}
+
+              {viewMode === 'edit-local' && localFile && (
+                <motion.div
+                  key="edit-local"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="h-full overflow-y-auto"
+                >
+                  <DocumentEditor
+                    localFile={localFile}
+                    folders={folders}
+                    onSave={(_data) => handleSaveLocalFile({ content: _data.content })}
+                    onCancel={() => {
+                      setLocalFile(null);
+                      setViewMode('list');
                     }}
                   />
                 </motion.div>

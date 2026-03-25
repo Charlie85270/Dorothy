@@ -4,6 +4,13 @@ import { useRef, useEffect, useCallback } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import type { AgentStatus } from '@/types/electron';
 import TerminalPanelHeader from './TerminalPanelHeader';
+import FileEditorPanel from './FileEditorPanel';
+
+export interface OpenedFile {
+  filePath: string;
+  filename: string;
+  content: string;
+}
 
 interface TerminalPanelProps {
   agent: AgentStatus;
@@ -11,6 +18,7 @@ interface TerminalPanelProps {
   isBroadcasting: boolean;
   isFocused: boolean;
   tabType: 'custom' | 'project';
+  openedFile?: OpenedFile | null;
   onRegisterContainer: (agentId: string, container: HTMLDivElement | null) => void;
   onStart: (agentId: string) => void;
   onStop: (agentId: string) => void;
@@ -20,6 +28,9 @@ interface TerminalPanelProps {
   onExitFullscreen: () => void;
   onFocus: (agentId: string) => void;
   onContextMenu: (e: React.MouseEvent, agentId: string) => void;
+  onOpenFile: (agentId: string) => void;
+  onCloseFile: (agentId: string) => void;
+  onSaveFile: (agentId: string, content: string) => void;
 }
 
 export default function TerminalPanel({
@@ -28,6 +39,7 @@ export default function TerminalPanel({
   isBroadcasting,
   isFocused,
   tabType,
+  openedFile,
   onRegisterContainer,
   onStart,
   onStop,
@@ -37,6 +49,9 @@ export default function TerminalPanel({
   onExitFullscreen,
   onFocus,
   onContextMenu,
+  onOpenFile,
+  onCloseFile,
+  onSaveFile,
 }: TerminalPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const onRegisterRef = useRef(onRegisterContainer);
@@ -67,6 +82,9 @@ export default function TerminalPanel({
   const handleClear = useCallback(() => onClear(agent.id), [agent.id, onClear]);
   const handleFullscreen = useCallback(() => onFullscreen(agent.id), [agent.id, onFullscreen]);
   const handleContextMenu = useCallback((e: React.MouseEvent) => onContextMenu(e, agent.id), [agent.id, onContextMenu]);
+  const handleOpenFile = useCallback(() => onOpenFile(agent.id), [agent.id, onOpenFile]);
+  const handleCloseFile = useCallback(() => onCloseFile(agent.id), [agent.id, onCloseFile]);
+  const handleSaveFile = useCallback((content: string) => onSaveFile(agent.id, content), [agent.id, onSaveFile]);
 
   return (
     <div
@@ -85,6 +103,7 @@ export default function TerminalPanel({
         isFullscreen={isFullscreen}
         isBroadcasting={isBroadcasting}
         tabType={tabType}
+        hasOpenFile={!!openedFile}
         onStart={handleStart}
         onStop={handleStop}
         onFullscreen={handleFullscreen}
@@ -92,14 +111,28 @@ export default function TerminalPanel({
         onClear={handleClear}
         onRemove={handleRemove}
         onContextMenu={handleContextMenu}
+        onOpenFile={handleOpenFile}
       />
 
-      {/* Terminal body */}
-      <div
-        ref={containerRef}
-        className="flex-1 min-h-0 overflow-hidden relative"
-        style={{ backgroundColor: '#1a1a2e' }}
-      />
+      {/* Terminal body + optional file editor — vertical stack */}
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+        {openedFile && (
+          <div className="h-1/2 min-h-0 overflow-hidden">
+            <FileEditorPanel
+              filePath={openedFile.filePath}
+              filename={openedFile.filename}
+              content={openedFile.content}
+              onSave={handleSaveFile}
+              onClose={handleCloseFile}
+            />
+          </div>
+        )}
+        <div
+          ref={containerRef}
+          className={`min-h-0 overflow-hidden relative ${openedFile ? 'h-1/2' : 'flex-1'}`}
+          style={{ backgroundColor: '#1a1a2e' }}
+        />
+      </div>
     </div>
   );
 }

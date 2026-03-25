@@ -7,6 +7,7 @@ import { Loader2 } from 'lucide-react';
 import type { AgentStatus } from '@/types/electron';
 import type { TerminalPanelState } from '../types';
 import TerminalPanel from './TerminalPanel';
+import type { OpenedFile } from './TerminalPanel';
 
 interface TerminalGridProps {
   agents: AgentStatus[];
@@ -21,6 +22,7 @@ interface TerminalGridProps {
   isLoading: boolean;
   isEditable: boolean;
   tabType: 'custom' | 'project';
+  openedFiles: Map<string, OpenedFile>;
   onRegisterContainer: (agentId: string, container: HTMLDivElement | null) => void;
   onStartAgent: (agentId: string) => void;
   onStopAgent: (agentId: string) => void;
@@ -31,6 +33,9 @@ interface TerminalGridProps {
   onFocusPanel: (agentId: string) => void;
   onContextMenu: (e: React.MouseEvent, agentId: string) => void;
   onFitAll: () => void;
+  onOpenFile: (agentId: string) => void;
+  onCloseFile: (agentId: string) => void;
+  onSaveFile: (agentId: string, content: string) => void;
 }
 
 export default function TerminalGrid({
@@ -46,6 +51,7 @@ export default function TerminalGrid({
   isLoading,
   isEditable,
   tabType,
+  openedFiles,
   onRegisterContainer,
   onStartAgent,
   onStopAgent,
@@ -56,6 +62,9 @@ export default function TerminalGrid({
   onFocusPanel,
   onContextMenu,
   onFitAll,
+  onOpenFile,
+  onCloseFile,
+  onSaveFile,
 }: TerminalGridProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -180,6 +189,7 @@ export default function TerminalGrid({
             isBroadcasting={broadcastMode}
             isFocused={true}
             tabType={tabType}
+            openedFile={openedFiles.get(panel.agentId)}
             onRegisterContainer={onRegisterContainer}
             onStart={onStartAgent}
             onStop={onStopAgent}
@@ -189,6 +199,9 @@ export default function TerminalGrid({
             onExitFullscreen={onExitFullscreen}
             onFocus={onFocusPanel}
             onContextMenu={onContextMenu}
+            onOpenFile={onOpenFile}
+            onCloseFile={onCloseFile}
+            onSaveFile={onSaveFile}
           />
         </div>
       );
@@ -221,6 +234,7 @@ export default function TerminalGrid({
                 isBroadcasting={broadcastMode}
                 isFocused={focusedPanelId === panel.agentId}
                 tabType={tabType}
+                openedFile={openedFiles.get(panel.agentId)}
                 onRegisterContainer={onRegisterContainer}
                 onStart={onStartAgent}
                 onStop={onStopAgent}
@@ -230,6 +244,9 @@ export default function TerminalGrid({
                 onExitFullscreen={onExitFullscreen}
                 onFocus={onFocusPanel}
                 onContextMenu={onContextMenu}
+                onOpenFile={onOpenFile}
+                onCloseFile={onCloseFile}
+                onSaveFile={onSaveFile}
               />
             </div>
           );

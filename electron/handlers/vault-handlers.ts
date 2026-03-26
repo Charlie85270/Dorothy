@@ -341,4 +341,49 @@ export function registerVaultHandlers(deps: VaultHandlerDependencies): void {
       return { success: false, error: String(err) };
     }
   });
+
+  // Read a local file from disk
+  ipcMain.handle('vault:readLocalFile', async (_event, filePath: string) => {
+    try {
+      const resolvedPath = path.resolve(filePath);
+      if (!fs.existsSync(resolvedPath)) {
+        return { error: 'File not found' };
+      }
+      const stats = fs.statSync(resolvedPath);
+      if (stats.isDirectory()) {
+        return { error: 'Path is a directory' };
+      }
+      // Limit to 10MB
+      if (stats.size > 10 * 1024 * 1024) {
+        return { error: 'File too large (max 10MB)' };
+      }
+      // Check for binary content by reading a small buffer
+      const buffer = Buffer.alloc(Math.min(8192, stats.size));
+      const fd = fs.openSync(resolvedPath, 'r');
+      fs.readSync(fd, buffer, 0, buffer.length, 0);
+      fs.closeSync(fd);
+      // Check for null bytes (binary indicator)
+      if (buffer.includes(0)) {
+        return { error: 'This file appears to be binary and cannot be edited as text. Only text-based files (.md, .txt, .json, .ts, .js, etc.) are supported.' };
+      }
+      const content = fs.readFileSync(resolvedPath, 'utf-8');
+      const filename = path.basename(resolvedPath);
+      return { content, filename, filePath: resolvedPath };
+    } catch (err) {
+      console.error('Failed to read local file:', err);
+      return { error: String(err) };
+    }
+  });
+
+  // Write content back to a local file on disk
+  ipcMain.handle('vault:writeLocalFile', async (_event, params: { filePath: string; content: string }) => {
+    try {
+      const resolvedPath = path.resolve(params.filePath);
+      fs.writeFileSync(resolvedPath, params.content, 'utf-8');
+      return { success: true, filePath: resolvedPath };
+    } catch (err) {
+      console.error('Failed to write local file:', err);
+      return { success: false, error: String(err) };
+    }
+  });
 }

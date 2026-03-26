@@ -9,6 +9,7 @@ import {
   RotateCcw,
   GripVertical,
   ShieldOff,
+  FileEdit,
 } from 'lucide-react';
 import type { AgentStatus } from '@/types/electron';
 import { CHARACTER_FACES, STATUS_COLORS } from '../constants';
@@ -18,6 +19,7 @@ interface TerminalPanelHeaderProps {
   isFullscreen: boolean;
   isBroadcasting: boolean;
   tabType: 'custom' | 'project';
+  hasOpenFile?: boolean;
   onStart: () => void;
   onStop: () => void;
   onFullscreen: () => void;
@@ -25,6 +27,7 @@ interface TerminalPanelHeaderProps {
   onClear: () => void;
   onRemove: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
+  onOpenFile: () => void;
 }
 
 export default function TerminalPanelHeader({
@@ -32,6 +35,7 @@ export default function TerminalPanelHeader({
   isFullscreen,
   isBroadcasting,
   tabType,
+  hasOpenFile,
   onStart,
   onStop,
   onFullscreen,
@@ -39,6 +43,7 @@ export default function TerminalPanelHeader({
   onClear,
   onRemove,
   onContextMenu,
+  onOpenFile,
 }: TerminalPanelHeaderProps) {
   const emoji = agent.name?.toLowerCase() === 'bitwonka'
     ? '🐸'
@@ -122,6 +127,14 @@ export default function TerminalPanelHeader({
           title="Clear terminal"
         >
           <RotateCcw className="w-3 h-3" />
+        </button>
+
+        <button
+          onClick={onOpenFile}
+          className={`p-1 hover:bg-primary/10 transition-colors ${hasOpenFile ? 'text-cyan-400' : 'text-muted-foreground hover:text-foreground'}`}
+          title={hasOpenFile ? 'File open' : 'Open file'}
+        >
+          <FileEdit className="w-3 h-3" />
         </button>
 
         <button

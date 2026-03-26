@@ -48,6 +48,7 @@ export default function TerminalsView() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [viewFullscreen, setViewFullscreen] = useState(false);
   const [terminalFontSize, setTerminalFontSize] = useState(11);
+  const [openedFiles, setOpenedFiles] = useState<Map<string, { filePath: string; filename: string; content: string }>>(new Map());
   const pendingStartRef = useRef<{ agentId: string; prompt: string; options?: { model?: string } } | null>(null);
   const [terminalTheme, setTerminalTheme] = useState<'dark' | 'light'>('dark');
   const [terminalSettingsLoaded, setTerminalSettingsLoaded] = useState(!isElectron());
@@ -230,6 +231,69 @@ export default function TerminalsView() {
     }
   }, [agents]);
 
+  // File editor handlers
+  const handleOpenFile = useCallback(async (agentId: string) => {
+    if (!isElectron() || !window.electronAPI?.dialog || !window.electronAPI?.vault) return;
+    // If already open, close it
+    if (openedFiles.has(agentId)) {
+      setOpenedFiles(prev => {
+        const next = new Map(prev);
+        next.delete(agentId);
+        return next;
+      });
+      setTimeout(() => multiTerminal.fitAll(), 100);
+      return;
+    }
+    try {
+      const filePaths = await window.electronAPI.dialog.openFiles();
+      if (!filePaths || filePaths.length === 0) return;
+      const result = await window.electronAPI.vault.readLocalFile(filePaths[0]);
+      if (result.error) {
+        alert(result.error);
+        return;
+      }
+      if (result.content === undefined) return;
+      setOpenedFiles(prev => {
+        const next = new Map(prev);
+        next.set(agentId, {
+          filePath: result.filePath || filePaths[0],
+          filename: result.filename || filePaths[0].split('/').pop() || 'file',
+          content: result.content!,
+        });
+        return next;
+      });
+      setTimeout(() => multiTerminal.fitAll(), 100);
+    } catch (err) {
+      console.error('Failed to open file:', err);
+    }
+  }, [openedFiles, multiTerminal]);
+
+  const handleCloseFile = useCallback((agentId: string) => {
+    setOpenedFiles(prev => {
+      const next = new Map(prev);
+      next.delete(agentId);
+      return next;
+    });
+    setTimeout(() => multiTerminal.fitAll(), 100);
+  }, [multiTerminal]);
+
+  const handleSaveFile = useCallback(async (agentId: string, content: string) => {
+    if (!isElectron() || !window.electronAPI?.vault) return;
+    const file = openedFiles.get(agentId);
+    if (!file) return;
+    try {
+      const result = await window.electronAPI.vault.writeLocalFile({
+        filePath: file.filePath,
+        content,
+      });
+      if (!result.success) {
+        console.error('Failed to save file:', result.error);
+      }
+    } catch (err) {
+      console.error('Failed to save file:', err);
+    }
+  }, [openedFiles]);
+
   const handleLayoutChange = useCallback((preset: LayoutPreset) => {
     if (tabManager.activeCustomTab) {
       tabManager.setTabLayout(tabManager.activeCustomTab.id, preset);
@@ -358,6 +422,7 @@ export default function TerminalsView() {
             isLoading={isLoading}
             isEditable={isEditable}
             tabType={tabType}
+            openedFiles={openedFiles}
             onRegisterContainer={multiTerminal.registerContainer}
             onStartAgent={handleStartAgent}
             onStopAgent={handleStopAgent}
@@ -368,6 +433,9 @@ export default function TerminalsView() {
             onFocusPanel={handleFocusPanel}
             onContextMenu={contextMenu.openMenu}
             onFitAll={multiTerminal.fitAll}
+            onOpenFile={handleOpenFile}
+            onCloseFile={handleCloseFile}
+            onSaveFile={handleSaveFile}
           />
 
           {/* Sidebar panel — overlays grid from the right */}

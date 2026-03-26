@@ -508,6 +508,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('vault:deleteFolder', params),
     attachFile: (params: { document_id: string; file_path: string }) =>
       ipcRenderer.invoke('vault:attachFile', params),
+    readLocalFile: (filePath: string) =>
+      ipcRenderer.invoke('vault:readLocalFile', filePath) as Promise<{ content?: string; filename?: string; filePath?: string; error?: string }>,
+    writeLocalFile: (params: { filePath: string; content: string }) =>
+      ipcRenderer.invoke('vault:writeLocalFile', params) as Promise<{ success?: boolean; filePath?: string; error?: string }>,
     // Event listeners
     onDocumentCreated: (callback: (doc: unknown) => void) => {
       const listener = (_: unknown, doc: unknown) => callback(doc);

@@ -1,19 +1,23 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
-import { Save, X, Eye, Pencil } from 'lucide-react';
+import { Save, X, Eye, Pencil, PanelTop, PanelBottom, PanelLeft, PanelRight } from 'lucide-react';
+
+export type DockPosition = 'top' | 'bottom' | 'left' | 'right';
 
 interface FileEditorPanelProps {
   filePath: string;
   filename: string;
   content: string;
+  position: DockPosition;
   onSave: (content: string) => void;
   onClose: () => void;
+  onPositionChange: (position: DockPosition) => void;
 }
 
 type EditorTab = 'write' | 'preview';
 
-export default function FileEditorPanel({ filePath, filename, content: initialContent, onSave, onClose }: FileEditorPanelProps) {
+export default function FileEditorPanel({ filePath, filename, content: initialContent, position, onSave, onClose, onPositionChange }: FileEditorPanelProps) {
   const [content, setContent] = useState(initialContent);
   const [activeTab, setActiveTab] = useState<EditorTab>('write');
   const [saved, setSaved] = useState(true);
@@ -38,52 +42,84 @@ export default function FileEditorPanel({ filePath, filename, content: initialCo
 
   return (
     <div
-      className="flex flex-col h-full overflow-hidden border-t border-border"
+      className={`flex flex-col h-full overflow-hidden ${position === 'top' || position === 'bottom' ? 'border-t border-b' : 'border-l border-r'} border-border`}
       onKeyDown={handleKeyDown}
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
     >
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-secondary border-b border-border select-none shrink-0">
-        <span className="text-xs font-medium text-foreground truncate flex-1" title={filePath}>
+      <div className="flex items-center gap-1 px-2 py-1 bg-secondary border-b border-border select-none shrink-0">
+        <span className="text-[10px] font-medium text-foreground truncate flex-1" title={filePath}>
           {filename}
         </span>
         {!saved && (
-          <span className="text-[10px] text-amber-400 font-medium">modified</span>
+          <span className="text-[9px] text-amber-400 font-medium">modified</span>
         )}
 
         {/* Tab toggle */}
         <div className="flex items-center bg-secondary/50 rounded p-0.5">
           <button
             onClick={() => setActiveTab('write')}
-            className={`p-1 rounded text-[10px] ${activeTab === 'write' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            className={`p-0.5 rounded ${activeTab === 'write' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
             title="Edit"
           >
-            <Pencil className="w-3 h-3" />
+            <Pencil className="w-2.5 h-2.5" />
           </button>
           <button
             onClick={() => setActiveTab('preview')}
-            className={`p-1 rounded text-[10px] ${activeTab === 'preview' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            className={`p-0.5 rounded ${activeTab === 'preview' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
             title="Preview"
           >
-            <Eye className="w-3 h-3" />
+            <Eye className="w-2.5 h-2.5" />
+          </button>
+        </div>
+
+        {/* Position buttons */}
+        <div className="flex items-center bg-secondary/50 rounded p-0.5">
+          <button
+            onClick={() => onPositionChange('top')}
+            className={`p-0.5 rounded ${position === 'top' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            title="Dock top"
+          >
+            <PanelTop className="w-2.5 h-2.5" />
+          </button>
+          <button
+            onClick={() => onPositionChange('bottom')}
+            className={`p-0.5 rounded ${position === 'bottom' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            title="Dock bottom"
+          >
+            <PanelBottom className="w-2.5 h-2.5" />
+          </button>
+          <button
+            onClick={() => onPositionChange('left')}
+            className={`p-0.5 rounded ${position === 'left' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            title="Dock left"
+          >
+            <PanelLeft className="w-2.5 h-2.5" />
+          </button>
+          <button
+            onClick={() => onPositionChange('right')}
+            className={`p-0.5 rounded ${position === 'right' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            title="Dock right"
+          >
+            <PanelRight className="w-2.5 h-2.5" />
           </button>
         </div>
 
         <button
           onClick={handleSave}
           disabled={saved}
-          className="p-1 hover:bg-primary/10 transition-colors text-muted-foreground hover:text-foreground disabled:opacity-30"
+          className="p-0.5 hover:bg-primary/10 transition-colors text-muted-foreground hover:text-foreground disabled:opacity-30"
           title="Save (⌘S)"
         >
-          <Save className="w-3 h-3" />
+          <Save className="w-2.5 h-2.5" />
         </button>
         <button
           onClick={onClose}
-          className="p-1 hover:bg-primary/10 transition-colors text-muted-foreground hover:text-red-400"
+          className="p-0.5 hover:bg-primary/10 transition-colors text-muted-foreground hover:text-red-400"
           title="Close file"
         >
-          <X className="w-3 h-3" />
+          <X className="w-2.5 h-2.5" />
         </button>
       </div>
 

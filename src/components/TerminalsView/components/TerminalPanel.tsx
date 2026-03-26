@@ -1,10 +1,11 @@
 'use client';
 
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import type { AgentStatus } from '@/types/electron';
 import TerminalPanelHeader from './TerminalPanelHeader';
 import FileEditorPanel from './FileEditorPanel';
+import type { DockPosition } from './FileEditorPanel';
 
 export interface OpenedFile {
   filePath: string;
@@ -86,6 +87,47 @@ export default function TerminalPanel({
   const handleCloseFile = useCallback(() => onCloseFile(agent.id), [agent.id, onCloseFile]);
   const handleSaveFile = useCallback((content: string) => onSaveFile(agent.id, content), [agent.id, onSaveFile]);
 
+  // Resizable split: file editor ratio (0..1, percentage of container for the editor)
+  const [editorRatio, setEditorRatio] = useState(0.5);
+  const [dockPosition, setDockPosition] = useState<DockPosition>('top');
+  const splitContainerRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
+
+  const isVertical = dockPosition === 'top' || dockPosition === 'bottom';
+
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    isDraggingRef.current = true;
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!isDraggingRef.current || !splitContainerRef.current) return;
+      const rect = splitContainerRef.current.getBoundingClientRect();
+      let ratio: number;
+      if (isVertical) {
+        const y = ev.clientY - rect.top;
+        ratio = y / rect.height;
+      } else {
+        const x = ev.clientX - rect.left;
+        ratio = x / rect.width;
+      }
+      // For bottom/right, we invert since editor comes after terminal
+      if (dockPosition === 'bottom' || dockPosition === 'right') {
+        ratio = 1 - ratio;
+      }
+      setEditorRatio(Math.min(0.8, Math.max(0.2, ratio)));
+    };
+
+    const onMouseUp = () => {
+      isDraggingRef.current = false;
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, [isVertical, dockPosition]);
+
   return (
     <div
       ref={setDropRef}
@@ -114,24 +156,71 @@ export default function TerminalPanel({
         onOpenFile={handleOpenFile}
       />
 
-      {/* Terminal body + optional file editor — vertical stack */}
-      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-        {openedFile && (
-          <div className="h-1/2 min-h-0 overflow-hidden">
-            <FileEditorPanel
-              filePath={openedFile.filePath}
-              filename={openedFile.filename}
-              content={openedFile.content}
-              onSave={handleSaveFile}
-              onClose={handleCloseFile}
-            />
-          </div>
+      {/* Terminal body + optional file editor — resizable split */}
+      <div
+        ref={splitContainerRef}
+        className={`flex-1 min-h-0 flex overflow-hidden ${openedFile && isVertical ? 'flex-col' : openedFile ? 'flex-row' : 'flex-col'}`}
+      >
+        {/* Editor before terminal (top or left) */}
+        {openedFile && (dockPosition === 'top' || dockPosition === 'left') && (
+          <>
+            <div
+              className="min-h-0 min-w-0 overflow-hidden"
+              style={isVertical ? { height: `${editorRatio * 100}%` } : { width: `${editorRatio * 100}%` }}
+            >
+              <FileEditorPanel
+                filePath={openedFile.filePath}
+                filename={openedFile.filename}
+                content={openedFile.content}
+                position={dockPosition}
+                onSave={handleSaveFile}
+                onClose={handleCloseFile}
+                onPositionChange={setDockPosition}
+              />
+            </div>
+            <div
+              className={`${isVertical ? 'h-1.5 cursor-row-resize' : 'w-1.5 cursor-col-resize'} bg-border hover:bg-primary/50 flex items-center justify-center shrink-0 transition-colors`}
+              onMouseDown={handleResizeStart}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className={`${isVertical ? 'w-8 h-0.5' : 'h-8 w-0.5'} bg-muted-foreground/30 rounded-full`} />
+            </div>
+          </>
         )}
+
+        {/* Terminal */}
         <div
           ref={containerRef}
-          className={`min-h-0 overflow-hidden relative ${openedFile ? 'h-1/2' : 'flex-1'}`}
+          className="min-h-0 min-w-0 overflow-hidden relative flex-1"
           style={{ backgroundColor: '#1a1a2e' }}
         />
+
+        {/* Editor after terminal (bottom or right) */}
+        {openedFile && (dockPosition === 'bottom' || dockPosition === 'right') && (
+          <>
+            <div
+              className={`${isVertical ? 'h-1.5 cursor-row-resize' : 'w-1.5 cursor-col-resize'} bg-border hover:bg-primary/50 flex items-center justify-center shrink-0 transition-colors`}
+              onMouseDown={handleResizeStart}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className={`${isVertical ? 'w-8 h-0.5' : 'h-8 w-0.5'} bg-muted-foreground/30 rounded-full`} />
+            </div>
+            <div
+              className="min-h-0 min-w-0 overflow-hidden"
+              style={isVertical ? { height: `${editorRatio * 100}%` } : { width: `${editorRatio * 100}%` }}
+            >
+              <FileEditorPanel
+                filePath={openedFile.filePath}
+                filename={openedFile.filename}
+                content={openedFile.content}
+                position={dockPosition}
+                onSave={handleSaveFile}
+                onClose={handleCloseFile}
+                onPositionChange={setDockPosition}
+              />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

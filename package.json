@@ -135,6 +135,7 @@
       "artifactName": "Dorothy-${version}-${arch}.AppImage"
     },
     "deb": {
+      "maintainer": "Charlie85270",
       "depends": [
         "libgtk-3-0",
         "libnotify4",

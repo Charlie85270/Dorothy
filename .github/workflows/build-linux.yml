@@ -1,0 +1,63 @@
+name: Build - Linux
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    name: Build Linux (Ubuntu)
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        arch: [x64]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libarchive-tools
+
+      - name: Build Electron app for Linux
+        run: npm run electron:build:linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dorothy-Linux-AppImage-${{ matrix.arch }}
+          path: release/*.AppImage
+          if-no-files-found: warn
+
+      - name: Upload deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dorothy-Linux-deb-${{ matrix.arch }}
+          path: release/*.deb
+          if-no-files-found: warn
+
+      - name: Upload to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/*.AppImage
+            release/*.deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

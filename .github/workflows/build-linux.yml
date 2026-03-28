@@ -6,6 +6,9 @@ on:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-linux:
     name: Build Linux (Ubuntu)
@@ -41,19 +44,22 @@ jobs:
       - name: Verify build artifacts
         run: |
           echo "=== Checking deb ==="
-          DEB=$(ls release/*.deb 2>/dev/null)
-          if [ -z "$DEB" ]; then echo "ERROR: No .deb found"; exit 1; fi
-          DEB_SIZE=$(stat --format=%s "$DEB")
-          echo "deb: $DEB ($DEB_SIZE bytes)"
-          if [ "$DEB_SIZE" -lt 52428800 ]; then echo "ERROR: deb too small (<50MB)"; exit 1; fi
+          shopt -s nullglob
+          DEBS=(release/*.deb)
+          if [ ${#DEBS[@]} -eq 0 ]; then echo "ERROR: No .deb found"; exit 1; fi
+          for DEB in "${DEBS[@]}"; do
+            DEB_SIZE=$(stat --format=%s "$DEB")
+            echo "deb: $DEB ($DEB_SIZE bytes)"
+            if [ "$DEB_SIZE" -lt 52428800 ]; then echo "ERROR: deb too small (<50MB): $DEB"; exit 1; fi
 
-          echo "=== Checking deb metadata ==="
-          dpkg-deb --info "$DEB"
+            echo "=== Checking deb metadata ==="
+            dpkg-deb --info "$DEB"
 
-          echo "=== Checking deb is a valid ELF package ==="
-          MAIN_BIN=$(dpkg-deb --contents "$DEB" | grep -m1 "opt/Dorothy/dorothy$" | awk '{print $NF}')
-          if [ -z "$MAIN_BIN" ]; then echo "ERROR: dorothy binary not found in deb"; exit 1; fi
-          echo "Main binary found: $MAIN_BIN"
+            echo "=== Checking deb contains dorothy binary ==="
+            MAIN_BIN=$(dpkg-deb --contents "$DEB" | grep -m1 "opt/Dorothy/dorothy$" | awk '{print $NF}')
+            if [ -z "$MAIN_BIN" ]; then echo "ERROR: dorothy binary not found in deb"; exit 1; fi
+            echo "Main binary found: $MAIN_BIN"
+          done
 
           echo "=== All checks passed ==="
 

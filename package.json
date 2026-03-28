@@ -130,8 +130,7 @@
       "desktop": {
         "StartupNotify": "true",
         "Categories": "Development;IDE;"
-      },
-      "executableArgs": ["--no-sandbox"]
+      }
     },
     "deb": {
       "maintainer": "Charlie85270",

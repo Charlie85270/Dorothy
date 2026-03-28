@@ -38,12 +38,24 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload AppImage artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Dorothy-Linux-AppImage-${{ matrix.arch }}
-          path: release/*.AppImage
-          if-no-files-found: warn
+      - name: Verify build artifacts
+        run: |
+          echo "=== Checking deb ==="
+          DEB=$(ls release/*.deb 2>/dev/null)
+          if [ -z "$DEB" ]; then echo "ERROR: No .deb found"; exit 1; fi
+          DEB_SIZE=$(stat --format=%s "$DEB")
+          echo "deb: $DEB ($DEB_SIZE bytes)"
+          if [ "$DEB_SIZE" -lt 52428800 ]; then echo "ERROR: deb too small (<50MB)"; exit 1; fi
+
+          echo "=== Checking deb metadata ==="
+          dpkg-deb --info "$DEB"
+
+          echo "=== Checking deb is a valid ELF package ==="
+          MAIN_BIN=$(dpkg-deb --contents "$DEB" | grep -m1 "opt/Dorothy/dorothy$" | awk '{print $NF}')
+          if [ -z "$MAIN_BIN" ]; then echo "ERROR: dorothy binary not found in deb"; exit 1; fi
+          echo "Main binary found: $MAIN_BIN"
+
+          echo "=== All checks passed ==="
 
       - name: Upload deb artifact
         uses: actions/upload-artifact@v4
@@ -57,7 +69,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release/*.AppImage
             release/*.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

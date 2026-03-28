@@ -7,6 +7,15 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 10,
+    version: '1.2.7',
+    date: '2026-03-28',
+    updates: [
+      'New Support page — one-time and monthly contributions via Stripe',
+      'All supporters get early beta access to the upcoming premium version',
+    ],
+  },
+  {
     id: 9,
     version: '1.2.6',
     date: '2026-03-28',

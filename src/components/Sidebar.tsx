@@ -19,6 +19,7 @@ import {
   Archive,
   Brain,
   Gift,
+  Heart,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { LATEST_RELEASE, WHATS_NEW_STORAGE_KEY } from '@/data/changelog';
@@ -218,6 +219,19 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
             <Settings className="w-5 h-5" />
             {showLabels && <span className="text-sm">Settings</span>}
           </Link>
+          <Link
+            href="/support"
+            className={`
+              flex items-center gap-3 px-5 py-3 transition-colors
+              ${pathname === '/support'
+                ? 'bg-primary/20 text-primary border-l-2 border-primary'
+                : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+              }
+            `}
+          >
+            <Heart className="w-5 h-5 text-red-500" fill="currentColor" />
+            {showLabels && <span className="text-sm">Support</span>}
+          </Link>
           <button
             onClick={toggleDarkMode}
             className="w-full flex items-center gap-3 px-5 py-3 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
@@ -350,6 +364,20 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
             >
               <Settings className="w-5 h-5" />
               <span className="text-sm">Settings</span>
+            </Link>
+            <Link
+              href="/support"
+              onClick={handleNavClick}
+              className={`
+                flex items-center gap-3 px-5 py-3 transition-colors
+                ${pathname === '/support'
+                  ? 'bg-primary/20 text-primary border-l-2 border-primary'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+                }
+              `}
+            >
+              <Heart className="w-5 h-5 text-red-500" fill="currentColor" />
+              <span className="text-sm">Support</span>
             </Link>
             <button
               onClick={toggleDarkMode}

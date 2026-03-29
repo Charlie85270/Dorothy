@@ -221,6 +221,8 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
           </Link>
           <Link
             href="/support"
+            aria-label="Support"
+            title="Support"
             className={`
               flex items-center gap-3 px-5 py-3 transition-colors
               ${pathname === '/support'

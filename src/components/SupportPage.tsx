@@ -18,7 +18,11 @@ const RECURRING_TIERS = [
 ];
 
 function openExternal(url: string) {
-  window.open(url, '_blank');
+  if (window.electronAPI?.updates?.openExternal) {
+    window.electronAPI.updates.openExternal(url);
+    return;
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 export default function SupportPage() {

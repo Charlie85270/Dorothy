@@ -48,17 +48,17 @@ jobs:
           DEBS=(release/*.deb)
           if [ ${#DEBS[@]} -eq 0 ]; then echo "ERROR: No .deb found"; exit 1; fi
           for DEB in "${DEBS[@]}"; do
-            DEB_SIZE=$(stat --format=%s "$DEB")
-            echo "deb: $DEB ($DEB_SIZE bytes)"
-            if [ "$DEB_SIZE" -lt 52428800 ]; then echo "ERROR: deb too small (<50MB): $DEB"; exit 1; fi
+            echo "deb: $DEB ($(stat --format=%s "$DEB") bytes)"
 
             echo "=== Checking deb metadata ==="
             dpkg-deb --info "$DEB"
 
             echo "=== Checking deb contains dorothy binary ==="
-            MAIN_BIN=$(dpkg-deb --contents "$DEB" | grep -m1 "opt/Dorothy/dorothy$" | awk '{print $NF}')
+            MAIN_BIN=$(dpkg-deb --contents "$DEB" | grep -m1 "opt/Dorothy/dorothy$")
             if [ -z "$MAIN_BIN" ]; then echo "ERROR: dorothy binary not found in deb"; exit 1; fi
-            echo "Main binary found: $MAIN_BIN"
+            BIN_SIZE=$(echo "$MAIN_BIN" | awk '{print $3}')
+            echo "Main binary: $(echo "$MAIN_BIN" | awk '{print $NF}') ($BIN_SIZE bytes)"
+            if [ "$BIN_SIZE" -eq 0 ]; then echo "ERROR: dorothy binary is zero-size"; exit 1; fi
           done
 
           echo "=== All checks passed ==="

@@ -17,11 +17,11 @@ import * as os from 'os';
 
 if (process.platform === 'linux') {
   // Ignore EPIPE errors on stdout/stderr (happens when launched from desktop entries)
-  process.stdout?.on?.('error', (err: NodeJS.ErrnoException) => {
+  process.stdout.on('error', (err: NodeJS.ErrnoException) => {
     if (err.code === 'EPIPE') return;
     throw err;
   });
-  process.stderr?.on?.('error', (err: NodeJS.ErrnoException) => {
+  process.stderr.on('error', (err: NodeJS.ErrnoException) => {
     if (err.code === 'EPIPE') return;
     throw err;
   });

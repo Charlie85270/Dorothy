@@ -134,7 +134,7 @@
     },
     "deb": {
       "maintainer": "Charlie85270",
-      "fpm": ["--after-install", "build/linux/after-install.sh"],
+      "fpm": ["--after-install", "build/linux/after-install.sh", "--before-remove", "build/linux/before-remove.sh"],
       "depends": [
         "libgtk-3-0",
         "libnotify4",

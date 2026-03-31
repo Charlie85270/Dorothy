@@ -25,7 +25,7 @@ export function ProjectFilterTabs({
   if (uniqueProjects.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-1 mb-3 overflow-x-auto pb-1">
+    <div className="flex items-center gap-1 mb-3 overflow-x-auto pb-1 [&_button]:cursor-pointer">
       {/* All tab */}
       <button
         onClick={() => onFilterChange(null)}

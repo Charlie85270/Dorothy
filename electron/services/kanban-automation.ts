@@ -21,7 +21,7 @@ export interface KanbanAutomationDependencies {
     skills: string[];
     character?: AgentCharacter;
     name?: string;
-    skipPermissions?: boolean;
+    permissionMode?: 'normal' | 'auto' | 'bypass';
   }) => Promise<AgentStatus>;
   startAgent: (id: string, prompt: string, options?: { model?: string }) => Promise<void>;
   saveAgents: () => void;
@@ -127,7 +127,7 @@ export async function createAgentForTask(task: KanbanTask): Promise<string> {
     skills: task.requiredSkills,
     character,
     name: agentName,
-    skipPermissions: true, // Kanban tasks run autonomously
+    permissionMode: 'auto', // Kanban tasks run autonomously
   });
 
   console.log(`Created agent ${agent.id} for task ${task.id}`);

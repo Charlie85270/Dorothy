@@ -6,7 +6,7 @@ import TelegramBot from 'node-telegram-bot-api';
 import * as pty from 'node-pty';
 import { AgentStatus, AppSettings } from '../types';
 import { TG_CHARACTER_FACES, TELEGRAM_DOWNLOADS_DIR } from '../constants';
-import { isSuperAgent, formatAgentStatus, getSuperAgentInstructions, getTelegramInstructions } from '../utils';
+import { isSuperAgent, formatAgentStatus, getSuperAgentInstructions, getSuperAgentInstructionsPath, getTelegramInstructions, getTelegramInstructionsPath } from '../utils';
 import { getProvider } from '../providers';
 import { writeProgrammaticInput } from '../core/pty-manager';
 
@@ -700,22 +700,36 @@ export function initTelegramBot() {
           return;
         }
 
-        // Build command using agent's provider
+        // Build command using the shared provider interface (same as agent:start in ipc-handlers)
         const cliProvider = getProvider(agent.provider);
-        const binaryName = cliProvider.binaryName;
-        let command = binaryName;
-        if (agent.skipPermissions) command += ' --dangerously-skip-permissions';
-        if (agent.secondaryProjectPath) {
-          const addDirFlag = cliProvider.getAddDirFlag();
-          command += ` ${addDirFlag} '${agent.secondaryProjectPath.replace(/'/g, "'\\''")}'`;
+        const binaryPath = cliProvider.resolveBinaryPath(appSettings);
+
+        // Resolve MCP config path if provider uses flag strategy
+        let mcpConfigPath: string | undefined;
+        if (cliProvider.getMcpConfigStrategy() === 'flag') {
+          const possibleMcpPath = path.join(app.getPath('home'), '.claude', 'mcp.json');
+          if (fs.existsSync(possibleMcpPath)) {
+            mcpConfigPath = possibleMcpPath;
+          }
         }
-        command += ` ${cliProvider.getAddDirFlag()} '${require('os').homedir()}/.dorothy'`;
-        command += ` '${task.replace(/'/g, "'\\''")}'`;
+
+        const command = cliProvider.buildInteractiveCommand({
+          binaryPath,
+          prompt: task,
+          model: agent.model,
+          permissionMode: agent.permissionMode ?? (agent.skipPermissions ? 'bypass' : 'normal'),
+          effort: agent.effort,
+          secondaryProjectPath: agent.secondaryProjectPath,
+          obsidianVaultPaths: agent.obsidianVaultPaths,
+          mcpConfigPath,
+          skills: [...new Set([...(agent.skills || []), 'world-builder'])],
+          isSuperAgent: isSuperAgent(agent),
+        });
 
         agent.status = 'running';
         agent.currentTask = task.slice(0, 100);
         agent.lastActivity = new Date().toISOString();
-        writeProgrammaticInput(ptyProcess, `cd '${workingPath}' && ${command}`);
+        writeProgrammaticInput(ptyProcess, `cd '${workingPath}' && ${command}`, true);
         saveAgents();
 
         const emoji = isSuperAgent(agent) ? '👑' : (TG_CHARACTER_FACES[agent.character || ''] || '🤖');
@@ -1184,42 +1198,65 @@ export async function sendToSuperAgent(chatId: string, message: string, attached
       // Include Telegram context in the message with the chat ID for proper routing
       const telegramMessage = `[FROM TELEGRAM chat_id=${chatId} - Use send_telegram MCP tool with chat_id="${chatId}" to respond!] ${sanitizedMessage}`;
 
-      writeProgrammaticInput(ptyProcess, telegramMessage);
+      writeProgrammaticInput(ptyProcess, telegramMessage, true);
 
       telegramBot?.sendMessage(chatId, `👑 Super Agent is processing...`);
     } else if (superAgent.status === 'idle' || superAgent.status === 'completed' || superAgent.status === 'error') {
       // No active session, start a new one
       const workingPath = (superAgent.worktreePath || superAgent.projectPath).replace(/'/g, "'\\''");
 
-      // Build command with instructions file
-      let command = 'claude';
+      // Build command using the shared provider interface
+      const cliProvider = getProvider(superAgent.provider || 'claude');
+      const binaryPath = cliProvider.resolveBinaryPath(appSettings);
 
-      // Add MCP config
-      const mcpConfigPath = path.join(app.getPath('home'), '.claude', 'mcp.json');
-      if (fs.existsSync(mcpConfigPath)) {
-        command += ` --mcp-config '${mcpConfigPath}'`;
+      // Resolve MCP config path
+      let mcpConfigPath: string | undefined;
+      if (cliProvider.getMcpConfigStrategy() === 'flag') {
+        const possibleMcpPath = path.join(app.getPath('home'), '.claude', 'mcp.json');
+        if (fs.existsSync(possibleMcpPath)) {
+          mcpConfigPath = possibleMcpPath;
+        }
       }
 
-      // Add system prompt from instructions (read via Node.js, not cat - asar compatibility)
-      const superAgentInstructions = getSuperAgentInstructions();
-      if (superAgentInstructions) {
-        // Escape for shell - replace single quotes and double quotes
-        const escapedInstructions = superAgentInstructions.replace(/'/g, "'\\''").replace(/"/g, '\\"').replace(/\n/g, ' ');
-        command += ` --append-system-prompt "${escapedInstructions}"`;
+      // Build a combined system prompt file (super agent + telegram instructions)
+      // Using a file avoids fragile inline shell escaping of large instruction blocks.
+      let systemPromptFile: string | undefined;
+      const superAgentInstructionsPath = getSuperAgentInstructionsPath();
+      if (fs.existsSync(superAgentInstructionsPath)) {
+        systemPromptFile = superAgentInstructionsPath;
       }
 
-      // Add Telegram-specific instructions
+      // If there are Telegram-specific instructions, create a combined temp file
       const telegramInstructions = getTelegramInstructions();
       if (telegramInstructions) {
-        const escapedTelegram = telegramInstructions.replace(/'/g, "'\\''").replace(/"/g, '\\"').replace(/\n/g, ' ');
-        command += ` --append-system-prompt "${escapedTelegram}"`;
+        const superAgentInstructions = getSuperAgentInstructions();
+        const combined = [superAgentInstructions, telegramInstructions].filter(Boolean).join('\n\n');
+        const combinedPath = path.join(app.getPath('home'), '.dorothy', 'telegram-combined-prompt.md');
+        try {
+          fs.mkdirSync(path.dirname(combinedPath), { recursive: true });
+          fs.writeFileSync(combinedPath, combined, 'utf-8');
+          systemPromptFile = combinedPath;
+        } catch {
+          // Fall back to super agent instructions file only
+        }
       }
 
-      if (superAgent.skipPermissions) command += ' --dangerously-skip-permissions';
-
-      // Simple prompt with Telegram context including chat ID for proper routing
+      // Build prompt with Telegram context
       const userPrompt = `[FROM TELEGRAM chat_id=${chatId} - Use send_telegram MCP tool with chat_id="${chatId}" to respond!] ${sanitizedMessage}`;
-      command += ` '${userPrompt.replace(/'/g, "'\\''")}'`;
+
+      const command = cliProvider.buildInteractiveCommand({
+        binaryPath,
+        prompt: userPrompt,
+        model: superAgent.model,
+        permissionMode: 'bypass',
+        effort: superAgent.effort,
+        secondaryProjectPath: superAgent.secondaryProjectPath,
+        obsidianVaultPaths: superAgent.obsidianVaultPaths,
+        mcpConfigPath,
+        systemPromptFile,
+        skills: [...new Set([...(superAgent.skills || []), 'world-builder'])],
+        isSuperAgent: true,
+      });
 
       superAgent.status = 'running';
       superAgent.currentTask = sanitizedMessage.slice(0, 100);
@@ -1230,7 +1267,7 @@ export async function sendToSuperAgent(chatId: string, message: string, attached
       superAgentOutputBuffer = [];
 
       // Start new Claude session
-      writeProgrammaticInput(ptyProcess, `cd '${workingPath}' && ${command}`);
+      writeProgrammaticInput(ptyProcess, `cd '${workingPath}' && ${command}`, true);
       saveAgents();
 
       telegramBot?.sendMessage(chatId, `👑 Super Agent is processing your request...`);

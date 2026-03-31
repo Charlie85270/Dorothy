@@ -295,7 +295,7 @@ describe('kanban-automation', () => {
           skills: ['testing'],
           name: 'Task: Fix login bug',
           character: 'ninja', // bug → ninja
-          skipPermissions: true,
+          permissionMode: 'auto',
         })
       );
     });

@@ -256,7 +256,7 @@ export default function Dashboard() {
         </div>
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
           {/* View Mode Toggle */}
-          <div className="flex items-center gap-1 p-1 bg-secondary border border-border" style={{ borderRadius: 10 }}>
+          <div className="flex items-center gap-1 p-1 bg-secondary border border-border [&_button]:cursor-pointer" style={{ borderRadius: 10 }}>
             <button
               onClick={() => setViewMode('terminals')}
               className={`

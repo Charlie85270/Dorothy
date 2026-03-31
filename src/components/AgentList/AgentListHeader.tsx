@@ -30,7 +30,7 @@ export function AgentListHeader({
           onClick={onSuperAgentClick}
           disabled={isCreatingSuperAgent}
           className={`
-            flex items-center justify-center gap-1.5 px-3 py-1.5 font-medium rounded-none transition-all text-sm
+            flex items-center justify-center gap-1.5 px-3 py-1.5 font-medium rounded-none transition-all text-sm cursor-pointer
             ${superAgent
               ? superAgent.status === 'running' || superAgent.status === 'waiting'
                 ? 'bg-green-500/20 border border-green-500/50 text-green-700 hover:bg-green-500/30 shadow-lg shadow-green-500/20'
@@ -64,7 +64,7 @@ export function AgentListHeader({
         {/* New Agent Button */}
         <button
           onClick={onNewAgentClick}
-          className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-foreground text-background font-medium hover:bg-foreground/90 transition-colors text-sm"
+          className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-foreground text-background font-medium hover:bg-foreground/90 transition-colors text-sm cursor-pointer"
         >
           <Plus className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">New Agent</span>

@@ -166,9 +166,9 @@ export default function TerminalGrid({
 
     // Fullscreen mode
     if (fullscreenPanelId) {
-      const panel = visiblePanels[0];
+      const panel = visiblePanels.find(p => p.agentId === fullscreenPanelId);
       if (!panel) return null;
-      const agent = agents.find(a => a.id === panel.agentId);
+      const agent = agents.find(a => a.id === fullscreenPanelId);
       if (!agent) return null;
 
       return (

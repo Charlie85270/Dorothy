@@ -74,8 +74,9 @@ export function useQuickTerminal({
         quickFitAddonRef.current = fitAddon;
 
         fitAddon.fit();
-        setTimeout(() => fitAddon.fit(), 100);
-        setTimeout(() => { fitAddon.fit(); term.focus(); }, 250);
+        term.scrollToBottom();
+        setTimeout(() => { fitAddon.fit(); term.scrollToBottom(); }, 100);
+        setTimeout(() => { fitAddon.fit(); term.scrollToBottom(); term.focus(); }, 250);
 
         const existing = persistentTerminals.get(agentId);
 

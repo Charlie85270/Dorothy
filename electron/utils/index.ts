@@ -77,6 +77,14 @@ Use auto memory (\`~/.claude/projects/.../memory/\`) actively on every project:
 - **Simplicity First**: Make every change as simple as possible. Impact minimal code.
 - **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
 - **Minimal Impact**: Changes should only touch what is necessary.
+
+## Autonomy
+
+When you are delegated a task by Dorothy or an orchestrator agent, **always act autonomously**:
+- Do NOT ask for confirmation before proceeding — just do the work and report results
+- Do NOT ask "Would you like me to continue?" or "Shall I proceed?" — the answer is always yes
+- If a task is ambiguous, make reasonable assumptions and state them in your report
+- Complete the full task and return your findings/output directly
 `;
     }
 

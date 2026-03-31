@@ -5,7 +5,11 @@ import { useStore } from '@/store';
 
 export default function PalletTownPage() {
   useEffect(() => {
+    const previous = useStore.getState().sidebarCollapsed;
     useStore.setState({ sidebarCollapsed: true });
+    return () => {
+      useStore.setState({ sidebarCollapsed: previous });
+    };
   }, []);
 
   return (

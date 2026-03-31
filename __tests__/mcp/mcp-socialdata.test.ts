@@ -210,7 +210,7 @@ function formatTweetDetail(tweet: TweetDetail): string {
   if (tweet.entities.user_mentions && tweet.entities.user_mentions.length > 0) {
     parts.push(`\nMentions: ${tweet.entities.user_mentions.map(m => `@${m.screen_name}`).join(', ')}`);
   }
-  parts.push(`\nAuthor: @${tweet.user.screen_name} — ${tweet.user.followers_count.toLocaleString()} followers, ${tweet.user.friends_count.toLocaleString()} following`);
+  parts.push(`\nAuthor: @${tweet.user.screen_name} — ${tweet.user.followers_count.toLocaleString('en-US')} followers, ${tweet.user.friends_count.toLocaleString('en-US')} following`);
 
   return parts.join('\n');
 }
@@ -227,11 +227,11 @@ function formatUserProfile(user: UserProfile): string {
     `🔗 URL: ${user.url || 'None'}`,
     `📅 Joined: ${user.created_at}`,
     '',
-    `👥 Followers: ${user.followers_count.toLocaleString()}`,
-    `👤 Following: ${user.friends_count.toLocaleString()}`,
-    `📝 Tweets: ${user.statuses_count.toLocaleString()}`,
-    `❤️ Likes: ${user.favourites_count.toLocaleString()}`,
-    `📋 Listed: ${user.listed_count.toLocaleString()}`,
+    `👥 Followers: ${user.followers_count.toLocaleString('en-US')}`,
+    `👤 Following: ${user.friends_count.toLocaleString('en-US')}`,
+    `📝 Tweets: ${user.statuses_count.toLocaleString('en-US')}`,
+    `❤️ Likes: ${user.favourites_count.toLocaleString('en-US')}`,
+    `📋 Listed: ${user.listed_count.toLocaleString('en-US')}`,
     '',
     `Protected: ${user.protected ? 'Yes' : 'No'}`,
     `Verified: ${user.verified ? 'Yes' : 'No'}`,

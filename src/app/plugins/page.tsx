@@ -537,7 +537,7 @@ export default function PluginsPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-7rem)] lg:h-[calc(100vh-3rem)] pt-4 lg:pt-6 overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-7rem)] lg:h-[calc(100vh-1.5rem)] pt-4 lg:pt-6 overflow-hidden">
       {/* Header */}
       <div className="flex flex-col gap-3 shrink-0">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -551,7 +551,7 @@ export default function PluginsPage() {
             href="https://code.claude.com/docs/en/discover-plugins"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-secondary text-foreground hover:bg-secondary/80 transition-colors text-sm shrink-0"
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-secondary text-muted-foreground hover:text-foreground border border-border hover:bg-secondary/80 transition-colors text-sm shrink-0 rounded-none"
           >
             <ExternalLink className="w-4 h-4" />
             <span className="hidden sm:inline">Documentation</span>
@@ -635,6 +635,7 @@ export default function PluginsPage() {
             <ChevronDown className="w-4 h-4 ml-auto" />
           </button>
 
+          {showCategoryDropdown && <div className="fixed inset-0 z-10" onClick={() => setShowCategoryDropdown(false)} />}
           <AnimatePresence>
             {showCategoryDropdown && (
               <motion.div
@@ -690,6 +691,7 @@ export default function PluginsPage() {
             <ChevronDown className="w-4 h-4 ml-auto" />
           </button>
 
+          {showMarketplaceDropdown && <div className="fixed inset-0 z-10" onClick={() => setShowMarketplaceDropdown(false)} />}
           <AnimatePresence>
             {showMarketplaceDropdown && (
               <motion.div
@@ -699,24 +701,16 @@ export default function PluginsPage() {
                 className="absolute top-full mt-2 right-0 w-56 bg-card border border-border rounded-none shadow-lg z-20 py-2"
               >
                 <button
-                  onClick={() => {
-                    setSelectedMarketplace(null);
-                    setShowMarketplaceDropdown(false);
-                  }}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-secondary ${!selectedMarketplace ? 'text-white' : 'text-muted-foreground'
-                    }`}
+                  onClick={() => { setSelectedMarketplace(null); setShowMarketplaceDropdown(false); }}
+                  className={`w-full text-left px-4 py-2 text-sm hover:bg-secondary ${!selectedMarketplace ? 'text-white' : 'text-muted-foreground'}`}
                 >
                   All Sources
                 </button>
                 {MARKETPLACES.map((marketplace) => (
                   <button
                     key={marketplace.id}
-                    onClick={() => {
-                      setSelectedMarketplace(marketplace.id);
-                      setShowMarketplaceDropdown(false);
-                    }}
-                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-secondary ${selectedMarketplace === marketplace.id ? 'text-white' : 'text-muted-foreground'
-                      }`}
+                    onClick={() => { setSelectedMarketplace(marketplace.id); setShowMarketplaceDropdown(false); }}
+                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-secondary ${selectedMarketplace === marketplace.id ? 'text-white' : 'text-muted-foreground'}`}
                   >
                     <div className="font-medium">{marketplace.name}</div>
                     <div className="text-xs text-muted-foreground">{marketplace.description}</div>
@@ -742,6 +736,7 @@ export default function PluginsPage() {
             <ChevronDown className="w-4 h-4 ml-auto" />
           </button>
 
+          {showAuthorDropdown && <div className="fixed inset-0 z-10" onClick={() => setShowAuthorDropdown(false)} />}
           <AnimatePresence>
             {showAuthorDropdown && (
               <motion.div
@@ -751,24 +746,16 @@ export default function PluginsPage() {
                 className="absolute top-full mt-2 right-0 w-56 bg-card border border-border rounded-none shadow-lg z-20 py-2 max-h-80 overflow-y-auto"
               >
                 <button
-                  onClick={() => {
-                    setSelectedAuthor(null);
-                    setShowAuthorDropdown(false);
-                  }}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-secondary ${!selectedAuthor ? 'text-white' : 'text-muted-foreground'
-                    }`}
+                  onClick={() => { setSelectedAuthor(null); setShowAuthorDropdown(false); }}
+                  className={`w-full text-left px-4 py-2 text-sm hover:bg-secondary ${!selectedAuthor ? 'text-white' : 'text-muted-foreground'}`}
                 >
                   All Authors
                 </button>
                 {AUTHORS.map((author) => (
                   <button
                     key={author}
-                    onClick={() => {
-                      setSelectedAuthor(author);
-                      setShowAuthorDropdown(false);
-                    }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-secondary truncate ${selectedAuthor === author ? 'text-white' : 'text-muted-foreground'
-                      }`}
+                    onClick={() => { setSelectedAuthor(author); setShowAuthorDropdown(false); }}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-secondary truncate ${selectedAuthor === author ? 'text-white' : 'text-muted-foreground'}`}
                   >
                     {author}
                   </button>

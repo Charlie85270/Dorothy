@@ -47,6 +47,7 @@ export default function TerminalsView() {
   const [focusedPanelId, setFocusedPanelId] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [viewFullscreen, setViewFullscreen] = useState(false);
+  const lastCustomTabRef = useRef<{ type: 'custom'; tabId: string } | null>(null);
   const [terminalFontSize, setTerminalFontSize] = useState(11);
   const pendingStartRef = useRef<{ agentId: string; prompt: string; options?: { model?: string } } | null>(null);
   const [terminalTheme, setTerminalTheme] = useState<'dark' | 'light'>('dark');
@@ -121,6 +122,9 @@ export default function TerminalsView() {
     }
   }, [startAgent]);
 
+  // Broadcast must be initialized before multiTerminal so we can pass broadcastMode
+  const broadcast = useBroadcast();
+
   // Core hooks — delay terminal init until settings are loaded to avoid wrong font size
   const multiTerminal = useMultiTerminal({
     agents: terminalSettingsLoaded ? filteredAgents : [],
@@ -133,9 +137,9 @@ export default function TerminalsView() {
     },
     theme: terminalTheme,
     onTerminalReady: handleTerminalReady,
+    broadcastMode: broadcast.broadcastMode,
   });
   const grid = useTerminalGrid({ agentIds, preset: gridPreset, isEditable, tabId });
-  const broadcast = useBroadcast();
   const search = useTerminalSearch(filteredAgents);
   const contextMenu = useTerminalContextMenu();
 
@@ -209,7 +213,7 @@ export default function TerminalsView() {
 
   const handleStartAll = useCallback(async () => {
     const needsStart = filteredAgents.filter(a =>
-      (a.status === 'idle' || a.status === 'completed') && !a.ptyId
+      a.status === 'idle' || a.status === 'completed' || a.status === 'error'
     );
     for (const agent of needsStart) {
       await startAgent(agent.id, '', { resume: true });
@@ -245,7 +249,11 @@ export default function TerminalsView() {
     character?: string,
     name?: string,
     secondaryProjectPath?: string,
-    skipPermissions?: boolean,
+    permissionMode?: 'normal' | 'auto' | 'bypass',
+    _provider?: string,
+    _localModel?: string,
+    _obsidianVaultPaths?: string[],
+    effort?: 'low' | 'medium' | 'high',
   ) => {
     const agent = await createAgent({
       projectPath,
@@ -254,7 +262,8 @@ export default function TerminalsView() {
       character: character as import('@/types/electron').AgentCharacter,
       name,
       secondaryProjectPath,
-      skipPermissions,
+      permissionMode,
+      effort,
     });
     // Auto-add to active custom tab
     if (tabManager.isCustomTabActive && tabManager.activeCustomTab) {
@@ -303,7 +312,7 @@ export default function TerminalsView() {
 
   return (
     <DndContext sensors={dnd.sensors} onDragEnd={dnd.handleDragEnd}>
-      <div className={`flex flex-col overflow-hidden ${viewFullscreen ? 'fixed inset-0 z-[100] bg-background' : 'h-full w-full relative'}`}>
+      <div className={`flex flex-col overflow-hidden ${viewFullscreen ? 'fixed inset-0 z-[100] bg-background window-no-drag pt-7' : 'h-full w-full relative'}`}>
         {/* Broadcast overlay */}
         <BroadcastIndicator active={broadcast.broadcastMode} />
 
@@ -387,7 +396,22 @@ export default function TerminalsView() {
         <ProjectTabBar
           agents={agents}
           activeTab={tabManager.activeTab}
-          onSelectProject={(path) => tabManager.setActiveTab({ type: 'project', projectPath: path })}
+          onSelectProject={(path) => {
+            if (tabManager.activeTab.type === 'project' && tabManager.activeTab.projectPath === path) {
+              // Toggle off: restore last custom tab, or fallback to first
+              const restore = lastCustomTabRef.current;
+              const target = restore && tabManager.customTabs.find(t => t.id === restore.tabId)
+                ? restore
+                : tabManager.customTabs[0] ? { type: 'custom' as const, tabId: tabManager.customTabs[0].id } : null;
+              if (target) tabManager.setActiveTab(target);
+            } else {
+              // Save current custom tab before switching to project view
+              if (tabManager.activeTab.type === 'custom') {
+                lastCustomTabRef.current = { type: 'custom', tabId: tabManager.activeTab.tabId };
+              }
+              tabManager.setActiveTab({ type: 'project', projectPath: path });
+            }
+          }}
           panelOpen={panelOpen}
           onTogglePanel={() => setPanelOpen(prev => !prev)}
         />

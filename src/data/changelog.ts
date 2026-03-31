@@ -7,6 +7,31 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 10,
+    version: '1.2.7',
+    date: '2026-03-28',
+    updates: [
+      'New Support page — one-time and monthly donations via Stripe',
+      'Agent permission modes: Normal, Auto, and Bypass replace old toggle',
+      'Agent effort level setting (Low, Medium, High)',
+      'Major Usage page overhaul — model breakdown donut chart, top projects, weekly trends',
+      'Multiline input support — Shift+Enter inserts newline, auto-resizing textarea',
+      'Broadcast mode — send input to all terminals at once',
+      'Terminal fixes: preserve content on navigation, fix fullscreen buttons, scroll-to-bottom on replay',
+      'Sidebar and Kanban UI polish',
+    ],
+  },
+  {
+    id: 9,
+    version: '1.2.6',
+    date: '2026-03-28',
+    updates: [
+      'Add delay between PTY write and carriage return to fix Telegram/Slack input',
+      'Add Chrome browser sharing for agents (--chrome flag)',
+      'Fix CLI path detection, settings sidebar scroll, and UX improvements',
+    ],
+  },
+  {
     id: 8,
     version: '1.2.5',
     date: '2026-03-17',

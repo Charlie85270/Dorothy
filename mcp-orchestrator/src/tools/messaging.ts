@@ -13,10 +13,11 @@ export function registerMessagingTools(server: McpServer): void {
     "Send a message to Telegram. Use this to respond to the user when the request came from Telegram.",
     {
       message: z.string().describe("The message to send to Telegram"),
+      chat_id: z.string().optional().describe("The chat ID to send to. REQUIRED when responding to a specific Telegram chat. Use the chat_id from the incoming Telegram message. Falls back to the default chat ID if not provided."),
     },
-    async ({ message }) => {
+    async ({ message, chat_id }) => {
       try {
-        await apiRequest("/api/telegram/send", "POST", { message });
+        await apiRequest("/api/telegram/send", "POST", { message, chat_id });
         return {
           content: [
             {

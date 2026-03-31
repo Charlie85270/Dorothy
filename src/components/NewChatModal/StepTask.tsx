@@ -12,8 +12,13 @@ import {
   FolderOpen,
   Sparkles,
   BookOpen,
+  Shield,
+  ShieldOff,
+  Bot,
+  Gauge,
 } from 'lucide-react';
 import type { AgentProvider } from '@/types/electron';
+import type { AgentPermissionMode, AgentEffort } from '@/types/agent';
 import OrchestratorModeToggle from './OrchestratorModeToggle';
 
 interface StepTaskProps {
@@ -24,8 +29,10 @@ interface StepTaskProps {
   onToggleWorktree: () => void;
   branchName: string;
   onBranchNameChange: (name: string) => void;
-  skipPermissions: boolean;
-  onToggleSkipPermissions: () => void;
+  permissionMode: AgentPermissionMode;
+  onPermissionModeChange: (mode: AgentPermissionMode) => void;
+  effort: AgentEffort;
+  onEffortChange: (effort: AgentEffort) => void;
   isOrchestrator: boolean;
   onOrchestratorToggle: (enabled: boolean) => void;
   // Summary data
@@ -35,6 +42,18 @@ interface StepTaskProps {
   selectedObsidianVaults: string[];
 }
 
+const PERMISSION_MODES: { value: AgentPermissionMode; label: string; description: string; icon: React.ReactNode; iconColor: string; accent: string }[] = [
+  { value: 'normal', label: 'Normal', description: 'Asks before each tool',    icon: <Shield className="w-5 h-5 mx-auto mb-1" />,    iconColor: 'text-accent-blue',  accent: 'border-accent-blue bg-accent-blue/10' },
+  { value: 'auto',   label: 'Auto',   description: 'Autonomous — recommended', icon: <Bot className="w-5 h-5 mx-auto mb-1" />,        iconColor: 'text-amber-400',    accent: 'border-amber-400 bg-amber-400/10' },
+  { value: 'bypass', label: 'Bypass', description: 'Skips all restrictions',   icon: <ShieldOff className="w-5 h-5 mx-auto mb-1" />, iconColor: 'text-red-400',      accent: 'border-red-400 bg-red-400/10' },
+];
+
+const EFFORT_LEVELS: { value: AgentEffort; label: string; description: string }[] = [
+  { value: 'low',    label: 'Low',    description: 'Fast, minimal' },
+  { value: 'medium', label: 'Medium', description: 'Balanced (default)' },
+  { value: 'high',   label: 'High',   description: 'Extended reasoning' },
+];
+
 const StepTask = React.memo(function StepTask({
   prompt,
   onPromptChange,
@@ -43,8 +62,10 @@ const StepTask = React.memo(function StepTask({
   onToggleWorktree,
   branchName,
   onBranchNameChange,
-  skipPermissions,
-  onToggleSkipPermissions,
+  permissionMode,
+  onPermissionModeChange,
+  effort,
+  onEffortChange,
   isOrchestrator,
   onOrchestratorToggle,
   projectPath,
@@ -112,7 +133,57 @@ const StepTask = React.memo(function StepTask({
               exit={{ height: 0 }}
               className="overflow-hidden"
             >
-              <div className="p-4 space-y-4 border-t border-border">
+              <div className="p-4 space-y-4">
+                {/* Permission Mode */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <Shield className="w-4 h-4 text-text-muted" />
+                    Permission Mode
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    {PERMISSION_MODES.map(({ value, label, description, icon, iconColor, accent }) => (
+                      <button
+                        key={value}
+                        onClick={() => onPermissionModeChange(value)}
+                        className={`p-3 rounded-lg border transition-all text-center
+                          ${permissionMode === value
+                            ? accent
+                            : 'border-border-primary hover:border-border-accent'
+                          }`}
+                      >
+                        <span className={permissionMode === value ? iconColor : 'text-text-muted'}>{icon}</span>
+                        <span className="font-medium block">{label}</span>
+                        <p className="text-xs text-text-muted mt-0.5">{description}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Effort Level */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <Gauge className="w-4 h-4 text-text-muted" />
+                    Effort
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    {EFFORT_LEVELS.map(({ value, label, description }) => (
+                      <button
+                        key={value}
+                        onClick={() => onEffortChange(value)}
+                        className={`p-3 rounded-lg border transition-all text-center
+                          ${effort === value
+                            ? 'border-accent-blue bg-accent-blue/10'
+                            : 'border-border-primary hover:border-border-accent'
+                          }`}
+                      >
+                        <Gauge className={`w-5 h-5 mx-auto mb-1 ${effort === value ? 'text-accent-blue' : 'text-text-muted'}`} />
+                        <span className="font-medium block">{label}</span>
+                        <p className="text-xs text-text-muted mt-0.5">{description}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Git Worktree Option */}
                 <div className="p-3 rounded-lg border border-border-primary bg-bg-tertiary/30">
                   <div className="flex items-start gap-3">
@@ -161,33 +232,6 @@ const StepTask = React.memo(function StepTask({
                           </motion.div>
                         )}
                       </AnimatePresence>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Skip Permissions */}
-                <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/5">
-                  <div className="flex items-start gap-3">
-                    <button
-                      onClick={onToggleSkipPermissions}
-                      className={`
-                        mt-0.5 w-5 h-5 rounded border flex items-center justify-center transition-all shrink-0
-                        ${skipPermissions
-                          ? 'bg-amber-500 border-amber-500'
-                          : 'border-amber-500/50 hover:border-amber-500'
-                        }
-                      `}
-                    >
-                      {skipPermissions && <Check className="w-3 h-3 text-white" />}
-                    </button>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <Zap className="w-4 h-4 text-amber-500" />
-                        <span className="font-medium text-sm">Skip Permission Prompts</span>
-                      </div>
-                      <p className="text-xs text-text-muted mt-1">
-                        Run without asking for permission — the agent will have full autonomy
-                      </p>
                     </div>
                   </div>
                 </div>

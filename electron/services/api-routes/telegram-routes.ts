@@ -5,14 +5,14 @@ import { RouteApp, RouteContext } from './types';
 export function registerTelegramRoutes(app: RouteApp, ctx: RouteContext): void {
   // POST /api/telegram/send
   app.post('/api/telegram/send', async (req, sendJson) => {
-    const { message } = req.body as { message: string };
+    const { message, chat_id } = req.body as { message: string; chat_id?: string };
     if (!message) {
       sendJson({ error: 'message is required' }, 400);
       return;
     }
 
     const telegramBot = ctx.getTelegramBot();
-    const targetChatId = ctx.appSettings.telegramChatId || ctx.appSettings.telegramAuthorizedChatIds?.[0];
+    const targetChatId = chat_id || ctx.appSettings.telegramChatId || ctx.appSettings.telegramAuthorizedChatIds?.[0];
     if (!telegramBot || !targetChatId) {
       sendJson({ error: 'Telegram not configured or no chat ID. Set a default chat in Settings > Telegram.' }, 400);
       return;

@@ -27,7 +27,8 @@ export function attachShiftEnterHandler(
 ): void {
   term.attachCustomKeyEventHandler((event) => {
     if (event.key === 'Enter' && event.shiftKey && event.type === 'keydown') {
-      sendFn('\x1b\r');
+      // Use bracket paste mode to insert a literal newline without submitting
+      sendFn('\x1b[200~\n\x1b[201~');
       return false;
     }
     return true;

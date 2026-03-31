@@ -144,9 +144,14 @@ export interface AgentStatus {
   name?: string;
   statusLine?: string;    // ANSI-stripped last meaningful output line
   pathMissing?: boolean; // True if project path no longer exists
-  skipPermissions?: boolean; // If true, use --dangerously-skip-permissions flag
+  /** @deprecated Use permissionMode instead */
+  skipPermissions?: boolean;
+  permissionMode?: 'normal' | 'auto' | 'bypass';
+  effort?: 'low' | 'medium' | 'high';
   provider?: AgentProvider;   // 'claude' (default) or 'local' (Tasmania)
+  model?: string;              // Model name (e.g. 'sonnet', 'opus', 'haiku')
   localModel?: string;        // Tasmania model name when provider is 'local'
+  savedPrompt?: string;       // Saved task/prompt for re-launching the agent
   obsidianVaultPaths?: string[]; // Obsidian vault paths to mount via --add-dir (read-only)
 }
 
@@ -185,7 +190,8 @@ export interface ElectronAPI {
       character?: AgentCharacter;
       name?: string;
       secondaryProjectPath?: string;
-      skipPermissions?: boolean;
+      permissionMode?: 'normal' | 'auto' | 'bypass';
+      effort?: 'low' | 'medium' | 'high';
       provider?: AgentProvider;
       localModel?: string;
       obsidianVaultPaths?: string[];
@@ -194,7 +200,8 @@ export interface ElectronAPI {
       id: string;
       skills?: string[];
       secondaryProjectPath?: string | null;
-      skipPermissions?: boolean;
+      permissionMode?: 'normal' | 'auto' | 'bypass';
+      effort?: 'low' | 'medium' | 'high';
       name?: string;
       character?: AgentCharacter;
     }) => Promise<{ success: boolean; error?: string; agent?: AgentStatus }>;
@@ -255,6 +262,19 @@ export interface ElectronAPI {
       skills: Array<{ name: string; source: 'project' | 'user' | 'plugin'; path: string; description?: string; projectName?: string }>;
       history: Array<{ display: string; timestamp: number; project?: string }>;
       activeSessions: string[];
+      rateLimits: {
+        five_hour?: { used_percentage: number; resets_at: number };
+        seven_day?: { used_percentage: number; resets_at: number };
+      } | null;
+      tokenStats: {
+        totalInputTokens: number;
+        totalOutputTokens: number;
+        totalCostUsd: number;
+        extraCostUsd: number;
+        sessionCount: number;
+        modelTokens?: Record<string, { in: number; out: number }>;
+        dailyCosts?: Record<string, { cost: number; extraCost: number }>;
+      } | null;
     } | null>;
   };
 

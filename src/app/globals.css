@@ -3,6 +3,10 @@
 
 @import "tailwindcss";
 
+@layer base {
+  button:not(:disabled), [role="button"]:not(:disabled), a, select { cursor: pointer; }
+}
+
 @font-face {
   font-family: 'Geist Sans';
   src: url('https://cdn.jsdelivr.net/npm/geist@1.2.0/dist/fonts/geist-sans/Geist-Regular.woff2') format('woff2');
@@ -323,11 +327,15 @@
   td, th, code, pre {
     font-variant-numeric: tabular-nums;
   }
-  /* Headings - retro serif display font */
+  /* Headings - use app sans-serif font by default */
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'DM Serif Display', Georgia, serif;
+    font-family: 'Geist Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-weight: 400;
     letter-spacing: 0;
+  }
+  /* Use retro serif only where explicitly applied via .font-serif class */
+  .font-serif {
+    font-family: 'DM Serif Display', Georgia, serif;
   }
   h1 {
     font-size: 2rem;

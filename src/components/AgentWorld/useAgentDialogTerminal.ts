@@ -87,6 +87,7 @@ export function useAgentDialogTerminal({
         const fitAndResize = () => {
           try {
             fitAddon.fit();
+            term.scrollToBottom();
             if (window.electronAPI?.agent?.resize && agent?.id) {
               window.electronAPI.agent.resize({ id: agent.id, cols: term.cols, rows: term.rows }).catch(() => {});
             }
@@ -181,6 +182,7 @@ export function useAgentDialogTerminal({
       if (fitAddonRef.current && xtermRef.current) {
         try {
           fitAddonRef.current.fit();
+          xtermRef.current.scrollToBottom();
           const id = agentIdRef.current;
           if (id && window.electronAPI?.agent?.resize) {
             window.electronAPI.agent.resize({ id, cols: xtermRef.current.cols, rows: xtermRef.current.rows }).catch(() => {});
@@ -199,12 +201,16 @@ export function useAgentDialogTerminal({
     if (!terminalReady || !fitAddonRef.current || !xtermRef.current) return;
     const t1 = setTimeout(() => {
       fitAddonRef.current?.fit();
+      xtermRef.current?.scrollToBottom();
       const id = agentIdRef.current;
       if (id && xtermRef.current && window.electronAPI?.agent?.resize) {
         window.electronAPI.agent.resize({ id, cols: xtermRef.current.cols, rows: xtermRef.current.rows }).catch(() => {});
       }
     }, 50);
-    const t2 = setTimeout(() => fitAddonRef.current?.fit(), 150);
+    const t2 = setTimeout(() => {
+      fitAddonRef.current?.fit();
+      xtermRef.current?.scrollToBottom();
+    }, 150);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [isFullscreen, terminalReady]);
 

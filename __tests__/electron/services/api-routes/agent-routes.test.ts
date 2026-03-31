@@ -229,7 +229,7 @@ describe('agent-routes', () => {
       const sendJson = vi.fn();
       await handler(makeReq({ params: { id: 'a1' }, body: { message: 'hello' } }), sendJson, ctx);
 
-      expect(writeProgrammaticInput).toHaveBeenCalledWith(mockPty, 'hello');
+      expect(writeProgrammaticInput).toHaveBeenCalledWith(mockPty, 'hello', true);
       expect(sendJson).toHaveBeenCalledWith({ success: true });
     });
 

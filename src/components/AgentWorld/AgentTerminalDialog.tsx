@@ -39,7 +39,7 @@ export default function AgentTerminalDialog({
   const [gitBranch, setGitBranch] = useState('');
 
   // Settings panel state
-  const [editSkipPermissions, setEditSkipPermissions] = useState(false);
+  const [editPermissionMode, setEditPermissionMode] = useState<'normal' | 'auto' | 'bypass'>('auto');
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [customSecondaryPath, setCustomSecondaryPath] = useState('');
 
@@ -61,11 +61,11 @@ export default function AgentTerminalDialog({
     [projects, agent?.projectPath, agent?.worktreePath], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  // Sync skip-permissions UI state when agent changes
+  // Sync permission mode UI state when agent changes
   useEffect(() => {
-    setEditSkipPermissions(agent?.skipPermissions || false);
+    setEditPermissionMode(agent?.permissionMode ?? (agent?.skipPermissions ? 'auto' : 'normal'));
     setGitBranch('');
-  }, [agent?.id, agent?.skipPermissions]);
+  }, [agent?.id, agent?.permissionMode, agent?.skipPermissions]);
 
   // Expand initialPanel when the dialog opens for a new agent
   useEffect(() => {
@@ -147,16 +147,16 @@ export default function AgentTerminalDialog({
     }
   }, [agent, onAgentUpdated]);
 
-  const handleSaveSkipPermissions = useCallback(async (value: boolean) => {
+  const handleSavePermissionMode = useCallback(async (value: 'normal' | 'auto' | 'bypass') => {
     if (!agent) return;
     setIsSavingSettings(true);
     try {
-      const params = { id: agent.id, skipPermissions: value };
+      const params = { id: agent.id, permissionMode: value };
       const result = onUpdateAgent
         ? await onUpdateAgent(params)
         : await window.electronAPI!.agent.update(params);
       if (result.success && result.agent && onAgentUpdated) onAgentUpdated(result.agent as AgentStatus);
-      setEditSkipPermissions(value);
+      setEditPermissionMode(value);
     } catch (err) {
       console.error('Failed to save settings:', err);
     } finally {
@@ -184,7 +184,7 @@ export default function AgentTerminalDialog({
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.9, opacity: 0 }}
           onClick={(e) => e.stopPropagation()}
-          className={`bg-bg-secondary border border-border-primary rounded-none overflow-hidden shadow-2xl ${dialogClass} flex flex-col`}
+          className={`bg-bg-secondary border border-border-primary rounded-none overflow-hidden shadow-2xl ${dialogClass} flex flex-col [&_button:not(:disabled)]:cursor-pointer`}
         >
           <AgentDialogHeader
             agent={agent}
@@ -255,9 +255,9 @@ export default function AgentTerminalDialog({
                       onCustomSecondaryPathChange={setCustomSecondaryPath}
                       onSetSecondaryProject={handleSetSecondaryProject}
                       onBrowseFolder={onBrowseFolder}
-                      editSkipPermissions={editSkipPermissions}
+                      editPermissionMode={editPermissionMode}
                       isSavingSettings={isSavingSettings}
-                      onSaveSkipPermissions={handleSaveSkipPermissions}
+                      onSavePermissionMode={handleSavePermissionMode}
                     />
                   </>
                 )}

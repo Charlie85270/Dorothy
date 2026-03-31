@@ -89,6 +89,7 @@ export default function NewChatModal({
   onRefreshSkills,
   initialProjectPath,
   initialStep,
+  initialOrchestrator,
 }: NewChatModalProps) {
   const isEditMode = !!editAgent;
   // Step navigation
@@ -123,7 +124,8 @@ export default function NewChatModal({
   const [prompt, setPrompt] = useState('');
   const [useWorktree, setUseWorktree] = useState(false);
   const [branchName, setBranchName] = useState('');
-  const [skipPermissions, setSkipPermissions] = useState(true);
+  const [permissionMode, setPermissionMode] = useState<'normal' | 'auto' | 'bypass'>('normal');
+  const [effort, setEffort] = useState<'low' | 'medium' | 'high'>('medium');
   const [isOrchestrator, setIsOrchestrator] = useState(false);
 
   const projectPath = selectedProject || customPath;
@@ -156,7 +158,8 @@ export default function NewChatModal({
         setSelectedProject(editAgent.projectPath);
         setCustomPath('');
         setSelectedSkills(editAgent.skills || []);
-        setPrompt('');
+        setPrompt(editAgent.savedPrompt || '');
+        setModel(editAgent.model || 'default');
         setUseWorktree(!!editAgent.branchName);
         setBranchName(editAgent.branchName || '');
         agentPersonaRef.current = {
@@ -166,7 +169,8 @@ export default function NewChatModal({
         setShowSecondaryProject(!!editAgent.secondaryProjectPath);
         setSelectedSecondaryProject(editAgent.secondaryProjectPath || '');
         setCustomSecondaryPath('');
-        setSkipPermissions(editAgent.skipPermissions || false);
+        setPermissionMode(editAgent.permissionMode ?? (editAgent.skipPermissions ? 'auto' : 'normal'));
+        setEffort(editAgent.effort || 'medium');
         setProvider(editAgent.provider || 'claude');
         setLocalModel(editAgent.localModel || '');
         setSelectedObsidianVaults(editAgent.obsidianVaultPaths || []);
@@ -180,15 +184,26 @@ export default function NewChatModal({
         setPrompt('');
         setUseWorktree(false);
         setBranchName('');
-        agentPersonaRef.current = { character: 'robot', name: '' };
         setShowSecondaryProject(false);
         setSelectedSecondaryProject('');
         setCustomSecondaryPath('');
-        setSkipPermissions(false);
+        setPermissionMode('normal');
+        setEffort('medium');
         setProvider('claude');
+        setModel('default');
         setLocalModel('');
         setSelectedObsidianVaults([]);
         setDetectedVault(null);
+
+        if (initialOrchestrator) {
+          agentPersonaRef.current = { character: 'wizard', name: 'Super Agent (Orchestrator)' };
+          setPermissionMode('bypass');
+          setIsOrchestrator(true);
+        } else {
+          agentPersonaRef.current = { character: 'robot', name: '' };
+          setPermissionMode('normal');
+          setIsOrchestrator(false);
+        }
       }
 
       // Load app settings (Tasmania, favorites, default project)
@@ -233,7 +248,7 @@ export default function NewChatModal({
         if (byProvider) setInstalledSkillsByProvider(byProvider);
       });
     }
-  }, [open, initialProjectPath, initialStep, editAgent]);
+  }, [open, initialProjectPath, initialStep, editAgent, initialOrchestrator]);
 
   // Clear selected skills when provider changes
   useEffect(() => {
@@ -300,7 +315,7 @@ export default function NewChatModal({
   const handleOrchestratorToggle = useCallback((enabled: boolean) => {
     setIsOrchestrator(enabled);
     if (enabled) {
-      setSkipPermissions(true);
+      setPermissionMode('auto');
       agentPersonaRef.current = { ...agentPersonaRef.current, character: 'wizard' };
     }
   }, []);
@@ -321,13 +336,23 @@ export default function NewChatModal({
     const secondaryPath = showSecondaryProject ? (selectedSecondaryProject || customSecondaryPath) : undefined;
 
     if (isEditMode && editAgent && onUpdate) {
-      // Edit mode: update existing agent
+      // Edit mode: update existing agent with all fields
+      const worktreeConfig = useWorktree && !editAgent.branchName
+        ? { enabled: true, branchName: branchName.trim() }
+        : undefined;
       onUpdate(editAgent.id, {
         skills: selectedSkills,
         secondaryProjectPath: secondaryPath || null,
-        skipPermissions,
+        permissionMode,
+        effort: effort || undefined,
         name: finalName,
         character: agentCharacter,
+        model: (model && model !== 'default') ? model : null,
+        provider,
+        localModel: localModel || null,
+        savedPrompt: prompt.trim() || null,
+        obsidianVaultPaths: selectedObsidianVaults.length > 0 ? selectedObsidianVaults : [],
+        worktree: worktreeConfig,
       });
       onClose();
       return;
@@ -338,7 +363,7 @@ export default function NewChatModal({
       || (selectedSkills.length > 0 ? `Use the following skills: ${selectedSkills.join(', ')}` : '');
     const worktreeConfig = useWorktree ? { enabled: true, branchName: branchName.trim() } : undefined;
 
-    onSubmit(projectPath, selectedSkills, finalPrompt, model, worktreeConfig, agentCharacter, finalName, secondaryPath, skipPermissions, provider, localModel, selectedObsidianVaults.length > 0 ? selectedObsidianVaults : undefined);
+    onSubmit(projectPath, selectedSkills, finalPrompt, model, worktreeConfig, agentCharacter, finalName, secondaryPath, permissionMode, provider, localModel, selectedObsidianVaults.length > 0 ? selectedObsidianVaults : undefined, effort);
 
     // Reset form
     setStep(1);
@@ -351,12 +376,14 @@ export default function NewChatModal({
     agentPersonaRef.current = { character: 'robot', name: '' };
     setShowSecondaryProject(false);
     setSelectedSecondaryProject('');
-    setSkipPermissions(false);
+    setPermissionMode('normal');
+    setEffort('medium');
     setCustomSecondaryPath('');
     setProvider('claude');
+    setModel('default');
     setLocalModel('');
     setSelectedObsidianVaults([]);
-  }, [projectPath, prompt, selectedSkills, useWorktree, branchName, showSecondaryProject, selectedSecondaryProject, customSecondaryPath, model, skipPermissions, provider, localModel, selectedObsidianVaults, onSubmit, isEditMode, editAgent, onUpdate, onClose]);
+  }, [projectPath, prompt, selectedSkills, useWorktree, branchName, showSecondaryProject, selectedSecondaryProject, customSecondaryPath, model, permissionMode, effort, provider, localModel, selectedObsidianVaults, onSubmit, isEditMode, editAgent, onUpdate, onClose]);
 
   // Can proceed from current step?
   const canContinue = step === 1 ? !!projectPath : true;
@@ -378,7 +405,7 @@ export default function NewChatModal({
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
           onClick={(e) => e.stopPropagation()}
-          className="w-full max-w-2xl mx-4 bg-card border border-border rounded-xl shadow-2xl overflow-hidden h-[85vh] lg:h-[90vh] flex flex-col"
+          className="w-full max-w-2xl mx-4 bg-card border border-border rounded-xl shadow-2xl overflow-hidden h-[85vh] lg:h-[90vh] flex flex-col [&_button:not(:disabled)]:cursor-pointer"
         >
           {/* Header: Step Indicator + Close */}
           <div className="px-4 lg:px-6 py-3 lg:py-4 border-b border-border flex items-center justify-between bg-secondary">
@@ -457,8 +484,10 @@ export default function NewChatModal({
                 onToggleWorktree={() => setUseWorktree(prev => !prev)}
                 branchName={branchName}
                 onBranchNameChange={setBranchName}
-                skipPermissions={skipPermissions}
-                onToggleSkipPermissions={() => setSkipPermissions(prev => !prev)}
+                permissionMode={permissionMode}
+                onPermissionModeChange={setPermissionMode}
+                effort={effort}
+                onEffortChange={setEffort}
                 isOrchestrator={isOrchestrator}
                 onOrchestratorToggle={handleOrchestratorToggle}
                 projectPath={projectPath}

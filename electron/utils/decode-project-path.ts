@@ -10,8 +10,8 @@ import * as fs from 'fs';
  *
  * To decode, we greedily match tokens against the filesystem, trying the
  * longest possible segment first. For each candidate segment we try all
- * combinations of `-` and `.` as separators so that both `frontend-lite`
- * and `docs.octav.fi` are correctly reconstructed.
+ * combinations of `-`, `.`, and `_` as separators so that `frontend-lite`,
+ * `docs.octav.fi`, and `charlie_rabiller` are all correctly reconstructed.
  */
 export function decodeProjectPath(dirName: string): string {
   const tokens = dirName.replace(/^-/, '').split('-');
@@ -36,7 +36,7 @@ export function decodeProjectPath(dirName: string): string {
           }
         } catch { /* ignore */ }
       } else {
-        // Try all separator combinations (-, .) for this group of tokens
+        // Try all separator combinations (-, ., _) for this group of tokens
         const names = separatorCombinations(subTokens);
         for (const name of names) {
           const candidate = path.join(resolved, name);
@@ -64,27 +64,29 @@ export function decodeProjectPath(dirName: string): string {
 }
 
 /**
- * Generate all possible names by joining tokens with `-` or `.` at each position.
- * For N tokens there are 2^(N-1) combinations. Capped at 7 tokens (64 combos).
+ * Generate all possible names by joining tokens with `-`, `.`, or `_` at each position.
+ * For N tokens there are 3^(N-1) combinations. Capped at 6 tokens (243 combos).
  */
 function separatorCombinations(tokens: string[]): string[] {
   if (tokens.length <= 1) return [tokens[0] || ''];
 
-  const separators = ['-', '.'];
+  const separators = ['-', '.', '_'];
   const positions = tokens.length - 1;
 
-  // Safety cap — for very long token sequences just try all-dash and all-dot
-  if (positions > 6) {
-    return [tokens.join('-'), tokens.join('.')];
+  // Safety cap — for very long token sequences just try each separator uniformly
+  if (positions > 5) {
+    return separators.map(sep => tokens.join(sep));
   }
 
-  const total = 1 << positions; // 2^positions
+  const total = separators.length ** positions; // 3^positions
   const results: string[] = [];
 
-  for (let mask = 0; mask < total; mask++) {
+  for (let combo = 0; combo < total; combo++) {
     let result = tokens[0];
+    let remaining = combo;
     for (let j = 0; j < positions; j++) {
-      const sepIdx = (mask >> j) & 1;
+      const sepIdx = remaining % separators.length;
+      remaining = Math.floor(remaining / separators.length);
       result += separators[sepIdx] + tokens[j + 1];
     }
     results.push(result);

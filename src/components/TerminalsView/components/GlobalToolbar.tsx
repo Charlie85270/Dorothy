@@ -62,7 +62,7 @@ export default function GlobalToolbar({
   disabledPresets,
 }: GlobalToolbarProps) {
   return (
-    <div className="flex items-center gap-2 px-3 py-2 bg-card border-b border-border !rounded-b-none">
+    <div className="flex items-center gap-2 px-3 py-2 bg-card border-b border-border !rounded-b-none [&_button]:cursor-pointer">
       {/* Left section */}
       <div className="flex items-center gap-2">
         {/* Layout selector — only for custom tabs */}
@@ -109,13 +109,19 @@ export default function GlobalToolbar({
           >
             <ZoomOut className="w-3.5 h-3.5" />
           </button>
-          <button
-            onClick={onZoomReset}
-            className="px-1.5 py-1 text-[10px] text-muted-foreground hover:text-foreground hover:bg-primary/5 transition-colors min-w-[32px] text-center"
-            title="Reset zoom"
-          >
-            {fontSize}px
-          </button>
+          {fontSize === 11 ? (
+            <span className="px-1.5 py-1 text-[10px] text-muted-foreground min-w-[32px] text-center cursor-default select-none">
+              {fontSize}px
+            </span>
+          ) : (
+            <button
+              onClick={onZoomReset}
+              className="px-1.5 py-1 text-[10px] text-muted-foreground hover:text-foreground hover:bg-primary/5 transition-colors min-w-[32px] text-center"
+              title="Reset zoom to 11px"
+            >
+              {fontSize}px
+            </button>
+          )}
           <button
             onClick={onZoomIn}
             className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-primary/5 transition-colors"
@@ -154,7 +160,7 @@ export default function GlobalToolbar({
           className={`
             flex items-center gap-1.5 px-2 py-1.5 text-xs transition-colors
             ${isViewFullscreen
-              ? 'bg-primary/15 text-primary'
+              ? 'text-muted-foreground hover:text-foreground hover:bg-primary/5'
               : 'text-muted-foreground hover:text-foreground hover:bg-primary/5'
             }
           `}

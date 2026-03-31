@@ -114,12 +114,12 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
 
   // POST /api/agents
   app_.post('/api/agents', (req, sendJson) => {
-    const { projectPath, name, skills = [], character, skipPermissions, secondaryProjectPath } = req.body as {
+    const { projectPath, name, skills = [], character, permissionMode, secondaryProjectPath } = req.body as {
       projectPath: string;
       name?: string;
       skills?: string[];
       character?: AgentCharacter;
-      skipPermissions?: boolean;
+      permissionMode?: 'normal' | 'auto' | 'bypass';
       secondaryProjectPath?: string;
     };
 
@@ -139,7 +139,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       lastActivity: new Date().toISOString(),
       character,
       name: name || `Agent ${id.slice(0, 6)}`,
-      skipPermissions,
+      permissionMode: permissionMode || 'auto',
     };
     agents.set(id, agent);
     saveAgents();
@@ -154,8 +154,8 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       return;
     }
 
-    const { prompt, model, skipPermissions, printMode } = req.body as {
-      prompt: string; model?: string; skipPermissions?: boolean; printMode?: boolean;
+    const { prompt, model, permissionMode: bodyPermissionMode, printMode } = req.body as {
+      prompt: string; model?: string; permissionMode?: 'normal' | 'auto' | 'bypass'; printMode?: boolean;
     };
     if (!prompt) {
       sendJson({ error: 'prompt is required' }, 400);
@@ -185,15 +185,17 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     if (agent.secondaryProjectPath) {
       command += ` --add-dir '${agent.secondaryProjectPath.replace(/'/g, "'\\''")}'`;
     }
-    if (skipPermissions !== undefined ? skipPermissions : agent.skipPermissions) {
+    const effectiveMode = bodyPermissionMode ?? agent.permissionMode ?? (agent.skipPermissions ? 'auto' : 'normal');
+    if (effectiveMode === 'auto' || effectiveMode === 'bypass') {
       command += ' --dangerously-skip-permissions';
     }
-    if (model) {
-      if (!/^[a-zA-Z0-9._:/-]+$/.test(model)) {
+    const resolvedModel = model || agent.model;
+    if (resolvedModel) {
+      if (!/^[a-zA-Z0-9._:/-]+$/.test(resolvedModel)) {
         sendJson({ error: 'Invalid model name' }, 400);
         return;
       }
-      command += ` --model '${model}'`;
+      command += ` --model '${resolvedModel}'`;
     }
 
     let finalPrompt = prompt;
@@ -228,6 +230,8 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     agent.status = 'running';
     agent.currentTask = prompt;
     agent.output = [];
+    agent.lastCleanOutput = undefined;  // Clear stale output from previous task
+    agent.error = undefined;            // Clear previous error state
     agent.lastActivity = new Date().toISOString();
     saveAgents();
 
@@ -244,14 +248,20 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     });
 
     ptyProcess.onExit(({ exitCode }) => {
-      agent.status = exitCode === 0 ? 'completed' : 'error';
-      if (exitCode !== 0) {
-        agent.error = `Process exited with code ${exitCode}`;
-      }
-      agent.lastActivity = new Date().toISOString();
-      ptyProcesses.delete(ptyId);
-      saveAgents();
-      ctx.agentStatusEmitter.emit(`status:${agent.id}`);
+      // Delay status change to let hooks (on-stop.sh, task-completed.sh) finish
+      // capturing output before wait_for_agent resolves.
+      setTimeout(() => {
+        if (agent.status === 'running') {
+          agent.status = exitCode === 0 ? 'completed' : 'error';
+        }
+        if (exitCode !== 0) {
+          agent.error = `Process exited with code ${exitCode}`;
+        }
+        agent.lastActivity = new Date().toISOString();
+        ptyProcesses.delete(ptyId);
+        saveAgents();
+        ctx.agentStatusEmitter.emit(`status:${agent.id}`);
+      }, 1500);
     });
 
     sendJson({ success: true, agent: { id: agent.id, status: agent.status } });
@@ -301,7 +311,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
 
     const ptyProcess = ptyProcesses.get(agent.ptyId);
     if (ptyProcess) {
-      writeProgrammaticInput(ptyProcess, message);
+      writeProgrammaticInput(ptyProcess, message, true);
       agent.status = 'running';
       agent.lastActivity = new Date().toISOString();
       saveAgents();

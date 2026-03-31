@@ -212,6 +212,11 @@ export function loadAgents() {
       agent.status = 'idle';
       agent.ptyId = undefined;
 
+      // Migrate legacy skipPermissions boolean → permissionMode
+      if (!agent.permissionMode) {
+        agent.permissionMode = agent.skipPermissions ? 'auto' : 'normal';
+      }
+
       agents.set(agent.id, agent);
     }
 
@@ -335,7 +340,8 @@ export async function initAgentPty(
   ptyProcess.onExit(({ exitCode }) => {
     console.log(`Agent ${agent.id} PTY exited with code ${exitCode}`);
     const agentData = agents.get(agent.id);
-    if (agentData) {
+    // Guard: only mutate if this PTY is still the active one (prevents race on restart/stop)
+    if (agentData && agentData.ptyId === ptyId) {
       const newStatus = exitCode === 0 ? 'completed' : 'error';
       agentData.status = newStatus;
       agentData.lastActivity = new Date().toISOString();

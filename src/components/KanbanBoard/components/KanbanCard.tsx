@@ -89,7 +89,7 @@ export function KanbanCard({ task, onEdit, onDelete, onStart, onOpenTerminal, is
         group relative bg-card rounded-xl p-4
         shadow-sm transition-all duration-200
         border border-border/50
-        ${isLocked ? 'cursor-default' : 'cursor-pointer hover:shadow-md hover:border-border'}
+        cursor-pointer hover:shadow-md hover:border-border
         ${isTaskDragging ? 'scale-105 shadow-xl z-50 rotate-2' : ''}
         ${isAgentWorking ? 'ring-2 ring-green-500/30' : ''}
         ${isDone ? 'opacity-70' : ''}
@@ -153,7 +153,7 @@ export function KanbanCard({ task, onEdit, onDelete, onStart, onOpenTerminal, is
       </div>
 
       {/* Title */}
-      <h4 className={`font-medium text-sm text-foreground mb-2 line-clamp-2 ${isDone ? 'line-through opacity-60' : ''}`}>
+      <h4 className={`font-medium text-sm text-foreground mb-2 line-clamp-2 font-sans ${isDone ? 'line-through opacity-60' : ''}`}>
         {task.title}
       </h4>
 

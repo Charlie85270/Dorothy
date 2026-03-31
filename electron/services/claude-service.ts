@@ -67,7 +67,8 @@ export async function getClaudeSettings(): Promise<ClaudeSettings | null> {
 }
 
 /**
- * Read Claude Code stats from stats-cache.json or statsig_user_metadata.json
+ * Read Claude Code stats from stats-cache.json, statsig_user_metadata.json,
+ * or compute from local files (history.jsonl + sessions/)
  */
 export async function getClaudeStats(): Promise<ClaudeStats | null> {
   try {
@@ -84,7 +85,106 @@ export async function getClaudeStats(): Promise<ClaudeStats | null> {
       return JSON.parse(fs.readFileSync(statsPath, 'utf-8'));
     }
 
+    // Fallback: compute stats from local Claude Code files
+    return computeStatsFromLocalFiles();
+  } catch {
     return null;
+  }
+}
+
+/**
+ * Compute usage stats by parsing ~/.claude/history.jsonl and ~/.claude/sessions/
+ * This works for subscription users who don't have stats-cache.json
+ */
+function computeStatsFromLocalFiles(): ClaudeStats | null {
+  try {
+    const claudeDir = path.join(os.homedir(), '.claude');
+    const historyPath = path.join(claudeDir, 'history.jsonl');
+    const sessionsDir = path.join(claudeDir, 'sessions');
+
+    // --- Parse history.jsonl for message counts ---
+    let totalMessages = 0;
+    const dailyMessages: Record<string, number> = {};
+    const hourCounts: Record<string, number> = {};
+    let firstTimestamp: number | null = null;
+    let lastDate: string | null = null;
+
+    if (fs.existsSync(historyPath)) {
+      const lines = fs.readFileSync(historyPath, 'utf-8').split('\n').filter(l => l.trim());
+      for (const line of lines) {
+        try {
+          const entry = JSON.parse(line);
+          if (!entry.timestamp) continue;
+
+          totalMessages++;
+          const ts = typeof entry.timestamp === 'number'
+            ? (entry.timestamp > 1e12 ? entry.timestamp : entry.timestamp * 1000)
+            : Date.parse(entry.timestamp);
+          const date = new Date(ts);
+          const dateKey = date.toISOString().split('T')[0];
+          const hour = date.getHours().toString();
+
+          dailyMessages[dateKey] = (dailyMessages[dateKey] || 0) + 1;
+          hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+
+          if (!firstTimestamp || ts < firstTimestamp) firstTimestamp = ts;
+          if (!lastDate || dateKey > lastDate) lastDate = dateKey;
+        } catch {
+          // skip malformed lines
+        }
+      }
+    }
+
+    // --- Count sessions from sessions/ directory ---
+    let totalSessions = 0;
+    const dailySessions: Record<string, number> = {};
+
+    if (fs.existsSync(sessionsDir)) {
+      const sessionFiles = fs.readdirSync(sessionsDir).filter(f => f.endsWith('.json'));
+      totalSessions = sessionFiles.length;
+
+      for (const file of sessionFiles) {
+        try {
+          const sessionData = JSON.parse(fs.readFileSync(path.join(sessionsDir, file), 'utf-8'));
+          if (sessionData.startedAt) {
+            const ts = sessionData.startedAt > 1e12 ? sessionData.startedAt : sessionData.startedAt * 1000;
+            const dateKey = new Date(ts).toISOString().split('T')[0];
+            dailySessions[dateKey] = (dailySessions[dateKey] || 0) + 1;
+          }
+        } catch {
+          // skip malformed files
+        }
+      }
+    }
+
+    if (totalMessages === 0 && totalSessions === 0) return null;
+
+    // --- Build dailyActivity array (last 30 days) ---
+    const now = new Date();
+    const dailyActivity: Array<{ date: string; messageCount: number; sessionCount: number; toolCallCount: number }> = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(now.getDate() - i);
+      const dateKey = d.toISOString().split('T')[0];
+      dailyActivity.push({
+        date: dateKey,
+        messageCount: dailyMessages[dateKey] || 0,
+        sessionCount: dailySessions[dateKey] || 0,
+        toolCallCount: 0,
+      });
+    }
+
+    return {
+      totalSessions,
+      totalMessages,
+      dailyActivity,
+      hourCounts,
+      firstSessionDate: firstTimestamp ? new Date(firstTimestamp).toISOString().split('T')[0] : null,
+      lastComputedDate: lastDate,
+      // These fields are not available from local files (subscription mode)
+      modelUsage: {},
+      dailyModelTokens: [],
+    } as unknown as ClaudeStats;
   } catch {
     return null;
   }

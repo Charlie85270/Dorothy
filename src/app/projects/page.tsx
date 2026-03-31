@@ -329,7 +329,11 @@ export default function ProjectsPage() {
     character?: AgentCharacter,
     name?: string,
     secondaryProjectPath?: string,
-    skipPermissions?: boolean
+    permissionMode?: 'normal' | 'auto' | 'bypass',
+    _provider?: string,
+    _localModel?: string,
+    _obsidianVaultPaths?: string[],
+    effort?: 'low' | 'medium' | 'high',
   ) => {
     try {
       const agent = await createAgent({
@@ -339,7 +343,8 @@ export default function ProjectsPage() {
         character,
         name,
         secondaryProjectPath,
-        skipPermissions,
+        permissionMode,
+        effort,
       });
 
       if (prompt) {

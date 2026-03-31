@@ -39,15 +39,33 @@ export function killAllPty(): void {
 
 /**
  * Write a command to a PTY and submit it.
- * Sends plain text, then a carriage return after a short delay so that
- * interactive TUI programs (e.g. Claude Code) finish processing the pasted
- * text before receiving the submit keystroke.
+ *
+ * When `bracketPaste` is true (used for sending messages to an already-running
+ * Claude Code session), multi-line / long input is wrapped in bracket paste
+ * mode so the terminal treats it as a single paste.  A short delay before the
+ * final carriage-return ensures the paste buffer is fully processed.
+ *
+ * When `bracketPaste` is false (default — used for the initial shell command
+ * that starts Claude Code), the data is sent as plain text + \r, which is what
+ * a raw bash/zsh shell expects.
  *
  * DO NOT use this for raw keystroke passthrough from xterm.js UI terminals.
  */
-export function writeProgrammaticInput(ptyProcess: pty.IPty, data: string): void {
-  ptyProcess.write(data);
-  setTimeout(() => ptyProcess.write('\r'), 100);
+export function writeProgrammaticInput(
+  ptyProcess: pty.IPty,
+  data: string,
+  bracketPaste = false,
+): void {
+  if (bracketPaste && (data.includes('\n') || data.length > 200)) {
+    // Bracket paste mode: \x1b[200~ ... \x1b[201~ tells the terminal
+    // "everything between these markers is pasted content, not typed input"
+    ptyProcess.write('\x1b[200~' + data + '\x1b[201~');
+    // Delay the carriage return so the terminal finishes processing the paste
+    setTimeout(() => ptyProcess.write('\r'), 300);
+  } else {
+    // Short single-line input or shell command: send directly
+    ptyProcess.write(data + '\r');
+  }
 }
 
 export function writeToPty(ptyId: string, data: string, isQuick = false): boolean {

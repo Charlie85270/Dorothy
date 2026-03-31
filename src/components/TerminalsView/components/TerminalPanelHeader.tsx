@@ -9,6 +9,9 @@ import {
   RotateCcw,
   GripVertical,
   ShieldOff,
+  Bot,
+  Shield,
+  Gauge,
 } from 'lucide-react';
 import type { AgentStatus } from '@/types/electron';
 import { CHARACTER_FACES, STATUS_COLORS } from '../constants';
@@ -52,7 +55,7 @@ export default function TerminalPanelHeader({
 
   return (
     <div
-      className={`${showDragHandle ? 'terminal-drag-handle' : ''} flex items-center gap-2 px-3 py-1.5 !rounded-none bg-secondary border-b border-border select-none`}
+      className={`${showDragHandle ? 'terminal-drag-handle' : ''} window-no-drag flex items-center gap-2 px-3 py-1.5 !rounded-none bg-secondary border-b border-border select-none`}
       onContextMenu={onContextMenu}
     >
       {/* Drag handle grip — custom tabs only */}
@@ -81,10 +84,27 @@ export default function TerminalPanelHeader({
         </span>
       )}
 
-      {/* Skip permissions indicator */}
-      {agent.skipPermissions && (
-        <span title="Bypass permissions enabled">
-          <ShieldOff className="w-3 h-3 text-yellow-400" />
+      {/* Permission mode indicator */}
+      {(agent.permissionMode === 'auto' || (!agent.permissionMode && agent.skipPermissions)) && (
+        <span title="Auto mode — runs autonomously">
+          <Bot className="w-3 h-3 text-amber-400" />
+        </span>
+      )}
+      {agent.permissionMode === 'bypass' && (
+        <span title="Bypass mode — all permissions skipped">
+          <ShieldOff className="w-3 h-3 text-red-400" />
+        </span>
+      )}
+      {agent.permissionMode === 'normal' && (
+        <span title="Normal mode — asks for permissions">
+          <Shield className="w-3 h-3 text-blue-400" />
+        </span>
+      )}
+
+      {/* Effort indicator */}
+      {agent.effort === 'high' && (
+        <span title="High effort — extended thinking">
+          <Gauge className="w-3 h-3 text-purple-400" />
         </span>
       )}
 
@@ -97,7 +117,7 @@ export default function TerminalPanelHeader({
       </span>
 
       {/* Action buttons */}
-      <div className="flex items-center gap-0.5" onMouseDown={e => e.stopPropagation()}>
+      <div className="flex items-center gap-0.5 [&_button]:cursor-pointer" onMouseDown={e => e.stopPropagation()}>
         {agent.status === 'running' || agent.status === 'waiting' ? (
           <button
             onClick={onStop}

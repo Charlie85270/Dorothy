@@ -59,14 +59,23 @@ export class ClaudeProvider implements CLIProvider {
       command += ' --verbose';
     }
 
+    // Permission mode
+    if (params.permissionMode === 'normal') {
+      command += ' --permission-mode default';
+    } else if (params.permissionMode === 'auto') {
+      command += ' --permission-mode auto';
+    } else if (params.permissionMode === 'bypass') {
+      command += ' --dangerously-skip-permissions';
+    }
+
+    // Effort level
+    if (params.effort && params.effort !== 'medium') {
+      command += ` --effort ${params.effort}`;
+    }
+
     // Chrome browser sharing (uses the user's logged-in Chrome via claude-in-chrome extension)
     if (params.chrome) {
       command += ' --chrome';
-    }
-
-    // Skip permissions
-    if (params.skipPermissions) {
-      command += ' --dangerously-skip-permissions';
     }
 
     // Secondary project

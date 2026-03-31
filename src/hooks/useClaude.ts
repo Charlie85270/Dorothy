@@ -13,6 +13,21 @@ import type {
 } from '@/lib/claude-code';
 import { isElectron } from './useElectron';
 
+interface RateLimits {
+  five_hour?: { used_percentage: number; resets_at: number };
+  seven_day?: { used_percentage: number; resets_at: number };
+}
+
+interface TokenStats {
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCostUsd: number;
+  extraCostUsd: number;
+  sessionCount: number;
+  modelTokens?: Record<string, { in: number; out: number }>;
+  dailyCosts?: Record<string, { cost: number; extraCost: number }>;
+}
+
 interface ClaudeData {
   settings: ClaudeSettings | null;
   stats: ClaudeStats | null;
@@ -21,6 +36,8 @@ interface ClaudeData {
   skills: ClaudeSkill[];
   history: HistoryEntry[];
   activeSessions: string[];
+  rateLimits: RateLimits | null;
+  tokenStats: TokenStats | null;
 }
 
 export function useClaude() {
@@ -71,6 +88,8 @@ export function useClaude() {
               skills: (result.skills || []) as ClaudeSkill[],
               history: (result.history || []) as HistoryEntry[],
               activeSessions: (result.activeSessions || []) as string[],
+              rateLimits: (result.rateLimits || null) as RateLimits | null,
+              tokenStats: (result.tokenStats || null) as TokenStats | null,
             };
             // Quick comparison - check if project count or active sessions changed
             if (!prev) return newData;
@@ -82,6 +101,9 @@ export function useClaude() {
               return prevP?.id !== p.id || prevP?.sessions.length !== p.sessions.length;
             });
             if (projectsChanged) return newData;
+            // Check if rateLimits changed
+            const rlChanged = JSON.stringify(prev.rateLimits) !== JSON.stringify(newData.rateLimits);
+            if (rlChanged) return newData;
             // No significant changes
             return prev;
           });

@@ -43,7 +43,7 @@ export class CodexProvider implements CLIProvider {
     }
 
     // Skip permissions (Codex uses --full-auto)
-    if (params.skipPermissions) {
+    if (params.permissionMode === 'auto' || params.permissionMode === 'bypass') {
       command += ' --full-auto';
     }
 

@@ -8,7 +8,8 @@ interface CreateAgentConfig {
   character?: AgentCharacter;
   name?: string;
   secondaryProjectPath?: string;
-  skipPermissions?: boolean;
+  permissionMode?: 'normal' | 'auto' | 'bypass';
+  effort?: 'low' | 'medium' | 'high';
 }
 
 interface UseAgentActionsProps {
@@ -31,6 +32,7 @@ export function useAgentActions({
   const [isCreatingSuperAgent, setIsCreatingSuperAgent] = useState(false);
   const [showCreateAgentModal, setShowCreateAgentModal] = useState(false);
   const [createAgentProjectPath, setCreateAgentProjectPath] = useState<string | null>(null);
+  const [createSuperAgent, setCreateSuperAgent] = useState(false);
 
   const handleToggleAgent = useCallback(async (agentId: string, isRunning: boolean) => {
     if (isRunning) {
@@ -71,10 +73,14 @@ export function useAgentActions({
     character?: AgentCharacter,
     name?: string,
     secondaryProjectPath?: string,
-    skipPermissions?: boolean
+    permissionMode?: 'normal' | 'auto' | 'bypass',
+    _provider?: string,
+    _localModel?: string,
+    _obsidianVaultPaths?: string[],
+    effort?: 'low' | 'medium' | 'high',
   ) => {
     try {
-      const agent = await createAgent({ projectPath, skills, worktree, character, name, secondaryProjectPath, skipPermissions });
+      const agent = await createAgent({ projectPath, skills, worktree, character, name, secondaryProjectPath, permissionMode, effort });
       setShowCreateAgentModal(false);
       setCreateAgentProjectPath(null);
 
@@ -124,7 +130,7 @@ export function useAgentActions({
         skills: [],
         character: 'wizard',
         name: 'Super Agent (Orchestrator)',
-        skipPermissions: true,
+        permissionMode: 'auto',
       });
 
       await startAgent(agent.id, orchestratorPrompt);
@@ -139,12 +145,14 @@ export function useAgentActions({
   const closeCreateAgentModal = useCallback(() => {
     setShowCreateAgentModal(false);
     setCreateAgentProjectPath(null);
+    setCreateSuperAgent(false);
   }, []);
 
   return {
     isCreatingSuperAgent,
     showCreateAgentModal,
     createAgentProjectPath,
+    createSuperAgent,
     handleToggleAgent,
     handleStartAgent,
     handleStopAgent,

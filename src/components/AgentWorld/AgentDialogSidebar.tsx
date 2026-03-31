@@ -8,8 +8,9 @@ import {
   Settings2,
   Loader2,
   X,
-  Check,
-  Zap,
+  Shield,
+  ShieldOff,
+  Bot,
 } from 'lucide-react';
 import type { AgentStatus } from '@/types/electron';
 import type { PanelType } from './AgentDialogTypes';
@@ -54,9 +55,9 @@ interface AgentDialogSidebarProps {
   onSetSecondaryProject: (path: string | null) => void;
   onBrowseFolder?: () => Promise<string | null>;
   // Settings
-  editSkipPermissions: boolean;
+  editPermissionMode: 'normal' | 'auto' | 'bypass';
   isSavingSettings: boolean;
-  onSaveSkipPermissions: (value: boolean) => void;
+  onSavePermissionMode: (value: 'normal' | 'auto' | 'bypass') => void;
 }
 
 function AccordionPanel({
@@ -98,9 +99,9 @@ export const AgentDialogSidebar = memo(function AgentDialogSidebar({
   onCustomSecondaryPathChange,
   onSetSecondaryProject,
   onBrowseFolder,
-  editSkipPermissions,
+  editPermissionMode,
   isSavingSettings,
-  onSaveSkipPermissions,
+  onSavePermissionMode,
 }: AgentDialogSidebarProps) {
   return (
     <div className="flex-1 overflow-y-auto">
@@ -211,39 +212,40 @@ export const AgentDialogSidebar = memo(function AgentDialogSidebar({
           color="text-zinc-400"
           isExpanded={expandedPanels.has('settings')}
           badge={
-            agent.skipPermissions ? (
+            editPermissionMode === 'bypass' ? (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400">Bypass</span>
+            ) : editPermissionMode === 'auto' ? (
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">Auto</span>
-            ) : null
+            ) : (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">Normal</span>
+            )
           }
           onToggle={() => onTogglePanel('settings')}
         />
         <AccordionPanel expanded={expandedPanels.has('settings')} height="">
           <div className="p-3 space-y-4">
-            <div className="p-3 rounded-none border border-amber-500/30 bg-amber-500/5">
-              <div className="flex items-start gap-3">
+            <div className="space-y-1.5">
+              <p className="text-xs text-text-muted font-medium mb-2">Permission Mode</p>
+              {([
+                { value: 'normal' as const, label: 'Normal', icon: <Shield className="w-3 h-3" />, color: 'text-blue-400', border: 'border-blue-500/40', bg: 'bg-blue-500/10' },
+                { value: 'auto'   as const, label: 'Auto',   icon: <Bot className="w-3 h-3" />,      color: 'text-amber-400', border: 'border-amber-500/40', bg: 'bg-amber-500/10' },
+                { value: 'bypass' as const, label: 'Bypass', icon: <ShieldOff className="w-3 h-3" />, color: 'text-red-400',   border: 'border-red-500/40',   bg: 'bg-red-500/10' },
+              ] as const).map(({ value, label, icon, color, border, bg }) => (
                 <button
-                  onClick={() => onSaveSkipPermissions(!editSkipPermissions)}
+                  key={value}
+                  onClick={() => onSavePermissionMode(value)}
                   disabled={isSavingSettings}
-                  className={`mt-0.5 w-5 h-5 rounded border flex items-center justify-center transition-all shrink-0 ${
-                    editSkipPermissions ? 'bg-amber-500 border-amber-500' : 'border-amber-500/50 hover:border-amber-500'
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-xs border transition-all ${
+                    editPermissionMode === value ? `${border} ${bg} ${color} font-medium` : 'border-border/40 text-text-muted hover:bg-secondary/50'
                   } ${isSavingSettings ? 'opacity-50' : ''}`}
                 >
-                  {isSavingSettings ? (
-                    <Loader2 className="w-3 h-3 text-white animate-spin" />
-                  ) : editSkipPermissions ? (
-                    <Check className="w-3 h-3 text-white" />
-                  ) : null}
+                  {isSavingSettings && editPermissionMode === value
+                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                    : icon}
+                  {label}
                 </button>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-amber-500" />
-                    <span className="font-medium text-sm">Skip Permissions</span>
-                  </div>
-                  <p className="text-xs text-text-muted mt-1">
-                    Run without asking for permission on each action. Changes take effect on next task.
-                  </p>
-                </div>
-              </div>
+              ))}
+              <p className="text-[10px] text-text-muted mt-1">Changes take effect on the next task.</p>
             </div>
 
             <div className="space-y-2 text-xs">

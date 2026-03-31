@@ -106,6 +106,7 @@ export function useAgentTerminal({ selectedAgentId, terminalRef, provider, termi
       setTimeout(() => {
         if (cancelled) return;
         fitAddon.fit();
+        term.scrollToBottom();
         term.focus();
         // Send initial resize to agent PTY (ignore errors if PTY not ready)
         if (window.electronAPI?.agent?.resize) {
@@ -158,10 +159,11 @@ export function useAgentTerminal({ selectedAgentId, terminalRef, provider, termi
 
       // Handle resize
       resizeObserver = new ResizeObserver(() => {
-        if (fitAddonRef.current) {
+        if (fitAddonRef.current && xtermRef.current) {
           fitAddonRef.current.fit();
+          xtermRef.current.scrollToBottom();
           const agentId = selectedAgentIdRef.current;
-          if (agentId && xtermRef.current && window.electronAPI?.agent?.resize) {
+          if (agentId && window.electronAPI?.agent?.resize) {
             window.electronAPI.agent.resize({
               id: agentId,
               cols: xtermRef.current.cols,

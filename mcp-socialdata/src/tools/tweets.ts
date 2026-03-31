@@ -77,7 +77,7 @@ function formatTweetDetail(tweet: TweetDetail): string {
   }
 
   parts.push(
-    `\nAuthor: @${tweet.user.screen_name} — ${tweet.user.followers_count.toLocaleString()} followers, ${tweet.user.friends_count.toLocaleString()} following`
+    `\nAuthor: @${tweet.user.screen_name} — ${tweet.user.followers_count.toLocaleString('en-US')} followers, ${tweet.user.friends_count.toLocaleString('en-US')} following`
   );
 
   return parts.join("\n");

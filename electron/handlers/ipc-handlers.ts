@@ -14,7 +14,7 @@ import TelegramBot from 'node-telegram-bot-api';
 import { App as SlackApp, LogLevel } from '@slack/bolt';
 
 // Import types
-import type { AgentStatus, WorktreeConfig, AgentCharacter, AppSettings, AgentProvider } from '../types';
+import type { AgentStatus, WorktreeConfig, AgentCharacter, AppSettings, AgentProvider, AgentPermissionMode, AgentEffort } from '../types';
 import { buildFullPath } from '../utils/path-builder';
 import { decodeProjectPath } from '../utils/decode-project-path';
 import { getProvider, getAllProviders } from '../providers';
@@ -216,13 +216,26 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     character?: AgentCharacter;
     name?: string;
     secondaryProjectPath?: string;
-    skipPermissions?: boolean;
+    permissionMode?: AgentPermissionMode;
+    effort?: AgentEffort;
     provider?: AgentProvider;
+    model?: string;
     localModel?: string;
     obsidianVaultPaths?: string[];
   }) => {
     const id = uuidv4();
     const shell = '/bin/bash';
+
+    // Validate effort against allowed values to prevent shell injection
+    const VALID_EFFORTS: AgentEffort[] = ['low', 'medium', 'high'];
+    if (config.effort && !VALID_EFFORTS.includes(config.effort)) {
+      throw new Error(`Invalid effort level: ${config.effort}`);
+    }
+
+    // Validate model name: only allow safe characters (alphanumeric, dash, dot, slash, colon, underscore)
+    if (config.model && !/^[a-zA-Z0-9._\-\/:@]+$/.test(config.model)) {
+      throw new Error(`Invalid model name: ${config.model}`);
+    }
 
     // Validate project path exists
     let cwd = config.projectPath;
@@ -356,8 +369,10 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       ptyId,
       character: config.character || 'robot',
       name: config.name || `Agent ${id.slice(0, 4)}`,
-      skipPermissions: config.skipPermissions || false,
+      permissionMode: config.permissionMode || 'normal',
+      effort: config.effort,
       provider: config.provider || 'claude',
+      model: config.model,
       localModel: config.localModel,
       obsidianVaultPaths: config.obsidianVaultPaths || [],
     };
@@ -427,6 +442,11 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
   }) => {
     const agent = agents.get(id);
     if (!agent) throw new Error('Agent not found');
+
+    // Validate model name from options to prevent shell injection
+    if (options?.model && !/^[a-zA-Z0-9._\-\/:@]+$/.test(options.model)) {
+      throw new Error(`Invalid model name: ${options.model}`);
+    }
 
     // Initialize PTY if agent was restored from disk and doesn't have one
     let ptyJustCreated = false;
@@ -537,7 +557,8 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       newPty.onExit(({ exitCode }) => {
         console.log(`Agent ${id} PTY exited with code ${exitCode}`);
         const agentData = agents.get(id);
-        if (agentData) {
+        // Guard: only mutate if this PTY is still the active one (prevents race on restart)
+        if (agentData && agentData.ptyId === newPtyId) {
           const newStatus = exitCode === 0 ? 'completed' : 'error';
           agentData.status = newStatus;
           agentData.lastActivity = new Date().toISOString();
@@ -590,12 +611,15 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
 
     const allAgentSkills = [...new Set([...(agent.skills || []), 'world-builder'])];
 
+    const resolvedModel = (provider !== 'local') ? (options?.model || agent.model) : undefined;
+
     const command = cliProvider.buildInteractiveCommand({
       binaryPath,
       prompt,
-      model: (provider !== 'local') ? options?.model : undefined,
+      model: resolvedModel,
       verbose: appSettingsForCommand.verboseModeEnabled,
-      skipPermissions: agent.skipPermissions,
+      permissionMode: isSuperAgentCheck ? 'bypass' : (agent.permissionMode ?? (agent.skipPermissions ? 'auto' : 'normal')),
+      effort: agent.effort,
       secondaryProjectPath: agent.secondaryProjectPath,
       obsidianVaultPaths: agent.obsidianVaultPaths,
       mcpConfigPath,
@@ -605,7 +629,10 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       chrome: appSettingsForCommand.chromeEnabled,
     });
 
-    // Update status
+    // Persist the prompt for future re-launches and update status
+    if (prompt.trim()) {
+      agent.savedPrompt = prompt;
+    }
     agent.status = 'running';
     agent.currentTask = prompt.slice(0, 100);
     agent.lastActivity = new Date().toISOString();
@@ -662,14 +689,21 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     return Array.from(agents.values());
   });
 
-  // Update an agent (can update skills, secondaryProjectPath, skipPermissions, name, character)
+  // Update an agent (supports all editable fields)
   ipcMain.handle('agent:update', async (_event, params: {
     id: string;
     skills?: string[];
     secondaryProjectPath?: string | null;
-    skipPermissions?: boolean;
+    permissionMode?: AgentPermissionMode;
+    effort?: AgentEffort | null;
     name?: string;
     character?: AgentCharacter;
+    model?: string | null;
+    provider?: AgentProvider;
+    localModel?: string | null;
+    savedPrompt?: string | null;
+    obsidianVaultPaths?: string[];
+    worktree?: WorktreeConfig;
   }) => {
     const agent = agents.get(params.id);
     if (!agent) {
@@ -689,14 +723,63 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
         return { success: false, error: 'Secondary project path does not exist' };
       }
     }
-    if (params.skipPermissions !== undefined) {
-      agent.skipPermissions = params.skipPermissions;
+    if (params.permissionMode !== undefined) {
+      agent.permissionMode = params.permissionMode;
+    }
+    if (params.effort !== undefined) {
+      agent.effort = params.effort === null ? undefined : params.effort;
     }
     if (params.name !== undefined) {
       agent.name = params.name;
     }
     if (params.character !== undefined) {
       agent.character = params.character;
+    }
+    if (params.model !== undefined) {
+      agent.model = params.model === null ? undefined : params.model;
+    }
+    if (params.provider !== undefined) {
+      agent.provider = params.provider;
+    }
+    if (params.localModel !== undefined) {
+      agent.localModel = params.localModel === null ? undefined : params.localModel;
+    }
+    if (params.savedPrompt !== undefined) {
+      agent.savedPrompt = params.savedPrompt === null ? undefined : params.savedPrompt;
+    }
+    if (params.obsidianVaultPaths !== undefined) {
+      agent.obsidianVaultPaths = params.obsidianVaultPaths;
+    }
+    if (params.worktree !== undefined && !agent.worktreePath) {
+      // Only allow worktree setup if agent doesn't already have one
+      // (worktree changes on a running agent could be destructive)
+      if (params.worktree.enabled && params.worktree.branchName) {
+        const branchName = params.worktree.branchName;
+        if (!/^[a-zA-Z0-9._\-\/]+$/.test(branchName)) {
+          return { success: false, error: 'Invalid branch name' };
+        }
+        const worktreesDir = path.join(agent.projectPath, '.worktrees');
+        const worktreePath = path.join(worktreesDir, branchName);
+        try {
+          if (!fs.existsSync(worktreesDir)) {
+            fs.mkdirSync(worktreesDir, { recursive: true });
+          }
+          if (!fs.existsSync(worktreePath)) {
+            const { execSync } = await import('child_process');
+            try {
+              execSync(`git rev-parse --verify '${branchName}'`, { cwd: agent.projectPath, stdio: 'pipe' });
+              execSync(`git worktree add '${worktreePath}' '${branchName}'`, { cwd: agent.projectPath, stdio: 'pipe' });
+            } catch {
+              execSync(`git worktree add -b '${branchName}' '${worktreePath}'`, { cwd: agent.projectPath, stdio: 'pipe' });
+            }
+          }
+          agent.worktreePath = worktreePath;
+          agent.branchName = branchName;
+        } catch (err) {
+          console.error('Failed to create worktree on update:', err);
+          return { success: false, error: 'Failed to create git worktree' };
+        }
+      }
     }
 
     agent.lastActivity = new Date().toISOString();
@@ -743,6 +826,8 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
         ptyProcess.kill();
         ptyProcesses.delete(agent.ptyId);
       }
+      // Nullify so pending onExit callbacks won't mutate state
+      agent.ptyId = undefined;
     }
 
     // Clean up worktree if it exists
@@ -1124,6 +1209,65 @@ function registerClaudeDataHandlers(deps: IpcHandlerDependencies): void {
         getClaudeHistory(50),
       ]);
 
+      // Read rate limits from statusline cache file
+      let rateLimits = null;
+      try {
+        const rateLimitsFile = path.join(os.homedir(), '.dorothy', 'rate-limits.json');
+        if (fs.existsSync(rateLimitsFile)) {
+          rateLimits = JSON.parse(fs.readFileSync(rateLimitsFile, 'utf-8'));
+        }
+      } catch {
+        // ignore parse errors
+      }
+
+      // Read accumulated token stats from statusline
+      let tokenStats = null;
+      try {
+        const tokenStatsFile = path.join(os.homedir(), '.dorothy', 'token-stats.json');
+        if (fs.existsSync(tokenStatsFile)) {
+          const raw = JSON.parse(fs.readFileSync(tokenStatsFile, 'utf-8'));
+          // Sum all sessions
+          let totalIn = 0, totalOut = 0, totalCost = 0, extraCost = 0;
+          const modelTokens: Record<string, { in: number; out: number }> = {};
+          const dailyCosts: Record<string, { cost: number; extraCost: number }> = {};
+          for (const session of Object.values(raw) as Array<{ in: number; out: number; cost: number; model?: string; extra?: boolean; date?: string }>) {
+            totalIn += session.in || 0;
+            totalOut += session.out || 0;
+            totalCost += session.cost || 0;
+            if (session.extra) {
+              extraCost += session.cost || 0;
+            }
+            if (session.model && session.model !== 'unknown') {
+              if (!modelTokens[session.model]) {
+                modelTokens[session.model] = { in: 0, out: 0 };
+              }
+              modelTokens[session.model].in += session.in || 0;
+              modelTokens[session.model].out += session.out || 0;
+            }
+            if (session.date) {
+              if (!dailyCosts[session.date]) {
+                dailyCosts[session.date] = { cost: 0, extraCost: 0 };
+              }
+              dailyCosts[session.date].cost += session.cost || 0;
+              if (session.extra) {
+                dailyCosts[session.date].extraCost += session.cost || 0;
+              }
+            }
+          }
+          tokenStats = {
+            totalInputTokens: totalIn,
+            totalOutputTokens: totalOut,
+            totalCostUsd: totalCost,
+            extraCostUsd: extraCost,
+            sessionCount: Object.keys(raw).length,
+            modelTokens,
+            dailyCosts,
+          };
+        }
+      } catch {
+        // ignore parse errors
+      }
+
       return {
         settings,
         stats,
@@ -1132,6 +1276,8 @@ function registerClaudeDataHandlers(deps: IpcHandlerDependencies): void {
         skills,
         history,
         activeSessions: [],
+        rateLimits,
+        tokenStats,
       };
     } catch (err) {
       console.error('Failed to get Claude data:', err);

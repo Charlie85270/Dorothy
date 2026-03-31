@@ -21,7 +21,7 @@ export default function TerminalPanelInput({
   const [input, setInput] = useState('');
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSubmit = useCallback(() => {
     const trimmed = input.trim();
@@ -36,20 +36,25 @@ export default function TerminalPanelInput({
     setHistory(prev => [trimmed, ...prev].slice(0, 50));
     setHistoryIndex(-1);
     setInput('');
+
+    // Reset textarea height
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+    }
   }, [input, agentId, onSubmit, onBroadcastSubmit, isBroadcasting]);
 
-  const handleKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+  const handleKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
-    } else if (e.key === 'ArrowUp') {
+    } else if (e.key === 'ArrowUp' && !input.includes('\n')) {
       e.preventDefault();
       if (history.length > 0) {
         const newIndex = Math.min(historyIndex + 1, history.length - 1);
         setHistoryIndex(newIndex);
         setInput(history[newIndex]);
       }
-    } else if (e.key === 'ArrowDown') {
+    } else if (e.key === 'ArrowDown' && !input.includes('\n')) {
       e.preventDefault();
       if (historyIndex > 0) {
         const newIndex = historyIndex - 1;
@@ -60,20 +65,27 @@ export default function TerminalPanelInput({
         setInput('');
       }
     }
-  }, [handleSubmit, history, historyIndex]);
+  }, [handleSubmit, history, historyIndex, input]);
+
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    // Auto-resize
+    e.target.style.height = 'auto';
+    e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
+  }, []);
 
   const isDisabled = agentStatus !== 'running' && agentStatus !== 'waiting';
 
   return (
-    <div className={`flex items-center gap-2 px-3 py-1.5 bg-secondary border-t border-border ${isBroadcasting ? 'ring-1 ring-primary/50' : ''}`}>
-      <span className={`text-xs font-mono ${isBroadcasting ? 'text-cyan-400' : 'text-muted-foreground'}`}>
+    <div className={`flex items-start gap-2 px-3 py-1.5 bg-secondary border-t border-border ${isBroadcasting ? 'ring-1 ring-primary/50' : ''}`}>
+      <span className={`text-xs font-mono mt-1.5 ${isBroadcasting ? 'text-cyan-400' : 'text-muted-foreground'}`}>
         {isBroadcasting ? '>' : '>'}
       </span>
-      <input
+      <textarea
         ref={inputRef}
-        type="text"
+        rows={1}
         value={input}
-        onChange={e => setInput(e.target.value)}
+        onChange={handleChange}
         onKeyDown={handleKeyDown}
         placeholder={
           isDisabled
@@ -83,12 +95,13 @@ export default function TerminalPanelInput({
               : 'Send input to agent...'
         }
         disabled={isDisabled}
-        className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground outline-none font-mono disabled:opacity-40"
+        className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground outline-none font-mono disabled:opacity-40 resize-none overflow-y-auto leading-relaxed"
+        style={{ height: 'auto', minHeight: '1.5rem' }}
       />
       <button
         onClick={handleSubmit}
         disabled={isDisabled || !input.trim()}
-        className="p-1 hover:bg-primary/10 transition-colors text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
+        className="p-1 mt-0.5 hover:bg-primary/10 transition-colors text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
       >
         <SendHorizontal className="w-3 h-3" />
       </button>

@@ -265,9 +265,18 @@ export function registerAgentTools(server: McpServer): void {
     "Send input/message to an agent. If the agent is idle/completed/error, this will START the agent with the message as the prompt. If the agent is 'waiting', this sends the message as input. WARNING: Sending to a 'running' agent may interfere with its current work — prefer waiting until it reaches 'waiting' or 'completed' status.",
     {
       id: z.string().describe("The agent ID"),
-      message: z.string().describe("The message to send to the agent"),
+      message: z.string().optional().describe("The message to send to the agent"),
+      prompt: z.string().optional().describe("Alias for 'message' — use either one"),
     },
-    async ({ id, message }) => {
+    async ({ id, message, prompt }) => {
+      // Accept either "message" or "prompt" so the LLM doesn't trip on naming
+      const resolvedMessage = message || prompt;
+      if (!resolvedMessage) {
+        return {
+          content: [{ type: "text", text: "Error: either 'message' or 'prompt' is required." }],
+          isError: true,
+        };
+      }
       try {
         const agentData = (await apiRequest(`/api/agents/${id}`)) as {
           agent: { status: string; name?: string };
@@ -277,37 +286,37 @@ export function registerAgentTools(server: McpServer): void {
 
         if (status === "idle" || status === "completed" || status === "error") {
           const startResult = (await apiRequest(`/api/agents/${id}/start`, "POST", {
-            prompt: message,
+            prompt: resolvedMessage,
             skipPermissions: true,
           })) as { success: boolean; agent: { status: string } };
           return {
             content: [
               {
                 type: "text",
-                text: `Agent "${agentName}" was ${status}, started it with prompt: "${message}". New status: ${startResult.agent.status}`,
+                text: `Agent "${agentName}" was ${status}, started it with prompt: "${resolvedMessage}". New status: ${startResult.agent.status}`,
               },
             ],
           };
         }
 
         if (status === "running") {
-          await apiRequest(`/api/agents/${id}/message`, "POST", { message });
+          await apiRequest(`/api/agents/${id}/message`, "POST", { message: resolvedMessage });
           return {
             content: [
               {
                 type: "text",
-                text: `⚠️ Agent "${agentName}" is currently running. Message sent but may interfere with current work. Consider using wait_for_agent first to wait until the agent is done.\nMessage sent: "${message}"`,
+                text: `⚠️ Agent "${agentName}" is currently running. Message sent but may interfere with current work. Consider using wait_for_agent first to wait until the agent is done.\nMessage sent: "${resolvedMessage}"`,
               },
             ],
           };
         }
 
-        await apiRequest(`/api/agents/${id}/message`, "POST", { message });
+        await apiRequest(`/api/agents/${id}/message`, "POST", { message: resolvedMessage });
         return {
           content: [
             {
               type: "text",
-              text: `Sent message to agent "${agentName}" (${status}): "${message}"`,
+              text: `Sent message to agent "${agentName}" (${status}): "${resolvedMessage}"`,
             },
           ],
         };
@@ -518,6 +527,67 @@ export function registerAgentTools(server: McpServer): void {
         }
 
         if (waitData.status === "waiting") {
+          // Agent asked for confirmation — auto-reply "continue" and wait again
+          try {
+            await apiRequest(`/api/agents/${id}/message`, "POST", {
+              message: "Yes, continue. Do not ask for confirmation — complete the task and report your results.",
+            });
+            // Wait again for the agent to finish
+            const retryData = (await apiRequest(
+              `/api/agents/${id}/wait?timeout=${Math.max(timeoutSeconds - 30, 60)}`
+            )) as {
+              status: string;
+              lastCleanOutput?: string;
+              error?: string;
+              timeout?: boolean;
+            };
+
+            if (retryData.status === "waiting") {
+              // Still waiting after retry — give up and let orchestrator handle it
+              const outputInfo = retryData.lastCleanOutput
+                ? `\n\nAgent output:\n${retryData.lastCleanOutput}`
+                : "";
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: `Agent "${agentName}" is still waiting for input after auto-continue.${outputInfo}\n\nUse send_message to respond.`,
+                  },
+                ],
+              };
+            }
+
+            if (retryData.timeout) {
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: `Agent "${agentName}" is still running after auto-continue. Use wait_for_agent to continue waiting.`,
+                  },
+                ],
+                isError: true,
+              };
+            }
+
+            // Agent finished after auto-continue — get output
+            const retryAgent = (await apiRequest(`/api/agents/${id}`)) as {
+              agent: { lastCleanOutput?: string; status: string };
+            };
+            const retryOutput = retryAgent.agent.lastCleanOutput || retryData.lastCleanOutput;
+            if (retryOutput) {
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: `Agent "${agentName}" completed.\n\n${retryOutput}`,
+                  },
+                ],
+              };
+            }
+          } catch {
+            // If auto-continue fails, fall through to original behavior
+          }
+
           const outputInfo = waitData.lastCleanOutput
             ? `\n\nAgent output:\n${waitData.lastCleanOutput}`
             : "";

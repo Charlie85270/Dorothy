@@ -37,6 +37,7 @@ export default function AgentsPage() {
 
   // Local state
   const [showNewChatModal, setShowNewChatModal] = useState(false);
+  const [showSuperAgentModal, setShowSuperAgentModal] = useState(false);
   const [viewAgentId, setViewAgentId] = useState<string | null>(null);  // terminal dialog
   const [editAgentId, setEditAgentId] = useState<string | null>(null);  // edit dialog
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
@@ -48,10 +49,9 @@ export default function AgentsPage() {
   // Custom hooks
   const { superAgent, isCreatingSuperAgent, handleSuperAgentClick } = useSuperAgent({
     agents,
-    projects: projects.map(p => ({ path: p.path, name: p.name })),
-    createAgent,
     startAgent,
     onAgentCreated: (id) => setEditAgentId(id),
+    onCreateNew: () => setShowSuperAgentModal(true),
   });
 
   const { filteredAgents, uniqueProjects } = useAgentFiltering({
@@ -76,11 +76,14 @@ export default function AgentsPage() {
       projectPath: agent.projectPath,
       secondaryProjectPath: agent.secondaryProjectPath,
       skills: agent.skills,
-      skipPermissions: agent.skipPermissions,
+      permissionMode: agent.permissionMode ?? (agent.skipPermissions ? 'auto' : 'normal'),
+      effort: agent.effort,
       provider: agent.provider,
+      model: agent.model,
       localModel: agent.localModel,
       branchName: agent.branchName,
       obsidianVaultPaths: agent.obsidianVaultPaths,
+      savedPrompt: agent.savedPrompt,
     };
   }, [editAgentId, agents]);
 
@@ -94,15 +97,17 @@ export default function AgentsPage() {
     character?: AgentCharacter,
     name?: string,
     secondaryProjectPath?: string,
-    skipPermissions?: boolean,
+    permissionMode?: 'normal' | 'auto' | 'bypass',
     provider?: AgentProvider,
     localModel?: string,
     obsidianVaultPaths?: string[],
+    effort?: 'low' | 'medium' | 'high',
   ) => {
     try {
-      const agent = await createAgent({ projectPath, skills, worktree, character, name, secondaryProjectPath, skipPermissions, provider, localModel, obsidianVaultPaths });
+      const resolvedModel = (provider !== 'local' && model && model !== 'default') ? model : undefined;
+      const agent = await createAgent({ projectPath, skills, worktree, character, name, secondaryProjectPath, permissionMode, effort, provider, model: resolvedModel, localModel, obsidianVaultPaths });
       if (prompt) {
-        const options = { model: provider === 'local' ? undefined : model, provider, localModel };
+        const options = { model: resolvedModel, provider, localModel };
         await startAgent(agent.id, prompt, options);
       }
       setShowNewChatModal(false);
@@ -114,9 +119,16 @@ export default function AgentsPage() {
   const handleUpdateAgent = useCallback(async (id: string, updates: {
     skills?: string[];
     secondaryProjectPath?: string | null;
-    skipPermissions?: boolean;
+    permissionMode?: 'normal' | 'auto' | 'bypass';
+    effort?: 'low' | 'medium' | 'high';
     name?: string;
     character?: AgentCharacter;
+    model?: string | null;
+    provider?: AgentProvider;
+    localModel?: string | null;
+    savedPrompt?: string | null;
+    obsidianVaultPaths?: string[];
+    worktree?: { enabled: boolean; branchName: string };
   }) => {
     try {
       await updateAgent({ id, ...updates });
@@ -182,7 +194,7 @@ export default function AgentsPage() {
       {/* Filter bar */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         {/* Status tabs */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 [&_button]:cursor-pointer">
           <button
             onClick={() => setStatusFilter(null)}
             className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium transition-colors ${
@@ -231,7 +243,7 @@ export default function AgentsPage() {
         {/* Sort toggle */}
         <button
           onClick={cycleSortBy}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-border bg-card hover:bg-accent/50 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer"
           title={`Sort by: ${sortBy}`}
         >
           <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground" />
@@ -270,14 +282,14 @@ export default function AgentsPage() {
             {agents.length === 0 ? (
               <button
                 onClick={() => setShowNewChatModal(true)}
-                className="text-primary text-sm hover:underline"
+                className="text-primary text-sm hover:underline cursor-pointer"
               >
                 Create your first agent
               </button>
             ) : (
               <button
                 onClick={() => { setProjectFilter(null); setStatusFilter(null); setSearchQuery(''); }}
-                className="text-primary text-sm hover:underline"
+                className="text-primary text-sm hover:underline cursor-pointer"
               >
                 Clear filters
               </button>
@@ -296,6 +308,19 @@ export default function AgentsPage() {
         installedSkills={installedSkills}
         allInstalledSkills={claudeData?.skills || []}
         onRefreshSkills={refreshSkills}
+      />
+
+      {/* Super Agent Create Modal */}
+      <NewChatModal
+        open={showSuperAgentModal}
+        onClose={() => setShowSuperAgentModal(false)}
+        onSubmit={handleCreateAgent}
+        projects={projects.map(p => ({ path: p.path, name: p.name }))}
+        onBrowseFolder={isElectron() ? openFolderDialog : undefined}
+        installedSkills={installedSkills}
+        allInstalledSkills={claudeData?.skills || []}
+        onRefreshSkills={refreshSkills}
+        initialOrchestrator
       />
 
       {/* Edit Modal — reuses NewChatModal pre-filled with agent data */}

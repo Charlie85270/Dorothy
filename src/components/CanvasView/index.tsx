@@ -107,6 +107,7 @@ export default function CanvasView() {
     isCreatingSuperAgent,
     showCreateAgentModal,
     createAgentProjectPath,
+    createSuperAgent,
     handleToggleAgent,
     handleStartAgent,
     handleStopAgent,
@@ -266,6 +267,7 @@ export default function CanvasView() {
         onRefreshSkills={refreshSkills}
         initialProjectPath={createAgentProjectPath || undefined}
         initialStep={createAgentProjectPath ? 2 : 1}
+        initialOrchestrator={createSuperAgent}
       />
     </div>
   );

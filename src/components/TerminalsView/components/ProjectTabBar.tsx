@@ -41,12 +41,13 @@ export default function ProjectTabBar({
     activeTab.type === 'project' && activeTab.projectPath === path;
 
   return (
-    <div className="flex items-center gap-0.5 px-3 py-1.5 bg-secondary border-t border-border !rounded-none">
+    <div data-sidebar-ignore className="flex items-center gap-0.5 px-3 py-1.5 bg-secondary border-t border-border !rounded-none [&_button]:cursor-pointer">
       <div className="flex items-center gap-0.5 flex-1 overflow-x-auto scrollbar-none">
         {projects.map(project => (
           <button
             key={project.path}
             onClick={() => onSelectProject(project.path)}
+
             className={`
               flex items-center gap-1.5 px-3 py-1 text-xs font-medium whitespace-nowrap transition-colors shrink-0
               ${isActive(project.path)

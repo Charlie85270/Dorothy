@@ -522,7 +522,7 @@ export default function PokemonGame() {
         skills: ['world-builder'],
         name: `World: ${prompt.slice(0, 30)}`,
         character: 'explorer',
-        skipPermissions: true,
+        permissionMode: 'auto',
       });
       await electronAgents.startAgent(agent.id,
         `Use the /world-builder skill to create a new game zone about: ${prompt}`

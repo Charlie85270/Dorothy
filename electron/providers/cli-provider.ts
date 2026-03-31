@@ -1,4 +1,4 @@
-import type { AgentProvider, AppSettings } from '../types';
+import type { AgentProvider, AppSettings, AgentPermissionMode, AgentEffort } from '../types';
 
 /**
  * Parameters for building an interactive (PTY) agent command.
@@ -8,7 +8,8 @@ export interface InteractiveCommandParams {
   prompt: string;
   model?: string;
   verbose?: boolean;
-  skipPermissions?: boolean;
+  permissionMode?: AgentPermissionMode;
+  effort?: AgentEffort;
   secondaryProjectPath?: string;
   obsidianVaultPaths?: string[];
   mcpConfigPath?: string;

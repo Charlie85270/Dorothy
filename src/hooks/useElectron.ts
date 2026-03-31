@@ -53,8 +53,10 @@ export function useElectronAgents() {
     character?: AgentCharacter;
     name?: string;
     secondaryProjectPath?: string;
-    skipPermissions?: boolean;
+    permissionMode?: 'normal' | 'auto' | 'bypass';
+    effort?: 'low' | 'medium' | 'high';
     provider?: AgentProvider;
+    model?: string;
     localModel?: string;
     obsidianVaultPaths?: string[];
   }) => {
@@ -71,9 +73,16 @@ export function useElectronAgents() {
     id: string;
     skills?: string[];
     secondaryProjectPath?: string | null;
-    skipPermissions?: boolean;
+    permissionMode?: 'normal' | 'auto' | 'bypass';
+    effort?: 'low' | 'medium' | 'high';
     name?: string;
     character?: AgentCharacter;
+    model?: string | null;
+    provider?: AgentProvider;
+    localModel?: string | null;
+    savedPrompt?: string | null;
+    obsidianVaultPaths?: string[];
+    worktree?: { enabled: boolean; branchName: string };
   }) => {
     if (!isElectron()) {
       throw new Error('Electron API not available');
@@ -152,16 +161,21 @@ export function useElectronAgents() {
     // (proven to reach all windows — tray panel uses this successfully)
     const unsubTick = window.electronAPI!.agent.onTick?.((tickAgents) => {
       setAgents(prev => {
-        if (prev.length !== tickAgents.length) return prev;
-        const hasStatusChange = tickAgents.some(t => {
+        // If agent count changed, refetch full data (tick only has partial fields)
+        if (prev.length !== tickAgents.length) {
+          fetchAgents();
+          return prev;
+        }
+        // Check if any status or currentTask changed
+        const hasChange = tickAgents.some(t => {
           const existing = prev.find(a => a.id === t.id);
-          return existing && existing.status !== t.status;
+          return existing && (existing.status !== t.status || existing.currentTask !== t.currentTask);
         });
-        if (!hasStatusChange) return prev;
+        if (!hasChange) return prev;
         return prev.map(a => {
           const tick = tickAgents.find(t => t.id === a.id);
-          if (tick && a.status !== tick.status) {
-            return { ...a, status: tick.status as AgentStatus['status'], lastActivity: tick.lastActivity };
+          if (tick && (a.status !== tick.status || a.currentTask !== tick.currentTask)) {
+            return { ...a, status: tick.status as AgentStatus['status'], currentTask: tick.currentTask, lastActivity: tick.lastActivity };
           }
           return a;
         });

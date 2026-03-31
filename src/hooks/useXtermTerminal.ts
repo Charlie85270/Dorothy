@@ -105,6 +105,7 @@ export function useXtermTerminal(
         const fitAndNotify = () => {
           try {
             fitAddon.fit();
+            term.scrollToBottom();
             options.onResize?.(term.cols, term.rows);
           } catch (e) {
             console.warn('Failed to fit terminal:', e);
@@ -153,6 +154,7 @@ export function useXtermTerminal(
       if (fitAddonRef.current && terminalRef.current) {
         try {
           fitAddonRef.current.fit();
+          terminalRef.current.scrollToBottom();
           options.onResize?.(terminalRef.current.cols, terminalRef.current.rows);
         } catch (e) {
           console.warn('Failed to fit terminal:', e);
@@ -186,6 +188,7 @@ export function useXtermTerminal(
     if (fitAddonRef.current) {
       try {
         fitAddonRef.current.fit();
+        terminalRef.current?.scrollToBottom();
       } catch (e) {
         console.warn('Failed to fit terminal:', e);
       }

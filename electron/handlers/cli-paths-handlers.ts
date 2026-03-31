@@ -18,18 +18,51 @@ export interface CLIPathsHandlerDependencies {
 }
 
 /**
- * Detect CLI paths from the system
+ * Detect CLI paths from the system.
+ * If savedPaths is provided, manually-set paths are checked first and used if the binary exists.
  */
-async function detectCLIPaths(): Promise<{ claude: string; codex: string; gemini: string; opencode: string; pi: string; gws: string; gcloud: string; gh: string; node: string }> {
+async function detectCLIPaths(savedPaths?: Partial<CLIPaths>): Promise<{ claude: string; codex: string; gemini: string; opencode: string; pi: string; gws: string; gcloud: string; gh: string; node: string }> {
   const homeDir = os.homedir();
   const paths = { claude: '', codex: '', gemini: '', opencode: '', pi: '', gws: '', gcloud: '', gh: '', node: '' };
+
+  // If a user manually set a path in settings, use it if the binary exists
+  if (savedPaths) {
+    const cliKeys = ['claude', 'codex', 'gemini', 'opencode', 'pi', 'gws', 'gcloud', 'gh', 'node'] as const;
+    for (const key of cliKeys) {
+      const savedPath = savedPaths[key];
+      if (savedPath && fs.existsSync(savedPath)) {
+        paths[key] = savedPath;
+      }
+    }
+  }
+
+  // Try to get the full interactive shell PATH (includes .zshrc/.bashrc paths)
+  let shellPath = process.env.PATH || '';
+  try {
+    const shell = process.env.SHELL || '/bin/zsh';
+    const { stdout } = await execAsync(`${shell} -ilc 'echo $PATH'`, { timeout: 5000 });
+    if (stdout.trim()) {
+      shellPath = stdout.trim();
+    }
+  } catch {
+    // Fall back to process.env.PATH
+  }
 
   // Common locations to check
   const commonPaths = [
     '/opt/homebrew/bin',
     '/usr/local/bin',
     path.join(homeDir, '.local/bin'),
+    path.join(homeDir, 'Library/pnpm'),   // pnpm global bin (macOS)
+    path.join(homeDir, '.yarn/bin'),       // yarn global bin
   ];
+
+  // Add directories from the shell PATH that aren't already included
+  for (const dir of shellPath.split(':')) {
+    if (dir && !commonPaths.includes(dir)) {
+      commonPaths.push(dir);
+    }
+  }
 
   // Add nvm paths
   const nvmDir = path.join(homeDir, '.nvm/versions/node');
@@ -45,7 +78,7 @@ async function detectCLIPaths(): Promise<{ claude: string; codex: string; gemini
   }
 
   // Check for claude
-  for (const dir of commonPaths) {
+  if (!paths.claude) for (const dir of commonPaths) {
     const claudePath = path.join(dir, 'claude');
     if (fs.existsSync(claudePath)) {
       paths.claude = claudePath;
@@ -68,7 +101,7 @@ async function detectCLIPaths(): Promise<{ claude: string; codex: string; gemini
   }
 
   // Check for codex
-  for (const dir of commonPaths) {
+  if (!paths.codex) for (const dir of commonPaths) {
     const codexPath = path.join(dir, 'codex');
     if (fs.existsSync(codexPath)) {
       paths.codex = codexPath;
@@ -91,7 +124,7 @@ async function detectCLIPaths(): Promise<{ claude: string; codex: string; gemini
   }
 
   // Check for gemini
-  for (const dir of commonPaths) {
+  if (!paths.gemini) for (const dir of commonPaths) {
     const geminiPath = path.join(dir, 'gemini');
     if (fs.existsSync(geminiPath)) {
       paths.gemini = geminiPath;
@@ -114,7 +147,7 @@ async function detectCLIPaths(): Promise<{ claude: string; codex: string; gemini
   }
 
   // Check for opencode
-  for (const dir of commonPaths) {
+  if (!paths.opencode) for (const dir of commonPaths) {
     const opencodePath = path.join(dir, 'opencode');
     if (fs.existsSync(opencodePath)) {
       paths.opencode = opencodePath;
@@ -137,7 +170,7 @@ async function detectCLIPaths(): Promise<{ claude: string; codex: string; gemini
   }
 
   // Check for pi
-  for (const dir of commonPaths) {
+  if (!paths.pi) for (const dir of commonPaths) {
     const piPath = path.join(dir, 'pi');
     if (fs.existsSync(piPath)) {
       paths.pi = piPath;
@@ -160,7 +193,7 @@ async function detectCLIPaths(): Promise<{ claude: string; codex: string; gemini
   }
 
   // Check for gws
-  for (const dir of commonPaths) {
+  if (!paths.gws) for (const dir of commonPaths) {
     const gwsPath = path.join(dir, 'gws');
     if (fs.existsSync(gwsPath)) {
       paths.gws = gwsPath;
@@ -189,7 +222,7 @@ async function detectCLIPaths(): Promise<{ claude: string; codex: string; gemini
     '/usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/bin',
     path.join(homeDir, 'google-cloud-sdk/bin'),
   ];
-  for (const dir of gcloudPaths) {
+  if (!paths.gcloud) for (const dir of gcloudPaths) {
     const gcloudPath = path.join(dir, 'gcloud');
     if (fs.existsSync(gcloudPath)) {
       paths.gcloud = gcloudPath;
@@ -212,7 +245,7 @@ async function detectCLIPaths(): Promise<{ claude: string; codex: string; gemini
   }
 
   // Check for gh
-  for (const dir of ['/opt/homebrew/bin', '/usr/local/bin']) {
+  if (!paths.gh) for (const dir of ['/opt/homebrew/bin', '/usr/local/bin']) {
     const ghPath = path.join(dir, 'gh');
     if (fs.existsSync(ghPath)) {
       paths.gh = ghPath;
@@ -235,7 +268,7 @@ async function detectCLIPaths(): Promise<{ claude: string; codex: string; gemini
   }
 
   // Check for node
-  for (const dir of commonPaths) {
+  if (!paths.node) for (const dir of commonPaths) {
     const nodePath = path.join(dir, 'node');
     if (fs.existsSync(nodePath)) {
       paths.node = nodePath;
@@ -275,6 +308,8 @@ function saveCLIPathsConfig(paths: CLIPaths): void {
     '/opt/homebrew/bin',
     '/usr/local/bin',
     path.join(homeDir, '.local/bin'),
+    path.join(homeDir, 'Library/pnpm'),
+    path.join(homeDir, '.yarn/bin'),
   ];
 
   // Add nvm paths
@@ -327,9 +362,10 @@ function loadCLIPathsConfig(): CLIPaths | null {
 export function registerCLIPathsHandlers(deps: CLIPathsHandlerDependencies): void {
   const { getAppSettings, setAppSettings, saveAppSettings } = deps;
 
-  // Detect CLI paths
+  // Detect CLI paths (use saved settings as overrides if binary exists at saved path)
   ipcMain.handle('cliPaths:detect', async () => {
-    return detectCLIPaths();
+    const settings = getAppSettings();
+    return detectCLIPaths(settings.cliPaths);
   });
 
   // Get CLI paths from app settings
@@ -371,6 +407,8 @@ export function getCLIPathsConfig(): CLIPaths & { fullPath: string } {
     '/opt/homebrew/bin',
     '/usr/local/bin',
     path.join(homeDir, '.local/bin'),
+    path.join(homeDir, 'Library/pnpm'),
+    path.join(homeDir, '.yarn/bin'),
   ];
 
   // Add nvm paths

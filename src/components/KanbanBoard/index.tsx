@@ -16,7 +16,7 @@ import {
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Loader2, RefreshCw, Search } from 'lucide-react';
+import { Plus, Loader2, RefreshCw, Search, ChevronDown, FolderOpen } from 'lucide-react';
 import { useElectronKanban, useKanbanAgentSync } from '@/hooks/useElectronKanban';
 import { isElectron as checkIsElectron } from '@/hooks/useElectron';
 import type { KanbanTask, KanbanColumn as KanbanColumnType, KanbanTaskCreate } from '@/types/kanban';
@@ -113,6 +113,18 @@ export default function KanbanBoard() {
   // Filter states
   const [searchQuery, setSearchQuery] = useState('');
   const [filterProject, setFilterProject] = useState<string | null>(null);
+  const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await refresh();
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 600);
+    }
+  }, [refresh, isRefreshing]);
 
   // Drag state
   const [activeTask, setActiveTask] = useState<KanbanTask | null>(null);
@@ -283,10 +295,10 @@ export default function KanbanBoard() {
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-4">
         <p className="text-red-400">{error}</p>
         <button
-          onClick={refresh}
+          onClick={handleRefresh}
           className="flex items-center gap-2 px-3 py-2 bg-secondary rounded-md hover:bg-secondary/80 transition-colors"
         >
-          <RefreshCw className="w-4 h-4" />
+          <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
           Retry
         </button>
       </div>
@@ -319,27 +331,52 @@ export default function KanbanBoard() {
 
           {/* Project filter */}
           {projects.length > 1 && (
-            <select
-              value={filterProject || ''}
-              onChange={(e) => setFilterProject(e.target.value || null)}
-              className="px-3 py-2 bg-secondary/50 border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-            >
-              <option value="">All projects</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <button
+                onClick={() => setProjectDropdownOpen(v => !v)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-none bg-secondary border border-border text-muted-foreground hover:text-foreground transition-colors text-sm min-w-[160px]"
+              >
+                <FolderOpen className="w-4 h-4" />
+                {filterProject ? projects.find(p => p.id === filterProject)?.name : 'All Projects'}
+                <ChevronDown className="w-4 h-4 ml-auto" />
+              </button>
+
+              <AnimatePresence>
+                {projectDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setProjectDropdownOpen(false)} />
+                    <motion.div
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 5 }}
+                      className="absolute top-full mt-2 right-0 w-48 bg-card border border-border rounded-none shadow-lg z-20 py-2"
+                    >
+                      {[{ id: '', name: 'All Projects' }, ...projects].map((p) => {
+                        const isSelected = (p.id === '' && !filterProject) || filterProject === p.id;
+                        return (
+                          <button
+                            key={p.id}
+                            onClick={() => { setFilterProject(p.id || null); setProjectDropdownOpen(false); }}
+                            className={`w-full text-left px-4 py-2 text-sm hover:bg-secondary ${isSelected ? 'text-white' : 'text-muted-foreground'}`}
+                          >
+                            {p.name}
+                          </button>
+                        );
+                      })}
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
           )}
 
           {/* Refresh button */}
           <button
-            onClick={refresh}
+            onClick={handleRefresh}
             className="p-2 rounded-lg hover:bg-secondary/50 transition-colors"
             title="Refresh"
           >
-            <RefreshCw className="w-4 h-4 text-muted-foreground" />
+            <RefreshCw className={`w-4 h-4 text-muted-foreground transition-transform ${isRefreshing ? 'animate-spin' : ''}`} />
           </button>
 
           {/* Add task button */}

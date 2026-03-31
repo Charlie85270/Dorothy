@@ -118,7 +118,7 @@ export function AgentManagementCard({ agent, onClick, onEdit, onStart, onStop, o
           {formatTimeAgo(agent.lastActivity)}
         </span>
 
-        <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-0.5 [&_button]:cursor-pointer" onClick={(e) => e.stopPropagation()}>
           {isRunning ? (
             <button
               onClick={onStop}

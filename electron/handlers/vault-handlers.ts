@@ -386,4 +386,34 @@ export function registerVaultHandlers(deps: VaultHandlerDependencies): void {
       return { success: false, error: String(err) };
     }
   });
+
+  // Save clipboard image data to disk
+  ipcMain.handle('vault:saveClipboardImage', async (_event, params: { imageDataUrl: string; targetDir?: string }) => {
+    try {
+      // Parse data URL: data:image/png;base64,xxxx
+      const match = params.imageDataUrl.match(/^data:image\/(\w+);base64,(.+)$/);
+      if (!match) {
+        return { error: 'Invalid image data URL' };
+      }
+      const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
+      const base64Data = match[2];
+      const buffer = Buffer.from(base64Data, 'base64');
+
+      // Save to target directory (same as the file being edited) or vault attachments
+      const saveDir = params.targetDir || path.join(VAULT_DIR, 'attachments');
+      if (!fs.existsSync(saveDir)) {
+        fs.mkdirSync(saveDir, { recursive: true });
+      }
+
+      const timestamp = Date.now();
+      const filename = `pasted-image-${timestamp}.${ext}`;
+      const filePath = path.join(saveDir, filename);
+      fs.writeFileSync(filePath, buffer);
+
+      return { success: true, filePath, filename };
+    } catch (err) {
+      console.error('Failed to save clipboard image:', err);
+      return { success: false, error: String(err) };
+    }
+  });
 }

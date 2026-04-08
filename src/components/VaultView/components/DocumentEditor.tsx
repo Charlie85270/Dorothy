@@ -228,6 +228,42 @@ export default function DocumentEditor({ document, localFile, folders, defaultFo
     }
   };
 
+  // Handle paste with image support
+  const handleTextareaPaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const blob = item.getAsFile();
+        if (!blob) return;
+
+        const reader = new FileReader();
+        reader.onload = async () => {
+          const dataUrl = reader.result as string;
+          if (!window.electronAPI?.vault?.saveClipboardImage) return;
+
+          // For local files, save to same directory; for vault docs, use vault attachments
+          const targetDir = isLocalFile && localFile
+            ? localFile.filePath.split('/').slice(0, -1).join('/')
+            : undefined;
+
+          const result = await window.electronAPI.vault.saveClipboardImage({
+            imageDataUrl: dataUrl,
+            targetDir: targetDir || undefined,
+          });
+
+          if (result.success && result.filePath && result.filename) {
+            insertTextAtCursor(`![${result.filename}](${result.filePath})`);
+          }
+        };
+        reader.readAsDataURL(blob);
+        return;
+      }
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -405,6 +441,7 @@ export default function DocumentEditor({ document, localFile, folders, defaultFo
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 onKeyDown={handleTextareaKeyDown}
+                onPaste={handleTextareaPaste}
                 placeholder="Write your document content here..."
                 className="w-full min-h-[400px] text-sm bg-transparent outline-none !border-none text-foreground placeholder:text-muted-foreground/40 focus:outline-none resize-none leading-relaxed font-mono p-4"
                 style={{ height: 'calc(100vh - 380px)' }}

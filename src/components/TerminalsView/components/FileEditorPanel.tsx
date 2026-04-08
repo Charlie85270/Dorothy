@@ -40,6 +40,53 @@ export default function FileEditorPanel({ filePath, filename, content: initialCo
     }
   }, [handleSave]);
 
+  // Handle paste with image support
+  const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const blob = item.getAsFile();
+        if (!blob) return;
+
+        // Convert to data URL
+        const reader = new FileReader();
+        reader.onload = async () => {
+          const dataUrl = reader.result as string;
+          if (!window.electronAPI?.vault?.saveClipboardImage) return;
+
+          // Save to same directory as the file being edited
+          const dirPath = filePath.split('/').slice(0, -1).join('/');
+          const result = await window.electronAPI.vault.saveClipboardImage({
+            imageDataUrl: dataUrl,
+            targetDir: dirPath || undefined,
+          });
+
+          if (result.success && result.filePath && result.filename) {
+            const textarea = textareaRef.current;
+            if (!textarea) return;
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const mdImage = `![${result.filename}](${result.filePath})`;
+            const newContent = content.slice(0, start) + mdImage + content.slice(end);
+            setContent(newContent);
+            setSaved(false);
+
+            const newPos = start + mdImage.length;
+            requestAnimationFrame(() => {
+              textarea.focus();
+              textarea.setSelectionRange(newPos, newPos);
+            });
+          }
+        };
+        reader.readAsDataURL(blob);
+        return;
+      }
+    }
+  }, [content, filePath]);
+
   return (
     <div
       className={`flex flex-col h-full overflow-hidden ${position === 'top' || position === 'bottom' ? 'border-t border-b' : 'border-l border-r'} border-border`}
@@ -129,6 +176,7 @@ export default function FileEditorPanel({ filePath, filename, content: initialCo
           ref={textareaRef}
           value={content}
           onChange={(e) => handleChange(e.target.value)}
+          onPaste={handlePaste}
           className="flex-1 w-full text-xs bg-[#1a1a2e] text-foreground font-mono p-3 outline-none border-none resize-none leading-relaxed"
           spellCheck={false}
         />

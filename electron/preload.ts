@@ -512,6 +512,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('vault:readLocalFile', filePath) as Promise<{ content?: string; filename?: string; filePath?: string; error?: string }>,
     writeLocalFile: (params: { filePath: string; content: string }) =>
       ipcRenderer.invoke('vault:writeLocalFile', params) as Promise<{ success?: boolean; filePath?: string; error?: string }>,
+    saveClipboardImage: (params: { imageDataUrl: string; targetDir?: string }) =>
+      ipcRenderer.invoke('vault:saveClipboardImage', params) as Promise<{ success?: boolean; filePath?: string; filename?: string; error?: string }>,
     // Event listeners
     onDocumentCreated: (callback: (doc: unknown) => void) => {
       const listener = (_: unknown, doc: unknown) => callback(doc);

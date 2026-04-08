@@ -708,6 +708,7 @@ export interface ElectronAPI {
     attachFile: (params: { document_id: string; file_path: string }) => Promise<{ success: boolean; attachment?: VaultAttachmentElectron; error?: string }>;
     readLocalFile: (filePath: string) => Promise<{ content?: string; filename?: string; filePath?: string; error?: string }>;
     writeLocalFile: (params: { filePath: string; content: string }) => Promise<{ success?: boolean; filePath?: string; error?: string }>;
+    saveClipboardImage: (params: { imageDataUrl: string; targetDir?: string }) => Promise<{ success?: boolean; filePath?: string; filename?: string; error?: string }>;
     onDocumentCreated: (callback: (doc: VaultDocumentElectron) => void) => () => void;
     onDocumentUpdated: (callback: (doc: VaultDocumentElectron) => void) => () => void;
     onDocumentDeleted: (callback: (event: { id: string }) => void) => () => void;

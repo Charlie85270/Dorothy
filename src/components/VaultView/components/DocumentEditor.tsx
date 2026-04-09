@@ -130,19 +130,20 @@ export default function DocumentEditor({ document, localFile, folders, defaultFo
 
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const before = content.slice(0, start);
-    const after = content.slice(end);
-    const needsNewline = before.length > 0 && !before.endsWith('\n');
-    const insert = (needsNewline ? '\n' : '') + text + '\n';
-    const newContent = before + insert + after;
-    setContent(newContent);
+    setContent(prev => {
+      const before = prev.slice(0, start);
+      const after = prev.slice(end);
+      const needsNewline = before.length > 0 && !before.endsWith('\n');
+      const insert = (needsNewline ? '\n' : '') + text + '\n';
+      return before + insert + after;
+    });
 
-    const newPos = start + insert.length;
+    const newPos = start + text.length + 2; // approximate
     requestAnimationFrame(() => {
       textarea.focus();
       textarea.setSelectionRange(newPos, newPos);
     });
-  }, [content]);
+  }, []);
 
   const applyFormatting = useCallback((action: ToolbarAction) => {
     const textarea = textareaRef.current;

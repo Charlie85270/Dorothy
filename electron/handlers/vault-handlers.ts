@@ -341,11 +341,22 @@ export function registerVaultHandlers(deps: VaultHandlerDependencies): void {
       return { success: false, error: String(err) };
     }
   });
+}
 
+/**
+ * Register local file IPC handlers that don't depend on the vault database.
+ * These can be registered even if vault DB initialization fails.
+ */
+export function registerLocalFileHandlers(): void {
   // Read a local file from disk
   ipcMain.handle('vault:readLocalFile', async (_event, filePath: string) => {
     try {
       const resolvedPath = path.resolve(filePath);
+      // Constrain to user's home directory
+      const homeDir = require('os').homedir();
+      if (!resolvedPath.startsWith(homeDir)) {
+        return { error: 'Access denied: file is outside the home directory' };
+      }
       if (!fs.existsSync(resolvedPath)) {
         return { error: 'File not found' };
       }
@@ -382,6 +393,11 @@ export function registerVaultHandlers(deps: VaultHandlerDependencies): void {
   ipcMain.handle('vault:writeLocalFile', async (_event, params: { filePath: string; content: string }) => {
     try {
       const resolvedPath = path.resolve(params.filePath);
+      // Constrain to user's home directory
+      const homeDir = require('os').homedir();
+      if (!resolvedPath.startsWith(homeDir)) {
+        return { success: false, error: 'Access denied: file is outside the home directory' };
+      }
       fs.writeFileSync(resolvedPath, params.content, 'utf-8');
       return { success: true, filePath: resolvedPath };
     } catch (err) {

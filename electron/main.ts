@@ -89,7 +89,7 @@ import { registerSchedulerHandlers } from './handlers/scheduler-handlers';
 import { registerAutomationHandlers } from './handlers/automation-handlers';
 import { registerCLIPathsHandlers } from './handlers/cli-paths-handlers';
 import { registerKanbanHandlers } from './handlers/kanban-handlers';
-import { registerVaultHandlers } from './handlers/vault-handlers';
+import { registerVaultHandlers, registerLocalFileHandlers } from './handlers/vault-handlers';
 import { registerWorldHandlers } from './handlers/world-handlers';
 import { initVaultDb, closeVaultDb } from './services/vault-db';
 import { initAutoUpdater, checkForUpdates, setMainWindowGetter } from './services/update-checker';
@@ -403,7 +403,7 @@ app.whenReady().then(async () => {
     console.error('[Dorothy] Failed to initialize vault database:', err);
   }
 
-  // Register vault handlers only if DB init succeeded
+  // Register vault DB handlers only if DB init succeeded
   if (vaultReady) {
     try {
       registerVaultHandlers({ getMainWindow });
@@ -412,7 +412,15 @@ app.whenReady().then(async () => {
       console.error('[Dorothy] Failed to register vault handlers:', err);
     }
   } else {
-    console.warn('[Dorothy] Vault handlers skipped due to database initialization failure');
+    console.warn('[Dorothy] Vault DB handlers skipped due to database initialization failure');
+  }
+
+  // Register local file handlers (no DB dependency)
+  try {
+    registerLocalFileHandlers();
+    console.log('[Dorothy] Local file handlers registered successfully');
+  } catch (err) {
+    console.error('[Dorothy] Failed to register local file handlers:', err);
   }
 
   // Register world (generative zone) handlers

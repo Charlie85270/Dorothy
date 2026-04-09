@@ -277,7 +277,10 @@ export default function TerminalsView() {
         filePath: file.filePath,
         content,
       });
-      if (!result.success) {
+      if (result.success) {
+        // Update store content so remounts don't rehydrate stale text
+        setOpenedFile(agentId, { ...file, content });
+      } else {
         console.error('Failed to save file:', result.error);
         alert(`Failed to save file: ${result.error || 'Unknown error'}`);
       }
@@ -285,7 +288,7 @@ export default function TerminalsView() {
       console.error('Failed to save file:', err);
       alert(`Failed to save file: ${String(err)}`);
     }
-  }, [openedFiles]);
+  }, [openedFiles, setOpenedFile]);
 
   const handleLayoutChange = useCallback((preset: LayoutPreset) => {
     if (tabManager.activeCustomTab) {

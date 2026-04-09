@@ -246,7 +246,7 @@ export default function DocumentEditor({ document, localFile, folders, defaultFo
 
           // For local files, save to same directory; for vault docs, use vault attachments
           const targetDir = isLocalFile && localFile
-            ? localFile.filePath.split('/').slice(0, -1).join('/')
+            ? localFile.filePath.replace(/\\/g, '/').split('/').slice(0, -1).join('/')
             : undefined;
 
           const result = await window.electronAPI.vault.saveClipboardImage({

@@ -279,9 +279,11 @@ export default function TerminalsView() {
       });
       if (!result.success) {
         console.error('Failed to save file:', result.error);
+        alert(`Failed to save file: ${result.error || 'Unknown error'}`);
       }
     } catch (err) {
       console.error('Failed to save file:', err);
+      alert(`Failed to save file: ${String(err)}`);
     }
   }, [openedFiles]);
 

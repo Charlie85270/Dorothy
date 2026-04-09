@@ -360,8 +360,11 @@ export function registerVaultHandlers(deps: VaultHandlerDependencies): void {
       // Check for binary content by reading a small buffer
       const buffer = Buffer.alloc(Math.min(8192, stats.size));
       const fd = fs.openSync(resolvedPath, 'r');
-      fs.readSync(fd, buffer, 0, buffer.length, 0);
-      fs.closeSync(fd);
+      try {
+        fs.readSync(fd, buffer, 0, buffer.length, 0);
+      } finally {
+        fs.closeSync(fd);
+      }
       // Check for null bytes (binary indicator)
       if (buffer.includes(0)) {
         return { error: 'This file appears to be binary and cannot be edited as text. Only text-based files (.md, .txt, .json, .ts, .js, etc.) are supported.' };
@@ -400,7 +403,16 @@ export function registerVaultHandlers(deps: VaultHandlerDependencies): void {
       const buffer = Buffer.from(base64Data, 'base64');
 
       // Save to target directory (same as the file being edited) or vault attachments
-      const saveDir = params.targetDir || path.join(VAULT_DIR, 'attachments');
+      let saveDir = path.join(VAULT_DIR, 'attachments');
+      if (params.targetDir) {
+        const resolvedTarget = path.resolve(params.targetDir);
+        // Only allow targetDir under the user's home directory
+        const homeDir = require('os').homedir();
+        if (!resolvedTarget.startsWith(homeDir)) {
+          return { success: false, error: 'Target directory is outside the home directory' };
+        }
+        saveDir = resolvedTarget;
+      }
       if (!fs.existsSync(saveDir)) {
         fs.mkdirSync(saveDir, { recursive: true });
       }

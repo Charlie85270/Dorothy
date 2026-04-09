@@ -58,7 +58,7 @@ export default function FileEditorPanel({ filePath, filename, content: initialCo
           if (!window.electronAPI?.vault?.saveClipboardImage) return;
 
           // Save to same directory as the file being edited
-          const dirPath = filePath.split('/').slice(0, -1).join('/');
+          const dirPath = filePath.replace(/\\/g, '/').split('/').slice(0, -1).join('/');
           const result = await window.electronAPI.vault.saveClipboardImage({
             imageDataUrl: dataUrl,
             targetDir: dirPath || undefined,
@@ -70,8 +70,10 @@ export default function FileEditorPanel({ filePath, filename, content: initialCo
             const start = textarea.selectionStart;
             const end = textarea.selectionEnd;
             const mdImage = `![${result.filename}](${result.filePath})`;
-            const newContent = content.slice(0, start) + mdImage + content.slice(end);
-            setContent(newContent);
+            setContent(prev => {
+              const newContent = prev.slice(0, start) + mdImage + prev.slice(end);
+              return newContent;
+            });
             setSaved(false);
 
             const newPos = start + mdImage.length;
@@ -85,7 +87,7 @@ export default function FileEditorPanel({ filePath, filename, content: initialCo
         return;
       }
     }
-  }, [content, filePath]);
+  }, [filePath]);
 
   return (
     <div

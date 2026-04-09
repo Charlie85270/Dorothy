@@ -4,6 +4,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { isElectron } from '@/hooks/useElectron';
 import { DndContext } from '@dnd-kit/core';
 import { useElectronAgents, useElectronFS, useElectronSkills } from '@/hooks/useElectron';
+import { useOpenedFilesStore } from '@/store/openedFiles';
 import { useMultiTerminal } from './hooks/useMultiTerminal';
 import { useTerminalGrid } from './hooks/useTerminalGrid';
 import { useTabManager } from './hooks/useTabManager';
@@ -48,7 +49,9 @@ export default function TerminalsView() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [viewFullscreen, setViewFullscreen] = useState(false);
   const [terminalFontSize, setTerminalFontSize] = useState(11);
-  const [openedFiles, setOpenedFiles] = useState<Map<string, { filePath: string; filename: string; content: string }>>(new Map());
+  const openedFiles = useOpenedFilesStore((s) => s.files);
+  const setOpenedFile = useOpenedFilesStore((s) => s.setFile);
+  const removeOpenedFile = useOpenedFilesStore((s) => s.removeFile);
   const pendingStartRef = useRef<{ agentId: string; prompt: string; options?: { model?: string } } | null>(null);
   const [terminalTheme, setTerminalTheme] = useState<'dark' | 'light'>('dark');
   const [terminalSettingsLoaded, setTerminalSettingsLoaded] = useState(!isElectron());
@@ -236,11 +239,7 @@ export default function TerminalsView() {
     if (!isElectron() || !window.electronAPI?.dialog || !window.electronAPI?.vault) return;
     // If already open, close it
     if (openedFiles.has(agentId)) {
-      setOpenedFiles(prev => {
-        const next = new Map(prev);
-        next.delete(agentId);
-        return next;
-      });
+      removeOpenedFile(agentId);
       setTimeout(() => multiTerminal.fitAll(), 100);
       return;
     }
@@ -253,29 +252,21 @@ export default function TerminalsView() {
         return;
       }
       if (result.content === undefined) return;
-      setOpenedFiles(prev => {
-        const next = new Map(prev);
-        next.set(agentId, {
-          filePath: result.filePath || filePaths[0],
-          filename: result.filename || filePaths[0].split('/').pop() || 'file',
-          content: result.content!,
-        });
-        return next;
+      setOpenedFile(agentId, {
+        filePath: result.filePath || filePaths[0],
+        filename: result.filename || filePaths[0].split('/').pop() || 'file',
+        content: result.content!,
       });
       setTimeout(() => multiTerminal.fitAll(), 100);
     } catch (err) {
       console.error('Failed to open file:', err);
     }
-  }, [openedFiles, multiTerminal]);
+  }, [openedFiles, multiTerminal, removeOpenedFile, setOpenedFile]);
 
   const handleCloseFile = useCallback((agentId: string) => {
-    setOpenedFiles(prev => {
-      const next = new Map(prev);
-      next.delete(agentId);
-      return next;
-    });
+    removeOpenedFile(agentId);
     setTimeout(() => multiTerminal.fitAll(), 100);
-  }, [multiTerminal]);
+  }, [multiTerminal, removeOpenedFile]);
 
   const handleSaveFile = useCallback(async (agentId: string, content: string) => {
     if (!isElectron() || !window.electronAPI?.vault) return;

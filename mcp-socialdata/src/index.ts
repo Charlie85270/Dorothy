@@ -3,7 +3,7 @@
  * MCP server for Twitter/X data via SocialData API
  * Available to all Claude agents for searching tweets, getting user profiles, etc.
  *
- * API key is read from ~/.dorothy/app-settings.json (socialDataApiKey field)
+ * API key is read from ~/.echelon/app-settings.json (socialDataApiKey field)
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";

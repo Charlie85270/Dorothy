@@ -3,7 +3,7 @@
  * MCP server for posting tweets via X API v2 (OAuth 1.0a)
  * Available to all Claude agents for publishing content on X/Twitter.
  *
- * Credentials are read from ~/.dorothy/app-settings.json:
+ * Credentials are read from ~/.echelon/app-settings.json:
  *   xApiKey, xApiSecret, xAccessToken, xAccessTokenSecret
  */
 

@@ -26,7 +26,7 @@ export function escapeForBashDoubleQuotes(str: string): string {
 export async function getClaudePath(): Promise<string> {
   // Check user-configured path in app-settings.json
   try {
-    const settingsFile = path.join(os.homedir(), ".dorothy", "app-settings.json");
+    const settingsFile = path.join(os.homedir(), ".echelon", "app-settings.json");
     if (fs.existsSync(settingsFile)) {
       const settings = JSON.parse(fs.readFileSync(settingsFile, "utf-8"));
       if (settings.cliPaths?.claude && fs.existsSync(settings.cliPaths.claude)) {
@@ -168,7 +168,7 @@ export async function createLaunchdJob(
     fs.mkdirSync(logsDir, { recursive: true });
   }
 
-  const scriptPath = path.join(os.homedir(), ".dorothy", "scripts", `${taskId}.sh`);
+  const scriptPath = path.join(os.homedir(), ".echelon", "scripts", `${taskId}.sh`);
   const scriptsDir = path.dirname(scriptPath);
   if (!fs.existsSync(scriptsDir)) {
     fs.mkdirSync(scriptsDir, { recursive: true });
@@ -213,7 +213,7 @@ echo "=== Task completed at $(date) ===" >> "${logPath}"
   if (dayOfMonth !== "*") calendarInterval.Day = parseInt(dayOfMonth, 10);
   if (dayOfWeek !== "*") calendarInterval.Weekday = parseInt(dayOfWeek, 10);
 
-  const label = `com.dorothy.scheduler.${taskId}`;
+  const label = `com.echelon.scheduler.${taskId}`;
   const plistPath = path.join(os.homedir(), "Library", "LaunchAgents", `${label}.plist`);
   const launchAgentsDir = path.dirname(plistPath);
   if (!fs.existsSync(launchAgentsDir)) {
@@ -273,7 +273,7 @@ export async function createCronJob(
   const claudePath = await getClaudePath();
   const claudeDir = path.dirname(claudePath);
 
-  const scriptPath = path.join(os.homedir(), ".dorothy", "scripts", `${taskId}.sh`);
+  const scriptPath = path.join(os.homedir(), ".echelon", "scripts", `${taskId}.sh`);
   const scriptsDir = path.dirname(scriptPath);
   if (!fs.existsSync(scriptsDir)) {
     fs.mkdirSync(scriptsDir, { recursive: true });
@@ -354,7 +354,7 @@ echo "=== Task completed at $(date) ===" >> "${logPath}"
  * Delete a launchd job (macOS)
  */
 export async function deleteLaunchdJob(taskId: string): Promise<void> {
-  const label = `com.dorothy.scheduler.${taskId}`;
+  const label = `com.echelon.scheduler.${taskId}`;
   const plistPath = path.join(os.homedir(), "Library", "LaunchAgents", `${label}.plist`);
   const uid = process.getuid?.() || 501;
 

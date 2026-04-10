@@ -1,5 +1,5 @@
 {
-  "name": "dorothy",
+  "name": "echelon",
   "version": "1.2.7",
   "private": true,
   "main": "electron/dist/main.js",
@@ -18,12 +18,12 @@
     "electron:pack": "tsc -p electron/tsconfig.json && cd mcp-orchestrator && npm install && npm run build && cd .. && cd mcp-telegram && npm install && npm run build && cd .. && cd mcp-kanban && npm install && npm run build && cd .. && cd mcp-vault && npm install && npm run build && cd .. && cd mcp-socialdata && npm install && npm run build && cd .. && cd mcp-x && npm install && npm run build && cd .. && cd mcp-world && npm install && npm run build && cd .. && electron-builder --dir --mac"
   },
   "build": {
-    "appId": "io.dorothy.app",
-    "productName": "Dorothy",
+    "appId": "io.tf-echelon.app",
+    "productName": "Echelon",
     "publish": {
       "provider": "github",
-      "owner": "Charlie85270",
-      "repo": "dorothy"
+      "owner": "jediswimmer",
+      "repo": "echelon"
     },
     "directories": {
       "output": "release"
@@ -117,7 +117,7 @@
       ]
     },
     "dmg": {
-      "title": "Dorothy",
+      "title": "Echelon",
       "contents": [
         {
           "x": 130,

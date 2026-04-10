@@ -22,7 +22,7 @@ function resolveDefaultProvider(deps: SchedulerDeps): AgentProvider {
   return deps.getAppSettings().defaultProvider || 'claude';
 }
 
-const SCHEDULER_METADATA_PATH = path.join(os.homedir(), '.dorothy', 'scheduler-metadata.json');
+const SCHEDULER_METADATA_PATH = path.join(os.homedir(), '.echelon', 'scheduler-metadata.json');
 
 // Active log file watchers for real-time streaming
 const logWatchers = new Map<string, { watcher: fs.FSWatcher; offset: number }>();
@@ -44,7 +44,7 @@ function resolveLogPath(taskId: string): string {
   }
 
   // Also check dorothy plist format
-  const dorothyPlistPath = path.join(os.homedir(), 'Library', 'LaunchAgents', `com.dorothy.scheduler.${taskId}.plist`);
+  const dorothyPlistPath = path.join(os.homedir(), 'Library', 'LaunchAgents', `com.echelon.scheduler.${taskId}.plist`);
   if (fs.existsSync(dorothyPlistPath)) {
     try {
       const plistContent = fs.readFileSync(dorothyPlistPath, 'utf-8');
@@ -229,7 +229,7 @@ async function getCLIPath(providerId: AgentProvider = 'claude'): Promise<string>
 
   // Check user-configured path in app-settings.json
   try {
-    const settingsFile = path.join(os.homedir(), '.dorothy', 'app-settings.json');
+    const settingsFile = path.join(os.homedir(), '.echelon', 'app-settings.json');
     if (fs.existsSync(settingsFile)) {
       const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'));
       const configuredPath = settings.cliPaths?.[binaryName];
@@ -323,7 +323,7 @@ async function createLaunchdJob(
   }
 
   // Create script to run
-  const scriptPath = path.join(os.homedir(), '.dorothy', 'scripts', `${taskId}.sh`);
+  const scriptPath = path.join(os.homedir(), '.echelon', 'scripts', `${taskId}.sh`);
   const scriptsDir = path.dirname(scriptPath);
   if (!fs.existsSync(scriptsDir)) {
     fs.mkdirSync(scriptsDir, { recursive: true });
@@ -387,7 +387,7 @@ async function createLaunchdJob(
     ? renderEntry(calendarEntries[0])
     : `  <array>\n${calendarEntries.map(e => '  ' + renderEntry(e)).join('\n')}\n  </array>`;
 
-  const label = `com.dorothy.scheduler.${taskId}`;
+  const label = `com.echelon.scheduler.${taskId}`;
   const plistPath = path.join(os.homedir(), 'Library', 'LaunchAgents', `${label}.plist`);
   const launchAgentsDir = path.dirname(plistPath);
   if (!fs.existsSync(launchAgentsDir)) {
@@ -439,7 +439,7 @@ async function createCronJob(
   const claudePath = await getCLIPath(provider);
   const claudeDir = path.dirname(claudePath);
 
-  const scriptPath = path.join(os.homedir(), '.dorothy', 'scripts', `${taskId}.sh`);
+  const scriptPath = path.join(os.homedir(), '.echelon', 'scripts', `${taskId}.sh`);
   const scriptsDir = path.dirname(scriptPath);
   if (!fs.existsSync(scriptsDir)) {
     fs.mkdirSync(scriptsDir, { recursive: true });
@@ -663,14 +663,14 @@ export function registerSchedulerHandlers(deps: SchedulerDeps): void {
           try {
             const files = fs.readdirSync(launchAgentsDir);
             for (const file of files) {
-              if (!file.startsWith('com.claude.schedule.') && !file.startsWith('com.dorothy.scheduler.')) continue;
+              if (!file.startsWith('com.claude.schedule.') && !file.startsWith('com.echelon.scheduler.')) continue;
               if (!file.endsWith('.plist')) continue;
 
               let taskId: string;
               if (file.startsWith('com.claude.schedule.')) {
                 taskId = file.replace('com.claude.schedule.', '').replace('.plist', '');
               } else {
-                taskId = file.replace('com.dorothy.scheduler.', '').replace('.plist', '');
+                taskId = file.replace('com.echelon.scheduler.', '').replace('.plist', '');
               }
 
               if (addedTaskIds.has(taskId)) continue;
@@ -906,7 +906,7 @@ export function registerSchedulerHandlers(deps: SchedulerDeps): void {
       // Remove launchd job (macOS)
       if (os.platform() === 'darwin') {
         const labels = [
-          `com.dorothy.scheduler.${taskId}`,
+          `com.echelon.scheduler.${taskId}`,
           `com.claude.schedule.${taskId}`,
         ];
 
@@ -952,7 +952,7 @@ export function registerSchedulerHandlers(deps: SchedulerDeps): void {
       }
 
       // Remove script file
-      const scriptPath = path.join(os.homedir(), '.dorothy', 'scripts', `${taskId}.sh`);
+      const scriptPath = path.join(os.homedir(), '.echelon', 'scripts', `${taskId}.sh`);
       if (fs.existsSync(scriptPath)) {
         fs.unlinkSync(scriptPath);
       }
@@ -1033,7 +1033,7 @@ export function registerSchedulerHandlers(deps: SchedulerDeps): void {
       const promptWithStatus = prompt + statusInstruction;
       const escapedPrompt = promptWithStatus.replace(/'/g, "'\\''");
 
-      const scriptPath = path.join(os.homedir(), '.dorothy', 'scripts', `${taskId}.sh`);
+      const scriptPath = path.join(os.homedir(), '.echelon', 'scripts', `${taskId}.sh`);
       const scriptsDir = path.dirname(scriptPath);
       if (!fs.existsSync(scriptsDir)) {
         fs.mkdirSync(scriptsDir, { recursive: true });
@@ -1058,7 +1058,7 @@ export function registerSchedulerHandlers(deps: SchedulerDeps): void {
       if (scheduleChanged) {
         if (os.platform() === 'darwin') {
           // Remove old launchd job
-          const label = `com.dorothy.scheduler.${taskId}`;
+          const label = `com.echelon.scheduler.${taskId}`;
           const plistPath = path.join(os.homedir(), 'Library', 'LaunchAgents', `${label}.plist`);
           const uid = process.getuid?.() || 501;
 
@@ -1127,7 +1127,7 @@ export function registerSchedulerHandlers(deps: SchedulerDeps): void {
         return { success: false, error: 'Task not found' };
       }
 
-      const scriptPath = path.join(os.homedir(), '.dorothy', 'scripts', `${taskId}.sh`);
+      const scriptPath = path.join(os.homedir(), '.echelon', 'scripts', `${taskId}.sh`);
       if (fs.existsSync(scriptPath)) {
         spawn('bash', [scriptPath], {
           detached: true,

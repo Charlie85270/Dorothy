@@ -1,0 +1,113 @@
+# Expected team for TaskFlow SaaS
+# Scope: Large tier (16+ characters)
+# Theme: The Big Bang Theory (tbbt)
+#
+# Rationale: Multi-service project with frontend, backend, database,
+# caching, real-time, auth, and CI/CD. Large tier is appropriate --
+# the team needs all Medium core roles plus database, DevOps, technical
+# writing, performance, and CI/CD specialists.
+
+tier: large
+theme: tbbt
+character_count: 16
+
+roster:
+  # --- Medium core (always present) ---
+
+  - archetype: ingestion-pm
+    character: penny
+    rationale: >
+      Reads the PRD, estimates scope as Large (multi-service, database,
+      real-time, auth, API), composes roster, hands off to Leonard.
+
+  - archetype: user-handler
+    character: leonard-hofstadter
+    rationale: >
+      Project coordinator and merge authority. Manages the 3-month
+      timeline, assigns tasks across frontend/backend/infra tracks.
+
+  - archetype: principal-architect
+    character: sheldon-cooper
+    rationale: >
+      Defines service boundaries, API contracts, database schema design
+      principles, and WebSocket architecture. Enforces dependency rules.
+
+  - archetype: frontend-engineer
+    character: raj
+    rationale: >
+      Builds the Next.js frontend: task boards, dashboards, real-time
+      UI updates, and shadcn/ui component integration.
+
+  - archetype: backend-engineer
+    character: stuart-bloom
+    rationale: >
+      Implements the Express REST API, WebSocket server, GitHub
+      integration, and auth flows.
+
+  - archetype: code-reviewer
+    character: alex-jensen
+    rationale: >
+      Reviews all PRs across frontend and backend for quality,
+      consistency, and adherence to architectural decisions.
+
+  - archetype: qa-lead
+    character: bernadette
+    rationale: >
+      Tests API endpoints, WebSocket reliability, auth flows, and
+      cross-browser frontend behavior. Defines test coverage targets.
+
+  - archetype: security-engineer
+    character: barry-kripke
+    rationale: >
+      Reviews auth implementation (NextAuth.js, OAuth), RBAC enforcement,
+      API input validation, and WebSocket security.
+
+  - archetype: adversarial-reviewer
+    character: wil-wheaton
+    rationale: >
+      Stress-tests the GitHub integration, real-time sync edge cases,
+      permission escalation paths, and API abuse scenarios.
+
+  - archetype: refinement-builder
+    character: leslie-winkle
+    rationale: >
+      Addresses review gate feedback pragmatically. Resolves conflicts
+      between Sheldon's architectural purity and shipping deadlines.
+
+  # --- Large tier additions ---
+
+  - archetype: database-engineer
+    character: bert-kibbler
+    rationale: >
+      Designs the PostgreSQL schema, Prisma models, migration strategy,
+      and query optimization. Manages Redis cache layer design.
+
+  - archetype: devops-infrastructure
+    character: howard
+    rationale: >
+      Builds Docker + Docker Compose setup, GitHub Actions CI/CD
+      pipelines, and deployment configurations for self-hosted and cloud.
+
+  - archetype: scrum-master
+    character: mrs-davis
+    rationale: >
+      Coordinates the 3-month timeline across parallel frontend/backend/
+      infra work streams. Tracks milestones and velocity.
+
+  - archetype: technical-writer
+    character: amy
+    rationale: >
+      Documents the REST API (OpenAPI spec), WebSocket protocol,
+      deployment guide, and user-facing help content.
+
+  - archetype: ux-designer
+    character: emily-sweeney
+    rationale: >
+      Designs the task board UX, dashboard layouts, notification patterns,
+      and responsive mobile experience.
+
+  - archetype: performance-engineer
+    character: dennis-kim
+    rationale: >
+      Benchmarks API response times, WebSocket throughput, database
+      query performance, and frontend bundle size. Sets perf budgets.

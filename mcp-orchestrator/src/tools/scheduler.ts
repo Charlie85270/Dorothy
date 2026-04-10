@@ -76,10 +76,10 @@ export function registerSchedulerTools(server: McpServer): void {
             const addedIds = new Set(tasks.map((t) => t.id));
 
             for (const file of files) {
-              if (!file.startsWith("com.dorothy.scheduler.")) continue;
+              if (!file.startsWith("com.echelon.scheduler.")) continue;
               if (!file.endsWith(".plist")) continue;
 
-              const taskId = file.replace("com.dorothy.scheduler.", "").replace(".plist", "");
+              const taskId = file.replace("com.echelon.scheduler.", "").replace(".plist", "");
               if (addedIds.has(taskId)) continue;
 
               try {
@@ -104,7 +104,7 @@ export function registerSchedulerTools(server: McpServer): void {
                 const cron = `${minute} ${hour} * * *`;
 
                 // Read prompt from script file
-                const scriptPath = path.join(os.homedir(), ".dorothy", "scripts", `${taskId}.sh`);
+                const scriptPath = path.join(os.homedir(), ".echelon", "scripts", `${taskId}.sh`);
                 let prompt = "";
                 if (fs.existsSync(scriptPath)) {
                   const scriptContent = fs.readFileSync(scriptPath, "utf-8");
@@ -296,7 +296,7 @@ export function registerSchedulerTools(server: McpServer): void {
         }
 
         // Remove script file
-        const scriptPath = path.join(os.homedir(), ".dorothy", "scripts", `${taskId}.sh`);
+        const scriptPath = path.join(os.homedir(), ".echelon", "scripts", `${taskId}.sh`);
         if (fs.existsSync(scriptPath)) {
           fs.unlinkSync(scriptPath);
         }
@@ -332,7 +332,7 @@ export function registerSchedulerTools(server: McpServer): void {
     },
     async ({ taskId }) => {
       try {
-        const scriptPath = path.join(os.homedir(), ".dorothy", "scripts", `${taskId}.sh`);
+        const scriptPath = path.join(os.homedir(), ".echelon", "scripts", `${taskId}.sh`);
 
         if (!fs.existsSync(scriptPath)) {
           return {

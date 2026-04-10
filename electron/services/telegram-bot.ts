@@ -1231,7 +1231,7 @@ export async function sendToSuperAgent(chatId: string, message: string, attached
       if (telegramInstructions) {
         const superAgentInstructions = getSuperAgentInstructions();
         const combined = [superAgentInstructions, telegramInstructions].filter(Boolean).join('\n\n');
-        const combinedPath = path.join(app.getPath('home'), '.dorothy', 'telegram-combined-prompt.md');
+        const combinedPath = path.join(app.getPath('home'), '.echelon', 'telegram-combined-prompt.md');
         try {
           fs.mkdirSync(path.dirname(combinedPath), { recursive: true });
           fs.writeFileSync(combinedPath, combined, 'utf-8');

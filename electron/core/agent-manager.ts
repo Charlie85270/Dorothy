@@ -248,7 +248,7 @@ export async function initAgentPty(
   const cliExtraPaths: string[] = [];
   let savedSettings: Record<string, unknown> = {};
   try {
-    const settingsFile = path.join(os.homedir(), '.dorothy', 'app-settings.json');
+    const settingsFile = path.join(os.homedir(), '.echelon', 'app-settings.json');
     if (fs.existsSync(settingsFile)) {
       savedSettings = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'));
       const cliPaths = savedSettings.cliPaths as Record<string, unknown> | undefined;
@@ -304,7 +304,7 @@ export async function initAgentPty(
       ...process.env as { [key: string]: string },
       PATH: fullPath,
       ...providerEnvVars,
-      // Load CLAUDE.md from --add-dir directories (e.g. ~/.dorothy)
+      // Load CLAUDE.md from --add-dir directories (e.g. ~/.echelon)
       CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD: '1',
       ...tasmaniaEnv,
     },

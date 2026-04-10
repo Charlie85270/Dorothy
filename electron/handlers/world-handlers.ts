@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
 
-const WORLDS_DIR = path.join(os.homedir(), '.dorothy', 'worlds');
+const WORLDS_DIR = path.join(os.homedir(), '.echelon', 'worlds');
 
 interface WorldHandlerDependencies {
   getMainWindow: () => BrowserWindow | null;
@@ -270,7 +270,7 @@ export function registerWorldHandlers(deps: WorldHandlerDependencies): void {
     }
   });
 
-  // Export a zone as a .dorothy-world file
+  // Export a zone as a .echelon-world file
   ipcMain.handle('world:exportZone', async (_event, params: { zoneId: string; screenshot: string }) => {
     try {
       const { zoneId, screenshot } = params;
@@ -293,7 +293,7 @@ export function registerWorldHandlers(deps: WorldHandlerDependencies): void {
       const safeName = (zoneData.name || 'world').replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
       const result = await dialog.showSaveDialog(win, {
         title: 'Export World',
-        defaultPath: `${safeName}.dorothy-world`,
+        defaultPath: `${safeName}.echelon-world`,
         filters: [{ name: 'Dorothy World', extensions: ['dorothy-world'] }],
       });
 
@@ -308,7 +308,7 @@ export function registerWorldHandlers(deps: WorldHandlerDependencies): void {
     }
   });
 
-  // Import a .dorothy-world file — returns preview data without saving
+  // Import a .echelon-world file — returns preview data without saving
   ipcMain.handle('world:importZone', async () => {
     try {
       const win = getMainWindow();

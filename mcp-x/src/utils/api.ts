@@ -7,7 +7,7 @@ import { generateOAuthHeader, type OAuthCredentials } from "./oauth.js";
 const X_API_HOST = "api.x.com";
 
 function getCredentials(): OAuthCredentials {
-  const settingsPath = path.join(os.homedir(), ".dorothy", "app-settings.json");
+  const settingsPath = path.join(os.homedir(), ".echelon", "app-settings.json");
   try {
     if (fs.existsSync(settingsPath)) {
       const settings = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));

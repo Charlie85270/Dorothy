@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { execFile } from 'child_process';
 import { AgentStatus } from '../types';
-import { TG_CHARACTER_FACES, SLACK_CHARACTER_FACES, DATA_DIR, OLD_DATA_DIR } from '../constants';
+import { TG_CHARACTER_FACES, SLACK_CHARACTER_FACES, DATA_DIR, OLD_DATA_DIR, LEGACY_DOROTHY_DIR } from '../constants';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -26,15 +26,15 @@ export function ensureDataDir() {
 }
 
 /**
- * Write Dorothy's CLAUDE.md to ~/.dorothy/CLAUDE.md so all agents spawned from
- * Dorothy can load it via --add-dir ~/.dorothy with
+ * Write Echelon's CLAUDE.md to ~/.echelon/CLAUDE.md so all agents spawned from
+ * Echelon can load it via --add-dir ~/.echelon with
  * CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1.
  *
  * First tries to read the live CLAUDE.md from the app source directory.
  * Falls back to a bundled minimal version if the source file is unavailable
  * (e.g. in a packaged .asar build without unpacked assets).
  */
-export function ensureDorothyClaudeMd(): void {
+export function ensureEchelonClaudeMd(): void {
   try {
     ensureDataDir();
     const dest = path.join(DATA_DIR, 'CLAUDE.md');
@@ -55,7 +55,7 @@ export function ensureDorothyClaudeMd(): void {
 
     // Fallback: write essential agent instructions
     if (!content) {
-      content = `# Dorothy Agent Instructions
+      content = `# Echelon Agent Instructions
 
 ## Memory
 
@@ -80,7 +80,7 @@ Use auto memory (\`~/.claude/projects/.../memory/\`) actively on every project:
 
 ## Autonomy
 
-When you are delegated a task by Dorothy or an orchestrator agent, **always act autonomously**:
+When you are delegated a task by Echelon or an orchestrator agent, **always act autonomously**:
 - Do NOT ask for confirmation before proceeding — just do the work and report results
 - Do NOT ask "Would you like me to continue?" or "Shall I proceed?" — the answer is always yes
 - If a task is ambiguous, make reasonable assumptions and state them in your report
@@ -90,19 +90,19 @@ When you are delegated a task by Dorothy or an orchestrator agent, **always act 
 
     fs.writeFileSync(dest, content, 'utf-8');
   } catch (err) {
-    console.warn('Failed to write Dorothy CLAUDE.md:', err);
+    console.warn('Failed to write Echelon CLAUDE.md:', err);
   }
 }
 
 /**
- * Migrate data from ~/.claude-manager to ~/.dorothy on first launch after rebrand.
+ * Migrate data from ~/.claude-manager to ~/.echelon on first launch after rebrand.
  * Only copies files that don't already exist in the new location to avoid overwriting newer data.
  * Removes the old directory after successful migration.
  */
 export function migrateFromClaudeManager() {
   if (!fs.existsSync(OLD_DATA_DIR)) return;
 
-  console.log('Migrating data from ~/.claude-manager to ~/.dorothy...');
+  console.log('Migrating data from ~/.claude-manager to ~/.echelon...');
 
   const items = [
     'agents.json',
@@ -120,7 +120,7 @@ export function migrateFromClaudeManager() {
 
     if (!fs.existsSync(src)) continue;
     if (fs.existsSync(dest)) {
-      console.log(`  Skipping ${item} (already exists in ~/.dorothy)`);
+      console.log(`  Skipping ${item} (already exists in ~/.echelon)`);
       continue;
     }
 
@@ -137,6 +137,26 @@ export function migrateFromClaudeManager() {
     console.log('Removed ~/.claude-manager');
   } catch (err) {
     console.error('Failed to remove ~/.claude-manager:', err);
+  }
+}
+
+/**
+ * Migrate data from ~/.dorothy to ~/.echelon on first launch after Echelon rebrand.
+ * Copies the entire Dorothy data directory to the new Echelon location.
+ * Keeps the Dorothy directory intact for rollback safety.
+ */
+export function migrateFromDorothy() {
+  if (!fs.existsSync(LEGACY_DOROTHY_DIR)) return;
+  if (fs.existsSync(DATA_DIR)) return; // Already migrated or fresh install
+
+  console.log('Migrating data from ~/.dorothy to ~/.echelon...');
+
+  try {
+    fs.cpSync(LEGACY_DOROTHY_DIR, DATA_DIR, { recursive: true });
+    console.log('Successfully copied ~/.dorothy to ~/.echelon');
+    console.log('Note: ~/.dorothy has been preserved for rollback safety');
+  } catch (err) {
+    console.error('Failed to migrate from ~/.dorothy to ~/.echelon:', err);
   }
 }
 

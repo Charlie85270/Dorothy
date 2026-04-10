@@ -4,7 +4,8 @@ import * as os from 'os';
 export const API_PORT = 31415;
 
 export const OLD_DATA_DIR = path.join(os.homedir(), '.claude-manager');
-export const DATA_DIR = path.join(os.homedir(), '.dorothy');
+export const LEGACY_DOROTHY_DIR = path.join(os.homedir(), '.dorothy');
+export const DATA_DIR = path.join(os.homedir(), '.echelon');
 export const AGENTS_FILE = path.join(DATA_DIR, 'agents.json');
 export const APP_SETTINGS_FILE = path.join(DATA_DIR, 'app-settings.json');
 export const KANBAN_FILE = path.join(DATA_DIR, 'kanban-tasks.json');
@@ -13,7 +14,7 @@ export const VAULT_DIR = path.join(DATA_DIR, 'vault');
 export const VAULT_DB_FILE = path.join(DATA_DIR, 'vault.db');
 export const API_TOKEN_FILE = path.join(DATA_DIR, 'api-token');
 
-export const GITHUB_REPO = 'Charlie85270/dorothy';
+export const GITHUB_REPO = 'jediswimmer/echelon';
 
 export const MIME_TYPES: { [key: string]: string } = {
   '.html': 'text/html',

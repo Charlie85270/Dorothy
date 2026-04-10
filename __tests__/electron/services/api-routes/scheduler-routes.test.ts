@@ -29,7 +29,7 @@ vi.mock('os', async (importOriginal) => {
 
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sched-test-'));
-  fs.mkdirSync(path.join(tmpDir, '.dorothy'), { recursive: true });
+  fs.mkdirSync(path.join(tmpDir, '.echelon'), { recursive: true });
 
   ctx = {
     mainWindow: { isDestroyed: () => false, webContents: { send: vi.fn() } } as any,
@@ -63,7 +63,7 @@ describe('scheduler-routes', () => {
 
     expect(sendJson).toHaveBeenCalledWith({ success: true });
 
-    const metadataPath = path.join(tmpDir, '.dorothy', 'scheduler-metadata.json');
+    const metadataPath = path.join(tmpDir, '.echelon', 'scheduler-metadata.json');
     expect(fs.existsSync(metadataPath)).toBe(true);
     const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
     expect(metadata['task-1'].lastRunStatus).toBe('success');

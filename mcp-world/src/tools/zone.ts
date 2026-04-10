@@ -5,7 +5,7 @@ import * as path from "path";
 import * as os from "os";
 import type { GenerativeZone } from "../types.js";
 
-const WORLDS_DIR = path.join(os.homedir(), ".dorothy", "worlds");
+const WORLDS_DIR = path.join(os.homedir(), ".echelon", "worlds");
 
 // Tile IDs
 const TILE = {
@@ -114,7 +114,7 @@ function loadSpriteCatalog(): Record<string, unknown> | null {
   const candidates = [
     path.join(resourcesPath, "app.asar.unpacked", "out", "pokemon", "sprites.json"),
     path.join(process.cwd(), "public", "pokemon", "sprites.json"),
-    path.join(os.homedir(), ".dorothy", "sprites.json"),
+    path.join(os.homedir(), ".echelon", "sprites.json"),
   ];
   for (const p of candidates) {
     try {

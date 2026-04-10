@@ -73,7 +73,7 @@ describe('automation-handlers', () => {
     });
 
     it('returns stored automations', async () => {
-      writeTmpJson('.dorothy/automations.json', [
+      writeTmpJson('.echelon/automations.json', [
         { id: 'auto-1', name: 'Test Automation', enabled: true },
       ]);
 
@@ -105,7 +105,7 @@ describe('automation-handlers', () => {
 
       // Verify it was saved
       const automations = JSON.parse(
-        fs.readFileSync(path.join(tmpDir, '.dorothy', 'automations.json'), 'utf-8')
+        fs.readFileSync(path.join(tmpDir, '.echelon', 'automations.json'), 'utf-8')
       );
       expect(automations).toHaveLength(1);
       expect(automations[0].name).toBe('New Automation');
@@ -127,7 +127,7 @@ describe('automation-handlers', () => {
       expect(result.success).toBe(true);
 
       const automations = JSON.parse(
-        fs.readFileSync(path.join(tmpDir, '.dorothy', 'automations.json'), 'utf-8')
+        fs.readFileSync(path.join(tmpDir, '.echelon', 'automations.json'), 'utf-8')
       );
       expect(automations[0].schedule.type).toBe('cron');
       expect(automations[0].schedule.cron).toBe('0 9 * * 1-5');
@@ -147,7 +147,7 @@ describe('automation-handlers', () => {
       });
 
       const automations = JSON.parse(
-        fs.readFileSync(path.join(tmpDir, '.dorothy', 'automations.json'), 'utf-8')
+        fs.readFileSync(path.join(tmpDir, '.echelon', 'automations.json'), 'utf-8')
       );
       expect(automations[0].outputs).toHaveLength(3);
       expect(automations[0].outputs.map((o: { type: string }) => o.type)).toContain('telegram');
@@ -171,7 +171,7 @@ describe('automation-handlers', () => {
 
   describe('automation:update', () => {
     it('updates automation name and enabled state', async () => {
-      writeTmpJson('.dorothy/automations.json', [
+      writeTmpJson('.echelon/automations.json', [
         { id: 'upd-1', name: 'Original', enabled: true, createdAt: '2026-01-01', updatedAt: '2026-01-01',
           schedule: { type: 'interval', intervalMinutes: 60 }, source: { type: 'github', config: {} },
           trigger: { eventTypes: [], onNewItem: true }, agent: { enabled: false, prompt: '' }, outputs: [] },
@@ -186,14 +186,14 @@ describe('automation-handlers', () => {
       expect(result.success).toBe(true);
 
       const automations = JSON.parse(
-        fs.readFileSync(path.join(tmpDir, '.dorothy', 'automations.json'), 'utf-8')
+        fs.readFileSync(path.join(tmpDir, '.echelon', 'automations.json'), 'utf-8')
       );
       expect(automations[0].name).toBe('Updated Name');
       expect(automations[0].enabled).toBe(false);
     });
 
     it('returns error for non-existent automation', async () => {
-      writeTmpJson('.dorothy/automations.json', []);
+      writeTmpJson('.echelon/automations.json', []);
       await registerHandlers();
 
       const result = await invokeHandler('automation:update', 'missing', { name: 'X' }) as { success: boolean; error: string };
@@ -204,7 +204,7 @@ describe('automation-handlers', () => {
 
   describe('automation:delete', () => {
     it('removes automation from storage', async () => {
-      writeTmpJson('.dorothy/automations.json', [
+      writeTmpJson('.echelon/automations.json', [
         { id: 'del-1', name: 'Delete Me', enabled: true, schedule: { type: 'interval', intervalMinutes: 60 },
           source: { type: 'github', config: {} }, trigger: { eventTypes: [], onNewItem: true },
           agent: { enabled: false, prompt: '' }, outputs: [] },
@@ -215,13 +215,13 @@ describe('automation-handlers', () => {
       expect(result.success).toBe(true);
 
       const automations = JSON.parse(
-        fs.readFileSync(path.join(tmpDir, '.dorothy', 'automations.json'), 'utf-8')
+        fs.readFileSync(path.join(tmpDir, '.echelon', 'automations.json'), 'utf-8')
       );
       expect(automations).toHaveLength(0);
     });
 
     it('returns error for non-existent automation', async () => {
-      writeTmpJson('.dorothy/automations.json', []);
+      writeTmpJson('.echelon/automations.json', []);
       await registerHandlers();
 
       const result = await invokeHandler('automation:delete', 'nope') as { success: boolean; error: string };
@@ -232,12 +232,12 @@ describe('automation-handlers', () => {
 
   describe('automation:run', () => {
     it('runs automation script if it exists', async () => {
-      writeTmpJson('.dorothy/automations.json', [
+      writeTmpJson('.echelon/automations.json', [
         { id: 'run-1', name: 'Run Me', enabled: true, schedule: { type: 'interval', intervalMinutes: 60 },
           source: { type: 'github', config: {} }, trigger: { eventTypes: [], onNewItem: true },
           agent: { enabled: false, prompt: '' }, outputs: [] },
       ]);
-      const scriptsDir = path.join(tmpDir, '.dorothy', 'scripts');
+      const scriptsDir = path.join(tmpDir, '.echelon', 'scripts');
       fs.mkdirSync(scriptsDir, { recursive: true });
       fs.writeFileSync(path.join(scriptsDir, 'automation-run-1.sh'), '#!/bin/bash');
 
@@ -247,7 +247,7 @@ describe('automation-handlers', () => {
     });
 
     it('returns error when script not found', async () => {
-      writeTmpJson('.dorothy/automations.json', [
+      writeTmpJson('.echelon/automations.json', [
         { id: 'no-script', name: 'No Script', enabled: true, schedule: { type: 'interval', intervalMinutes: 60 },
           source: { type: 'github', config: {} }, trigger: { eventTypes: [], onNewItem: true },
           agent: { enabled: false, prompt: '' }, outputs: [] },
@@ -260,7 +260,7 @@ describe('automation-handlers', () => {
     });
 
     it('returns error for non-existent automation', async () => {
-      writeTmpJson('.dorothy/automations.json', []);
+      writeTmpJson('.echelon/automations.json', []);
       await registerHandlers();
 
       const result = await invokeHandler('automation:run', 'ghost') as { success: boolean; error: string };
@@ -278,7 +278,7 @@ describe('automation-handlers', () => {
     });
 
     it('parses runs from log markers', async () => {
-      const logsDir = path.join(tmpDir, '.dorothy', 'logs');
+      const logsDir = path.join(tmpDir, '.echelon', 'logs');
       fs.mkdirSync(logsDir, { recursive: true });
       fs.writeFileSync(path.join(logsDir, 'automation-parsed.log'), [
         '=== Automation started at 2026-01-01 09:00 ===',
@@ -301,7 +301,7 @@ describe('automation-handlers', () => {
     });
 
     it('detects running status when no completion marker', async () => {
-      const logsDir = path.join(tmpDir, '.dorothy', 'logs');
+      const logsDir = path.join(tmpDir, '.echelon', 'logs');
       fs.mkdirSync(logsDir, { recursive: true });
       fs.writeFileSync(path.join(logsDir, 'automation-running.log'), [
         '=== Automation started at 2026-01-01 09:00 ===',

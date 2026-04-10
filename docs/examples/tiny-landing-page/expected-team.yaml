@@ -1,0 +1,78 @@
+# Expected team for Acme Analytics landing page
+# Scope: Medium tier (~11 characters)
+# Theme: The Big Bang Theory (tbbt)
+#
+# Rationale: This is a frontend-focused project with no backend beyond
+# a contact form API route. Medium tier is appropriate -- the team needs
+# frontend, design, and quality roles but not database, data, or mobile
+# specialists.
+
+tier: medium
+theme: tbbt
+character_count: 11
+
+roster:
+  - archetype: ingestion-pm
+    character: penny
+    rationale: >
+      Reads the PRD, estimates scope as Medium, composes the roster,
+      and hands off to Leonard.
+
+  - archetype: user-handler
+    character: leonard-hofstadter
+    rationale: >
+      Runs the project. Assigns tasks, coordinates standups, manages
+      the review pipeline, and serves as merge authority.
+
+  - archetype: principal-architect
+    character: sheldon-cooper
+    rationale: >
+      Reviews architectural decisions (Next.js App Router structure,
+      component hierarchy, API route design).
+
+  - archetype: frontend-engineer
+    character: raj
+    rationale: >
+      Primary implementer. Builds all page sections, components, and
+      Tailwind styling. Aesthetically driven.
+
+  - archetype: ux-designer
+    character: emily-sweeney
+    rationale: >
+      Designs the visual layout, ensures responsive behavior, reviews
+      accessibility and mobile experience.
+
+  - archetype: code-reviewer
+    character: alex-jensen
+    rationale: >
+      Reviews all PRs for code quality, consistency, and maintainability.
+
+  - archetype: qa-lead
+    character: bernadette
+    rationale: >
+      Tests across browsers and devices. Validates Lighthouse scores.
+      Checks form submission flows.
+
+  - archetype: security-engineer
+    character: barry-kripke
+    rationale: >
+      Reviews the contact form API route for injection, CSRF, and
+      rate limiting. Validates Resend integration security.
+
+  - archetype: adversarial-reviewer
+    character: wil-wheaton
+    rationale: >
+      Stress-tests assumptions about the pricing table, form validation,
+      and edge cases in responsive layout.
+
+  - archetype: refinement-builder
+    character: leslie-winkle
+    rationale: >
+      Addresses review feedback from all gates. Makes the pragmatic
+      fixes needed to get tasks through review.
+
+  - archetype: devops-infrastructure
+    character: howard
+    rationale: >
+      Sets up Vercel deployment, preview environments, and any CI
+      needed for the project.

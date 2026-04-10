@@ -5,7 +5,7 @@ import * as os from "os";
 
 const API_PORT = 31415;
 const API_HOST = "127.0.0.1";
-const API_TOKEN_FILE = path.join(os.homedir(), ".dorothy", "api-token");
+const API_TOKEN_FILE = path.join(os.homedir(), ".echelon", "api-token");
 
 function readApiToken(): string | null {
   try {

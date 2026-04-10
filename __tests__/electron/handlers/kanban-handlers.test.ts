@@ -53,7 +53,7 @@ beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kanban-test-'));
 
   // Ensure data dir
-  const dataDir = path.join(tmpDir, '.dorothy');
+  const dataDir = path.join(tmpDir, '.echelon');
   fs.mkdirSync(dataDir, { recursive: true });
 
   mockDeps = {
@@ -73,11 +73,11 @@ afterEach(() => {
 });
 
 function writeKanbanFile(tasks: unknown[]): void {
-  fs.writeFileSync(path.join(tmpDir, '.dorothy', 'kanban-tasks.json'), JSON.stringify(tasks, null, 2));
+  fs.writeFileSync(path.join(tmpDir, '.echelon', 'kanban-tasks.json'), JSON.stringify(tasks, null, 2));
 }
 
 function readKanbanFile(): unknown[] {
-  return JSON.parse(fs.readFileSync(path.join(tmpDir, '.dorothy', 'kanban-tasks.json'), 'utf-8'));
+  return JSON.parse(fs.readFileSync(path.join(tmpDir, '.echelon', 'kanban-tasks.json'), 'utf-8'));
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────

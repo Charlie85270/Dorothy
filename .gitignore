@@ -17,8 +17,9 @@
 /.next/
 /out/
 
-# production
-/build
+# production / skill pipeline output
+/dist/
+build/out/
 
 # misc
 .DS_Store
@@ -60,3 +61,13 @@ mcp-world/dist
 electron/dist
 
 .idea
+
+# factor-echelon (absorbed from team-factory)
+*.tgz
+*.tar.gz
+test-results/
+.pnpm-store/
+secrets/
+*.key
+*.log
+logs/

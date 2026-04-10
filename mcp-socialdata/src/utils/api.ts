@@ -6,7 +6,7 @@ import * as os from "os";
 const SOCIALDATA_BASE = "api.socialdata.tools";
 
 function getApiKey(): string {
-  const settingsPath = path.join(os.homedir(), ".dorothy", "app-settings.json");
+  const settingsPath = path.join(os.homedir(), ".echelon", "app-settings.json");
   try {
     if (fs.existsSync(settingsPath)) {
       const settings = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));

@@ -1,5 +1,5 @@
 /**
- * Dorothy - Main Electron Entry Point
+ * Echelon - Main Electron Entry Point
  *
  * This file initializes and wires together all the modular components:
  * - Window management and protocol handling
@@ -102,8 +102,9 @@ import {
   isSuperAgent,
   getSuperAgent,
   ensureDataDir,
-  ensureDorothyClaudeMd,
+  ensureEchelonClaudeMd,
   migrateFromClaudeManager,
+  migrateFromDorothy,
 } from './utils';
 
 // ============== App Settings Management ==============
@@ -309,8 +310,8 @@ app.whenReady().then(async () => {
   // Ensure data directory exists
   ensureDataDir();
 
-  // Write Dorothy's CLAUDE.md to ~/.dorothy/ so all spawned agents can load it
-  ensureDorothyClaudeMd();
+  // Write Echelon's CLAUDE.md to ~/.echelon/ so all spawned agents can load it
+  ensureEchelonClaudeMd();
 
   // Install/update statusline script if enabled (ensures script is always up-to-date after app updates)
   // statusLineEnabled defaults to true for new users
@@ -325,7 +326,10 @@ app.whenReady().then(async () => {
     // ignore statusline errors on startup
   }
 
-  // Migrate data from ~/.claude-manager if it exists (rebrand migration)
+  // Migrate data from ~/.dorothy if it exists (Dorothy → Echelon rebrand)
+  migrateFromDorothy();
+
+  // Migrate data from ~/.claude-manager if it exists (legacy rebrand migration)
   migrateFromClaudeManager();
 
   // Load agents from disk

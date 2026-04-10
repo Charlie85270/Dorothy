@@ -24,7 +24,7 @@ export function registerSchedulerRoutes(app: RouteApp, ctx: RouteContext): void 
     }
 
     try {
-      const metadataPath = path.join(os.homedir(), '.dorothy', 'scheduler-metadata.json');
+      const metadataPath = path.join(os.homedir(), '.echelon', 'scheduler-metadata.json');
       let metadata: Record<string, Record<string, unknown>> = {};
       if (fs.existsSync(metadataPath)) {
         metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));

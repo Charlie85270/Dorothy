@@ -112,19 +112,19 @@ describe('mcp-orchestrator scheduler tools', () => {
 
     it('handles launchd plist file scanning', () => {
       const plistFiles = [
-        'com.dorothy.scheduler.task-abc.plist',
-        'com.dorothy.scheduler.task-def.plist',
+        'com.echelon.scheduler.task-abc.plist',
+        'com.echelon.scheduler.task-def.plist',
         'com.other.plist', // Should be skipped
       ];
 
       const relevant = plistFiles.filter(
-        f => f.startsWith('com.dorothy.scheduler.') && f.endsWith('.plist')
+        f => f.startsWith('com.echelon.scheduler.') && f.endsWith('.plist')
       );
       expect(relevant).toHaveLength(2);
 
       // Extract task IDs
       const ids = relevant.map(f =>
-        f.replace('com.dorothy.scheduler.', '').replace('.plist', '')
+        f.replace('com.echelon.scheduler.', '').replace('.plist', '')
       );
       expect(ids).toEqual(['task-abc', 'task-def']);
     });
@@ -231,7 +231,7 @@ echo "=== Task started ==="
 
     it('handles missing script file gracefully', () => {
       vi.mocked(fs.existsSync).mockReturnValue(false);
-      const scriptPath = '/home/user/.dorothy/scripts/task-1.sh';
+      const scriptPath = '/home/user/.echelon/scripts/task-1.sh';
       if (fs.existsSync(scriptPath)) {
         fs.unlinkSync(scriptPath);
       }

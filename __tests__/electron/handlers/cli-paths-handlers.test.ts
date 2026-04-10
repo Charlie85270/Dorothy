@@ -58,7 +58,7 @@ beforeEach(() => {
   vi.resetModules();
   handlers = new Map();
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cli-paths-test-'));
-  fs.mkdirSync(path.join(tmpDir, '.dorothy'), { recursive: true });
+  fs.mkdirSync(path.join(tmpDir, '.echelon'), { recursive: true });
 
   mockSettings = {};
 });
@@ -152,7 +152,7 @@ describe('cli-paths-handlers', () => {
       expect(mockSettings.cliPaths).toEqual(paths);
 
       // Verify config file was written
-      const configPath = path.join(tmpDir, '.dorothy', 'cli-paths.json');
+      const configPath = path.join(tmpDir, '.echelon', 'cli-paths.json');
       expect(fs.existsSync(configPath)).toBe(true);
       const saved = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
       expect(saved.claude).toBe('/opt/homebrew/bin/claude');
@@ -201,7 +201,7 @@ describe('getCLIPathsConfig', () => {
   });
 
   it('reads from config file when present', async () => {
-    const configPath = path.join(tmpDir, '.dorothy', 'cli-paths.json');
+    const configPath = path.join(tmpDir, '.echelon', 'cli-paths.json');
     fs.writeFileSync(configPath, JSON.stringify({
       claude: '/usr/local/bin/claude',
       gh: '/usr/local/bin/gh',

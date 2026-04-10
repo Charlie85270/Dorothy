@@ -12,14 +12,14 @@ set -euo pipefail
 INPUT=$(cat)
 
 # --- Extract rate_limits and write to file for Dorothy Usage page ---
-RATE_LIMITS_FILE="$HOME/.dorothy/rate-limits.json"
+RATE_LIMITS_FILE="$HOME/.echelon/rate-limits.json"
 RATE_LIMITS=$(echo "$INPUT" | jq -c '.rate_limits // empty' 2>/dev/null || true)
 if [ -n "$RATE_LIMITS" ] && [ "$RATE_LIMITS" != "null" ]; then
   echo "$RATE_LIMITS" > "$RATE_LIMITS_FILE" 2>/dev/null || true
 fi
 
 # --- Accumulate token stats per session for Dorothy Usage page ---
-TOKEN_STATS_FILE="$HOME/.dorothy/token-stats.json"
+TOKEN_STATS_FILE="$HOME/.echelon/token-stats.json"
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty' 2>/dev/null || true)
 if [ -n "$SESSION_ID" ]; then
   T_IN=$(echo "$INPUT" | jq -r '.context_window.total_input_tokens // 0' 2>/dev/null || echo 0)
@@ -36,7 +36,7 @@ if [ -n "$SESSION_ID" ]; then
   fi
 
   # Acquire lock to prevent concurrent read-modify-write races
-  LOCK_DIR="$HOME/.dorothy/token-stats.lock"
+  LOCK_DIR="$HOME/.echelon/token-stats.lock"
   LOCK_ACQUIRED=false
   for _i in $(seq 1 20); do
     if mkdir "$LOCK_DIR" 2>/dev/null; then
@@ -204,11 +204,11 @@ printf "\${DIM}↑%s ↓%s\${RESET}" "$IN_FMT" "$OUT_FMT"
 printf "\\n"
 `;
 
-const SCRIPT_PATH = path.join(os.homedir(), '.dorothy', 'statusline.sh');
+const SCRIPT_PATH = path.join(os.homedir(), '.echelon', 'statusline.sh');
 const CLAUDE_SETTINGS_PATH = path.join(os.homedir(), '.claude', 'settings.json');
 
 /**
- * Install the statusline script to ~/.dorothy/statusline.sh
+ * Install the statusline script to ~/.echelon/statusline.sh
  */
 function installScript(): void {
   const dir = path.dirname(SCRIPT_PATH);
@@ -219,7 +219,7 @@ function installScript(): void {
 }
 
 /**
- * Remove the statusline script from ~/.dorothy/statusline.sh
+ * Remove the statusline script from ~/.echelon/statusline.sh
  */
 function removeScript(): void {
   if (fs.existsSync(SCRIPT_PATH)) {
@@ -278,7 +278,7 @@ export function disableStatusLine(): void {
   removeScript();
 
   // Remove cached rate-limits data so Usage page no longer shows stale quota
-  const rateLimitsFile = path.join(os.homedir(), '.dorothy', 'rate-limits.json');
+  const rateLimitsFile = path.join(os.homedir(), '.echelon', 'rate-limits.json');
   if (fs.existsSync(rateLimitsFile)) {
     fs.unlinkSync(rateLimitsFile);
   }

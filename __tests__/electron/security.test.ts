@@ -56,7 +56,7 @@ describe('API Auth', () => {
 // ============================================================================
 
 describe('/api/local-file path restriction', () => {
-  const VAULT_DIR = path.join(os.homedir(), '.dorothy', 'vault');
+  const VAULT_DIR = path.join(os.homedir(), '.echelon', 'vault');
   const allowedDir = path.join(VAULT_DIR, 'attachments');
 
   function isPathAllowed(filePath: string): boolean {

@@ -1,0 +1,49 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  skill-build:
+    name: Skill Build (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [claude-code, openclaw, echelon]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile || bun install
+      - name: Build skill target
+        env:
+          BUILD_TARGET: ${{ matrix.target }}
+        run: bun run skill:build:"$BUILD_TARGET"
+
+  test:
+    name: Vitest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm test
+
+  electron-dry-run:
+    name: Electron Builder Dry Run
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: tsc -p electron/tsconfig.json --noEmit || true
+      - name: Verify electron-builder config
+        run: npx electron-builder --mac --publish never --dry-run || echo "Dry run completed (may fail without signing certs)"

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://biomejs.dev/schemas/1.9.0/schema.json",
+  "organizeImports": { "enabled": true },
+  "linter": {
+    "enabled": true,
+    "rules": { "recommended": true }
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "files": {
+    "include": [
+      "electron/**/*.ts",
+      "src/**/*.ts",
+      "src/**/*.tsx",
+      "build/**/*.ts"
+    ],
+    "ignore": [
+      "node_modules",
+      ".next",
+      "out",
+      "dist",
+      "release",
+      "electron/dist",
+      "build/out"
+    ]
+  }
+}

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, PanelRight } from 'lucide-react';
+import { ChevronDown, Loader2, PanelRight } from 'lucide-react';
 import type { AgentStatus } from '@/types/electron';
 import 'xterm/css/xterm.css';
 
@@ -77,7 +77,7 @@ export default function AgentTerminalDialog({
   }, [open, agent, initialPanel]);
 
   // Terminal hooks
-  const { terminalReady, terminalRef, xtermRef } = useAgentDialogTerminal({
+  const { terminalReady, terminalRef, xtermRef, isAtBottom, scrollToBottom } = useAgentDialogTerminal({
     open,
     agent,
     isFullscreen,
@@ -211,7 +211,7 @@ export default function AgentTerminalDialog({
                   <Loader2 className="w-6 h-6 animate-spin text-accent-cyan" />
                 </div>
               )}
-              {/* Sidebar toggle button (bottom-right of terminal) */}
+              {/* Sidebar toggle button (top-right of terminal) */}
               {!sidebarOpen && !isSuperAgentMode && (
                 <button
                   onClick={() => setSidebarOpen(true)}
@@ -219,6 +219,17 @@ export default function AgentTerminalDialog({
                   title="Show sidebar"
                 >
                   <PanelRight className="w-4 h-4" />
+                </button>
+              )}
+              {/* Scroll-to-bottom button — appears when user has scrolled up */}
+              {terminalReady && !isAtBottom && (
+                <button
+                  onClick={scrollToBottom}
+                  className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1 px-3 py-1 rounded bg-white/10 hover:bg-white/20 text-white/70 hover:text-white text-xs transition-colors z-10 shadow-lg"
+                  title="Scroll to bottom"
+                >
+                  <ChevronDown className="w-3.5 h-3.5" />
+                  Scroll to bottom
                 </button>
               )}
             </div>

@@ -178,7 +178,7 @@ export function registerAgentTools(server: McpServer): void {
     {
       id: z.string().describe("The agent ID"),
       prompt: z.string().describe("The task or instruction for the agent to work on"),
-      model: z.string().optional().describe("Optional model to use (e.g., 'sonnet', 'opus')"),
+      model: z.string().optional().describe("Optional model to use. Aliases: 'sonnet', 'opus', 'haiku', 'opusplan', 'sonnet[1m]' (1M context). Full IDs: 'claude-sonnet-4-6', 'claude-opus-4-6', 'claude-haiku-4-5-20251001'. Omit to use the agent's configured default."),
     },
     async ({ id, prompt, model }) => {
       try {
@@ -469,7 +469,7 @@ export function registerAgentTools(server: McpServer): void {
     {
       id: z.string().describe("The agent ID to delegate to"),
       prompt: z.string().describe("The task/instruction for the agent"),
-      model: z.string().optional().describe("Optional model to use (e.g., 'sonnet', 'opus')"),
+      model: z.string().optional().describe("Optional model to use. Aliases: 'sonnet', 'opus', 'haiku', 'opusplan', 'sonnet[1m]' (1M context). Full IDs: 'claude-sonnet-4-6', 'claude-opus-4-6', 'claude-haiku-4-5-20251001'. Omit to use the agent's configured default."),
       timeoutSeconds: z.number().optional().describe("Maximum time to wait in seconds (default: 300)"),
     },
     async ({ id, prompt, model, timeoutSeconds = 300 }) => {

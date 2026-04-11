@@ -426,14 +426,10 @@ export default function SkillsPage() {
                       <td style={COL_STYLES.status} className="px-4 py-3 text-right">
                         {installed ? (
                           <div className="inline-flex items-center gap-1">
-                            {isSkillInstalledOn(skill.name, 'claude') && (
-                              <ProviderBadge provider="claude" />
-                            )}
-                            {isSkillInstalledOn(skill.name, 'codex') && (
-                              <ProviderBadge provider="codex" />
-                            )}
-                            {isSkillInstalledOn(skill.name, 'gemini') && (
-                              <ProviderBadge provider="gemini" />
+                            {CLI_PROVIDER_IDS.map((pid) =>
+                              isSkillInstalledOn(skill.name, pid) ? (
+                                <ProviderBadge key={pid} provider={pid} />
+                              ) : null
                             )}
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary text-[10px] font-medium ml-1" style={{ borderRadius: 4 }}>
                               <Check className="w-2.5 h-2.5" />

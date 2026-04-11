@@ -215,6 +215,49 @@ describe('agent-routes', () => {
     });
   });
 
+  describe('POST /api/agents/:id/start', () => {
+    it('kills existing PTY before spawning a new one', async () => {
+      const existingPty = { kill: vi.fn() };
+      ptyProcesses.set('existing-pty', existingPty as any);
+      const agent = makeAgent({ id: 'a1', status: 'idle', ptyId: 'existing-pty' });
+      agents.set('a1', agent);
+
+      const app = makeRouteApp();
+      registerAgentRoutes(app, ctx);
+      const handler = findHandler(app, 'POST', 'start');
+
+      const sendJson = vi.fn();
+      await handler(makeReq({ params: { id: 'a1' }, body: { prompt: 'Do something' } }), sendJson, ctx);
+
+      expect(existingPty.kill).toHaveBeenCalled();
+      expect(ptyProcesses.has('existing-pty')).toBe(false);
+      expect(sendJson).toHaveBeenCalledWith({ success: true, agent: { id: 'a1', status: 'running' } });
+    });
+
+    it('transitions waiting→error when PTY exits while agent is waiting', async () => {
+      const agent = makeAgent({ id: 'a1', status: 'idle' });
+      agents.set('a1', agent);
+
+      const app = makeRouteApp();
+      registerAgentRoutes(app, ctx);
+      const handler = findHandler(app, 'POST', 'start');
+
+      const sendJson = vi.fn();
+      await handler(makeReq({ params: { id: 'a1' }, body: { prompt: 'Do something' } }), sendJson, ctx);
+
+      // Simulate status being set to 'waiting' by a hook while the PTY is running
+      agent.status = 'waiting';
+
+      // Simulate PTY exit
+      const exitHandler = mockPtyProcess.onExit.mock.calls[0][0] as (args: { exitCode: number }) => void;
+      exitHandler({ exitCode: 1 });
+
+      // After the 1500ms delay, status should become 'error' not stay 'waiting'
+      await new Promise(r => setTimeout(r, 1600));
+      expect(agent.status).toBe('error');
+    });
+  });
+
   describe('POST /api/agents/:id/message', () => {
     it('sends message to agent PTY', async () => {
       const mockPty = { write: vi.fn() };
@@ -233,22 +276,26 @@ describe('agent-routes', () => {
       expect(sendJson).toHaveBeenCalledWith({ success: true });
     });
 
-    it('initializes PTY if not present', async () => {
-      const mockPty = { write: vi.fn() };
-      const agent = makeAgent({ id: 'a1', status: 'waiting' });
+    it('auto-respawns PTY with message as prompt when PTY is missing', async () => {
+      const agent = makeAgent({ id: 'a1', status: 'waiting', projectPath: '/test/project' });
       agents.set('a1', agent);
-
-      // initAgentPtyCallback returns 'new-pty-id', so set up that PTY
-      ptyProcesses.set('new-pty-id', mockPty as any);
 
       const app = makeRouteApp();
       registerAgentRoutes(app, ctx);
       const handler = findHandler(app, 'POST', 'message');
 
       const sendJson = vi.fn();
-      await handler(makeReq({ params: { id: 'a1' }, body: { message: 'hello' } }), sendJson, ctx);
+      await handler(makeReq({ params: { id: 'a1' }, body: { message: 'continue the task' } }), sendJson, ctx);
 
-      expect(ctx.initAgentPtyCallback).toHaveBeenCalledWith(agent);
+      // Should NOT call the legacy initAgentPtyCallback (bare bash shell)
+      expect(ctx.initAgentPtyCallback).not.toHaveBeenCalled();
+      // Should have spawned a new one-shot PTY
+      const pty = await import('node-pty');
+      expect(pty.spawn).toHaveBeenCalled();
+      // Agent should be running and PTY registered
+      expect(agent.status).toBe('running');
+      expect(agent.ptyId).toBe('test-uuid');
+      expect(ptyProcesses.has('test-uuid')).toBe(true);
       expect(sendJson).toHaveBeenCalledWith({ success: true });
     });
   });

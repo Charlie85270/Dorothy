@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as pty from 'node-pty';
 import { app } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
-import { agents, saveAgents } from '../../core/agent-manager';
+import { agents, saveAgents, killStalePty } from '../../core/agent-manager';
 import { ptyProcesses, writeProgrammaticInput } from '../../core/pty-manager';
 import { buildFullPath } from '../../utils/path-builder';
 import { AgentStatus, AgentCharacter } from '../../types';
@@ -162,7 +162,11 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       return;
     }
 
-    const workingDir = (agent.worktreePath || agent.projectPath).replace(/'/g, "'\\''");
+    // Raw cwd for pty.spawn, shell-escaped form for the `cd` command. These
+    // must be separate — passing the shell-escaped form to pty.spawn would
+    // break when the path legitimately contains a single quote.
+    const rawWorkingDir = agent.worktreePath || agent.projectPath;
+    const workingDir = rawWorkingDir.replace(/'/g, "'\\''");
     let command = `cd '${workingDir}' && claude`;
 
     const isAutomationAgent = agent.name?.toLowerCase().includes('automation:');
@@ -227,7 +231,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       name: 'xterm-256color',
       cols: 120,
       rows: 40,
-      cwd: workingDir,
+      cwd: rawWorkingDir,
       env: {
         ...process.env,
         PATH: fullPath,
@@ -242,6 +246,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     ptyProcesses.set(ptyId, ptyProcess);
 
     agent.ptyId = ptyId;
+    agent.ptyCwd = rawWorkingDir;
     agent.status = 'running';
     agent.currentTask = prompt;
     agent.output = [];
@@ -324,12 +329,18 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       return;
     }
 
+    // BUG 4 guard: if the agent's worktreePath changed after the PTY was
+    // spawned, the existing PTY is stuck in the wrong cwd. Kill it so the
+    // reconnect path below spawns fresh with the correct working directory.
+    killStalePty(agent);
+
     if (!agent.ptyId || !ptyProcesses.has(agent.ptyId)) {
       // No live PTY — the claude process exited (e.g. crashed while 'waiting').
       // Auto-respawn: start a fresh one-shot claude session using the message
       // as the prompt, identical to the /start path.  This ensures send_message
       // and delegate_task reconnect transparently instead of timing out.
-      const workingDir = (agent.worktreePath || agent.projectPath).replace(/'/g, "'\\''");
+      const rawWorkingDir = agent.worktreePath || agent.projectPath;
+      const workingDir = rawWorkingDir.replace(/'/g, "'\\''");
       const effectiveMode = agent.permissionMode ?? (agent.skipPermissions ? 'auto' : 'normal');
       let reconnectCmd = `cd '${workingDir}' && claude`;
       if (effectiveMode === 'auto' || effectiveMode === 'bypass') {
@@ -343,7 +354,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
         name: 'xterm-256color',
         cols: 120,
         rows: 40,
-        cwd: workingDir,
+        cwd: rawWorkingDir,
         env: {
           ...process.env as { [key: string]: string },
           PATH: reconnectPath,
@@ -355,6 +366,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       const reconnectPtyId = uuidv4();
       ptyProcesses.set(reconnectPtyId, reconnectPty);
       agent.ptyId = reconnectPtyId;
+      agent.ptyCwd = rawWorkingDir;
       agent.status = 'running';
       agent.currentTask = message.slice(0, 100);
       agent.lastActivity = new Date().toISOString();

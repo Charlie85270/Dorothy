@@ -25,6 +25,7 @@ vi.mock('../../../../electron/core/agent-manager', () => ({
   agents: new Map(),
   saveAgents: vi.fn(),
   initAgentPty: vi.fn(),
+  killStalePty: vi.fn(),
 }));
 
 vi.mock('../../../../electron/core/pty-manager', () => ({
@@ -37,7 +38,7 @@ vi.mock('../../../../electron/utils/path-builder', () => ({
 }));
 
 import { registerAgentRoutes } from '../../../../electron/services/api-routes/agent-routes';
-import { agents, saveAgents } from '../../../../electron/core/agent-manager';
+import { agents, saveAgents, killStalePty } from '../../../../electron/core/agent-manager';
 import { ptyProcesses, writeProgrammaticInput } from '../../../../electron/core/pty-manager';
 import { RouteApp, RouteContext, RouteRequest, SendJson } from '../../../../electron/services/api-routes/types';
 import { AgentStatus, AppSettings } from '../../../../electron/types';
@@ -85,6 +86,7 @@ beforeEach(() => {
   agents.clear();
   ptyProcesses.clear();
   vi.mocked(saveAgents).mockClear();
+  vi.mocked(killStalePty).mockClear();
   mockPtyProcess.onData.mockClear();
   mockPtyProcess.onExit.mockClear();
   mockPtyProcess.kill.mockClear();
@@ -297,6 +299,85 @@ describe('agent-routes', () => {
       expect(agent.ptyId).toBe('test-uuid');
       expect(ptyProcesses.has('test-uuid')).toBe(true);
       expect(sendJson).toHaveBeenCalledWith({ success: true });
+    });
+
+    it('BUG 4: calls killStalePty before reusing existing PTY', async () => {
+      const mockPty = { write: vi.fn() };
+      ptyProcesses.set('pty-1', mockPty as any);
+      const agent = makeAgent({
+        id: 'a1',
+        status: 'running',
+        ptyId: 'pty-1',
+        projectPath: '/test/project',
+        worktreePath: '/test/project/.worktrees/feat/backend',
+        ptyCwd: '/test/project/.worktrees/feat/backend',
+      });
+      agents.set('a1', agent);
+
+      const app = makeRouteApp();
+      registerAgentRoutes(app, ctx);
+      const handler = findHandler(app, 'POST', 'message');
+
+      await handler(makeReq({ params: { id: 'a1' }, body: { message: 'hi' } }), vi.fn(), ctx);
+
+      // killStalePty must be called on every /message so stale cwd is caught
+      expect(killStalePty).toHaveBeenCalledWith(agent);
+    });
+
+    it('BUG 4: reconnect path records worktreePath as ptyCwd', async () => {
+      const agent = makeAgent({
+        id: 'a1',
+        status: 'waiting',
+        projectPath: '/test/project',
+        worktreePath: '/test/project/.worktrees/feat/backend',
+      });
+      agents.set('a1', agent);
+
+      const app = makeRouteApp();
+      registerAgentRoutes(app, ctx);
+      const handler = findHandler(app, 'POST', 'message');
+
+      await handler(makeReq({ params: { id: 'a1' }, body: { message: 'go' } }), vi.fn(), ctx);
+
+      // ptyCwd must match the worktree path — this is the cwd bash/claude
+      // actually inherits from pty.spawn. Without it, killStalePty can't
+      // detect a later worktree change.
+      expect(agent.ptyCwd).toBe('/test/project/.worktrees/feat/backend');
+
+      // pty.spawn must receive the raw path (not the shell-escaped version)
+      // so it works for paths that legitimately contain a single quote.
+      const pty = await import('node-pty');
+      expect(pty.spawn).toHaveBeenCalled();
+      const spawnOpts = (pty.spawn as any).mock.calls.at(-1)[2];
+      expect(spawnOpts.cwd).toBe('/test/project/.worktrees/feat/backend');
+    });
+  });
+
+  describe('BUG 4 cwd invariants', () => {
+    it('POST /start uses worktreePath as raw spawn cwd and records ptyCwd', async () => {
+      const agent = makeAgent({
+        id: 'a1',
+        status: 'idle',
+        projectPath: '/test/project',
+        worktreePath: '/test/project/.worktrees/feat/backend',
+      });
+      agents.set('a1', agent);
+
+      const app = makeRouteApp();
+      registerAgentRoutes(app, ctx);
+      const handler = findHandler(app, 'POST', 'start');
+
+      await handler(makeReq({ params: { id: 'a1' }, body: { prompt: 'work' } }), vi.fn(), ctx);
+
+      // ptyCwd must match the logical worktree path so killStalePty has
+      // ground truth to compare against when worktreePath later changes.
+      expect(agent.ptyCwd).toBe('/test/project/.worktrees/feat/backend');
+
+      // pty.spawn must receive the raw (non-shell-escaped) worktree path.
+      // Passing the escaped form would break paths containing single quotes.
+      const pty = await import('node-pty');
+      const spawnOpts = (pty.spawn as any).mock.calls.at(-1)[2];
+      expect(spawnOpts.cwd).toBe('/test/project/.worktrees/feat/backend');
     });
   });
 

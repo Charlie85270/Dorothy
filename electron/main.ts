@@ -37,6 +37,7 @@ import {
   handleStatusChangeNotification,
   getSuperAgentOutputBuffer,
   clearSuperAgentOutputBuffer,
+  killStalePty,
 } from './core/agent-manager';
 
 import {
@@ -460,6 +461,7 @@ app.whenReady().then(async () => {
         output: [],
         lastActivity: new Date().toISOString(),
         ptyId,
+        ptyCwd: cwd,
         character: config.character || 'robot',
         name: config.name || `Agent ${id.slice(0, 4)}`,
         permissionMode: config.permissionMode || 'auto',
@@ -517,6 +519,9 @@ app.whenReady().then(async () => {
     startAgent: async (agentId, prompt) => {
       const agent = agents.get(agentId);
       if (!agent) throw new Error('Agent not found');
+
+      // BUG 4 guard: kill stale PTY if worktreePath changed after spawn.
+      killStalePty(agent);
 
       // Initialize PTY if needed
       if (!agent.ptyId || !ptyProcesses.has(agent.ptyId)) {

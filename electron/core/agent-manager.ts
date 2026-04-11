@@ -32,6 +32,36 @@ export function clearSuperAgentOutputBuffer() {
   superAgentOutputBuffer = [];
 }
 
+/**
+ * Kill the agent's PTY if its recorded cwd no longer matches the agent's
+ * current logical working directory (worktreePath ?? projectPath). Returns
+ * true if the PTY was killed (caller should respawn before writing to it).
+ *
+ * This prevents the BUG 4 scenario where an agent has a worktree added
+ * after its PTY was created: the running PTY keeps its old cwd, so
+ * subsequent messages land in the main workspace instead of the worktree.
+ */
+export function killStalePty(agent: AgentStatus): boolean {
+  if (!agent.ptyId) return false;
+  const expectedCwd = agent.worktreePath || agent.projectPath;
+  if (agent.ptyCwd === expectedCwd) return false;
+  const existing = ptyProcesses.get(agent.ptyId);
+  if (existing) {
+    try {
+      existing.kill();
+    } catch (err) {
+      console.warn(`Failed to kill stale PTY for agent ${agent.id}:`, err);
+    }
+    ptyProcesses.delete(agent.ptyId);
+  }
+  console.log(
+    `Killed stale PTY for agent ${agent.id}: ptyCwd=${agent.ptyCwd} expected=${expectedCwd}`
+  );
+  agent.ptyId = undefined;
+  agent.ptyCwd = undefined;
+  return true;
+}
+
 const previousAgentStatus: Map<string, string> = new Map();
 
 const pendingStatusChanges: Map<string, {
@@ -211,6 +241,7 @@ export function loadAgents() {
 
       agent.status = 'idle';
       agent.ptyId = undefined;
+      agent.ptyCwd = undefined;
 
       // Migrate legacy skipPermissions boolean → permissionMode
       if (!agent.permissionMode) {
@@ -312,6 +343,7 @@ export async function initAgentPty(
 
   const ptyId = uuidv4();
   ptyProcesses.set(ptyId, ptyProcess);
+  agent.ptyCwd = cwd;
 
   ptyProcess.onData((data) => {
     const agentData = agents.get(agent.id);

@@ -4,7 +4,7 @@ import { App as SlackApp, LogLevel } from '@slack/bolt';
 import { AgentStatus, AppSettings } from '../types';
 import { SLACK_CHARACTER_FACES } from '../constants';
 import { formatSlackAgentStatus, isSuperAgent, getSuperAgent, getSuperAgentInstructions } from '../utils';
-import { agents, saveAgents, initAgentPty } from '../core/agent-manager';
+import { agents, saveAgents, initAgentPty, killStalePty } from '../core/agent-manager';
 import { ptyProcesses, writeProgrammaticInput } from '../core/pty-manager';
 import { getMainWindow } from '../core/window-manager';
 import { app } from 'electron';
@@ -441,6 +441,10 @@ export async function handleSlackCommand(
     try {
       const workingPath = (agent.worktreePath || agent.projectPath).replace(/'/g, "'\\''");
 
+      // BUG 4 guard: if worktreePath changed after PTY spawn, the running
+      // PTY is in the wrong cwd. Kill it so initAgentPty respawns correctly.
+      killStalePty(agent);
+
       if (!agent.ptyId || !ptyProcesses.has(agent.ptyId)) {
         const ptyId = await initAgentPtyWithCallbacks(agent);
         agent.ptyId = ptyId;
@@ -531,6 +535,10 @@ export async function sendToSuperAgentFromSlack(
   const sanitizedMessage = message.replace(/\r?\n/g, ' ').trim();
 
   try {
+    // BUG 4 guard: if worktreePath changed after PTY spawn, the existing
+    // PTY is stuck in the wrong cwd. Kill it so initAgentPty respawns.
+    killStalePty(superAgent);
+
     // Initialize PTY if needed
     if (!superAgent.ptyId || !ptyProcesses.has(superAgent.ptyId)) {
       const ptyId = await initAgentPtyWithCallbacks(superAgent);

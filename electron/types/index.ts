@@ -34,6 +34,9 @@ export interface AgentStatus {
   lastActivity: string;
   error?: string;
   ptyId?: string;
+  /** CWD the active PTY was spawned with. Used to detect stale PTYs when
+   *  the agent's worktreePath changes after the PTY was started. Not persisted. */
+  ptyCwd?: string;
   character?: AgentCharacter;
   name?: string;
   pathMissing?: boolean;

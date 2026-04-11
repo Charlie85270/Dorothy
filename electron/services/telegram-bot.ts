@@ -9,6 +9,7 @@ import { TG_CHARACTER_FACES, TELEGRAM_DOWNLOADS_DIR } from '../constants';
 import { isSuperAgent, formatAgentStatus, getSuperAgentInstructions, getSuperAgentInstructionsPath, getTelegramInstructions, getTelegramInstructionsPath } from '../utils';
 import { getProvider } from '../providers';
 import { writeProgrammaticInput } from '../core/pty-manager';
+import { killStalePty } from '../core/agent-manager';
 
 // ============== Telegram Bot State ==============
 let telegramBot: TelegramBot | null = null;
@@ -688,6 +689,9 @@ export function initTelegramBot() {
         // Start the agent using the existing IPC mechanism
         const workingPath = (agent.worktreePath || agent.projectPath).replace(/'/g, "'\\''");
 
+        // BUG 4 guard: kill PTY if its cwd is stale before reusing it.
+        killStalePty(agent);
+
         // Initialize PTY if needed
         if (!agent.ptyId || !ptyProcesses.has(agent.ptyId)) {
           const ptyId = await initAgentPty(agent);
@@ -1173,6 +1177,10 @@ export async function sendToSuperAgent(chatId: string, message: string, attached
   const sanitizedMessage = fullMessage.replace(/\r?\n/g, ' ').trim();
 
   try {
+    // BUG 4 guard: if worktreePath changed since the PTY was spawned, its
+    // cwd is stale — kill it so initAgentPty respawns in the right directory.
+    killStalePty(superAgent);
+
     // Initialize PTY if needed
     if (!superAgent.ptyId || !ptyProcesses.has(superAgent.ptyId)) {
       const ptyId = await initAgentPty(superAgent);

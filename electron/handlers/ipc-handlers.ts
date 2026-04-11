@@ -19,6 +19,7 @@ import { buildFullPath } from '../utils/path-builder';
 import { decodeProjectPath } from '../utils/decode-project-path';
 import { getProvider, getAllProviders } from '../providers';
 import { writeProgrammaticInput } from '../core/pty-manager';
+import { killStalePty } from '../core/agent-manager';
 import { extractStatusLine } from '../utils/ansi';
 import { scheduleTick } from '../utils/agents-tick';
 
@@ -367,6 +368,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       output: [],
       lastActivity: new Date().toISOString(),
       ptyId,
+      ptyCwd: cwd,
       character: config.character || 'robot',
       name: config.name || `Agent ${id.slice(0, 4)}`,
       permissionMode: config.permissionMode || 'normal',
@@ -448,6 +450,11 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       throw new Error(`Invalid model name: ${options.model}`);
     }
 
+    // If the agent's worktreePath changed after the PTY was spawned, the
+    // existing PTY is stuck in the wrong cwd. Kill it so initAgentPty below
+    // respawns with the correct working directory.
+    killStalePty(agent);
+
     // Initialize PTY if agent was restored from disk and doesn't have one
     let ptyJustCreated = false;
     if (!agent.ptyId || !ptyProcesses.has(agent.ptyId)) {
@@ -528,6 +535,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       const newPtyId = uuidv4();
       ptyProcesses.set(newPtyId, newPty);
       agent.ptyId = newPtyId;
+      agent.ptyCwd = cwd;
 
       // Re-attach event handlers
       newPty.onData((data) => {
@@ -775,6 +783,12 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
           }
           agent.worktreePath = worktreePath;
           agent.branchName = branchName;
+          // BUG 4: the running PTY (if any) was spawned with cwd=projectPath.
+          // It must be killed so the next agent:start respawns in the new
+          // worktree directory — otherwise writes leak into the main workspace.
+          killStalePty(agent);
+          agent.status = 'idle';
+          agent.currentTask = undefined;
         } catch (err) {
           console.error('Failed to create worktree on update:', err);
           return { success: false, error: 'Failed to create git worktree' };

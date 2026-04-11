@@ -211,6 +211,18 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     const shell = '/bin/bash';
     const fullPath = buildFullPath();
 
+    // Kill any existing PTY for this agent before spawning a new one.
+    // Agents started via the API use one-shot PTYs that stay alive (the claude
+    // process waits at a prompt after each task). Without this, every /start call
+    // orphans the previous PTY+claude process, eventually exhausting resources.
+    if (agent.ptyId) {
+      const existingPty = ptyProcesses.get(agent.ptyId);
+      if (existingPty) {
+        existingPty.kill();
+        ptyProcesses.delete(agent.ptyId);
+      }
+    }
+
     const ptyProcess = pty.spawn(shell, ['-l', '-c', command], {
       name: 'xterm-256color',
       cols: 120,
@@ -256,6 +268,11 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       setTimeout(() => {
         if (agent.status === 'running') {
           agent.status = exitCode === 0 ? 'completed' : 'error';
+        } else if (agent.status === 'waiting') {
+          // PTY exited while agent was waiting for input — the claude process
+          // crashed. Mark as error so /wait is unblocked and the orchestrator
+          // can retry rather than hanging until timeout.
+          agent.status = 'error';
         }
         if (exitCode !== 0) {
           agent.error = `Process exited with code ${exitCode}`;
@@ -308,8 +325,67 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     }
 
     if (!agent.ptyId || !ptyProcesses.has(agent.ptyId)) {
-      const ptyId = await ctx.initAgentPtyCallback(agent);
-      agent.ptyId = ptyId;
+      // No live PTY — the claude process exited (e.g. crashed while 'waiting').
+      // Auto-respawn: start a fresh one-shot claude session using the message
+      // as the prompt, identical to the /start path.  This ensures send_message
+      // and delegate_task reconnect transparently instead of timing out.
+      const workingDir = (agent.worktreePath || agent.projectPath).replace(/'/g, "'\\''");
+      const effectiveMode = agent.permissionMode ?? (agent.skipPermissions ? 'auto' : 'normal');
+      let reconnectCmd = `cd '${workingDir}' && claude`;
+      if (effectiveMode === 'auto' || effectiveMode === 'bypass') {
+        reconnectCmd += ' --dangerously-skip-permissions';
+      }
+      reconnectCmd += ` '${message.replace(/'/g, "'\\''")}'`;
+
+      const reconnectShell = '/bin/bash';
+      const reconnectPath = buildFullPath();
+      const reconnectPty = pty.spawn(reconnectShell, ['-l', '-c', reconnectCmd], {
+        name: 'xterm-256color',
+        cols: 120,
+        rows: 40,
+        cwd: workingDir,
+        env: {
+          ...process.env as { [key: string]: string },
+          PATH: reconnectPath,
+          CLAUDE_AGENT_ID: agent.id,
+          CLAUDE_PROJECT_PATH: agent.projectPath,
+        },
+      });
+
+      const reconnectPtyId = uuidv4();
+      ptyProcesses.set(reconnectPtyId, reconnectPty);
+      agent.ptyId = reconnectPtyId;
+      agent.status = 'running';
+      agent.currentTask = message.slice(0, 100);
+      agent.lastActivity = new Date().toISOString();
+
+      reconnectPty.onData((data: string) => {
+        agent.output.push(data);
+        if (agent.output.length > 10000) agent.output = agent.output.slice(-5000);
+        agent.lastActivity = new Date().toISOString();
+        if (ctx.mainWindow && !ctx.mainWindow.isDestroyed()) {
+          ctx.mainWindow.webContents.send('agent:output', { agentId: agent.id, data });
+        }
+      });
+
+      reconnectPty.onExit(({ exitCode }) => {
+        setTimeout(() => {
+          if (agent.status === 'running') {
+            agent.status = exitCode === 0 ? 'completed' : 'error';
+          } else if (agent.status === 'waiting') {
+            agent.status = 'error';
+          }
+          if (exitCode !== 0) agent.error = `Process exited with code ${exitCode}`;
+          agent.lastActivity = new Date().toISOString();
+          ptyProcesses.delete(reconnectPtyId);
+          saveAgents();
+          ctx.agentStatusEmitter.emit(`status:${agent.id}`);
+        }, 1500);
+      });
+
+      saveAgents();
+      sendJson({ success: true });
+      return;
     }
 
     const ptyProcess = ptyProcesses.get(agent.ptyId);

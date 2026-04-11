@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import { Loader2 } from 'lucide-react';
 import { isElectron } from '@/hooks/useElectron';
+import { useClaude } from '@/hooks/useClaude';
 import SchedulerCalendar from '@/components/SchedulerCalendar';
 import { useToast, useScheduledTasks, useTaskForm, useEditForm, useTaskLogs } from './hooks';
 import {
@@ -21,6 +22,9 @@ export default function RecurringTasksPage() {
   const taskForm = useTaskForm(scheduled.agents, scheduled.loadTasks, showToast);
   const editForm = useEditForm(scheduled.loadTasks, showToast);
   const taskLogs = useTaskLogs();
+  const { data: claudeData } = useClaude();
+  const availableSkills = claudeData?.skills?.map(s => s.name) ?? [];
+  const defaultProvider = claudeData?.settings?.defaultProvider ?? 'claude';
 
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
 
@@ -107,6 +111,8 @@ export default function RecurringTasksPage() {
         isCreating={taskForm.isCreating}
         createError={taskForm.createError}
         onSubmit={taskForm.handleCreateTask}
+        availableSkills={availableSkills}
+        defaultProvider={defaultProvider}
       />
 
       <EditTaskModal

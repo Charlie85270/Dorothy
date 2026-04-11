@@ -26,6 +26,7 @@ interface TokenStats {
   sessionCount: number;
   modelTokens?: Record<string, { in: number; out: number }>;
   dailyCosts?: Record<string, { cost: number; extraCost: number }>;
+  providerTotals?: Record<string, { in: number; out: number; cost: number; sessions: number }>;
 }
 
 interface ClaudeData {

@@ -10,10 +10,12 @@ import {
   Pencil,
   Trash2,
   Loader2,
+  Cpu,
 } from 'lucide-react';
 import { SlackIcon } from '@/components/Settings/SlackIcon';
 import type { ScheduledTask } from '../types';
 import { formatNextRun } from '../utils';
+import { getProviderDef } from '@/lib/providers';
 
 interface TaskCardProps {
   task: ScheduledTask;
@@ -82,6 +84,28 @@ export function TaskCard({
               <div className="flex items-center gap-1">
                 <Bot className="w-3 h-3" />
                 {task.agentName}
+              </div>
+            )}
+
+            {task.provider && task.provider !== 'claude' && (() => {
+              const def = getProviderDef(task.provider);
+              if (!def) return null;
+              return (
+                <div className="flex items-center gap-1">
+                  {def.icon.type === 'image' && <img src={def.icon.src} alt={def.label} className="w-3 h-3 object-contain" />}
+                  {def.icon.type === 'svg-gemini' && <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 text-black"><path d="M12 0C12 6.627 6.627 12 0 12c6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12-6.627 0-12-5.373-12-12Z" /></svg>}
+                  {def.icon.type === 'cpu' && <Cpu className="w-3 h-3 text-cyan-500" />}
+                  {(def.icon.type === 'text') && <span className="font-bold text-[9px]">{def.icon.content}</span>}
+                  {def.label}
+                </div>
+              );
+            })()}
+
+            {task.skills && task.skills.length > 0 && (
+              <div className="flex items-center gap-1">
+                <span className="px-1.5 py-0.5 bg-accent-purple/20 text-accent-purple rounded text-[10px] font-medium">
+                  {task.skills.length} skill{task.skills.length !== 1 ? 's' : ''}
+                </span>
               </div>
             )}
 

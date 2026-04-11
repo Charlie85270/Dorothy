@@ -61,6 +61,7 @@ interface SchedulerTaskMetadata {
   agentId?: string;
   agentName?: string;
   provider?: AgentProvider;
+  skills?: string[];
   notifications: {
     telegram: boolean;
     slack: boolean;
@@ -308,7 +309,8 @@ async function createLaunchdJob(
   projectPath: string,
   prompt: string,
   autonomous: boolean,
-  provider: AgentProvider = 'claude'
+  provider: AgentProvider = 'claude',
+  skills?: string[]
 ): Promise<void> {
   const claudePath = await getCLIPath(provider);
   const claudeDir = path.dirname(claudePath);
@@ -346,6 +348,7 @@ async function createLaunchdJob(
     mcpConfigPath,
     logPath,
     homeDir,
+    skills,
   });
 
   fs.writeFileSync(scriptPath, scriptContent);
@@ -434,7 +437,8 @@ async function createCronJob(
   projectPath: string,
   prompt: string,
   autonomous: boolean,
-  provider: AgentProvider = 'claude'
+  provider: AgentProvider = 'claude',
+  skills?: string[]
 ): Promise<void> {
   const claudePath = await getCLIPath(provider);
   const claudeDir = path.dirname(claudePath);
@@ -468,6 +472,7 @@ async function createCronJob(
     mcpConfigPath,
     logPath,
     homeDir,
+    skills,
   });
 
   fs.writeFileSync(scriptPath, scriptContent);
@@ -823,6 +828,7 @@ export function registerSchedulerHandlers(deps: SchedulerDeps): void {
     agentId?: string;
     agentName?: string;
     provider?: AgentProvider;
+    skills?: string[];
     autonomous?: boolean;
     worktree?: { enabled: boolean; branchPrefix?: string };
     notifications?: { telegram: boolean; slack: boolean };
@@ -872,6 +878,7 @@ export function registerSchedulerHandlers(deps: SchedulerDeps): void {
         agentId: config.agentId,
         agentName: config.agentName,
         provider: taskProvider,
+        skills: config.skills,
         notifications: config.notifications || { telegram: false, slack: false },
         createdAt: new Date().toISOString(),
       };
@@ -879,9 +886,9 @@ export function registerSchedulerHandlers(deps: SchedulerDeps): void {
 
       // Create platform-specific job
       if (os.platform() === 'darwin') {
-        await createLaunchdJob(taskId, schedule, config.projectPath, config.prompt, autonomous, taskProvider);
+        await createLaunchdJob(taskId, schedule, config.projectPath, config.prompt, autonomous, taskProvider, config.skills);
       } else {
-        await createCronJob(taskId, schedule, config.projectPath, config.prompt, autonomous, taskProvider);
+        await createCronJob(taskId, schedule, config.projectPath, config.prompt, autonomous, taskProvider, config.skills);
       }
 
       return { success: true, taskId };

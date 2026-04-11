@@ -43,6 +43,7 @@ interface Automation {
     prompt: string;
     model?: string;
     provider?: AgentProvider;
+    skills?: string[];
   };
   outputs: Array<{
     type: string;
@@ -271,6 +272,7 @@ async function createAutomationLaunchdJob(automation: Automation): Promise<void>
     mcpConfigPath,
     logPath,
     homeDir,
+    skills: automation.agent.skills,
   });
 
   fs.writeFileSync(scriptPath, scriptContent);
@@ -391,6 +393,7 @@ export function registerAutomationHandlers(): void {
     agentPrompt?: string;
     agentProjectPath?: string;
     agentProvider?: AgentProvider;
+    agentSkills?: string[];
     outputTelegram?: boolean;
     outputSlack?: boolean;
     outputGitHubComment?: boolean;
@@ -455,6 +458,7 @@ export function registerAutomationHandlers(): void {
           provider: (params.agentProvider && isValidProvider(params.agentProvider))
             ? params.agentProvider
             : getDefaultProvider(),
+          skills: params.agentSkills,
         },
         outputs,
       };

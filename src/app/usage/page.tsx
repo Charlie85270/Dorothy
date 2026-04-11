@@ -20,12 +20,10 @@ import {
   Timer,
   Minus,
   FolderOpen,
+  Cpu,
 } from 'lucide-react';
 import { useClaude } from '@/hooks/useClaude';
-// TODO: Usage tracking is Claude-native — useClaude() reads Claude Code's JSONL usage files.
-// Other providers (codex, gemini, openrouter, deepseek, etc.) don't produce these files,
-// so their token/cost data is not tracked here. A future enhancement would read per-provider
-// usage logs if those CLIs expose them.
+import { getProviderDef } from '@/lib/providers';
 
 // Token pricing per million tokens (MTok)
 const MODEL_PRICING: Record<string, {
@@ -1176,6 +1174,81 @@ export default function UsagePage() {
           </div>
         </motion.div>
       )}
+
+      {/* Usage by Provider */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.43 }}
+        className="rounded-none border border-border-primary bg-bg-secondary p-5"
+      >
+        <div className="text-sm font-medium mb-4 flex items-center gap-2">
+          <Zap className="w-4 h-4 text-text-muted" />
+          Usage by Provider
+        </div>
+        {(() => {
+          const providerTotals = data?.tokenStats?.providerTotals;
+          const entries = providerTotals ? Object.entries(providerTotals) : [];
+          const sorted = entries
+            .sort(([, a], [, b]) => b.cost !== a.cost ? b.cost - a.cost : b.sessions - a.sessions);
+
+          if (sorted.length === 0) {
+            return (
+              <p className="text-xs text-text-muted">
+                No usage recorded yet for any provider. Start a chat to see token usage appear here.
+              </p>
+            );
+          }
+
+          return (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border-primary">
+                    <th className="text-left py-2 px-2 text-text-muted font-medium">Provider</th>
+                    <th className="text-right py-2 px-2 text-text-muted font-medium">Sessions</th>
+                    <th className="text-right py-2 px-2 text-text-muted font-medium">Tokens In</th>
+                    <th className="text-right py-2 px-2 text-text-muted font-medium">Tokens Out</th>
+                    <th className="text-right py-2 px-2 text-text-muted font-medium">Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sorted.map(([providerId, totals]) => {
+                    const def = getProviderDef(providerId);
+                    const label = def?.label ?? providerId;
+                    const icon = def?.icon;
+                    const fmtTokens = (n: number) =>
+                      n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1_000 ? `${(n / 1_000).toFixed(1)}k` : String(n);
+                    return (
+                      <tr key={providerId} className="border-b border-border-primary/50 hover:bg-bg-tertiary/50">
+                        <td className="py-2 px-2">
+                          <div className="flex items-center gap-1.5">
+                            {icon?.type === 'image' && <img src={icon.src} alt={label} className="w-3.5 h-3.5 object-contain" />}
+                            {icon?.type === 'svg-gemini' && (
+                              <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5 text-black shrink-0">
+                                <path d="M12 0C12 6.627 6.627 12 0 12c6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12-6.627 0-12-5.373-12-12Z" />
+                              </svg>
+                            )}
+                            {icon?.type === 'cpu' && <Cpu className="w-3.5 h-3.5 text-cyan-500 shrink-0" />}
+                            {icon?.type === 'text' && <span className="font-bold text-[9px] text-text-muted">{icon.content}</span>}
+                            <span className="font-medium">{label}</span>
+                          </div>
+                        </td>
+                        <td className="text-right py-2 px-2 tabular-nums">{totals.sessions}</td>
+                        <td className="text-right py-2 px-2 tabular-nums">{fmtTokens(totals.in)}</td>
+                        <td className="text-right py-2 px-2 tabular-nums">{fmtTokens(totals.out)}</td>
+                        <td className="text-right py-2 px-2 tabular-nums text-accent-green">
+                          {totals.cost > 0 ? `$${totals.cost.toFixed(2)}` : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
+      </motion.div>
 
       {/* Pricing Reference Table */}
       <motion.div

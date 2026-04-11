@@ -15,13 +15,19 @@ function ProviderIcon({ providerId }: { providerId: string }) {
   }
   if (icon.type === 'svg-gemini') {
     return (
-      <svg viewBox="0 0 24 24" fill="currentColor" title={label} className="w-4 h-4 shrink-0 text-black">
-        <path d="M12 0C12 6.627 6.627 12 0 12c6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12-6.627 0-12-5.373-12-12Z" />
-      </svg>
+      <span title={label} className="shrink-0 inline-flex">
+        <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-black">
+          <path d="M12 0C12 6.627 6.627 12 0 12c6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12-6.627 0-12-5.373-12-12Z" />
+        </svg>
+      </span>
     );
   }
   if (icon.type === 'cpu') {
-    return <Cpu className="w-4 h-4 text-cyan-500 shrink-0" title={label} />;
+    return (
+      <span title={label} className="shrink-0 inline-flex">
+        <Cpu className="w-4 h-4 text-cyan-500" />
+      </span>
+    );
   }
   // text
   return (

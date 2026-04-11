@@ -4,6 +4,7 @@ import type { Agent } from '../types';
 import { ScheduleFieldPicker } from './ScheduleFieldPicker';
 import { TaskOptionsFields } from './TaskOptionsFields';
 import { NotificationFields } from './NotificationFields';
+import { PROVIDER_REGISTRY } from '@/lib/providers';
 
 interface CreateTaskModalProps {
   show: boolean;
@@ -24,11 +25,15 @@ interface CreateTaskModalProps {
     useWorktree: boolean;
     notifyTelegram: boolean;
     notifySlack: boolean;
+    provider: string;
+    skills: string[];
   };
   onFormChange: (data: CreateTaskModalProps['formData']) => void;
   isCreating: boolean;
   createError: string | null;
   onSubmit: () => void;
+  availableSkills?: string[];
+  defaultProvider?: string;
 }
 
 export function CreateTaskModal({
@@ -40,7 +45,11 @@ export function CreateTaskModal({
   isCreating,
   createError,
   onSubmit,
+  availableSkills = [],
+  defaultProvider = 'claude',
 }: CreateTaskModalProps) {
+  // Initialize provider to defaultProvider on first render if still at default
+  const effectiveProvider = formData.provider || defaultProvider;
   return (
     <AnimatePresence>
       {show && (
@@ -153,6 +162,54 @@ export function CreateTaskModal({
                 useWorktree={formData.useWorktree}
                 onWorktreeChange={(v) => onFormChange({ ...formData, useWorktree: v })}
               />
+
+              {/* Provider */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Provider</label>
+                <select
+                  value={effectiveProvider}
+                  onChange={(e) => onFormChange({ ...formData, provider: e.target.value })}
+                  className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm"
+                >
+                  {PROVIDER_REGISTRY.map(p => (
+                    <option key={p.id} value={p.id}>{p.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Skills */}
+              {availableSkills.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Skills
+                    <span className="ml-1 text-xs text-muted-foreground font-normal">({formData.skills.length} selected)</span>
+                  </label>
+                  <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto p-2 bg-secondary border border-border rounded-lg">
+                    {availableSkills.map(skill => {
+                      const selected = formData.skills.includes(skill);
+                      return (
+                        <button
+                          key={skill}
+                          type="button"
+                          onClick={() => {
+                            const next = selected
+                              ? formData.skills.filter(s => s !== skill)
+                              : [...formData.skills, skill];
+                            onFormChange({ ...formData, skills: next });
+                          }}
+                          className={`px-2 py-0.5 rounded text-xs transition-colors ${
+                            selected
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-bg-tertiary text-muted-foreground hover:bg-secondary/80'
+                          }`}
+                        >
+                          {skill}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Notifications */}
               <NotificationFields

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Settings, RefreshCw, Download, ExternalLink, CheckCircle, AlertCircle, Loader2, RotateCw, BarChart3 } from 'lucide-react';
 import { Toggle } from './Toggle';
 import type { ClaudeInfo, AppSettings } from './types';
+import { PROVIDER_REGISTRY } from '@/lib/providers';
 
 /** Strip HTML tags and collapse whitespace so release notes render as plain text. */
 function stripHtml(html: string): string {
@@ -329,15 +330,14 @@ export const GeneralSection = ({ info, appSettings, onSaveAppSettings }: General
           onChange={(e) => onSaveAppSettings({ defaultProvider: e.target.value })}
           className="w-full sm:w-64 px-3 py-2 bg-background border border-border text-sm text-foreground focus:outline-none focus:border-foreground"
         >
-          <option value="claude" disabled={!installedProviders.claude}>
-            Claude{!installedProviders.claude ? ' (not installed)' : ''}
-          </option>
-          <option value="codex" disabled={!installedProviders.codex}>
-            Codex{!installedProviders.codex ? ' (not installed)' : ''}
-          </option>
-          <option value="gemini" disabled={!installedProviders.gemini}>
-            Gemini{!installedProviders.gemini ? ' (not installed)' : ''}
-          </option>
+          {PROVIDER_REGISTRY.map(({ id, label, requiresCli }) => {
+            const notInstalled = requiresCli && installedProviders[id] === false;
+            return (
+              <option key={id} value={id} disabled={notInstalled}>
+                {label}{notInstalled ? ' (not installed)' : ''}
+              </option>
+            );
+          })}
         </select>
       </div>
 

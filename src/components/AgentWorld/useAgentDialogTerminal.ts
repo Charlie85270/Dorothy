@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { AgentStatus } from '@/types/electron';
 import { isElectron } from '@/hooks/useElectron';
 import { attachShiftEnterHandler, stripCursorSequences } from '@/lib/terminal';
@@ -29,10 +29,12 @@ export function useAgentDialogTerminal({
   skipHistoricalOutput,
 }: UseAgentDialogTerminalOptions) {
   const [terminalReady, setTerminalReady] = useState(false);
+  const [isAtBottom, setIsAtBottom] = useState(true);
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<import('xterm').Terminal | null>(null);
   const fitAddonRef = useRef<import('xterm-addon-fit').FitAddon | null>(null);
   const agentIdRef = useRef<string | null>(null);
+  const isAtBottomRef = useRef(true);
 
   // Keep agentIdRef current
   useEffect(() => {
@@ -48,6 +50,10 @@ export function useAgentDialogTerminal({
       xtermRef.current = null;
       fitAddonRef.current = null;
     }
+
+    // Reset scroll-lock state for new session
+    isAtBottomRef.current = true;
+    setIsAtBottom(true);
 
     let cancelled = false;
 
@@ -83,6 +89,15 @@ export function useAgentDialogTerminal({
 
         xtermRef.current = term;
         fitAddonRef.current = fitAddon;
+
+        // Track whether user is at the bottom so we don't hijack scroll position
+        term.onScroll(() => {
+          const buffer = term.buffer.active;
+          const maxY = Math.max(0, buffer.length - term.rows);
+          const atBottom = buffer.viewportY >= maxY - 2;
+          isAtBottomRef.current = atBottom;
+          setIsAtBottom(atBottom);
+        });
 
         const fitAndResize = () => {
           try {
@@ -182,7 +197,10 @@ export function useAgentDialogTerminal({
       if (fitAddonRef.current && xtermRef.current) {
         try {
           fitAddonRef.current.fit();
-          xtermRef.current.scrollToBottom();
+          // Only scroll to bottom if user was already at the bottom — don't hijack manual scroll position
+          if (isAtBottomRef.current) {
+            xtermRef.current.scrollToBottom();
+          }
           const id = agentIdRef.current;
           if (id && window.electronAPI?.agent?.resize) {
             window.electronAPI.agent.resize({ id, cols: xtermRef.current.cols, rows: xtermRef.current.rows }).catch(() => {});
@@ -201,7 +219,9 @@ export function useAgentDialogTerminal({
     if (!terminalReady || !fitAddonRef.current || !xtermRef.current) return;
     const t1 = setTimeout(() => {
       fitAddonRef.current?.fit();
-      xtermRef.current?.scrollToBottom();
+      if (isAtBottomRef.current) {
+        xtermRef.current?.scrollToBottom();
+      }
       const id = agentIdRef.current;
       if (id && xtermRef.current && window.electronAPI?.agent?.resize) {
         window.electronAPI.agent.resize({ id, cols: xtermRef.current.cols, rows: xtermRef.current.rows }).catch(() => {});
@@ -209,10 +229,21 @@ export function useAgentDialogTerminal({
     }, 50);
     const t2 = setTimeout(() => {
       fitAddonRef.current?.fit();
-      xtermRef.current?.scrollToBottom();
+      if (isAtBottomRef.current) {
+        xtermRef.current?.scrollToBottom();
+      }
     }, 150);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [isFullscreen, terminalReady]);
 
-  return { terminalReady, terminalRef, xtermRef, agentIdRef };
+  // Exposed scroll-to-bottom: re-anchors viewport and re-enables auto-scroll
+  const scrollToBottom = useCallback(() => {
+    if (xtermRef.current) {
+      xtermRef.current.scrollToBottom();
+      isAtBottomRef.current = true;
+      setIsAtBottom(true);
+    }
+  }, []);
+
+  return { terminalReady, terminalRef, xtermRef, agentIdRef, isAtBottom, scrollToBottom };
 }

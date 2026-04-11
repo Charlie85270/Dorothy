@@ -119,7 +119,7 @@ export class GeminiProvider implements CLIProvider {
     return command;
   }
 
-  getPtyEnvVars(agentId: string, projectPath: string, skills: string[]): Record<string, string> {
+  getPtyEnvVars(agentId: string, projectPath: string, skills: string[], _appSettings?: AppSettings): Record<string, string> {
     return {
       DOROTHY_SKILLS: skills.join(','),
       DOROTHY_AGENT_ID: agentId,

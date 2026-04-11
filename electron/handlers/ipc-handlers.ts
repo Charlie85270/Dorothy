@@ -323,7 +323,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
 
     // Get provider-specific env vars
     const agentProvider = getProvider(config.provider);
-    const providerEnvVars = agentProvider.getPtyEnvVars(id, config.projectPath, allSkills);
+    const providerEnvVars = agentProvider.getPtyEnvVars(id, config.projectPath, allSkills, currentSettings);
 
     // BUG 6: pre-accept Claude Code's workspace trust dialog for this cwd so
     // bypass/auto-mode agents never see the first-launch trust prompt.
@@ -521,7 +521,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       ensureProjectTrusted(cwd);
 
       // Local provider uses Claude provider env vars + Tasmania env vars
-      const localProviderEnvVars = getProvider('claude').getPtyEnvVars(agent.id, agent.projectPath, agent.skills);
+      const localProviderEnvVars = getProvider('claude').getPtyEnvVars(agent.id, agent.projectPath, agent.skills, currentSettings);
 
       const newPty = pty.spawn('/bin/bash', ['-l'], {
         name: 'xterm-256color',

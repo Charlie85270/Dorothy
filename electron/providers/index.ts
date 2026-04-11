@@ -5,6 +5,12 @@ import { CodexProvider } from './codex-provider';
 import { GeminiProvider } from './gemini-provider';
 import { OpenCodeProvider } from './opencode-provider';
 import { PiProvider } from './pi-provider';
+import { OpenRouterProvider } from './openrouter-provider';
+import { DeepSeekProvider } from './deepseek-provider';
+import { MiMoProvider } from './mimo-provider';
+import { MoonshotProvider } from './moonshot-provider';
+import { QwenProvider } from './qwen-provider';
+import { ZhipuProvider } from './zhipu-provider';
 
 export type { CLIProvider } from './cli-provider';
 export type {
@@ -21,6 +27,12 @@ const providers: Record<string, CLIProvider> = {
   gemini: new GeminiProvider(),
   opencode: new OpenCodeProvider(),
   pi: new PiProvider(),
+  openrouter: new OpenRouterProvider(),
+  deepseek: new DeepSeekProvider(),
+  mimo: new MiMoProvider(),
+  moonshot: new MoonshotProvider(),
+  qwen: new QwenProvider(),
+  zhipu: new ZhipuProvider(),
 };
 
 /**

@@ -125,7 +125,19 @@ export interface WorktreeConfig {
 
 export type AgentCharacter = 'robot' | 'ninja' | 'wizard' | 'astronaut' | 'knight' | 'pirate' | 'alien' | 'viking' | 'frog';
 
-export type AgentProvider = 'claude' | 'codex' | 'gemini' | 'opencode' | 'pi' | 'local';
+export type AgentProvider =
+  | 'claude'
+  | 'codex'
+  | 'gemini'
+  | 'opencode'
+  | 'pi'
+  | 'local'
+  | 'openrouter'
+  | 'deepseek'
+  | 'mimo'
+  | 'moonshot'
+  | 'qwen'
+  | 'zhipu';
 
 export interface AgentStatus {
   id: string;

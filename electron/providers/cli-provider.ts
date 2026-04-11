@@ -88,7 +88,7 @@ export interface CLIProvider {
   buildOneShotCommand(params: OneShotCommandParams): string;
 
   /** Get environment variables to set for PTY sessions */
-  getPtyEnvVars(agentId: string, projectPath: string, skills: string[]): Record<string, string>;
+  getPtyEnvVars(agentId: string, projectPath: string, skills: string[], appSettings?: AppSettings): Record<string, string>;
 
   /** Get environment variable names to delete before spawning PTY */
   getEnvVarsToDelete(): string[];

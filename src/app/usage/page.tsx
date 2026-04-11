@@ -22,6 +22,10 @@ import {
   FolderOpen,
 } from 'lucide-react';
 import { useClaude } from '@/hooks/useClaude';
+// TODO: Usage tracking is Claude-native — useClaude() reads Claude Code's JSONL usage files.
+// Other providers (codex, gemini, openrouter, deepseek, etc.) don't produce these files,
+// so their token/cost data is not tracked here. A future enhancement would read per-provider
+// usage logs if those CLIs expose them.
 
 // Token pricing per million tokens (MTok)
 const MODEL_PRICING: Record<string, {

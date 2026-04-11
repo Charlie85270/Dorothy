@@ -26,6 +26,11 @@ export interface ProviderDef {
   /** Tailwind color fragment, e.g. 'accent-blue', 'amber-500' */
   accent: string;
   /**
+   * Full Tailwind class string for a small badge (bg + text).
+   * Used wherever a coloured pill badge shows the provider name.
+   */
+  badgeClass: string;
+  /**
    * True for providers that ship as a CLI binary and can be "not installed".
    * Checked via cliPaths.detect() for claude/codex/gemini; others default to available.
    */
@@ -40,6 +45,7 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
     label: 'Claude',
     icon: { type: 'image', src: '/claude-ai-icon.webp' },
     accent: 'accent-blue',
+    badgeClass: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
     requiresCli: true,
     models: [
       { id: 'default', name: 'Default', description: 'Recommended' },
@@ -56,6 +62,7 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
     label: 'Codex',
     icon: { type: 'image', src: '/chatgpt-icon.webp' },
     accent: 'accent-green',
+    badgeClass: 'bg-green-500/15 text-green-600 dark:text-green-400',
     requiresCli: true,
     models: [
       { id: 'gpt-5.3-codex', name: 'GPT-5.3 Codex', description: 'Recommended' },
@@ -70,6 +77,7 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
     label: 'Gemini',
     icon: { type: 'svg-gemini' },
     accent: 'accent-purple',
+    badgeClass: 'bg-purple-500/15 text-purple-600 dark:text-purple-400',
     requiresCli: true,
     models: [
       { id: 'gemini-3-pro', name: 'Gemini 3 Pro', description: 'Most capable' },
@@ -84,6 +92,7 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
     label: 'OpenCode',
     icon: { type: 'text', content: 'OC' },
     accent: 'accent-cyan',
+    badgeClass: 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400',
     requiresCli: true,
     models: [
       { id: 'default', name: 'Default', description: 'Use configured default' },
@@ -95,6 +104,7 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
     label: 'Pi',
     icon: { type: 'cpu' },
     accent: 'accent-cyan',
+    badgeClass: 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400',
     requiresCli: true,
     models: [
       { id: 'default', name: 'Default', description: 'Use configured model' },
@@ -110,6 +120,7 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
     label: 'OpenRouter',
     icon: { type: 'text', content: 'OR' },
     accent: 'amber-500',
+    badgeClass: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
     models: [
       { id: 'deepseek/deepseek-r1', name: 'DeepSeek R1', description: 'Reasoning' },
       { id: 'moonshotai/kimi-k2', name: 'Kimi K2', description: 'Agentic' },
@@ -125,6 +136,7 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
     label: 'DeepSeek',
     icon: { type: 'text', content: 'DS' },
     accent: 'sky-500',
+    badgeClass: 'bg-sky-500/15 text-sky-600 dark:text-sky-400',
     models: [
       { id: 'deepseek/deepseek-r1', name: 'DeepSeek R1', description: 'Reasoning' },
       { id: 'deepseek/deepseek-chat', name: 'DeepSeek V3', description: 'Flagship chat' },
@@ -137,6 +149,7 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
     label: 'Moonshot',
     icon: { type: 'text', content: '🌙' },
     accent: 'violet-500',
+    badgeClass: 'bg-violet-500/15 text-violet-600 dark:text-violet-400',
     models: [
       { id: 'moonshotai/kimi-k2', name: 'Kimi K2', description: 'Agentic flagship' },
       { id: 'moonshotai/moonlight-16k', name: 'Moonlight 16K', description: 'Fast' },
@@ -149,6 +162,7 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
     label: 'MiMo',
     icon: { type: 'text', content: 'MM' },
     accent: 'orange-500',
+    badgeClass: 'bg-orange-500/15 text-orange-600 dark:text-orange-400',
     models: [
       { id: 'xiaomi/mimo-v2-pro', name: 'MiMo V2 Pro', description: 'Flagship' },
       { id: 'xiaomi/mimo-v2-flash', name: 'MiMo V2 Flash', description: 'Fast' },
@@ -161,6 +175,7 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
     label: 'Qwen',
     icon: { type: 'text', content: 'QW' },
     accent: 'blue-500',
+    badgeClass: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
     models: [
       { id: 'qwen/qwq-32b', name: 'QwQ 32B', description: 'Reasoning' },
       { id: 'qwen/qwen3-235b-a22b', name: 'Qwen3 235B', description: 'Flagship' },
@@ -174,6 +189,7 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
     label: 'ZhipuAI',
     icon: { type: 'text', content: 'ZH' },
     accent: 'indigo-500',
+    badgeClass: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400',
     models: [
       { id: 'zhipuai/glm-4.6', name: 'GLM-4.6', description: 'Flagship' },
       { id: 'zhipuai/glm-4.5', name: 'GLM-4.5', description: 'Stable' },

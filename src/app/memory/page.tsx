@@ -24,6 +24,7 @@ import {
 import { useMemory, formatBytes, timeAgo } from '@/hooks/useMemory';
 import type { ProjectMemory, MemoryFile } from '@/types/electron';
 import AgentKnowledgeGraph from '@/components/Memory/AgentKnowledgeGraph';
+import { getProviderDef } from '@/lib/providers';
 
 // ─── Inline editor with save/cancel ────────────────────────────────────────
 
@@ -163,9 +164,7 @@ function ProjectCard({
           <span className="text-sm font-medium truncate">{project.projectName}</span>
           {project.provider && project.provider !== 'claude' && (
             <span className={`text-[9px] px-1 py-0.5 font-medium uppercase tracking-wider shrink-0 ${
-              project.provider === 'codex' ? 'bg-green-500/15 text-green-600 dark:text-green-400' :
-              project.provider === 'gemini' ? 'bg-purple-500/15 text-purple-600 dark:text-purple-400' :
-              'bg-secondary text-muted-foreground'
+              getProviderDef(project.provider)?.badgeClass ?? 'bg-secondary text-muted-foreground'
             }`}>
               {project.provider}
             </span>

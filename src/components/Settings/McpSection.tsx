@@ -15,9 +15,12 @@ import {
   Plug,
   AlertCircle,
   Check,
+  Cpu,
 } from 'lucide-react';
+import type { AgentProvider } from '@/types/electron';
+import { PROVIDER_REGISTRY, getProviderDef } from '@/lib/providers';
 
-type Provider = 'claude' | 'codex' | 'gemini';
+type Provider = AgentProvider;
 
 interface McpServer {
   name: string;
@@ -32,29 +35,28 @@ interface EditState {
   env: Record<string, string>;
 }
 
-const PROVIDER_TABS: { id: Provider; label: string }[] = [
-  { id: 'claude', label: 'Claude' },
-  { id: 'codex', label: 'Codex' },
-  { id: 'gemini', label: 'Gemini' },
-];
-
-function GeminiSvg({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <path d="M12 0C12 6.627 6.627 12 0 12c6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12-6.627 0-12-5.373-12-12Z" />
-    </svg>
-  );
-}
+const PROVIDER_TABS: { id: Provider; label: string }[] = PROVIDER_REGISTRY
+  .filter((p) => p.requiresCli)
+  .map(({ id, label }) => ({ id, label }));
 
 function ProviderIcon({ provider, className }: { provider: Provider; className?: string }) {
-  switch (provider) {
-    case 'claude':
-      return <img src="/claude-ai-icon.webp" alt="Claude" className={className} />;
-    case 'codex':
-      return <img src="/chatgpt-icon.webp" alt="Codex" className={className} />;
-    case 'gemini':
-      return <GeminiSvg className={className} />;
+  const def = getProviderDef(provider);
+  if (!def) return null;
+  const { icon, label } = def;
+  if (icon.type === 'image') {
+    return <img src={icon.src} alt={label} className={className} />;
   }
+  if (icon.type === 'svg-gemini') {
+    return (
+      <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M12 0C12 6.627 6.627 12 0 12c6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12-6.627 0-12-5.373-12-12Z" />
+      </svg>
+    );
+  }
+  if (icon.type === 'cpu') {
+    return <Cpu className={className} />;
+  }
+  return <span className={`font-bold text-xs ${className}`}>{icon.content}</span>;
 }
 
 export function McpSection() {

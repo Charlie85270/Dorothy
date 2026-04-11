@@ -67,6 +67,7 @@ if [ -n "$SESSION_ID" ]; then
 
     # Update session entry via temp file for atomic write
     T_DATE=$(date +%Y-%m-%d)
+    T_PROVIDER="\${CLAUDE_PROVIDER:-claude}"
     TMP_FILE="\${TOKEN_STATS_FILE}.tmp.$$"
     echo "$EXISTING" | jq -c \
       --arg sid "$SESSION_ID" \
@@ -76,7 +77,8 @@ if [ -n "$SESSION_ID" ]; then
       --arg model "$T_MODEL" \
       --argjson extra "$IS_EXTRA" \
       --arg date "$T_DATE" \
-      '.[$sid] = {"in": $tin, "out": $tout, "cost": $cost, "model": $model, "extra": $extra, "date": $date}' \
+      --arg provider "$T_PROVIDER" \
+      '.[$sid] = {"in": $tin, "out": $tout, "cost": $cost, "model": $model, "extra": $extra, "date": $date, "provider": $provider}' \
       > "$TMP_FILE" 2>/dev/null && mv "$TMP_FILE" "$TOKEN_STATS_FILE" 2>/dev/null || rm -f "$TMP_FILE"
 
     # Release lock

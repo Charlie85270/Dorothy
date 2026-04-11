@@ -383,9 +383,16 @@ export async function initAgentPty(
     }
   }
 
-  // Get provider-specific env vars
+  // Get provider-specific env vars. Pass loaded savedSettings so alt
+  // providers (OpenRouter, DeepSeek, etc.) can inject ANTHROPIC_BASE_URL
+  // and ANTHROPIC_API_KEY from the configured API keys.
   const agentProvider = getProvider(agent.provider);
-  const providerEnvVars = agentProvider.getPtyEnvVars(agent.id, agent.projectPath, agent.skills);
+  const providerEnvVars = agentProvider.getPtyEnvVars(
+    agent.id,
+    agent.projectPath,
+    agent.skills,
+    savedSettings as unknown as AppSettings,
+  );
 
   const ptyProcess = pty.spawn(shell, ['-l'], {
     name: 'xterm-256color',

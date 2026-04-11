@@ -77,6 +77,20 @@ export interface AppSettings {
   obsidianVaultPaths?: string[];
   opencodeEnabled: boolean;
   opencodeDefaultModel: string;
+  // External AI providers. Each injects ANTHROPIC_BASE_URL + ANTHROPIC_API_KEY
+  // into the claude PTY process. All keys fall back to openRouterApiKey.
+  openRouterEnabled?: boolean;
+  openRouterApiKey?: string;
+  deepSeekEnabled?: boolean;
+  deepSeekApiKey?: string;
+  mimoEnabled?: boolean;
+  mimoApiKey?: string;
+  moonshotEnabled?: boolean;
+  moonshotApiKey?: string;
+  qwenEnabled?: boolean;
+  qwenApiKey?: string;
+  zhipuEnabled?: boolean;
+  zhipuApiKey?: string;
   notificationSounds?: {
     waiting?: string;
     complete?: string;
@@ -91,4 +105,4 @@ export interface AppSettings {
   defaultProjectPath?: string;
 }
 
-export type SettingsSection = 'general' | 'terminal' | 'git' | 'notifications' | 'telegram' | 'slack' | 'jira' | 'socialdata' | 'tasmania' | 'opencode' | 'pi' | 'google-workspace' | 'obsidian' | 'permissions' | 'skills' | 'mcp' | 'cli' | 'system';
+export type SettingsSection = 'general' | 'terminal' | 'git' | 'notifications' | 'telegram' | 'slack' | 'jira' | 'socialdata' | 'tasmania' | 'opencode' | 'pi' | 'google-workspace' | 'obsidian' | 'ai-providers' | 'permissions' | 'skills' | 'mcp' | 'cli' | 'system';

@@ -18,6 +18,8 @@ const INITIAL_FORM = {
   useWorktree: false,
   notifyTelegram: false,
   notifySlack: false,
+  provider: 'claude',
+  skills: [] as string[],
 };
 
 export function useTaskForm(
@@ -78,6 +80,8 @@ export function useTaskForm(
         prompt: fullPrompt,
         schedule: cron,
         projectPath,
+        provider: formData.provider || undefined,
+        skills: formData.skills.length > 0 ? formData.skills : undefined,
         autonomous: formData.autonomous,
         useWorktree: formData.useWorktree,
         notifications: {

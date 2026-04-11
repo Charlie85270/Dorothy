@@ -61,6 +61,7 @@ interface SchedulerTaskMetadata {
   agentId?: string;
   agentName?: string;
   provider?: AgentProvider;
+  skills?: string[];
   notifications: {
     telegram: boolean;
     slack: boolean;
@@ -308,7 +309,8 @@ async function createLaunchdJob(
   projectPath: string,
   prompt: string,
   autonomous: boolean,
-  provider: AgentProvider = 'claude'
+  provider: AgentProvider = 'claude',
+  skills?: string[]
 ): Promise<void> {
   const claudePath = await getCLIPath(provider);
   const claudeDir = path.dirname(claudePath);
@@ -346,6 +348,7 @@ async function createLaunchdJob(
     mcpConfigPath,
     logPath,
     homeDir,
+    skills,
   });
 
   fs.writeFileSync(scriptPath, scriptContent);
@@ -434,7 +437,8 @@ async function createCronJob(
   projectPath: string,
   prompt: string,
   autonomous: boolean,
-  provider: AgentProvider = 'claude'
+  provider: AgentProvider = 'claude',
+  skills?: string[]
 ): Promise<void> {
   const claudePath = await getCLIPath(provider);
   const claudeDir = path.dirname(claudePath);
@@ -468,6 +472,7 @@ async function createCronJob(
     mcpConfigPath,
     logPath,
     homeDir,
+    skills,
   });
 
   fs.writeFileSync(scriptPath, scriptContent);
@@ -530,6 +535,7 @@ export function registerSchedulerHandlers(deps: SchedulerDeps): void {
         projectPath: string;
         agentId?: string;
         agentName?: string;
+        provider?: AgentProvider;
         autonomous: boolean;
         worktree?: { enabled: boolean; branchPrefix?: string };
         notifications: { telegram: boolean; slack: boolean };
@@ -578,6 +584,7 @@ export function registerSchedulerHandlers(deps: SchedulerDeps): void {
                 projectPath: schedule.projectPath || schedule.project || os.homedir(),
                 agentId: taskMeta.agentId,
                 agentName: taskMeta.agentName,
+                provider: taskMeta.provider,
                 autonomous: schedule.autonomous ?? true,
                 worktree: schedule.worktree,
                 notifications: taskMeta.notifications,
@@ -636,6 +643,7 @@ export function registerSchedulerHandlers(deps: SchedulerDeps): void {
                       projectPath: schedule.projectPath || projectPath,
                       agentId: taskMeta.agentId,
                       agentName: taskMeta.agentName,
+                      provider: taskMeta.provider,
                       autonomous: schedule.autonomous ?? true,
                       worktree: schedule.worktree,
                       notifications: taskMeta.notifications,
@@ -785,6 +793,7 @@ export function registerSchedulerHandlers(deps: SchedulerDeps): void {
                   projectPath,
                   agentId: taskMeta.agentId,
                   agentName: taskMeta.agentName,
+                  provider: taskMeta.provider,
                   autonomous: true,
                   worktree: undefined,
                   notifications: taskMeta.notifications,
@@ -818,6 +827,8 @@ export function registerSchedulerHandlers(deps: SchedulerDeps): void {
     projectPath: string;
     agentId?: string;
     agentName?: string;
+    provider?: AgentProvider;
+    skills?: string[];
     autonomous?: boolean;
     worktree?: { enabled: boolean; branchPrefix?: string };
     notifications?: { telegram: boolean; slack: boolean };
@@ -855,8 +866,9 @@ export function registerSchedulerHandlers(deps: SchedulerDeps): void {
       }
       fs.writeFileSync(globalSchedulesPath, JSON.stringify(schedules, null, 2));
 
-      // Resolve provider: agent's provider > default provider > 'claude'
-      const taskProvider: AgentProvider = (config.agentId && deps.agents.get(config.agentId)?.provider)
+      // Resolve provider: explicit config > agent's provider > default provider > 'claude'
+      const taskProvider: AgentProvider = config.provider
+        || (config.agentId && deps.agents.get(config.agentId)?.provider)
         || resolveDefaultProvider(deps);
 
       // Save metadata
@@ -866,6 +878,7 @@ export function registerSchedulerHandlers(deps: SchedulerDeps): void {
         agentId: config.agentId,
         agentName: config.agentName,
         provider: taskProvider,
+        skills: config.skills,
         notifications: config.notifications || { telegram: false, slack: false },
         createdAt: new Date().toISOString(),
       };
@@ -873,9 +886,9 @@ export function registerSchedulerHandlers(deps: SchedulerDeps): void {
 
       // Create platform-specific job
       if (os.platform() === 'darwin') {
-        await createLaunchdJob(taskId, schedule, config.projectPath, config.prompt, autonomous, taskProvider);
+        await createLaunchdJob(taskId, schedule, config.projectPath, config.prompt, autonomous, taskProvider, config.skills);
       } else {
-        await createCronJob(taskId, schedule, config.projectPath, config.prompt, autonomous, taskProvider);
+        await createCronJob(taskId, schedule, config.projectPath, config.prompt, autonomous, taskProvider, config.skills);
       }
 
       return { success: true, taskId };

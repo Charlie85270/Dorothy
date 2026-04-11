@@ -7,6 +7,8 @@ export interface ScheduledTask {
   projectPath: string;
   agentId?: string;
   agentName?: string;
+  provider?: string;
+  skills?: string[];
   autonomous: boolean;
   worktree?: {
     enabled: boolean;

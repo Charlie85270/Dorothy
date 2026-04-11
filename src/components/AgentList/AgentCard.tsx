@@ -3,12 +3,39 @@
 import { Loader2, AlertTriangle, GitBranch, Pencil, Crown, Cpu } from 'lucide-react';
 import type { AgentStatus } from '@/types/electron';
 import { STATUS_COLORS, STATUS_LABELS, CHARACTER_FACES, getProjectColor, isSuperAgentCheck } from '@/app/agents/constants';
+import { getProviderDef } from '@/lib/providers';
 
-const PROVIDER_ICONS: Record<string, { src: string; alt: string }> = {
-  claude: { src: '/claude-ai-icon.webp', alt: 'Claude' },
-  codex: { src: '/chatgpt-icon.webp', alt: 'ChatGPT' },
-  pi: { src: '', alt: 'Pi Terminal' },
-};
+/** Renders the provider icon for a given provider id using the shared registry. */
+function ProviderIcon({ providerId }: { providerId: string }) {
+  const def = getProviderDef(providerId);
+  if (!def) return null;
+  const { icon, label } = def;
+  if (icon.type === 'image') {
+    return <img src={icon.src} alt={label} title={label} className="w-4 h-4 object-contain shrink-0" />;
+  }
+  if (icon.type === 'svg-gemini') {
+    return (
+      <span title={label} className="shrink-0 inline-flex">
+        <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-black">
+          <path d="M12 0C12 6.627 6.627 12 0 12c6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12-6.627 0-12-5.373-12-12Z" />
+        </svg>
+      </span>
+    );
+  }
+  if (icon.type === 'cpu') {
+    return (
+      <span title={label} className="shrink-0 inline-flex">
+        <Cpu className="w-4 h-4 text-cyan-500" />
+      </span>
+    );
+  }
+  // text
+  return (
+    <span title={label} className="shrink-0 inline-flex font-bold text-[10px] text-text-muted">
+      {icon.content}
+    </span>
+  );
+}
 
 interface AgentCardProps {
   agent: AgentStatus;
@@ -67,27 +94,9 @@ export function AgentCard({ agent, isSelected, onSelect, onEdit }: AgentCardProp
             <h4 className={`font-medium text-sm truncate flex items-center gap-1.5 font-sans ${isSuper ? 'text-foreground' : ''}`}>
               {isSuper && <Crown className="w-3.5 h-3.5 text-amber-600" />}
               {agent.name || 'Unnamed Agent'}
-              {(() => {
-                const p = agent.provider && agent.provider !== 'local' ? agent.provider : 'claude';
-                const icon = PROVIDER_ICONS[p];
-                if (icon) return <img src={icon.src} alt={icon.alt} title={icon.alt} className="w-4 h-4 object-contain shrink-0" />;
-                if (p === 'opencode') return (
-                  <span title="OpenCode" className="shrink-0 inline-flex text-cyan-500 text-[10px] font-bold">OC</span>
-                );
-                if (p === 'pi') return (
-                  <span title="Pi Terminal" className="shrink-0 inline-flex">
-                    <Cpu className="w-4 h-4 text-cyan-500" />
-                  </span>
-                );
-                if (p === 'gemini') return (
-                  <span title="Gemini" className="shrink-0 inline-flex">
-                    <svg viewBox="0 0 24 24" className="w-4 h-4 text-black" fill="currentColor">
-                      <path d="M12 0C12 6.627 6.627 12 0 12c6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12-6.627 0-12-5.373-12-12Z" />
-                    </svg>
-                  </span>
-                );
-                return null;
-              })()}
+              <ProviderIcon providerId={
+                agent.provider && agent.provider !== 'local' ? agent.provider : 'claude'
+              } />
             </h4>
             <div className="flex items-center gap-1.5 shrink-0">
               <button

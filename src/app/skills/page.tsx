@@ -20,8 +20,12 @@ import {
 import { useClaude } from '@/hooks/useClaude';
 import { useElectronSkills } from '@/hooks/useElectron';
 import { SKILLS_DATABASE, fetchSkillsFromMarketplace, type Skill } from '@/lib/skills-database';
+import { PROVIDER_REGISTRY } from '@/lib/providers';
 import TerminalDialog from '@/components/TerminalDialog';
 import ProviderBadge from '@/components/ProviderBadge';
+
+/** Providers with a local CLI binary that have their own skill directory */
+const CLI_PROVIDER_IDS = PROVIDER_REGISTRY.filter((p) => p.requiresCli).map((p) => p.id);
 
 const COL_STYLES = {
   rank: { width: '4%' },
@@ -422,14 +426,10 @@ export default function SkillsPage() {
                       <td style={COL_STYLES.status} className="px-4 py-3 text-right">
                         {installed ? (
                           <div className="inline-flex items-center gap-1">
-                            {isSkillInstalledOn(skill.name, 'claude') && (
-                              <ProviderBadge provider="claude" />
-                            )}
-                            {isSkillInstalledOn(skill.name, 'codex') && (
-                              <ProviderBadge provider="codex" />
-                            )}
-                            {isSkillInstalledOn(skill.name, 'gemini') && (
-                              <ProviderBadge provider="gemini" />
+                            {CLI_PROVIDER_IDS.map((pid) =>
+                              isSkillInstalledOn(skill.name, pid) ? (
+                                <ProviderBadge key={pid} provider={pid} />
+                              ) : null
                             )}
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary text-[10px] font-medium ml-1" style={{ borderRadius: 4 }}>
                               <Check className="w-2.5 h-2.5" />
@@ -487,7 +487,7 @@ export default function SkillsPage() {
         open={showInstallTerminal}
         repo={currentInstallRepo}
         title={currentInstallTitle}
-        availableProviders={['claude', 'codex', 'gemini']}
+        availableProviders={CLI_PROVIDER_IDS}
         onClose={(success) => {
           setShowInstallTerminal(false);
           setInstallingSkill(null);

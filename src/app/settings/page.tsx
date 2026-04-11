@@ -21,6 +21,7 @@ import {
   OpenCodeSection,
   PiTerminalSection,
   GoogleWorkspaceSection,
+  AIProvidersSection,
   PermissionsSection,
   SkillsSection,
   McpSection,
@@ -146,6 +147,14 @@ function SettingsPageInner() {
       case 'google-workspace':
         return (
           <GoogleWorkspaceSection
+            appSettings={appSettings}
+            onSaveAppSettings={handleSaveAppSettings}
+            onUpdateLocalSettings={updateLocalAppSettings}
+          />
+        );
+      case 'ai-providers':
+        return (
+          <AIProvidersSection
             appSettings={appSettings}
             onSaveAppSettings={handleSaveAppSettings}
             onUpdateLocalSettings={updateLocalAppSettings}

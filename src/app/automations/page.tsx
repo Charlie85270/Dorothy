@@ -28,8 +28,11 @@ import {
   GitBranch,
   Tag,
   TicketCheck,
+  Cpu,
 } from 'lucide-react';
 import { isElectron } from '@/hooks/useElectron';
+import { useClaude } from '@/hooks/useClaude';
+import { PROVIDER_REGISTRY, getProviderDef } from '@/lib/providers';
 
 // Slack Icon component
 const SlackIcon = ({ className }: { className?: string }) => (
@@ -71,6 +74,8 @@ interface Automation {
     projectPath?: string;
     prompt: string;
     model?: string;
+    provider?: string;
+    skills?: string[];
   };
   outputs: Array<{
     type: string;
@@ -134,6 +139,10 @@ export default function AutomationsPage() {
   const [runningAutomationId, setRunningAutomationId] = useState<string | null>(null);
   const [expandedAutomations, setExpandedAutomations] = useState<Set<string>>(new Set());
 
+  const { data: claudeData } = useClaude();
+  const availableSkills = claudeData?.skills?.map(s => s.name) ?? [];
+  const defaultProvider = claudeData?.settings?.defaultProvider ?? 'claude';
+
   // Form state
   const [formData, setFormData] = useState({
     name: '',
@@ -149,6 +158,8 @@ export default function AutomationsPage() {
     agentEnabled: true,
     agentPrompt: '',
     projectPath: '',
+    agentProvider: '',
+    agentSkills: [] as string[],
     outputTelegram: false,
     outputSlack: false,
     outputGitHubComment: false,
@@ -228,6 +239,8 @@ export default function AutomationsPage() {
         agentEnabled: formData.agentEnabled,
         agentPrompt: formData.agentPrompt,
         agentProjectPath: formData.projectPath || undefined,
+        agentProvider: formData.agentProvider || defaultProvider || undefined,
+        agentSkills: formData.agentSkills.length > 0 ? formData.agentSkills : undefined,
         outputTelegram: formData.outputTelegram,
         outputSlack: formData.outputSlack,
         outputGitHubComment: formData.outputGitHubComment,
@@ -252,6 +265,8 @@ export default function AutomationsPage() {
           agentEnabled: true,
           agentPrompt: '',
           projectPath: '',
+          agentProvider: '',
+          agentSkills: [],
           outputTelegram: false,
           outputSlack: false,
           outputGitHubComment: false,
@@ -521,6 +536,26 @@ export default function AutomationsPage() {
                                 <Bot className="w-3 h-3" />
                                 Agent enabled
                               </div>
+                            )}
+
+                            {automation.agent.enabled && automation.agent.provider && automation.agent.provider !== 'claude' && (() => {
+                              const def = getProviderDef(automation.agent.provider);
+                              if (!def) return null;
+                              return (
+                                <div className="flex items-center gap-1">
+                                  {def.icon.type === 'image' && <img src={def.icon.src} alt={def.label} className="w-3 h-3 object-contain" />}
+                                  {def.icon.type === 'svg-gemini' && <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 text-black"><path d="M12 0C12 6.627 6.627 12 0 12c6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12-6.627 0-12-5.373-12-12Z" /></svg>}
+                                  {def.icon.type === 'cpu' && <Cpu className="w-3 h-3 text-cyan-500" />}
+                                  {def.icon.type === 'text' && <span className="font-bold text-[9px]">{def.icon.content}</span>}
+                                  {def.label}
+                                </div>
+                              );
+                            })()}
+
+                            {automation.agent.enabled && automation.agent.skills && automation.agent.skills.length > 0 && (
+                              <span className="px-1.5 py-0.5 bg-accent-purple/20 text-accent-purple rounded text-[10px] font-medium">
+                                {automation.agent.skills.length} skill{automation.agent.skills.length !== 1 ? 's' : ''}
+                              </span>
                             )}
 
                             {automation.agent.projectPath && (
@@ -979,6 +1014,52 @@ Post the tweet as a comment.`}
                           className="w-full px-3 py-2 bg-secondary border border-border rounded-lg font-mono text-sm"
                         />
                       </div>
+
+                      <div>
+                        <label className="block text-sm font-medium mb-2">Provider</label>
+                        <select
+                          value={formData.agentProvider || defaultProvider}
+                          onChange={(e) => setFormData({ ...formData, agentProvider: e.target.value })}
+                          className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm"
+                        >
+                          {PROVIDER_REGISTRY.map(p => (
+                            <option key={p.id} value={p.id}>{p.label}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {availableSkills.length > 0 && (
+                        <div>
+                          <label className="block text-sm font-medium mb-2">
+                            Skills
+                            <span className="ml-1 text-xs text-muted-foreground font-normal">({formData.agentSkills.length} selected)</span>
+                          </label>
+                          <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto p-2 bg-secondary border border-border rounded-lg">
+                            {availableSkills.map(skill => {
+                              const selected = formData.agentSkills.includes(skill);
+                              return (
+                                <button
+                                  key={skill}
+                                  type="button"
+                                  onClick={() => {
+                                    const next = selected
+                                      ? formData.agentSkills.filter(s => s !== skill)
+                                      : [...formData.agentSkills, skill];
+                                    setFormData({ ...formData, agentSkills: next });
+                                  }}
+                                  className={`px-2 py-0.5 rounded text-xs transition-colors ${
+                                    selected
+                                      ? 'bg-primary text-primary-foreground'
+                                      : 'bg-bg-tertiary text-muted-foreground hover:bg-secondary/80'
+                                  }`}
+                                >
+                                  {skill}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>

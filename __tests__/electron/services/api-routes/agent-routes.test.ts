@@ -95,6 +95,7 @@ beforeEach(() => {
   ctx = {
     mainWindow: { isDestroyed: () => false, webContents: { send: vi.fn() } } as any,
     appSettings: {} as AppSettings,
+    getAppSettings: () => ({} as AppSettings),
     getTelegramBot: () => null,
     getSlackApp: () => null,
     slackResponseChannel: null,

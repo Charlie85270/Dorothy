@@ -66,6 +66,7 @@ export interface ClaudeSettings {
     allow: string[];
     deny: string[];
   };
+  defaultProvider?: string;
 }
 
 export interface ClaudeStats {

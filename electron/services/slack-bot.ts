@@ -7,6 +7,7 @@ import { formatSlackAgentStatus, isSuperAgent, getSuperAgent, getSuperAgentInstr
 import { agents, saveAgents, initAgentPty, killStalePty } from '../core/agent-manager';
 import { ptyProcesses, writeProgrammaticInput } from '../core/pty-manager';
 import { getMainWindow } from '../core/window-manager';
+import { getProvider } from '../providers';
 import { app } from 'electron';
 
 // Slack bot state
@@ -456,8 +457,14 @@ export async function handleSlackCommand(
         return;
       }
 
-      let command = 'claude';
+      const slackAgentProvider = getProvider(agent.provider);
+      const slackBinaryPath = slackAgentProvider.resolveBinaryPath(appSettings).replace(/'/g, "'\\''");
+      let command = `'${slackBinaryPath}'`;
       if (agent.permissionMode === 'auto' || agent.permissionMode === 'bypass' || (!agent.permissionMode && agent.skipPermissions)) command += ' --dangerously-skip-permissions';
+      if (slackAgentProvider.getMcpConfigStrategy() === 'flag') {
+        const mcpConfigPath = path.join(app.getPath('home'), '.claude', 'mcp.json');
+        if (fs.existsSync(mcpConfigPath)) command += ` --mcp-config '${mcpConfigPath}'`;
+      }
       if (agent.secondaryProjectPath) {
         command += ` --add-dir '${agent.secondaryProjectPath.replace(/'/g, "'\\''")}'`;
       }
@@ -466,7 +473,12 @@ export async function handleSlackCommand(
       if (isSuperAgent(agent) || agent.orchestratorMode) {
         command += ' --disallowed-tools "Edit" "Write" "MultiEdit" "NotebookEdit"';
       }
-      command += ` '${task.replace(/'/g, "'\\''")}'`;
+      if (agent.skills && agent.skills.length > 0 && !isSuperAgent(agent)) {
+        const slackSkillsList = agent.skills.join(', ');
+        command += ` '[IMPORTANT: Use these skills for this session: ${slackSkillsList}. Invoke them with /<skill-name> when relevant to the task.] ${task.replace(/'/g, "'\\''")}'`;
+      } else {
+        command += ` '${task.replace(/'/g, "'\\''")}'`;
+      }
 
       agent.status = 'running';
       agent.currentTask = task.slice(0, 100);
@@ -580,12 +592,16 @@ export async function sendToSuperAgentFromSlack(
         "'\\''",
       );
 
-      // Build command with instructions file
-      let command = 'claude';
+      // Build command with instructions file — use provider-aware binary
+      const superAgentSlackProvider = getProvider(superAgent.provider);
+      const superAgentSlackBinary = superAgentSlackProvider.resolveBinaryPath(appSettings).replace(/'/g, "'\\''");
+      let command = `'${superAgentSlackBinary}'`;
 
-      const mcpConfigPath = path.join(app.getPath('home'), '.claude', 'mcp.json');
-      if (fs.existsSync(mcpConfigPath)) {
-        command += ` --mcp-config '${mcpConfigPath}'`;
+      if (superAgentSlackProvider.getMcpConfigStrategy() === 'flag') {
+        const mcpConfigPath = path.join(app.getPath('home'), '.claude', 'mcp.json');
+        if (fs.existsSync(mcpConfigPath)) {
+          command += ` --mcp-config '${mcpConfigPath}'`;
+        }
       }
 
       // Add system prompt from instructions (read via Node.js, not cat - asar compatibility)

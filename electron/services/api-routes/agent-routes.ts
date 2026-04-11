@@ -5,6 +5,7 @@ import { app } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import { agents, saveAgents, killStalePty, ensureProjectTrusted } from '../../core/agent-manager';
 import { ptyProcesses, writeProgrammaticInput } from '../../core/pty-manager';
+import { getProvider } from '../../providers';
 import { buildFullPath } from '../../utils/path-builder';
 import { AgentStatus, AgentCharacter } from '../../types';
 import { RouteApp, RouteContext } from './types';
@@ -169,7 +170,14 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     // break when the path legitimately contains a single quote.
     const rawWorkingDir = agent.worktreePath || agent.projectPath;
     const workingDir = rawWorkingDir.replace(/'/g, "'\\''");
-    let command = `cd '${workingDir}' && claude`;
+
+    // Resolve provider and binary — honours custom CLI paths in Settings and
+    // the agent's provider (claude / openrouter / deepseek / mimo / etc.).
+    const appSettings = ctx.getAppSettings();
+    const cliProvider = getProvider(agent.provider);
+    const binaryPath = cliProvider.resolveBinaryPath(appSettings);
+    const escapedBinary = binaryPath.replace(/'/g, "'\\''");
+    let command = `cd '${workingDir}' && '${escapedBinary}'`;
 
     const isAutomationAgent = agent.name?.toLowerCase().includes('automation:');
     const usePrintMode = printMode || isAutomationAgent;
@@ -181,7 +189,9 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     const isSuperAgentApi = agent.name?.toLowerCase().includes('super agent') ||
                             agent.name?.toLowerCase().includes('orchestrator');
 
-    if (isSuperAgentApi || isAutomationAgent) {
+    // Pass MCP config to all agents using a flag-strategy provider (all claude-based
+    // providers, including OpenRouter/DeepSeek/etc.). Mirrors ipc-handlers behaviour.
+    if (cliProvider.getMcpConfigStrategy() === 'flag') {
       const mcpConfigPath = path.join(app.getPath('home'), '.claude', 'mcp.json');
       if (fs.existsSync(mcpConfigPath)) {
         command += ` --mcp-config '${mcpConfigPath}'`;
@@ -236,6 +246,10 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     // BUG 6: pre-accept Claude Code's workspace trust dialog for this cwd.
     ensureProjectTrusted(rawWorkingDir);
 
+    // Inject provider env vars: CLAUDE_* tracking vars + ANTHROPIC_BASE_URL /
+    // ANTHROPIC_API_KEY for alt providers (OpenRouter, DeepSeek, MiMo, Moonshot,
+    // Qwen, ZhipuAI). Claude provider just returns the CLAUDE_* vars.
+    const providerEnvVars = cliProvider.getPtyEnvVars(agent.id, agent.projectPath, agent.skills || [], appSettings);
     const ptyProcess = pty.spawn(shell, ['-l', '-c', command], {
       name: 'xterm-256color',
       cols: 120,
@@ -245,9 +259,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
         ...process.env,
         PATH: fullPath,
         TERM: 'xterm-256color',
-        CLAUDE_SKILLS: agent.skills?.join(',') || '',
-        CLAUDE_AGENT_ID: agent.id,
-        CLAUDE_PROJECT_PATH: agent.projectPath,
+        ...providerEnvVars,
       },
     });
 
@@ -351,7 +363,13 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       const rawWorkingDir = agent.worktreePath || agent.projectPath;
       const workingDir = rawWorkingDir.replace(/'/g, "'\\''");
       const effectiveMode = agent.permissionMode ?? (agent.skipPermissions ? 'auto' : 'normal');
-      let reconnectCmd = `cd '${workingDir}' && claude`;
+
+      // Resolve provider and binary for the reconnect session (mirrors /start path).
+      const reconnectAppSettings = ctx.getAppSettings();
+      const reconnectProvider = getProvider(agent.provider);
+      const reconnectBinaryPath = reconnectProvider.resolveBinaryPath(reconnectAppSettings);
+      const reconnectEscapedBinary = reconnectBinaryPath.replace(/'/g, "'\\''");
+      let reconnectCmd = `cd '${workingDir}' && '${reconnectEscapedBinary}'`;
       if (effectiveMode === 'auto' || effectiveMode === 'bypass') {
         reconnectCmd += ' --dangerously-skip-permissions';
       }
@@ -361,12 +379,27 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       if (reconnectIsSuper || agent.orchestratorMode) {
         reconnectCmd += ' --disallowed-tools "Edit" "Write" "MultiEdit" "NotebookEdit"';
       }
-      reconnectCmd += ` '${message.replace(/'/g, "'\\''")}'`;
+      // Pass MCP config to reconnected sessions (mirrors /start path).
+      if (reconnectProvider.getMcpConfigStrategy() === 'flag') {
+        const reconnectMcpPath = path.join(app.getPath('home'), '.claude', 'mcp.json');
+        if (fs.existsSync(reconnectMcpPath)) {
+          reconnectCmd += ` --mcp-config '${reconnectMcpPath}'`;
+        }
+      }
+      // Inject skills into reconnect prompt (mirrors /start path behaviour).
+      let reconnectFinalMessage = message;
+      if (agent.skills && agent.skills.length > 0 && !reconnectIsSuper) {
+        const skillsList = agent.skills.join(', ');
+        reconnectFinalMessage = `[IMPORTANT: Use these skills for this session: ${skillsList}. Invoke them with /<skill-name> when relevant to the task.] ${message}`;
+      }
+      reconnectCmd += ` '${reconnectFinalMessage.replace(/'/g, "'\\''")}'`;
 
       const reconnectShell = '/bin/bash';
       const reconnectPath = buildFullPath();
       // BUG 6: pre-accept Claude Code's workspace trust dialog for this cwd.
       ensureProjectTrusted(rawWorkingDir);
+      // Inject provider env vars (ANTHROPIC_BASE_URL/ANTHROPIC_API_KEY for alt providers).
+      const reconnectProviderEnvVars = reconnectProvider.getPtyEnvVars(agent.id, agent.projectPath, agent.skills || [], reconnectAppSettings);
       const reconnectPty = pty.spawn(reconnectShell, ['-l', '-c', reconnectCmd], {
         name: 'xterm-256color',
         cols: 120,
@@ -375,8 +408,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
         env: {
           ...process.env as { [key: string]: string },
           PATH: reconnectPath,
-          CLAUDE_AGENT_ID: agent.id,
-          CLAUDE_PROJECT_PATH: agent.projectPath,
+          ...reconnectProviderEnvVars,
         },
       });
 

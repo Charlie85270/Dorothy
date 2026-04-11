@@ -125,7 +125,19 @@ export interface WorktreeConfig {
 
 export type AgentCharacter = 'robot' | 'ninja' | 'wizard' | 'astronaut' | 'knight' | 'pirate' | 'alien' | 'viking' | 'frog';
 
-export type AgentProvider = 'claude' | 'codex' | 'gemini' | 'opencode' | 'pi' | 'local';
+export type AgentProvider =
+  | 'claude'
+  | 'codex'
+  | 'gemini'
+  | 'opencode'
+  | 'pi'
+  | 'local'
+  | 'openrouter'
+  | 'deepseek'
+  | 'mimo'
+  | 'moonshot'
+  | 'qwen'
+  | 'zhipu';
 
 export interface AgentStatus {
   id: string;
@@ -548,6 +560,7 @@ export interface ElectronAPI {
         projectPath: string;
         agentId?: string;
         agentName?: string;
+        provider?: string;
         autonomous: boolean;
         worktree?: {
           enabled: boolean;
@@ -569,6 +582,8 @@ export interface ElectronAPI {
       prompt: string;
       schedule: string;
       projectPath: string;
+      provider?: string;
+      skills?: string[];
       autonomous: boolean;
       useWorktree?: boolean;
       notifications?: {
@@ -627,6 +642,8 @@ export interface ElectronAPI {
       agentEnabled?: boolean;
       agentPrompt?: string;
       agentProjectPath?: string;
+      agentProvider?: string;
+      agentSkills?: string[];
       outputTelegram?: boolean;
       outputSlack?: boolean;
       outputGitHubComment?: boolean;

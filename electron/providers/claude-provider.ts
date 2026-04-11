@@ -162,11 +162,12 @@ export class ClaudeProvider implements CLIProvider {
     return command;
   }
 
-  getPtyEnvVars(agentId: string, projectPath: string, skills: string[]): Record<string, string> {
+  getPtyEnvVars(agentId: string, projectPath: string, skills: string[], _appSettings?: AppSettings): Record<string, string> {
     return {
       CLAUDE_SKILLS: skills.join(','),
       CLAUDE_AGENT_ID: agentId,
       CLAUDE_PROJECT_PATH: projectPath,
+      CLAUDE_PROVIDER: this.id,
     };
   }
 
@@ -399,8 +400,12 @@ export class ClaudeProvider implements CLIProvider {
     mcpConfigPath: string;
     logPath: string;
     homeDir: string;
+    skills?: string[];
   }): string {
     const flags = params.autonomous ? '--dangerously-skip-permissions' : '';
+    const promptWithSkills = (params.skills && params.skills.length > 0)
+      ? `[IMPORTANT: Use these skills for this session: ${params.skills.join(', ')}. Invoke them with /<skill-name> when relevant to the task.] ${params.prompt}`
+      : params.prompt;
 
     return `#!/bin/bash
 
@@ -423,7 +428,7 @@ export PATH="${params.binaryDir}:$PATH"
 cd "${params.projectPath}"
 echo "=== Task started at $(date) ===" >> "${params.logPath}"
 unset CLAUDECODE
-CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 "${params.binaryPath}" ${flags} --output-format stream-json --verbose --mcp-config "${params.mcpConfigPath}" --add-dir "${params.homeDir}/.dorothy" -p '${params.prompt}' >> "${params.logPath}" 2>&1
+CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 "${params.binaryPath}" ${flags} --output-format stream-json --verbose --mcp-config "${params.mcpConfigPath}" --add-dir "${params.homeDir}/.dorothy" -p '${promptWithSkills}' >> "${params.logPath}" 2>&1
 echo "=== Task completed at $(date) ===" >> "${params.logPath}"
 `;
   }

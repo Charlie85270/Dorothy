@@ -10,6 +10,7 @@ interface CreateAgentConfig {
   secondaryProjectPath?: string;
   permissionMode?: 'normal' | 'auto' | 'bypass';
   effort?: 'low' | 'medium' | 'high';
+  orchestratorMode?: boolean;
 }
 
 interface UseAgentActionsProps {
@@ -78,9 +79,10 @@ export function useAgentActions({
     _localModel?: string,
     _obsidianVaultPaths?: string[],
     effort?: 'low' | 'medium' | 'high',
+    orchestratorMode?: boolean,
   ) => {
     try {
-      const agent = await createAgent({ projectPath, skills, worktree, character, name, secondaryProjectPath, permissionMode, effort });
+      const agent = await createAgent({ projectPath, skills, worktree, character, name, secondaryProjectPath, permissionMode, effort, orchestratorMode });
       setShowCreateAgentModal(false);
       setCreateAgentProjectPath(null);
 
@@ -131,6 +133,7 @@ export function useAgentActions({
         character: 'wizard',
         name: 'Super Agent (Orchestrator)',
         permissionMode: 'auto',
+        orchestratorMode: true,
       });
 
       await startAgent(agent.id, orchestratorPrompt);

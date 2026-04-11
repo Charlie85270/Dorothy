@@ -174,6 +174,7 @@ export default function NewChatModal({
         setProvider(editAgent.provider || 'claude');
         setLocalModel(editAgent.localModel || '');
         setSelectedObsidianVaults(editAgent.obsidianVaultPaths || []);
+        setIsOrchestrator(editAgent.orchestratorMode || false);
         setDetectedVault(null);
       } else {
         // Create mode: reset everything
@@ -353,6 +354,7 @@ export default function NewChatModal({
         savedPrompt: prompt.trim() || null,
         obsidianVaultPaths: selectedObsidianVaults.length > 0 ? selectedObsidianVaults : [],
         worktree: worktreeConfig,
+        orchestratorMode: isOrchestrator,
       });
       onClose();
       return;
@@ -363,7 +365,7 @@ export default function NewChatModal({
       || (selectedSkills.length > 0 ? `Use the following skills: ${selectedSkills.join(', ')}` : '');
     const worktreeConfig = useWorktree ? { enabled: true, branchName: branchName.trim() } : undefined;
 
-    onSubmit(projectPath, selectedSkills, finalPrompt, model, worktreeConfig, agentCharacter, finalName, secondaryPath, permissionMode, provider, localModel, selectedObsidianVaults.length > 0 ? selectedObsidianVaults : undefined, effort);
+    onSubmit(projectPath, selectedSkills, finalPrompt, model, worktreeConfig, agentCharacter, finalName, secondaryPath, permissionMode, provider, localModel, selectedObsidianVaults.length > 0 ? selectedObsidianVaults : undefined, effort, isOrchestrator);
 
     // Reset form
     setStep(1);

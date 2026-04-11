@@ -55,6 +55,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       model?: string;
       localModel?: string;
       obsidianVaultPaths?: string[];
+      orchestratorMode?: boolean;
     }) => ipcRenderer.invoke('agent:create', config),
     update: (params: {
       id: string;
@@ -70,6 +71,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       savedPrompt?: string | null;
       obsidianVaultPaths?: string[];
       worktree?: { enabled: boolean; branchName: string };
+      orchestratorMode?: boolean;
     }) => ipcRenderer.invoke('agent:update', params),
     start: (params: { id: string; prompt: string; options?: { model?: string; resume?: boolean; provider?: string; localModel?: string } }) =>
       ipcRenderer.invoke('agent:start', params),

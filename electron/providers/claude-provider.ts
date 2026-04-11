@@ -68,6 +68,14 @@ export class ClaudeProvider implements CLIProvider {
       command += ' --dangerously-skip-permissions';
     }
 
+    // Orchestrator mode: block all file-mutating tools so the agent cannot do
+    // implementation work itself and is forced to delegate. Bash is left
+    // available so it can still run git/gh and inspection commands — the
+    // orchestrator persona guides it to delegate coding instead of running it.
+    if (params.orchestratorMode) {
+      command += ' --disallowed-tools "Edit" "Write" "MultiEdit" "NotebookEdit"';
+    }
+
     // Effort level
     if (params.effort && params.effort !== 'medium') {
       command += ` --effort ${params.effort}`;

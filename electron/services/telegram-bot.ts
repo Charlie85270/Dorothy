@@ -728,6 +728,7 @@ export function initTelegramBot() {
           mcpConfigPath,
           skills: [...new Set([...(agent.skills || []), 'world-builder'])],
           isSuperAgent: isSuperAgent(agent),
+          orchestratorMode: isSuperAgent(agent) || agent.orchestratorMode,
         });
 
         agent.status = 'running';
@@ -1264,6 +1265,7 @@ export async function sendToSuperAgent(chatId: string, message: string, attached
         systemPromptFile,
         skills: [...new Set([...(superAgent.skills || []), 'world-builder'])],
         isSuperAgent: true,
+        orchestratorMode: true,
       });
 
       superAgent.status = 'running';

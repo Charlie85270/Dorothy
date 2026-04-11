@@ -44,6 +44,10 @@ export interface AgentStatus {
   skipPermissions?: boolean;
   permissionMode?: AgentPermissionMode;
   effort?: AgentEffort;
+  /** When true, the agent is an orchestrator and should not have Edit/Write
+   *  implementation tools available — it can only read, delegate, and use
+   *  shell/git commands. See BUG 5. */
+  orchestratorMode?: boolean;
   currentSessionId?: string;
   kanbanTaskId?: string;  // For kanban task completion tracking
   statusLine?: string;       // ANSI-stripped last meaningful output line

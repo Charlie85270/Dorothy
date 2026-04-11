@@ -26,6 +26,7 @@ vi.mock('../../../../electron/core/agent-manager', () => ({
   saveAgents: vi.fn(),
   initAgentPty: vi.fn(),
   killStalePty: vi.fn(),
+  ensureProjectTrusted: vi.fn(),
 }));
 
 vi.mock('../../../../electron/core/pty-manager', () => ({

@@ -148,6 +148,8 @@ export interface AgentStatus {
   skipPermissions?: boolean;
   permissionMode?: 'normal' | 'auto' | 'bypass';
   effort?: 'low' | 'medium' | 'high';
+  /** Orchestrator mode: agent cannot edit files directly; must delegate. */
+  orchestratorMode?: boolean;
   provider?: AgentProvider;   // 'claude' (default) or 'local' (Tasmania)
   model?: string;              // Model name (e.g. 'sonnet', 'opus', 'haiku')
   localModel?: string;        // Tasmania model name when provider is 'local'
@@ -195,6 +197,7 @@ export interface ElectronAPI {
       provider?: AgentProvider;
       localModel?: string;
       obsidianVaultPaths?: string[];
+      orchestratorMode?: boolean;
     }) => Promise<AgentStatus & { ptyId: string }>;
     update: (params: {
       id: string;
@@ -204,6 +207,7 @@ export interface ElectronAPI {
       effort?: 'low' | 'medium' | 'high';
       name?: string;
       character?: AgentCharacter;
+      orchestratorMode?: boolean;
     }) => Promise<{ success: boolean; error?: string; agent?: AgentStatus }>;
     start: (params: { id: string; prompt: string; options?: { model?: string; resume?: boolean; provider?: AgentProvider; localModel?: string } }) => Promise<{ success: boolean }>;
     get: (id: string) => Promise<AgentStatus | null>;

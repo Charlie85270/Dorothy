@@ -34,6 +34,7 @@ export interface EditAgentData {
   branchName?: string;
   obsidianVaultPaths?: string[];
   savedPrompt?: string;
+  orchestratorMode?: boolean;
 }
 
 export interface NewChatModalProps {
@@ -53,6 +54,7 @@ export interface NewChatModalProps {
     localModel?: string,
     obsidianVaultPaths?: string[],
     effort?: AgentEffort,
+    orchestratorMode?: boolean,
   ) => void;
   onUpdate?: (id: string, updates: {
     skills?: string[];
@@ -67,6 +69,7 @@ export interface NewChatModalProps {
     savedPrompt?: string | null;
     obsidianVaultPaths?: string[];
     worktree?: WorktreeConfig;
+    orchestratorMode?: boolean;
   }) => void;
   editAgent?: EditAgentData | null;
   projects: Project[];

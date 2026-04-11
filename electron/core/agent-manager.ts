@@ -16,6 +16,63 @@ import { scheduleTick } from '../utils/agents-tick';
 
 export const agents: Map<string, AgentStatus> = new Map();
 
+/**
+ * Pre-populate Claude Code's workspace trust record for a given directory.
+ *
+ * BUG 6 fix: `--dangerously-skip-permissions` skips *runtime* permission
+ * prompts (Edit/Write/Bash confirmations), but Claude Code has a SEPARATE
+ * "workspace trust" dialog that fires on first launch in an unknown directory.
+ * That dialog is gated by `~/.claude.json`'s
+ * `projects[<absolute-path>].hasTrustDialogAccepted` flag — NOT by the
+ * runtime permission mode. So even a bypass-mode agent hits the trust prompt
+ * on first launch in a new project.
+ *
+ * Writing the flag ourselves before we spawn the claude process makes the
+ * trust dialog never appear. Safe to call repeatedly and idempotent.
+ */
+export function ensureProjectTrusted(projectPath: string): void {
+  if (!projectPath) return;
+  const claudeJsonPath = path.join(os.homedir(), '.claude.json');
+  type ClaudeConfig = {
+    projects?: Record<string, {
+      hasTrustDialogAccepted?: boolean;
+      projectOnboardingSeenCount?: number;
+      [key: string]: unknown;
+    }>;
+    [key: string]: unknown;
+  };
+  let config: ClaudeConfig = {};
+  try {
+    if (fs.existsSync(claudeJsonPath)) {
+      const raw = fs.readFileSync(claudeJsonPath, 'utf-8');
+      if (raw.trim()) {
+        config = JSON.parse(raw) as ClaudeConfig;
+      }
+    }
+  } catch (err) {
+    console.warn(`ensureProjectTrusted: failed to read ${claudeJsonPath}:`, err);
+    // If the file exists but is unreadable/corrupt, don't overwrite it.
+    if (fs.existsSync(claudeJsonPath)) return;
+  }
+
+  if (!config.projects) config.projects = {};
+  const existing = config.projects[projectPath] ?? {};
+  if (existing.hasTrustDialogAccepted === true) return;
+
+  config.projects[projectPath] = {
+    ...existing,
+    hasTrustDialogAccepted: true,
+    projectOnboardingSeenCount: existing.projectOnboardingSeenCount ?? 1,
+  };
+
+  try {
+    fs.writeFileSync(claudeJsonPath, JSON.stringify(config, null, 2));
+    console.log(`ensureProjectTrusted: marked ${projectPath} trusted in ~/.claude.json`);
+  } catch (err) {
+    console.warn(`ensureProjectTrusted: failed to write ${claudeJsonPath}:`, err);
+  }
+}
+
 export let agentsLoaded = false;
 export let superAgentTelegramTask = false;
 export let superAgentOutputBuffer: string[] = [];
@@ -272,6 +329,10 @@ export async function initAgentPty(
     console.warn(`Agent ${agent.id} cwd does not exist: ${cwd} — falling back to home directory`);
     cwd = os.homedir();
   }
+
+  // BUG 6: pre-accept Claude Code's workspace trust dialog for this cwd so
+  // bypass-mode agents never see the first-launch prompt.
+  ensureProjectTrusted(cwd);
 
   console.log(`Initializing PTY for restored agent ${agent.id} in ${cwd}`);
 

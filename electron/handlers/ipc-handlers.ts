@@ -19,7 +19,7 @@ import { buildFullPath } from '../utils/path-builder';
 import { decodeProjectPath } from '../utils/decode-project-path';
 import { getProvider, getAllProviders } from '../providers';
 import { writeProgrammaticInput } from '../core/pty-manager';
-import { killStalePty } from '../core/agent-manager';
+import { killStalePty, ensureProjectTrusted } from '../core/agent-manager';
 import { extractStatusLine } from '../utils/ansi';
 import { scheduleTick } from '../utils/agents-tick';
 
@@ -223,6 +223,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     model?: string;
     localModel?: string;
     obsidianVaultPaths?: string[];
+    orchestratorMode?: boolean;
   }) => {
     const id = uuidv4();
     const shell = '/bin/bash';
@@ -324,6 +325,10 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     const agentProvider = getProvider(config.provider);
     const providerEnvVars = agentProvider.getPtyEnvVars(id, config.projectPath, allSkills);
 
+    // BUG 6: pre-accept Claude Code's workspace trust dialog for this cwd so
+    // bypass/auto-mode agents never see the first-launch trust prompt.
+    ensureProjectTrusted(cwd);
+
     let ptyProcess: pty.IPty;
     try {
       ptyProcess = pty.spawn(shell, ['-l'], {
@@ -373,6 +378,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       name: config.name || `Agent ${id.slice(0, 4)}`,
       permissionMode: config.permissionMode || 'normal',
       effort: config.effort,
+      orchestratorMode: config.orchestratorMode || false,
       provider: config.provider || 'claude',
       model: config.model,
       localModel: config.localModel,
@@ -511,6 +517,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       const workingDir = agent.worktreePath || agent.projectPath;
       const cwd = fs.existsSync(workingDir) ? workingDir : os.homedir();
 
+      // BUG 6: pre-accept Claude Code's workspace trust dialog for this cwd.
+      ensureProjectTrusted(cwd);
+
       // Local provider uses Claude provider env vars + Tasmania env vars
       const localProviderEnvVars = getProvider('claude').getPtyEnvVars(agent.id, agent.projectPath, agent.skills);
 
@@ -635,6 +644,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       skills: allAgentSkills,
       isSuperAgent: isSuperAgentCheck,
       chrome: appSettingsForCommand.chromeEnabled,
+      // BUG 5: Super Agent is implicitly an orchestrator; regular agents opt in
+      // via the "Orchestrator Mode" toggle in NewChatModal.
+      orchestratorMode: isSuperAgentCheck || agent.orchestratorMode,
     });
 
     // Persist the prompt for future re-launches and update status
@@ -712,6 +724,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     savedPrompt?: string | null;
     obsidianVaultPaths?: string[];
     worktree?: WorktreeConfig;
+    orchestratorMode?: boolean;
   }) => {
     const agent = agents.get(params.id);
     if (!agent) {
@@ -757,6 +770,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     }
     if (params.obsidianVaultPaths !== undefined) {
       agent.obsidianVaultPaths = params.obsidianVaultPaths;
+    }
+    if (params.orchestratorMode !== undefined) {
+      agent.orchestratorMode = params.orchestratorMode;
     }
     if (params.worktree !== undefined && !agent.worktreePath) {
       // Only allow worktree setup if agent doesn't already have one

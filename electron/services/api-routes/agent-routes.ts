@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as pty from 'node-pty';
 import { app } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
-import { agents, saveAgents, killStalePty } from '../../core/agent-manager';
+import { agents, saveAgents, killStalePty, ensureProjectTrusted } from '../../core/agent-manager';
 import { ptyProcesses, writeProgrammaticInput } from '../../core/pty-manager';
 import { buildFullPath } from '../../utils/path-builder';
 import { AgentStatus, AgentCharacter } from '../../types';
@@ -114,13 +114,14 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
 
   // POST /api/agents
   app_.post('/api/agents', (req, sendJson) => {
-    const { projectPath, name, skills = [], character, permissionMode, secondaryProjectPath } = req.body as {
+    const { projectPath, name, skills = [], character, permissionMode, secondaryProjectPath, orchestratorMode } = req.body as {
       projectPath: string;
       name?: string;
       skills?: string[];
       character?: AgentCharacter;
       permissionMode?: 'normal' | 'auto' | 'bypass';
       secondaryProjectPath?: string;
+      orchestratorMode?: boolean;
     };
 
     if (!projectPath) {
@@ -140,6 +141,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       character,
       name: name || `Agent ${id.slice(0, 6)}`,
       permissionMode: permissionMode || 'auto',
+      orchestratorMode: orchestratorMode || false,
     };
     agents.set(id, agent);
     saveAgents();
@@ -193,6 +195,10 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     if (effectiveMode === 'auto' || effectiveMode === 'bypass') {
       command += ' --dangerously-skip-permissions';
     }
+    // BUG 5: orchestrator-mode agents cannot edit files directly — must delegate.
+    if (isSuperAgentApi || agent.orchestratorMode) {
+      command += ' --disallowed-tools "Edit" "Write" "MultiEdit" "NotebookEdit"';
+    }
     const resolvedModel = model || agent.model;
     // 'default' is a Dorothy UI alias meaning "let Claude CLI pick"; omit the flag.
     if (resolvedModel && resolvedModel !== 'default') {
@@ -226,6 +232,9 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
         ptyProcesses.delete(agent.ptyId);
       }
     }
+
+    // BUG 6: pre-accept Claude Code's workspace trust dialog for this cwd.
+    ensureProjectTrusted(rawWorkingDir);
 
     const ptyProcess = pty.spawn(shell, ['-l', '-c', command], {
       name: 'xterm-256color',
@@ -346,10 +355,18 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       if (effectiveMode === 'auto' || effectiveMode === 'bypass') {
         reconnectCmd += ' --dangerously-skip-permissions';
       }
+      // BUG 5: orchestrator-mode agents cannot edit files directly — must delegate.
+      const reconnectIsSuper = agent.name?.toLowerCase().includes('super agent') ||
+                               agent.name?.toLowerCase().includes('orchestrator');
+      if (reconnectIsSuper || agent.orchestratorMode) {
+        reconnectCmd += ' --disallowed-tools "Edit" "Write" "MultiEdit" "NotebookEdit"';
+      }
       reconnectCmd += ` '${message.replace(/'/g, "'\\''")}'`;
 
       const reconnectShell = '/bin/bash';
       const reconnectPath = buildFullPath();
+      // BUG 6: pre-accept Claude Code's workspace trust dialog for this cwd.
+      ensureProjectTrusted(rawWorkingDir);
       const reconnectPty = pty.spawn(reconnectShell, ['-l', '-c', reconnectCmd], {
         name: 'xterm-256color',
         cols: 120,

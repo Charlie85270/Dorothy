@@ -17,6 +17,9 @@ export interface InteractiveCommandParams {
   skills?: string[];
   isSuperAgent?: boolean;
   chrome?: boolean;
+  /** Orchestrator mode: disable Edit/Write/MultiEdit/NotebookEdit so the agent
+   *  cannot do implementation work itself and must delegate. See BUG 5. */
+  orchestratorMode?: boolean;
 }
 
 /**

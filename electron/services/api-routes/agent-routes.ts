@@ -190,8 +190,11 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       command += ' --dangerously-skip-permissions';
     }
     const resolvedModel = model || agent.model;
-    if (resolvedModel) {
-      if (!/^[a-zA-Z0-9._:/-]+$/.test(resolvedModel)) {
+    // 'default' is a Dorothy UI alias meaning "let Claude CLI pick"; omit the flag.
+    if (resolvedModel && resolvedModel !== 'default') {
+      // Allow the same characters as claude-provider.ts buildInteractiveCommand,
+      // including brackets used by 1M-context variants (e.g. sonnet[1m]).
+      if (!/^[a-zA-Z0-9._:\/\[\]-]+$/.test(resolvedModel)) {
         sendJson({ error: 'Invalid model name' }, 400);
         return;
       }

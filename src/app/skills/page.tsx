@@ -20,8 +20,12 @@ import {
 import { useClaude } from '@/hooks/useClaude';
 import { useElectronSkills } from '@/hooks/useElectron';
 import { SKILLS_DATABASE, fetchSkillsFromMarketplace, type Skill } from '@/lib/skills-database';
+import { PROVIDER_REGISTRY } from '@/lib/providers';
 import TerminalDialog from '@/components/TerminalDialog';
 import ProviderBadge from '@/components/ProviderBadge';
+
+/** Providers with a local CLI binary that have their own skill directory */
+const CLI_PROVIDER_IDS = PROVIDER_REGISTRY.filter((p) => p.requiresCli).map((p) => p.id);
 
 const COL_STYLES = {
   rank: { width: '4%' },
@@ -487,7 +491,7 @@ export default function SkillsPage() {
         open={showInstallTerminal}
         repo={currentInstallRepo}
         title={currentInstallTitle}
-        availableProviders={['claude', 'codex', 'gemini']}
+        availableProviders={CLI_PROVIDER_IDS}
         onClose={(success) => {
           setShowInstallTerminal(false);
           setInstallingSkill(null);

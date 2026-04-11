@@ -15,6 +15,7 @@ import {
 import { SKILLS_DATABASE, SKILL_CATEGORIES, type Skill } from '@/lib/skills-database';
 import type { ClaudeSkill } from '@/lib/claude-code';
 import type { AgentProvider } from '@/types/electron';
+import { PROVIDER_REGISTRY } from '@/lib/providers';
 import ProviderBadge from '@/components/ProviderBadge';
 
 interface StepToolsProps {
@@ -31,7 +32,8 @@ interface StepToolsProps {
   onToggleVault: (vaultPath: string) => void;
 }
 
-const PROVIDER_IDS = ['claude', 'codex', 'gemini'] as const;
+/** CLI-based providers that have their own skill directories */
+const PROVIDER_IDS = PROVIDER_REGISTRY.filter((p) => p.requiresCli).map((p) => p.id);
 
 const StepTools = React.memo(function StepTools({
   selectedSkills,

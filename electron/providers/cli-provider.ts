@@ -136,5 +136,7 @@ export interface CLIProvider {
     mcpConfigPath: string;
     logPath: string;
     homeDir: string;
+    /** Optional skills list to inject as a prompt prefix (same as interactive sessions) */
+    skills?: string[];
   }): string;
 }

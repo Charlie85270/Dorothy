@@ -113,6 +113,7 @@ export class CodexProvider implements CLIProvider {
       DOROTHY_SKILLS: skills.join(','),
       DOROTHY_AGENT_ID: agentId,
       DOROTHY_PROJECT_PATH: projectPath,
+      CLAUDE_PROVIDER: this.id,
     };
   }
 
@@ -275,8 +276,12 @@ export class CodexProvider implements CLIProvider {
     mcpConfigPath: string;
     logPath: string;
     homeDir: string;
+    skills?: string[];
   }): string {
     const flags = params.autonomous ? '--full-auto' : '';
+    const promptWithSkills = (params.skills && params.skills.length > 0)
+      ? `[IMPORTANT: Use these skills for this session: ${params.skills.join(', ')}. Invoke them with /<skill-name> when relevant to the task.] ${params.prompt}`
+      : params.prompt;
 
     return `#!/bin/bash
 
@@ -298,7 +303,7 @@ fi
 export PATH="${params.binaryDir}:$PATH"
 cd "${params.projectPath}"
 echo "=== Task started at $(date) ===" >> "${params.logPath}"
-"${params.binaryPath}" ${flags} --json exec '${params.prompt}' >> "${params.logPath}" 2>&1
+"${params.binaryPath}" ${flags} --json exec '${promptWithSkills}' >> "${params.logPath}" 2>&1
 echo "=== Task completed at $(date) ===" >> "${params.logPath}"
 `;
   }

@@ -79,6 +79,7 @@ export class QwenProvider implements CLIProvider {
       CLAUDE_SKILLS: skills.join(','),
       CLAUDE_AGENT_ID: agentId,
       CLAUDE_PROJECT_PATH: projectPath,
+      CLAUDE_PROVIDER: this.id,
     };
     if (appSettings?.qwenApiKey) {
       vars.ANTHROPIC_BASE_URL = QWEN_BASE_URL;
@@ -130,8 +131,11 @@ export class QwenProvider implements CLIProvider {
   getMemoryBasePath(): string { return path.join(this.configDir, 'projects'); }
   getAddDirFlag(): string { return '--add-dir'; }
 
-  buildScheduledScript(params: { binaryPath: string; binaryDir: string; projectPath: string; prompt: string; autonomous: boolean; mcpConfigPath: string; logPath: string; homeDir: string; }): string {
+  buildScheduledScript(params: { binaryPath: string; binaryDir: string; projectPath: string; prompt: string; autonomous: boolean; mcpConfigPath: string; logPath: string; homeDir: string; skills?: string[]; }): string {
     const flags = params.autonomous ? '--dangerously-skip-permissions' : '';
+    const promptWithSkills = (params.skills && params.skills.length > 0)
+      ? `[IMPORTANT: Use these skills for this session: ${params.skills.join(', ')}. Invoke them with /<skill-name> when relevant to the task.] ${params.prompt}`
+      : params.prompt;
     return `#!/bin/bash
 export HOME="${params.homeDir}"
 if [ -s "${params.homeDir}/.nvm/nvm.sh" ]; then source "${params.homeDir}/.nvm/nvm.sh" 2>/dev/null || true; fi
@@ -140,7 +144,7 @@ export PATH="${params.binaryDir}:$PATH"
 cd "${params.projectPath}"
 echo "=== Task started at $(date) ===" >> "${params.logPath}"
 unset CLAUDECODE
-"${params.binaryPath}" ${flags} --output-format stream-json --verbose --mcp-config "${params.mcpConfigPath}" --add-dir "${params.homeDir}/.dorothy" -p '${params.prompt}' >> "${params.logPath}" 2>&1
+"${params.binaryPath}" ${flags} --output-format stream-json --verbose --mcp-config "${params.mcpConfigPath}" --add-dir "${params.homeDir}/.dorothy" -p '${promptWithSkills}' >> "${params.logPath}" 2>&1
 echo "=== Task completed at $(date) ===" >> "${params.logPath}"
 `;
   }

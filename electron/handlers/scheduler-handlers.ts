@@ -530,6 +530,7 @@ export function registerSchedulerHandlers(deps: SchedulerDeps): void {
         projectPath: string;
         agentId?: string;
         agentName?: string;
+        provider?: AgentProvider;
         autonomous: boolean;
         worktree?: { enabled: boolean; branchPrefix?: string };
         notifications: { telegram: boolean; slack: boolean };
@@ -578,6 +579,7 @@ export function registerSchedulerHandlers(deps: SchedulerDeps): void {
                 projectPath: schedule.projectPath || schedule.project || os.homedir(),
                 agentId: taskMeta.agentId,
                 agentName: taskMeta.agentName,
+                provider: taskMeta.provider,
                 autonomous: schedule.autonomous ?? true,
                 worktree: schedule.worktree,
                 notifications: taskMeta.notifications,
@@ -636,6 +638,7 @@ export function registerSchedulerHandlers(deps: SchedulerDeps): void {
                       projectPath: schedule.projectPath || projectPath,
                       agentId: taskMeta.agentId,
                       agentName: taskMeta.agentName,
+                      provider: taskMeta.provider,
                       autonomous: schedule.autonomous ?? true,
                       worktree: schedule.worktree,
                       notifications: taskMeta.notifications,
@@ -785,6 +788,7 @@ export function registerSchedulerHandlers(deps: SchedulerDeps): void {
                   projectPath,
                   agentId: taskMeta.agentId,
                   agentName: taskMeta.agentName,
+                  provider: taskMeta.provider,
                   autonomous: true,
                   worktree: undefined,
                   notifications: taskMeta.notifications,
@@ -818,6 +822,7 @@ export function registerSchedulerHandlers(deps: SchedulerDeps): void {
     projectPath: string;
     agentId?: string;
     agentName?: string;
+    provider?: AgentProvider;
     autonomous?: boolean;
     worktree?: { enabled: boolean; branchPrefix?: string };
     notifications?: { telegram: boolean; slack: boolean };
@@ -855,8 +860,9 @@ export function registerSchedulerHandlers(deps: SchedulerDeps): void {
       }
       fs.writeFileSync(globalSchedulesPath, JSON.stringify(schedules, null, 2));
 
-      // Resolve provider: agent's provider > default provider > 'claude'
-      const taskProvider: AgentProvider = (config.agentId && deps.agents.get(config.agentId)?.provider)
+      // Resolve provider: explicit config > agent's provider > default provider > 'claude'
+      const taskProvider: AgentProvider = config.provider
+        || (config.agentId && deps.agents.get(config.agentId)?.provider)
         || resolveDefaultProvider(deps);
 
       // Save metadata

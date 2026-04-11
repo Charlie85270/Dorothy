@@ -520,8 +520,12 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       // BUG 6: pre-accept Claude Code's workspace trust dialog for this cwd.
       ensureProjectTrusted(cwd);
 
-      // Local provider uses Claude provider env vars + Tasmania env vars
-      const localProviderEnvVars = getProvider('claude').getPtyEnvVars(agent.id, agent.projectPath, agent.skills, currentSettings);
+      // Local provider uses Claude provider env vars + Tasmania env vars.
+      // Override CLAUDE_PROVIDER to 'local' so usage tracking records the correct provider.
+      const localProviderEnvVars = {
+        ...getProvider('claude').getPtyEnvVars(agent.id, agent.projectPath, agent.skills, currentSettings),
+        CLAUDE_PROVIDER: 'local',
+      };
 
       const newPty = pty.spawn('/bin/bash', ['-l'], {
         name: 'xterm-256color',
@@ -1260,7 +1264,8 @@ function registerClaudeDataHandlers(deps: IpcHandlerDependencies): void {
           let totalIn = 0, totalOut = 0, totalCost = 0, extraCost = 0;
           const modelTokens: Record<string, { in: number; out: number }> = {};
           const dailyCosts: Record<string, { cost: number; extraCost: number }> = {};
-          for (const session of Object.values(raw) as Array<{ in: number; out: number; cost: number; model?: string; extra?: boolean; date?: string }>) {
+          const providerTotals: Record<string, { in: number; out: number; cost: number; sessions: number }> = {};
+          for (const session of Object.values(raw) as Array<{ in: number; out: number; cost: number; model?: string; extra?: boolean; date?: string; provider?: string }>) {
             totalIn += session.in || 0;
             totalOut += session.out || 0;
             totalCost += session.cost || 0;
@@ -1283,6 +1288,15 @@ function registerClaudeDataHandlers(deps: IpcHandlerDependencies): void {
                 dailyCosts[session.date].extraCost += session.cost || 0;
               }
             }
+            // Per-provider breakdown (defaults legacy rows to 'claude')
+            const providerKey = session.provider || 'claude';
+            if (!providerTotals[providerKey]) {
+              providerTotals[providerKey] = { in: 0, out: 0, cost: 0, sessions: 0 };
+            }
+            providerTotals[providerKey].in += session.in || 0;
+            providerTotals[providerKey].out += session.out || 0;
+            providerTotals[providerKey].cost += session.cost || 0;
+            providerTotals[providerKey].sessions += 1;
           }
           tokenStats = {
             totalInputTokens: totalIn,
@@ -1292,6 +1306,7 @@ function registerClaudeDataHandlers(deps: IpcHandlerDependencies): void {
             sessionCount: Object.keys(raw).length,
             modelTokens,
             dailyCosts,
+            providerTotals,
           };
         }
       } catch {

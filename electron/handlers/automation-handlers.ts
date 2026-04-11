@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { spawn } from 'child_process';
-import { getProvider } from '../providers';
+import { getProvider, isValidProvider } from '../providers';
 import type { AgentProvider } from '../types';
 
 // ============================================
@@ -109,7 +109,7 @@ function getDefaultProvider(): AgentProvider {
     const settingsFile = path.join(os.homedir(), '.dorothy', 'app-settings.json');
     if (fs.existsSync(settingsFile)) {
       const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'));
-      if (settings.defaultProvider && ['claude', 'codex', 'gemini'].includes(settings.defaultProvider)) {
+      if (settings.defaultProvider && isValidProvider(settings.defaultProvider)) {
         return settings.defaultProvider as AgentProvider;
       }
     }
@@ -390,6 +390,7 @@ export function registerAutomationHandlers(): void {
     agentEnabled?: boolean;
     agentPrompt?: string;
     agentProjectPath?: string;
+    agentProvider?: AgentProvider;
     outputTelegram?: boolean;
     outputSlack?: boolean;
     outputGitHubComment?: boolean;
@@ -451,7 +452,9 @@ export function registerAutomationHandlers(): void {
           enabled: params.agentEnabled ?? false,
           projectPath: params.agentProjectPath,
           prompt: params.agentPrompt || '',
-          provider: getDefaultProvider(),
+          provider: (params.agentProvider && isValidProvider(params.agentProvider))
+            ? params.agentProvider
+            : getDefaultProvider(),
         },
         outputs,
       };

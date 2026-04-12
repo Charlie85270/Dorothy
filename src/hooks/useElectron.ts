@@ -293,7 +293,8 @@ export function useElectronFS() {
 
     try {
       const list = await window.electronAPI!.fs.listProjects();
-      setProjects(list);
+      // Filter out worktree paths to avoid duplicate React keys
+      setProjects(list.filter((p: { path: string }) => !p.path.includes('/.worktrees/')));
     } catch (error) {
       console.error('Failed to fetch projects:', error);
     } finally {

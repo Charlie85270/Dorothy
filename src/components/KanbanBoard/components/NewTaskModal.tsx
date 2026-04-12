@@ -83,7 +83,9 @@ export function NewTaskModal({ onClose, onCreate }: NewTaskModalProps) {
   useEffect(() => {
     const loadProjects = async () => {
       if (isElectron() && window.electronAPI?.fs?.listProjects) {
-        const projectList = await window.electronAPI.fs.listProjects();
+        const rawProjects = await window.electronAPI.fs.listProjects();
+        // Filter out worktree paths to avoid duplicate React keys
+        const projectList = rawProjects.filter((p: Project) => !p.path.includes('/.worktrees/'));
 
         // Load app settings for favorites, hidden, and default project
         const settings = await window.electronAPI?.appSettings?.get();

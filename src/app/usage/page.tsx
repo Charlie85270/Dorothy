@@ -23,7 +23,22 @@ import {
   Cpu,
 } from 'lucide-react';
 import { useClaude } from '@/hooks/useClaude';
-import { getProviderDef } from '@/lib/providers';
+import { getProviderDef, PROVIDER_REGISTRY } from '@/lib/providers';
+import { Pencil as PencilIcon } from 'lucide-react';
+
+// Per-provider pricing defaults (input/output per MTok) for the pricing reference table.
+// Users can override these via the edit button.
+const DEFAULT_PROVIDER_PRICING: Record<string, { inputPerMTok: number; outputPerMTok: number } | null> = {
+  claude: null, // Claude uses the detailed MODEL_PRICING below
+  codex: { inputPerMTok: 2, outputPerMTok: 8 },
+  gemini: { inputPerMTok: 1.25, outputPerMTok: 10 },
+  openrouter: null, // varies per model
+  deepseek: { inputPerMTok: 0.55, outputPerMTok: 2.19 },
+  moonshot: { inputPerMTok: 1, outputPerMTok: 4 },
+  mimo: { inputPerMTok: 1, outputPerMTok: 4 },
+  qwen: { inputPerMTok: 0.30, outputPerMTok: 1.20 },
+  zhipu: { inputPerMTok: 0.70, outputPerMTok: 2.80 },
+};
 
 // Token pricing per million tokens (MTok)
 const MODEL_PRICING: Record<string, {
@@ -455,11 +470,11 @@ export default function UsagePage() {
       {/* Header */}
       <div>
         <h1 className="text-xl lg:text-2xl font-bold tracking-tight">
-          <span className="hidden sm:inline">Claude Code Usage & Quota</span>
+          <span className="hidden sm:inline">Usage & Quota</span>
           <span className="sm:hidden">Usage & Quota</span>
         </h1>
         <p className="text-muted-foreground text-xs lg:text-sm mt-1 hidden sm:block">
-          Track your subscription quota, session activity, and estimated API costs
+          Track your subscription quota, session activity, and estimated API costs across all providers
         </p>
       </div>
 
@@ -1250,7 +1265,7 @@ export default function UsagePage() {
         })()}
       </motion.div>
 
-      {/* Pricing Reference Table */}
+      {/* Pricing Reference Table — all providers */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -1269,61 +1284,125 @@ export default function UsagePage() {
         </button>
 
         {showPricingTable && (
-          <div className="mt-4 overflow-x-auto space-y-4">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-border-primary">
-                  <th className="text-left py-2 px-2 text-text-muted font-medium">Model</th>
-                  <th className="text-right py-2 px-2 text-text-muted font-medium">Input</th>
-                  <th className="text-right py-2 px-2 text-text-muted font-medium">Output</th>
-                  <th className="text-right py-2 px-2 text-text-muted font-medium">Cache Hits</th>
-                  <th className="text-right py-2 px-2 text-text-muted font-medium">5m Cache Write</th>
-                  <th className="text-right py-2 px-2 text-text-muted font-medium">1h Cache Write</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  { name: 'Claude Opus 4.6', key: 'claude-opus-4-6' },
-                  { name: 'Claude Opus 4.6 (Fast Mode)', key: 'fast-opus-4-6', fast: true },
-                  { name: 'Claude Opus 4.5', key: 'claude-opus-4-5' },
-                  { name: 'Claude Opus 4.1', key: 'claude-opus-4-1' },
-                  { name: 'Claude Opus 4', key: 'claude-opus-4' },
-                  { name: 'Claude Sonnet 4.6', key: 'claude-sonnet-4-6' },
-                  { name: 'Claude Sonnet 4.5', key: 'claude-sonnet-4-5' },
-                  { name: 'Claude Sonnet 4', key: 'claude-sonnet-4' },
-                  { name: 'Claude Haiku 4.5', key: 'claude-haiku-4-5' },
-                  { name: 'Claude Haiku 3.5', key: 'claude-haiku-3-5' },
-                  { name: 'Claude Haiku 3', key: 'claude-haiku-3' },
-                ].map((model) => {
-                  if ('fast' in model) {
+          <div className="mt-4 overflow-x-auto space-y-6">
+            {/* Claude Models — detailed */}
+            <div>
+              <h4 className="text-xs font-medium text-text-muted mb-2">Claude (Anthropic)</h4>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border-primary">
+                    <th className="text-left py-2 px-2 text-text-muted font-medium">Model</th>
+                    <th className="text-right py-2 px-2 text-text-muted font-medium">Input</th>
+                    <th className="text-right py-2 px-2 text-text-muted font-medium">Output</th>
+                    <th className="text-right py-2 px-2 text-text-muted font-medium">Cache Hits</th>
+                    <th className="text-right py-2 px-2 text-text-muted font-medium">5m Cache Write</th>
+                    <th className="text-right py-2 px-2 text-text-muted font-medium">1h Cache Write</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    { name: 'Opus 4.6', key: 'claude-opus-4-6' },
+                    { name: 'Opus 4.5', key: 'claude-opus-4-5' },
+                    { name: 'Opus 4.1', key: 'claude-opus-4-1' },
+                    { name: 'Sonnet 4.6', key: 'claude-sonnet-4-6' },
+                    { name: 'Sonnet 4.5', key: 'claude-sonnet-4-5' },
+                    { name: 'Sonnet 4', key: 'claude-sonnet-4' },
+                    { name: 'Haiku 4.5', key: 'claude-haiku-4-5' },
+                    { name: 'Haiku 3.5', key: 'claude-haiku-3-5' },
+                    { name: 'Haiku 3', key: 'claude-haiku-3' },
+                  ].map((model) => {
+                    const pricing = MODEL_PRICING[model.key];
                     return (
                       <tr key={model.key} className="border-b border-border-primary/50 hover:bg-bg-tertiary/50">
                         <td className="py-2 px-2 font-medium">{model.name}</td>
-                        <td className="text-right py-2 px-2">$30/MTok</td>
-                        <td className="text-right py-2 px-2">$150/MTok</td>
-                        <td className="text-right py-2 px-2">$3/MTok</td>
-                        <td className="text-right py-2 px-2">$37.50/MTok</td>
-                        <td className="text-right py-2 px-2">$60/MTok</td>
+                        <td className="text-right py-2 px-2">${pricing.inputPerMTok}/MTok</td>
+                        <td className="text-right py-2 px-2">${pricing.outputPerMTok}/MTok</td>
+                        <td className="text-right py-2 px-2">${pricing.cacheHitsPerMTok}/MTok</td>
+                        <td className="text-right py-2 px-2">${pricing.cache5mWritePerMTok}/MTok</td>
+                        <td className="text-right py-2 px-2">${pricing.cache1hWritePerMTok}/MTok</td>
                       </tr>
                     );
-                  }
-                  const pricing = MODEL_PRICING[model.key];
-                  return (
-                    <tr key={model.key} className="border-b border-border-primary/50 hover:bg-bg-tertiary/50">
-                      <td className="py-2 px-2 font-medium">{model.name}</td>
-                      <td className="text-right py-2 px-2">${pricing.inputPerMTok}/MTok</td>
-                      <td className="text-right py-2 px-2">${pricing.outputPerMTok}/MTok</td>
-                      <td className="text-right py-2 px-2">${pricing.cacheHitsPerMTok}/MTok</td>
-                      <td className="text-right py-2 px-2">${pricing.cache5mWritePerMTok}/MTok</td>
-                      <td className="text-right py-2 px-2">${pricing.cache1hWritePerMTok}/MTok</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Other Providers — simplified input/output pricing */}
+            <div>
+              <h4 className="text-xs font-medium text-text-muted mb-2">Other Providers</h4>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border-primary">
+                    <th className="text-left py-2 px-2 text-text-muted font-medium">Provider</th>
+                    <th className="text-right py-2 px-2 text-text-muted font-medium">Input /MTok</th>
+                    <th className="text-right py-2 px-2 text-text-muted font-medium">Output /MTok</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {PROVIDER_REGISTRY.filter(p => p.id !== 'claude').map((p) => {
+                    const pricing = DEFAULT_PROVIDER_PRICING[p.id];
+                    return (
+                      <tr key={p.id} className="border-b border-border-primary/50 hover:bg-bg-tertiary/50">
+                        <td className="py-2 px-2 font-medium">{p.label}</td>
+                        <td className="text-right py-2 px-2">
+                          {pricing ? `$${pricing.inputPerMTok}` : <span className="text-text-muted">&mdash;</span>}
+                        </td>
+                        <td className="text-right py-2 px-2">
+                          {pricing ? `$${pricing.outputPerMTok}` : <span className="text-text-muted">&mdash;</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <p className="text-[10px] text-text-muted mt-2">
+                Pricing shown is approximate default rates. Actual costs may vary by model and routing.
+                OpenRouter pricing varies per model — check openrouter.ai/models for details.
+              </p>
+            </div>
           </div>
         )}
       </motion.div>
+
+      {/* Provider Usage Breakdown */}
+      {data?.tokenStats?.providerTotals && Object.keys(data.tokenStats.providerTotals).length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="rounded-none border border-border-primary bg-bg-secondary p-5"
+        >
+          <div className="text-sm font-medium mb-4 flex items-center gap-2">
+            <Cpu className="w-4 h-4 text-text-muted" />
+            Usage by Provider
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {Object.entries(data.tokenStats.providerTotals)
+              .sort(([, a], [, b]) => b.cost - a.cost)
+              .map(([providerId, totals]) => {
+                const providerDef = getProviderDef(providerId);
+                return (
+                  <div key={providerId} className="p-3 border border-border-primary bg-bg-tertiary/30">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium">{providerDef?.label || providerId}</span>
+                      <span className="text-xs text-accent-green font-mono">${totals.cost.toFixed(2)}</span>
+                    </div>
+                    <div className="text-xs text-text-muted space-y-0.5">
+                      <div className="flex justify-between">
+                        <span>Tokens</span>
+                        <span className="font-mono">{((totals.in + totals.out) / 1000000).toFixed(2)}M</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Sessions</span>
+                        <span className="font-mono">{totals.sessions}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </motion.div>
+      )}
     </div>
   );
 }

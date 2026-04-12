@@ -231,17 +231,26 @@ export default function NewChatModal({
         setRegisteredVaults(info?.vaultPaths || []);
       });
 
-      // Detect installed CLI providers
-      window.electronAPI?.cliPaths?.detect().then((paths) => {
-        if (paths) {
-          setInstalledProviders({
-            claude: !!paths.claude,
-            codex: !!paths.codex,
-            gemini: !!paths.gemini,
-            opencode: !!(paths as Record<string, string>).opencode,
-            pi: !!(paths as Record<string, string>).pi,
-          });
-        }
+      // Detect installed CLI providers + API key availability
+      Promise.all([
+        window.electronAPI?.cliPaths?.detect(),
+        window.electronAPI?.appSettings?.get(),
+      ]).then(([paths, settings]) => {
+        const providers: Record<string, boolean> = {
+          claude: !!paths?.claude,
+          codex: !!paths?.codex,
+          gemini: !!paths?.gemini,
+          opencode: !!(paths as Record<string, string> | undefined)?.opencode,
+          pi: !!(paths as Record<string, string> | undefined)?.pi,
+          // Non-CLI providers: available only when API key is configured
+          openrouter: !!(settings?.openRouterEnabled && settings?.openRouterApiKey),
+          deepseek: !!(settings?.deepSeekEnabled && settings?.deepSeekApiKey) || !!(settings?.openRouterEnabled && settings?.openRouterApiKey),
+          moonshot: !!(settings?.moonshotEnabled && settings?.moonshotApiKey) || !!(settings?.openRouterEnabled && settings?.openRouterApiKey),
+          mimo: !!(settings?.mimoEnabled && settings?.mimoApiKey) || !!(settings?.openRouterEnabled && settings?.openRouterApiKey),
+          qwen: !!(settings?.qwenEnabled && settings?.qwenApiKey) || !!(settings?.openRouterEnabled && settings?.openRouterApiKey),
+          zhipu: !!(settings?.zhipuEnabled && settings?.zhipuApiKey) || !!(settings?.openRouterEnabled && settings?.openRouterApiKey),
+        };
+        setInstalledProviders(providers);
       });
 
       // Fetch per-provider installed skills

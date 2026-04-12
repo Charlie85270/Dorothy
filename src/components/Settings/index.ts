@@ -25,8 +25,6 @@ export { JiraSection } from './JiraSection';
 export { SocialDataSection } from './SocialDataSection';
 export { TasmaniaSection } from './TasmaniaSection';
 export { TasmaniaIcon } from './TasmaniaIcon';
-export { OpenCodeSection } from './OpenCodeSection';
-export { PiTerminalSection } from './PiTerminalSection';
 export { GoogleWorkspaceSection } from './GoogleWorkspaceSection';
 export { AIProvidersSection } from './AIProvidersSection';
 export { PermissionsSection } from './PermissionsSection';

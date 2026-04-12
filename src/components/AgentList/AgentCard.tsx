@@ -29,10 +29,17 @@ function ProviderIcon({ providerId }: { providerId: string }) {
       </span>
     );
   }
-  // text
+  if (icon.type === 'text') {
+    return (
+      <span title={label} className="shrink-0 inline-flex font-bold text-[10px] text-text-muted">
+        {icon.content}
+      </span>
+    );
+  }
+  // SVG provider icons — show provider label as compact badge
   return (
     <span title={label} className="shrink-0 inline-flex font-bold text-[10px] text-text-muted">
-      {icon.content}
+      {label.slice(0, 2)}
     </span>
   );
 }

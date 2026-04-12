@@ -19,7 +19,7 @@ export const GitSection = ({ settings, onUpdateSettings }: GitSectionProps) => {
           <div className="flex items-center justify-between pb-4 border-b border-border">
             <div>
               <p className="font-medium">Include Co-Authored-By</p>
-              <p className="text-sm text-muted-foreground">Add Claude as co-author in git commits</p>
+              <p className="text-sm text-muted-foreground">Add the active AI provider as co-author in git commits</p>
             </div>
             <Toggle
               enabled={settings?.includeCoAuthoredBy ?? false}
@@ -29,7 +29,7 @@ export const GitSection = ({ settings, onUpdateSettings }: GitSectionProps) => {
 
           <div className="pt-2">
             <p className="text-xs text-muted-foreground">
-              When enabled, commits made with Claude&apos;s assistance will include a co-authored-by trailer.
+              When enabled, commits made with AI assistance will include a co-authored-by trailer using the active provider name.
             </p>
           </div>
         </div>

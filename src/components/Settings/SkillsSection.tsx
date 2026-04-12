@@ -15,7 +15,7 @@ export const SkillsSection = ({ skills }: SkillsSectionProps) => {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold mb-1">Skills & Plugins</h2>
-          <p className="text-sm text-muted-foreground">Installed skills and plugins for Claude Code</p>
+          <p className="text-sm text-muted-foreground">Installed skills and plugins available to all CLI providers</p>
         </div>
         <a
           href="https://skills.sh"

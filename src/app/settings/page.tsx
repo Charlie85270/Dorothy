@@ -18,8 +18,6 @@ import {
   JiraSection,
   SocialDataSection,
   TasmaniaSection,
-  OpenCodeSection,
-  PiTerminalSection,
   GoogleWorkspaceSection,
   AIProvidersSection,
   PermissionsSection,
@@ -128,22 +126,6 @@ function SettingsPageInner() {
             onUpdateLocalSettings={updateLocalAppSettings}
           />
         );
-      case 'opencode':
-        return (
-          <OpenCodeSection
-            appSettings={appSettings}
-            onSaveAppSettings={handleSaveAppSettings}
-            onUpdateLocalSettings={updateLocalAppSettings}
-          />
-        );
-      case 'pi':
-        return (
-          <PiTerminalSection
-            appSettings={appSettings}
-            onSaveAppSettings={handleSaveAppSettings}
-            onUpdateLocalSettings={updateLocalAppSettings}
-          />
-        );
       case 'google-workspace':
         return (
           <GoogleWorkspaceSection
@@ -171,6 +153,7 @@ function SettingsPageInner() {
           <CLIPathsSection
             appSettings={appSettings}
             onSaveAppSettings={handleSaveAppSettings}
+            onUpdateLocalSettings={updateLocalAppSettings}
           />
         );
       case 'system':

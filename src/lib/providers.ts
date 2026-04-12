@@ -10,6 +10,12 @@ import type { AgentProvider } from '@/types/electron';
 export type ProviderIconDef =
   | { type: 'image'; src: string }
   | { type: 'svg-gemini' }
+  | { type: 'svg-openrouter' }
+  | { type: 'svg-deepseek' }
+  | { type: 'svg-moonshot' }
+  | { type: 'svg-mimo' }
+  | { type: 'svg-qwen' }
+  | { type: 'svg-zai' }
   | { type: 'text'; content: string }
   | { type: 'cpu' };
 
@@ -118,7 +124,7 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
   {
     id: 'openrouter',
     label: 'OpenRouter',
-    icon: { type: 'text', content: 'OR' },
+    icon: { type: 'svg-openrouter' },
     accent: 'amber-500',
     badgeClass: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
     models: [
@@ -134,7 +140,7 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
   {
     id: 'deepseek',
     label: 'DeepSeek',
-    icon: { type: 'text', content: 'DS' },
+    icon: { type: 'svg-deepseek' },
     accent: 'sky-500',
     badgeClass: 'bg-sky-500/15 text-sky-600 dark:text-sky-400',
     models: [
@@ -147,7 +153,7 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
   {
     id: 'moonshot',
     label: 'Moonshot',
-    icon: { type: 'text', content: '🌙' },
+    icon: { type: 'svg-moonshot' },
     accent: 'violet-500',
     badgeClass: 'bg-violet-500/15 text-violet-600 dark:text-violet-400',
     models: [
@@ -160,7 +166,7 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
   {
     id: 'mimo',
     label: 'MiMo',
-    icon: { type: 'text', content: 'MM' },
+    icon: { type: 'svg-mimo' },
     accent: 'orange-500',
     badgeClass: 'bg-orange-500/15 text-orange-600 dark:text-orange-400',
     models: [
@@ -173,7 +179,7 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
   {
     id: 'qwen',
     label: 'Qwen',
-    icon: { type: 'text', content: 'QW' },
+    icon: { type: 'svg-qwen' },
     accent: 'blue-500',
     badgeClass: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
     models: [
@@ -186,8 +192,8 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
   },
   {
     id: 'zhipu',
-    label: 'ZhipuAI',
-    icon: { type: 'text', content: 'ZH' },
+    label: 'Zai',
+    icon: { type: 'svg-zai' },
     accent: 'indigo-500',
     badgeClass: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400',
     models: [

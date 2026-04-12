@@ -349,6 +349,20 @@ export interface ElectronAPI {
       tasmaniaEnabled: boolean;
       tasmaniaServerPath: string;
       defaultProvider?: string;
+      opencodeEnabled?: boolean;
+      opencodeDefaultModel?: string;
+      openRouterEnabled?: boolean;
+      openRouterApiKey?: string;
+      deepSeekEnabled?: boolean;
+      deepSeekApiKey?: string;
+      mimoEnabled?: boolean;
+      mimoApiKey?: string;
+      moonshotEnabled?: boolean;
+      moonshotApiKey?: string;
+      qwenEnabled?: boolean;
+      qwenApiKey?: string;
+      zhipuEnabled?: boolean;
+      zhipuApiKey?: string;
       notificationSounds?: {
         waiting?: string;
         complete?: string;

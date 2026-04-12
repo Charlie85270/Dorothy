@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Zap,
   Cpu,
   AlertCircle,
   Loader2,
@@ -46,6 +45,49 @@ function ProviderIcon({ icon, selected, accent }: { icon: ProviderIconDef; selec
     return (
       <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-black">
         <path d="M12 0C12 6.627 6.627 12 0 12c6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12-6.627 0-12-5.373-12-12Z" />
+      </svg>
+    );
+  }
+  if (icon.type === 'svg-openrouter') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4">
+        <path d="M4 12h4l2-4 4 8 2-4h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={colorClass} />
+      </svg>
+    );
+  }
+  if (icon.type === 'svg-deepseek') {
+    return (
+      <svg viewBox="0 0 24 24" fill="currentColor" className={`w-4 h-4 ${colorClass}`}>
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-2.09c-1.67-.44-3-1.7-3.5-3.41h2.09c.43 1.08 1.46 1.8 2.66 1.8 1.58 0 2.87-1.29 2.87-2.87S13.83 7.06 12.25 7.06c-1.2 0-2.23.72-2.66 1.8H7.5c.5-1.71 1.83-2.97 3.5-3.41V3.5h2v1.95c2.47.49 4.25 2.68 4.25 5.3 0 2.61-1.78 4.81-4.25 5.3v2.45h-2z" />
+      </svg>
+    );
+  }
+  if (icon.type === 'svg-moonshot') {
+    return (
+      <svg viewBox="0 0 24 24" fill="currentColor" className={`w-4 h-4 ${colorClass}`}>
+        <path d="M12 2a9.94 9.94 0 0 0-6.38 2.31C8.07 3.47 11.18 4.64 13.5 7c2.37 2.37 3.53 5.49 2.69 7.93A9.94 9.94 0 0 0 22 12c0-5.52-4.48-10-10-10zM2 12c0 5.52 4.48 10 10 10a9.94 9.94 0 0 0 6.38-2.31c-2.45.84-5.56-.33-7.88-2.69C8.13 14.63 6.97 11.51 7.81 9.07A9.94 9.94 0 0 0 2 12z" />
+      </svg>
+    );
+  }
+  if (icon.type === 'svg-mimo') {
+    return (
+      <svg viewBox="0 0 24 24" fill="currentColor" className={`w-4 h-4 ${colorClass}`}>
+        <path d="M3 6h4v12H3V6zm7 0h4v12h-4V6zm7 0h4v12h-4V6z" opacity="0.8" />
+        <path d="M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm0 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1H5z" />
+      </svg>
+    );
+  }
+  if (icon.type === 'svg-qwen') {
+    return (
+      <svg viewBox="0 0 24 24" fill="currentColor" className={`w-4 h-4 ${colorClass}`}>
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (icon.type === 'svg-zai') {
+    return (
+      <svg viewBox="0 0 24 24" fill="currentColor" className={`w-4 h-4 ${colorClass}`}>
+        <path d="M4 6h16v2H7.5l10 8H4v-2h12.5l-10-8H4V6z" />
       </svg>
     );
   }
@@ -133,8 +175,11 @@ const StepModel = React.memo(function StepModel({
       <div>
         <label className="block text-sm font-medium mb-2">Provider</label>
         <div className="grid gap-2 grid-cols-4">
-          {PROVIDER_REGISTRY.map(({ id, label, icon, accent }) => {
+          {PROVIDER_REGISTRY.map(({ id, label, icon, accent, requiresCli }) => {
             const installed = installedProviders?.[id] !== false;
+            const disabledReason = !installed
+              ? requiresCli ? 'Not installed' : 'Add API key in Settings'
+              : null;
             return (
               <button
                 key={id}
@@ -144,6 +189,7 @@ const StepModel = React.memo(function StepModel({
                   onProviderChange(id);
                   onModelChange(PROVIDER_DEFAULT_MODEL[id]);
                 }}
+                title={disabledReason || undefined}
                 className={`
                   p-2.5 rounded-lg border transition-all text-center flex flex-col items-center justify-center gap-1
                   ${!installed
@@ -158,8 +204,8 @@ const StepModel = React.memo(function StepModel({
                   <ProviderIcon icon={icon} selected={provider === id} accent={accent} />
                   <span className="font-medium text-sm">{label}</span>
                 </div>
-                {!installed && (
-                  <span className="text-[10px] text-text-muted">Not installed</span>
+                {disabledReason && (
+                  <span className="text-[10px] text-text-muted">{disabledReason}</span>
                 )}
               </button>
             );
@@ -182,32 +228,26 @@ const StepModel = React.memo(function StepModel({
         </div>
       </div>
 
-      {/* Model Selection — dynamic based on provider */}
+      {/* Model Selection — dynamic dropdown based on provider */}
       {provider !== 'local' ? (
         <div>
           <label className="block text-sm font-medium mb-2">Model</label>
-          <div className={`grid gap-3 ${(PROVIDER_MODELS[provider] || PROVIDER_MODELS.claude).length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
-            {(PROVIDER_MODELS[provider] || PROVIDER_MODELS.claude).map((m) => {
-              const accentColor = PROVIDER_REGISTRY.find(p => p.id === provider)?.accent ?? 'accent-blue';
-              return (
-                <button
-                  key={m.id}
-                  onClick={() => onModelChange(m.id)}
-                  className={`
-                    p-3 rounded-lg border transition-all text-center
-                    ${model === m.id
-                      ? `border-${accentColor} bg-${accentColor}/10`
-                      : 'border-border-primary hover:border-border-accent'
-                    }
-                  `}
-                >
-                  <Zap className={`w-5 h-5 mx-auto mb-1 ${model === m.id ? `text-${accentColor}` : 'text-text-muted'}`} />
-                  <span className="font-medium">{m.name}</span>
-                  <p className="text-xs text-text-muted mt-0.5">{m.description}</p>
-                </button>
-              );
-            })}
-          </div>
+          <select
+            value={model}
+            onChange={(e) => onModelChange(e.target.value)}
+            className="w-full px-3 py-2.5 rounded-lg text-sm bg-bg-primary border border-border-primary focus:border-accent-blue focus:outline-none"
+          >
+            {(PROVIDER_MODELS[provider] || PROVIDER_MODELS.claude).map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name} — {m.description}
+              </option>
+            ))}
+          </select>
+          {model && (
+            <p className="text-xs text-text-muted mt-1.5">
+              {(PROVIDER_MODELS[provider] || PROVIDER_MODELS.claude).find(m => m.id === model)?.description}
+            </p>
+          )}
         </div>
       ) : (
         <div>

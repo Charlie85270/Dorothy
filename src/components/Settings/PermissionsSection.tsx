@@ -9,7 +9,7 @@ export const PermissionsSection = ({ settings }: PermissionsSectionProps) => {
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold mb-1">Permissions</h2>
-        <p className="text-sm text-muted-foreground">Manage allowed and denied actions for Claude</p>
+        <p className="text-sm text-muted-foreground">Manage allowed and denied actions for all CLI agents</p>
       </div>
 
       <div className="border border-border bg-card p-6">
@@ -55,7 +55,8 @@ export const PermissionsSection = ({ settings }: PermissionsSectionProps) => {
           </div>
 
           <p className="text-xs text-muted-foreground pt-2">
-            Permissions are managed through Claude Code CLI. Use <code className="text-foreground bg-secondary px-1 py-0.5">claude config</code> to modify.
+            Permissions are managed through the CLI. Use <code className="text-foreground bg-secondary px-1 py-0.5">claude config</code> to modify.
+            These settings apply to all providers that use the Claude binary for execution.
           </p>
         </div>
       </div>

@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
-import { RefreshCw, Check, AlertCircle, Plus, X, FolderOpen } from 'lucide-react';
+import { RefreshCw, Check, AlertCircle, Plus, X, FolderOpen, Cpu, Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { Toggle } from './Toggle';
 import type { AppSettings, CLIPaths } from './types';
 
 interface CLIPathsSectionProps {
   appSettings: AppSettings;
   onSaveAppSettings: (settings: Partial<AppSettings>) => void;
+  onUpdateLocalSettings?: (settings: Partial<AppSettings>) => void;
 }
 
 interface DetectedPaths {
@@ -19,10 +21,14 @@ interface DetectedPaths {
   node: string;
 }
 
-export const CLIPathsSection = ({ appSettings, onSaveAppSettings }: CLIPathsSectionProps) => {
+export const CLIPathsSection = ({ appSettings, onSaveAppSettings, onUpdateLocalSettings }: CLIPathsSectionProps) => {
   const [detecting, setDetecting] = useState(false);
   const [detectedPaths, setDetectedPaths] = useState<DetectedPaths | null>(null);
   const [newPath, setNewPath] = useState('');
+  const [testingOpencode, setTestingOpencode] = useState(false);
+  const [testingPi, setTestingPi] = useState(false);
+  const [opencodeResult, setOpencodeResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [piResult, setPiResult] = useState<{ success: boolean; message: string } | null>(null);
   const [localPaths, setLocalPaths] = useState<CLIPaths>(
     appSettings.cliPaths || { claude: '', codex: '', gemini: '', opencode: '', pi: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] }
   );
@@ -169,6 +175,98 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings }: CLIPathsSect
                 <li className="text-yellow-400">No CLI tools found in common locations</li>
               )}
             </ul>
+          </div>
+        )}
+      </div>
+
+      {/* Provider Toggles — OpenCode & Pi */}
+      <div className="border border-border bg-card p-6 space-y-4">
+        <h3 className="text-md font-medium mb-2">CLI Agent Providers</h3>
+        <p className="text-xs text-muted-foreground mb-4">
+          Enable additional CLI-based agent providers. Paths are configured below.
+        </p>
+
+        <div className="flex items-center justify-between py-3 border-b border-border">
+          <div className="flex items-center gap-3">
+            <Cpu className="w-4 h-4 text-cyan-500" />
+            <div>
+              <p className="text-sm font-medium">OpenCode</p>
+              <p className="text-xs text-muted-foreground">75+ LLM providers via opencode.ai</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                setTestingOpencode(true);
+                setOpencodeResult(null);
+                try {
+                  const result = await window.electronAPI?.shell?.exec({ command: 'opencode --version' });
+                  setOpencodeResult(result?.success && result.output
+                    ? { success: true, message: result.output.trim() }
+                    : { success: false, message: 'OpenCode CLI not found' });
+                } catch { setOpencodeResult({ success: false, message: 'Test failed' }); }
+                setTestingOpencode(false);
+              }}
+              disabled={testingOpencode}
+              className="px-2 py-1 text-xs border border-border hover:border-foreground transition-colors"
+            >
+              {testingOpencode ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Test'}
+            </button>
+            <Toggle
+              enabled={appSettings.opencodeEnabled ?? false}
+              onChange={() => onSaveAppSettings({ opencodeEnabled: !appSettings.opencodeEnabled })}
+            />
+          </div>
+        </div>
+        {opencodeResult && (
+          <div className={`flex items-center gap-2 text-xs p-2 ${opencodeResult.success ? 'text-green-400 bg-green-500/10' : 'text-red-400 bg-red-500/10'} border ${opencodeResult.success ? 'border-green-500/30' : 'border-red-500/30'}`}>
+            {opencodeResult.success ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+            {opencodeResult.message}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between py-3">
+          <div className="flex items-center gap-3">
+            <Cpu className="w-4 h-4 text-cyan-500" />
+            <div>
+              <p className="text-sm font-medium">Pi Terminal</p>
+              <p className="text-xs text-muted-foreground">15+ AI providers via shittycodingagent.ai</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                setTestingPi(true);
+                setPiResult(null);
+                try {
+                  const result = await window.electronAPI?.shell?.exec?.({
+                    command: `${appSettings.cliPaths?.pi || 'pi'} --version 2>&1 || echo "not found"`,
+                  });
+                  setPiResult(result?.success && result.output && !result.output.includes('not found')
+                    ? { success: true, message: `Pi CLI: ${result.output.trim()}` }
+                    : { success: false, message: 'Pi CLI not found' });
+                } catch { setPiResult({ success: false, message: 'Test failed' }); }
+                setTestingPi(false);
+              }}
+              disabled={testingPi}
+              className="px-2 py-1 text-xs border border-border hover:border-foreground transition-colors"
+            >
+              {testingPi ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Test'}
+            </button>
+            <Toggle
+              enabled={(appSettings as unknown as Record<string, unknown>).piEnabled === true}
+              onChange={() => {
+                const newVal = !((appSettings as unknown as Record<string, unknown>).piEnabled === true);
+                onUpdateLocalSettings?.({ piEnabled: newVal } as Partial<AppSettings>);
+                onSaveAppSettings({ piEnabled: newVal } as Partial<AppSettings>);
+              }}
+            />
+          </div>
+        </div>
+        {piResult && (
+          <div className={`flex items-center gap-2 text-xs p-2 ${piResult.success ? 'text-green-400 bg-green-500/10' : 'text-red-400 bg-red-500/10'} border ${piResult.success ? 'border-green-500/30' : 'border-red-500/30'}`}>
+            {piResult.success ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+            {piResult.message}
           </div>
         )}
       </div>

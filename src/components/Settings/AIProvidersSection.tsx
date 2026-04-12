@@ -195,9 +195,9 @@ export const AIProvidersSection = ({ appSettings, onSaveAppSettings, onUpdateLoc
         routingNote="Provider: qwen — direct via https://dashscope.aliyuncs.com/compatible-mode/v1. Falls back to OpenRouter key if no Qwen key set."
       />
 
-      {/* ZhipuAI GLM */}
+      {/* Zai GLM */}
       <ProviderCard
-        title="ZhipuAI (GLM)"
+        title="Zai (GLM)"
         description="GLM-4.6 flagship and GLM-4 Plus/Air/Flash. Strong Chinese + English performance."
         docsUrl="https://open.bigmodel.cn/usercenter/apikeys"
         enabled={!!appSettings.zhipuEnabled}
@@ -207,7 +207,7 @@ export const AIProvidersSection = ({ appSettings, onSaveAppSettings, onUpdateLoc
         onApiKeyChange={(v) => onUpdateLocalSettings({ zhipuApiKey: v })}
         onApiKeyBlur={() => onSaveAppSettings({ zhipuApiKey: appSettings.zhipuApiKey })}
         models={['zhipuai/glm-4.6', 'zhipuai/glm-4.5', 'zhipuai/glm-4-plus', 'zhipuai/glm-4-air', 'zhipuai/glm-4-flash']}
-        routingNote="Provider: zhipu — direct via https://open.bigmodel.cn/api/paas/v4/. Falls back to OpenRouter key if no Zhipu key set."
+        routingNote="Provider: zai — direct via https://open.bigmodel.cn/api/paas/v4/. Falls back to OpenRouter key if no Zai key set."
       />
 
       {/* Routing note */}

@@ -22,6 +22,8 @@ import type { SettingsSection } from './types';
 export const SECTIONS: { id: SettingsSection; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'general', label: 'General', icon: Settings },
   { id: 'terminal', label: 'Terminal', icon: Terminal },
+  { id: 'ai-providers', label: 'AI Providers', icon: Zap },
+  { id: 'cli', label: 'CLI Paths', icon: Terminal },
   { id: 'obsidian', label: 'Obsidian', icon: ObsidianIcon },
   { id: 'git', label: 'Git', icon: GitCommit },
   { id: 'notifications', label: 'Notifications', icon: Bell },
@@ -30,14 +32,10 @@ export const SECTIONS: { id: SettingsSection; label: string; icon: React.Compone
   { id: 'jira', label: 'JIRA', icon: JiraIcon },
   { id: 'socialdata', label: 'X (Twitter)', icon: Twitter },
   { id: 'tasmania', label: 'Tasmania', icon: TasmaniaIcon },
-  { id: 'opencode', label: 'OpenCode', icon: Cpu },
-  { id: 'pi', label: 'Pi Terminal', icon: Cpu },
   { id: 'google-workspace', label: 'Google Workspace', icon: Cloud },
-  { id: 'ai-providers', label: 'AI Providers', icon: Zap },
   { id: 'permissions', label: 'Permissions', icon: Shield },
   { id: 'skills', label: 'Skills & Plugins', icon: Sparkles },
   { id: 'mcp', label: 'Custom MCP', icon: Plug },
-  { id: 'cli', label: 'CLI Paths', icon: Terminal },
   { id: 'system', label: 'System', icon: Monitor },
 ];
 

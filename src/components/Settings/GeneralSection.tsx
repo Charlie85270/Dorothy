@@ -45,12 +45,23 @@ export const GeneralSection = ({ info, appSettings, onSaveAppSettings }: General
   const [installedProviders, setInstalledProviders] = useState<Record<string, boolean>>({ claude: true, codex: true, gemini: true });
 
   useEffect(() => {
-    window.electronAPI?.cliPaths?.detect().then((paths) => {
-      if (paths) {
+    Promise.all([
+      window.electronAPI?.cliPaths?.detect(),
+      window.electronAPI?.appSettings?.get(),
+    ]).then(([paths, settings]) => {
+      if (paths || settings) {
         setInstalledProviders({
-          claude: !!paths.claude,
-          codex: !!paths.codex,
-          gemini: !!paths.gemini,
+          claude: !!paths?.claude,
+          codex: !!paths?.codex,
+          gemini: !!paths?.gemini,
+          opencode: !!(paths as Record<string, string> | undefined)?.opencode,
+          pi: !!(paths as Record<string, string> | undefined)?.pi,
+          openrouter: !!(settings?.openRouterEnabled && settings?.openRouterApiKey),
+          deepseek: !!(settings?.deepSeekEnabled && settings?.deepSeekApiKey) || !!(settings?.openRouterEnabled && settings?.openRouterApiKey),
+          moonshot: !!(settings?.moonshotEnabled && settings?.moonshotApiKey) || !!(settings?.openRouterEnabled && settings?.openRouterApiKey),
+          mimo: !!(settings?.mimoEnabled && settings?.mimoApiKey) || !!(settings?.openRouterEnabled && settings?.openRouterApiKey),
+          qwen: !!(settings?.qwenEnabled && settings?.qwenApiKey) || !!(settings?.openRouterEnabled && settings?.openRouterApiKey),
+          zhipu: !!(settings?.zhipuEnabled && settings?.zhipuApiKey) || !!(settings?.openRouterEnabled && settings?.openRouterApiKey),
         });
       }
     });
@@ -331,31 +342,20 @@ export const GeneralSection = ({ info, appSettings, onSaveAppSettings }: General
           className="w-full sm:w-64 px-3 py-2 bg-background border border-border text-sm text-foreground focus:outline-none focus:border-foreground"
         >
           {PROVIDER_REGISTRY.map(({ id, label, requiresCli }) => {
-            const notInstalled = requiresCli && installedProviders[id] === false;
+            const notAvailable = installedProviders[id] === false;
+            const reason = notAvailable
+              ? requiresCli ? ' (not installed)' : ' (add API key in Settings)'
+              : '';
             return (
-              <option key={id} value={id} disabled={notInstalled}>
-                {label}{notInstalled ? ' (not installed)' : ''}
+              <option key={id} value={id} disabled={notAvailable}>
+                {label}{reason}
               </option>
             );
           })}
         </select>
       </div>
 
-      {info && (
-        <div className="border border-border bg-card p-6">
-          <h3 className="font-medium mb-4">Quick Info</h3>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="text-muted-foreground">Claude Version</p>
-              <p className="font-mono">{info.claudeVersion || 'Not found'}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Platform</p>
-              <p className="font-mono">{info.platform} ({info.arch})</p>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Quick Info removed — duplicate of System section */}
     </div>
   );
 };

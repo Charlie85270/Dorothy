@@ -29,7 +29,7 @@ export const TerminalSection = ({ appSettings, onSaveAppSettings }: TerminalSect
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold mb-1">Terminal</h2>
-        <p className="text-sm text-muted-foreground">Configure terminal appearance for all views</p>
+        <p className="text-sm text-muted-foreground">Configure terminal appearance for all agent views (applies to Claude, Codex, Gemini, and all CLI providers)</p>
       </div>
 
       {/* Theme */}

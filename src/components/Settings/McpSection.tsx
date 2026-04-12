@@ -56,7 +56,11 @@ function ProviderIcon({ provider, className }: { provider: Provider; className?:
   if (icon.type === 'cpu') {
     return <Cpu className={className} />;
   }
-  return <span className={`font-bold text-xs ${className}`}>{icon.content}</span>;
+  if (icon.type === 'text') {
+    return <span className={`font-bold text-xs ${className}`}>{icon.content}</span>;
+  }
+  // SVG provider icons — show label abbreviation
+  return <span className={`font-bold text-xs ${className}`}>{label.slice(0, 2)}</span>;
 }
 
 export function McpSection() {

@@ -10,6 +10,7 @@ interface UseTerminalKeyboardOptions {
   onToggleSidebar: () => void;
   onNewAgent: () => void;
   onExitFullscreen: () => void;
+  onCycleTab: (direction: 'next' | 'prev') => void;
   isFullscreen: boolean;
 }
 
@@ -21,9 +22,17 @@ export function useTerminalKeyboard({
   onToggleSidebar,
   onNewAgent,
   onExitFullscreen,
+  onCycleTab,
   isFullscreen,
 }: UseTerminalKeyboardOptions) {
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    // Ctrl+Tab / Ctrl+Shift+Tab: Cycle through custom tabs (browser-style)
+    if (e.ctrlKey && e.key === 'Tab') {
+      e.preventDefault();
+      onCycleTab(e.shiftKey ? 'prev' : 'next');
+      return;
+    }
+
     // Ctrl+1-9: Focus terminal by index
     if (e.ctrlKey && !e.shiftKey && e.key >= '1' && e.key <= '9') {
       const index = parseInt(e.key) - 1;
@@ -62,7 +71,7 @@ export function useTerminalKeyboard({
       e.preventDefault();
       onExitFullscreen();
     }
-  }, [panelAgentIds, onFocusPanel, onToggleFullscreen, onToggleBroadcast, onToggleSidebar, onNewAgent, onExitFullscreen, isFullscreen]);
+  }, [panelAgentIds, onFocusPanel, onToggleFullscreen, onToggleBroadcast, onToggleSidebar, onNewAgent, onExitFullscreen, onCycleTab, isFullscreen]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);

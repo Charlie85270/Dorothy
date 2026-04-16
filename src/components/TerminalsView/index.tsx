@@ -52,6 +52,12 @@ export default function TerminalsView() {
   const pendingStartRef = useRef<{ agentId: string; prompt: string; options?: { model?: string } } | null>(null);
   const [terminalTheme, setTerminalTheme] = useState<'dark' | 'light'>('dark');
   const [terminalSettingsLoaded, setTerminalSettingsLoaded] = useState(!isElectron());
+  // Remember last focused agent per custom tab so Ctrl+Tab restores focus where the user left it
+  const lastFocusedByTabRef = useRef<Map<string, string>>(new Map());
+  // Set by handleCycleTab; consumed by handleTerminalReady once the destination
+  // tab's terminal finishes async init. Also consumed inline if the terminal is
+  // already mounted (fast tab cycling).
+  const pendingFocusRef = useRef<string | null>(null);
 
   // Load terminal settings from app settings
   useEffect(() => {
@@ -111,7 +117,12 @@ export default function TerminalsView() {
   // Agent IDs for grid
   const agentIds = useMemo(() => filteredAgents.map(a => a.id), [filteredAgents]);
 
+  // Set after multiTerminal is created; lets handleTerminalReady consume
+  // pendingFocusRef without a circular dep.
+  const focusTerminalRef = useRef<((agentId: string) => void) | null>(null);
+
   // Called when a terminal is fully initialized — fire any deferred agent start
+  // and consume any pending Ctrl+Tab focus targeting this agent.
   const handleTerminalReady = useCallback((agentId: string) => {
     const pending = pendingStartRef.current;
     if (pending && pending.agentId === agentId) {
@@ -119,6 +130,10 @@ export default function TerminalsView() {
       startAgent(pending.agentId, pending.prompt, pending.options as { model?: string; resume?: boolean }).catch(error => {
         console.error('Failed to start agent after creation:', error);
       });
+    }
+    if (pendingFocusRef.current === agentId) {
+      pendingFocusRef.current = null;
+      focusTerminalRef.current?.(agentId);
     }
   }, [startAgent]);
 
@@ -139,6 +154,18 @@ export default function TerminalsView() {
     onTerminalReady: handleTerminalReady,
     broadcastMode: broadcast.broadcastMode,
   });
+  // Expose focusTerminal to handleTerminalReady via a ref to break the cycle.
+  focusTerminalRef.current = multiTerminal.focusTerminal;
+
+  // Prune lastFocusedByTabRef entries for tabs that no longer exist (mirrors
+  // the cleanup useTabManager does for stale agent IDs and tab layouts).
+  useEffect(() => {
+    const validIds = new Set(tabManager.customTabs.map(t => t.id));
+    for (const tabId of lastFocusedByTabRef.current.keys()) {
+      if (!validIds.has(tabId)) lastFocusedByTabRef.current.delete(tabId);
+    }
+  }, [tabManager.customTabs]);
+
   const grid = useTerminalGrid({ agentIds, preset: gridPreset, isEditable, tabId });
   const search = useTerminalSearch(filteredAgents);
   const contextMenu = useTerminalContextMenu();
@@ -148,26 +175,6 @@ export default function TerminalsView() {
     onSkillDrop: async (skillName, agentId) => {
       await sendInput(agentId, `use this skill: ${skillName}\n`);
     },
-  });
-
-  // Keyboard shortcuts
-  const visibleAgentIds = useMemo(
-    () => grid.visiblePanels.map(p => p.agentId),
-    [grid.visiblePanels]
-  );
-
-  useTerminalKeyboard({
-    panelAgentIds: visibleAgentIds,
-    onFocusPanel: (agentId) => {
-      setFocusedPanelId(agentId);
-      multiTerminal.focusTerminal(agentId);
-    },
-    onToggleFullscreen: () => grid.toggleFullscreen(focusedPanelId || undefined),
-    onToggleBroadcast: broadcast.toggleBroadcast,
-    onToggleSidebar: () => { },
-    onNewAgent: () => setShowNewChatModal(true),
-    onExitFullscreen: grid.exitFullscreen,
-    isFullscreen: !!grid.fullscreenPanelId,
   });
 
   // Handler callbacks
@@ -209,7 +216,61 @@ export default function TerminalsView() {
   const handleFocusPanel = useCallback((agentId: string) => {
     setFocusedPanelId(agentId);
     multiTerminal.focusTerminal(agentId);
-  }, [multiTerminal]);
+    if (tabManager.isCustomTabActive && tabManager.activeCustomTab) {
+      lastFocusedByTabRef.current.set(tabManager.activeCustomTab.id, agentId);
+    }
+  }, [multiTerminal, tabManager]);
+
+  // Ctrl+Tab / Ctrl+Shift+Tab: cycle through custom tabs (browser-style),
+  // restoring focus to the last focused agent in the destination tab.
+  const handleCycleTab = useCallback((direction: 'next' | 'prev') => {
+    const tabs = tabManager.customTabs;
+    if (tabs.length < 2) return;
+
+    const currentIdx = tabManager.isCustomTabActive && tabManager.activeCustomTab
+      ? tabs.findIndex(t => t.id === tabManager.activeCustomTab!.id)
+      : 0;
+    const step = direction === 'next' ? 1 : tabs.length - 1;
+    const nextTab = tabs[(currentIdx + step) % tabs.length];
+
+    // Resolve the focus target: last focused agent in the destination tab if
+    // it's still a member, otherwise the first agent. Empty tabs get nothing.
+    const remembered = lastFocusedByTabRef.current.get(nextTab.id);
+    const targetAgentId = remembered && nextTab.agentIds.includes(remembered)
+      ? remembered
+      : nextTab.agentIds[0];
+
+    tabManager.setActiveTab({ type: 'custom', tabId: nextTab.id });
+
+    if (targetAgentId) {
+      setFocusedPanelId(targetAgentId);
+      // Switching tabs re-mounts terminals (registerContainer disposes the old
+      // one and asynchronously inits a new xterm). Stash the focus target —
+      // handleTerminalReady will consume it once the new terminal is ready.
+      pendingFocusRef.current = targetAgentId;
+      // Also try immediately in case the terminal happens to already be live
+      // (no-op if it's not yet registered).
+      multiTerminal.focusTerminal(targetAgentId);
+    }
+  }, [tabManager, multiTerminal]);
+
+  // Keyboard shortcuts (must come after handler declarations to avoid TDZ)
+  const visibleAgentIds = useMemo(
+    () => grid.visiblePanels.map(p => p.agentId),
+    [grid.visiblePanels]
+  );
+
+  useTerminalKeyboard({
+    panelAgentIds: visibleAgentIds,
+    onFocusPanel: handleFocusPanel,
+    onToggleFullscreen: () => grid.toggleFullscreen(focusedPanelId || undefined),
+    onToggleBroadcast: broadcast.toggleBroadcast,
+    onToggleSidebar: () => { },
+    onNewAgent: () => setShowNewChatModal(true),
+    onExitFullscreen: grid.exitFullscreen,
+    onCycleTab: handleCycleTab,
+    isFullscreen: !!grid.fullscreenPanelId,
+  });
 
   const handleStartAll = useCallback(async () => {
     const needsStart = filteredAgents.filter(a =>

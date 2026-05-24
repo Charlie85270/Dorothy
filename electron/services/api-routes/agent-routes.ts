@@ -1,11 +1,10 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import * as pty from 'node-pty';
-import { app } from 'electron';
+import * as os from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import { agents, saveAgents } from '../../core/agent-manager';
 import { ptyProcesses, writeProgrammaticInput } from '../../core/pty-manager';
-import { buildFullPath } from '../../utils/path-builder';
+import { getProvider } from '../../providers';
 import { AgentStatus, AgentCharacter } from '../../types';
 import { RouteApp, RouteContext } from './types';
 
@@ -146,8 +145,8 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     sendJson({ agent });
   });
 
-  // POST /api/agents/:id/start
-  app_.post(/^\/api\/agents\/([^/]+)\/start$/, (req, sendJson) => {
+  // POST /api/agents/:id/start — aligné ipc-handlers (PTY persistant + writeProgrammaticInput)
+  app_.post(/^\/api\/agents\/([^/]+)\/start$/, async (req, sendJson) => {
     const agent = agents.get(req.params.id);
     if (!agent) {
       sendJson({ error: 'Agent not found' }, 404);
@@ -162,107 +161,93 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       return;
     }
 
-    const workingDir = (agent.worktreePath || agent.projectPath).replace(/'/g, "'\\''");
-    let command = `cd '${workingDir}' && claude`;
+    if (model && !/^[a-zA-Z0-9._:/-]+$/.test(model)) {
+      sendJson({ error: 'Invalid model name' }, 400);
+      return;
+    }
+
+    // Recycler le PTY existant pour garantir un /start propre (MCP chargé au boot session).
+    if (agent.ptyId) {
+      const oldPty = ptyProcesses.get(agent.ptyId);
+      if (oldPty) {
+        oldPty.kill();
+        ptyProcesses.delete(agent.ptyId);
+      }
+      agent.ptyId = undefined;
+    }
 
     const isAutomationAgent = agent.name?.toLowerCase().includes('automation:');
     const usePrintMode = printMode || isAutomationAgent;
-
-    if (usePrintMode) {
-      command += ' -p';
-    }
-
     const isSuperAgentApi = agent.name?.toLowerCase().includes('super agent') ||
-                            agent.name?.toLowerCase().includes('orchestrator');
+      agent.name?.toLowerCase().includes('orchestrator');
 
-    if (isSuperAgentApi || isAutomationAgent) {
-      const mcpConfigPath = path.join(app.getPath('home'), '.claude', 'mcp.json');
-      if (fs.existsSync(mcpConfigPath)) {
-        command += ` --mcp-config '${mcpConfigPath}'`;
+    const mcpConfigPath = path.resolve(os.homedir(), '.claude', 'mcp.json');
+    let systemPromptFile: string | undefined;
+    if (isSuperAgentApi) {
+      const { getSuperAgentInstructionsPath } = await import('../../utils');
+      const superAgentInstructionsPath = getSuperAgentInstructionsPath();
+      if (fs.existsSync(superAgentInstructionsPath)) {
+        systemPromptFile = superAgentInstructionsPath;
       }
     }
 
-    if (agent.secondaryProjectPath) {
-      command += ` --add-dir '${agent.secondaryProjectPath.replace(/'/g, "'\\''")}'`;
-    }
+    const appSettings = ctx.getAppSettings();
+    const cliProvider = getProvider(agent.provider || 'claude');
+    const binaryPath = cliProvider.resolveBinaryPath(appSettings);
+
     const effectiveMode = bodyPermissionMode ?? agent.permissionMode ?? (agent.skipPermissions ? 'auto' : 'normal');
-    if (effectiveMode === 'auto' || effectiveMode === 'bypass') {
-      command += ' --dangerously-skip-permissions';
-    }
-    const resolvedModel = model || agent.model;
-    if (resolvedModel) {
-      if (!/^[a-zA-Z0-9._:/-]+$/.test(resolvedModel)) {
-        sendJson({ error: 'Invalid model name' }, 400);
-        return;
-      }
-      command += ` --model '${resolvedModel}'`;
-    }
+    const permissionMode = isSuperAgentApi ? 'bypass' : effectiveMode;
 
-    let finalPrompt = prompt;
-    if (agent.skills && agent.skills.length > 0 && !isSuperAgentApi) {
-      const skillsList = agent.skills.join(', ');
-      finalPrompt = `[IMPORTANT: Use these skills for this session: ${skillsList}. Invoke them with /<skill-name> when relevant to the task.] ${prompt}`;
-    }
-    command += ` '${finalPrompt.replace(/'/g, "'\\''")}'`;
-
-    const shell = '/bin/bash';
-    const fullPath = buildFullPath();
-
-    const ptyProcess = pty.spawn(shell, ['-l', '-c', command], {
-      name: 'xterm-256color',
-      cols: 120,
-      rows: 40,
-      cwd: workingDir,
-      env: {
-        ...process.env,
-        PATH: fullPath,
-        TERM: 'xterm-256color',
-        CLAUDE_SKILLS: agent.skills?.join(',') || '',
-        CLAUDE_AGENT_ID: agent.id,
-        CLAUDE_PROJECT_PATH: agent.projectPath,
-      },
+    let command = cliProvider.buildInteractiveCommand({
+      binaryPath,
+      prompt,
+      model: model || agent.model,
+      verbose: appSettings.verboseModeEnabled,
+      permissionMode,
+      effort: agent.effort,
+      secondaryProjectPath: agent.secondaryProjectPath,
+      obsidianVaultPaths: agent.obsidianVaultPaths,
+      mcpConfigPath: fs.existsSync(mcpConfigPath) ? mcpConfigPath : undefined,
+      systemPromptFile,
+      skills: [...new Set([...(agent.skills || []), 'world-builder'])],
+      isSuperAgent: isSuperAgentApi,
+      chrome: appSettings.chromeEnabled,
     });
 
-    const ptyId = uuidv4();
-    ptyProcesses.set(ptyId, ptyProcess);
+    if (usePrintMode) {
+      command = command.replace(/^'([^']*(?:\\'[^']*)*)'/, (m) => `${m} -p`);
+    }
+
+    const workingPath = (agent.worktreePath || agent.projectPath).replace(/'/g, "'\\''");
+    const fullCommand = `cd '${workingPath}' && ${command}`;
+
+    let ptyId: string;
+    try {
+      ptyId = await ctx.initAgentPtyCallback(agent);
+    } catch (e) {
+      sendJson({ error: `PTY init failed: ${String((e as Error)?.message || e)}` }, 500);
+      return;
+    }
 
     agent.ptyId = ptyId;
+    const ptyProcess = ptyProcesses.get(ptyId);
+    if (!ptyProcess) {
+      sendJson({ error: 'PTY not found after init' }, 500);
+      return;
+    }
+
     agent.status = 'running';
     agent.currentTask = prompt;
     agent.output = [];
-    agent.lastCleanOutput = undefined;  // Clear stale output from previous task
-    agent.error = undefined;            // Clear previous error state
+    agent.lastCleanOutput = undefined;
+    agent.error = undefined;
     agent.lastActivity = new Date().toISOString();
     saveAgents();
+    ctx.agentStatusEmitter.emit(`status:${agent.id}`);
 
-    ptyProcess.onData((data: string) => {
-      agent.output.push(data);
-      if (agent.output.length > 10000) {
-        agent.output = agent.output.slice(-5000);
-      }
-      agent.lastActivity = new Date().toISOString();
-
-      if (ctx.mainWindow && !ctx.mainWindow.isDestroyed()) {
-        ctx.mainWindow.webContents.send('agent:output', { agentId: agent.id, data });
-      }
-    });
-
-    ptyProcess.onExit(({ exitCode }) => {
-      // Delay status change to let hooks (on-stop.sh, task-completed.sh) finish
-      // capturing output before wait_for_agent resolves.
-      setTimeout(() => {
-        if (agent.status === 'running') {
-          agent.status = exitCode === 0 ? 'completed' : 'error';
-        }
-        if (exitCode !== 0) {
-          agent.error = `Process exited with code ${exitCode}`;
-        }
-        agent.lastActivity = new Date().toISOString();
-        ptyProcesses.delete(ptyId);
-        saveAgents();
-        ctx.agentStatusEmitter.emit(`status:${agent.id}`);
-      }, 1500);
-    });
+    setTimeout(() => {
+      writeProgrammaticInput(ptyProcess, fullCommand);
+    }, 500);
 
     sendJson({ success: true, agent: { id: agent.id, status: agent.status } });
   });

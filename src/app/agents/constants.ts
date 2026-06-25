@@ -83,6 +83,7 @@ export const PROVIDER_LABELS: Record<string, string> = {
   claude: 'Claude',
   codex: 'Codex',
   gemini: 'Gemini',
+  grok: 'Grok',
   local: 'Local',
 };
 

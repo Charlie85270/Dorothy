@@ -8,6 +8,15 @@ function GeminiLogo({ className }: { className?: string }) {
   );
 }
 
+function GrokLogo({ className }: { className?: string }) {
+  // Angular slashed "X" mark evoking the xAI / Grok wordmark.
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={`${className} !text-black`}>
+      <path d="M2.5 3h4l5.5 7.6L18 3h3.5l-7.3 9.8L21.5 21h-4l-5.5-7.6L6 21H2.5l7.3-9.8L2.5 3Z" />
+    </svg>
+  );
+}
+
 const PROVIDER_CONFIG: Record<string, {
   label: string;
   icon: string | React.FC<{ className?: string }>;
@@ -15,6 +24,7 @@ const PROVIDER_CONFIG: Record<string, {
   claude: { label: 'Claude', icon: '/claude-ai-icon.webp' },
   codex: { label: 'ChatGPT', icon: '/chatgpt-icon.webp' },
   gemini: { label: 'Gemini', icon: GeminiLogo },
+  grok: { label: 'Grok', icon: GrokLogo },
 };
 
 interface ProviderBadgeProps {
@@ -50,4 +60,4 @@ export default function ProviderBadge({ provider, className = '' }: ProviderBadg
   );
 }
 
-export { PROVIDER_CONFIG, GeminiLogo };
+export { PROVIDER_CONFIG, GeminiLogo, GrokLogo };

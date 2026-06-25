@@ -119,7 +119,7 @@ describe('scheduler-handlers', () => {
         opencodeEnabled: false,
         opencodeDefaultModel: '',
         defaultProvider: 'claude' as const,
-        cliPaths: { claude: '', codex: '', gemini: '', opencode: '', pi: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] },
+        cliPaths: { claude: '', codex: '', gemini: '', grok: '', opencode: '', pi: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] },
       }),
     });
   }

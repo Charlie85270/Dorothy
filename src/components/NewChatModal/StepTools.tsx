@@ -31,7 +31,7 @@ interface StepToolsProps {
   onToggleVault: (vaultPath: string) => void;
 }
 
-const PROVIDER_IDS = ['claude', 'codex', 'gemini'] as const;
+const PROVIDER_IDS = ['claude', 'codex', 'gemini', 'grok'] as const;
 
 const StepTools = React.memo(function StepTools({
   selectedSkills,

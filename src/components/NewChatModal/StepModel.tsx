@@ -50,6 +50,11 @@ const PROVIDER_MODELS: Record<string, ProviderModel[]> = {
     { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', description: 'Stable' },
     { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: 'Balanced' },
   ],
+  grok: [
+    { id: 'grok-4', name: 'Grok 4', description: 'Most capable' },
+    { id: 'grok-4-fast', name: 'Grok 4 Fast', description: 'Fast & efficient' },
+    { id: 'grok-code-fast-1', name: 'Grok Code Fast', description: 'Optimized for coding' },
+  ],
   opencode: [
     { id: 'default', name: 'Default', description: 'Use configured default' },
   ],
@@ -67,6 +72,7 @@ const PROVIDER_DEFAULT_MODEL: Record<string, string> = {
   claude: 'default',
   codex: 'gpt-5.2-codex',
   gemini: 'gemini-3-flash',
+  grok: 'grok-4-fast',
   opencode: 'default',
   pi: 'default',
 };
@@ -144,11 +150,12 @@ const StepModel = React.memo(function StepModel({
       {/* Provider Selector */}
       <div>
         <label className="block text-sm font-medium mb-2">Provider</label>
-        <div className={`grid gap-3 ${tasmaniaEnabled ? 'grid-cols-5' : 'grid-cols-4'}`}>
+        <div className="grid gap-3 grid-cols-3">
           {([
             { id: 'claude' as const, label: 'Claude', icon: '/claude-ai-icon.webp', accent: 'accent-blue' },
             { id: 'codex' as const, label: 'Codex', icon: '/chatgpt-icon.webp', accent: 'accent-green' },
             { id: 'gemini' as const, label: 'Gemini', icon: 'gemini-svg', accent: 'accent-purple' },
+            { id: 'grok' as const, label: 'Grok', icon: 'grok-svg', accent: 'foreground' },
             { id: 'opencode' as const, label: 'OpenCode', icon: 'opencode-text', accent: 'accent-cyan' },
             { id: 'pi' as const, label: 'Pi', icon: 'pi-icon', accent: 'accent-cyan' },
           ] as const).map(({ id, label, icon, accent }) => {
@@ -176,6 +183,10 @@ const StepModel = React.memo(function StepModel({
                   {icon === 'gemini-svg' ? (
                     <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-black">
                       <path d="M12 0C12 6.627 6.627 12 0 12c6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12-6.627 0-12-5.373-12-12Z" />
+                    </svg>
+                  ) : icon === 'grok-svg' ? (
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-foreground">
+                      <path d="M2.5 3h4l5.5 7.6L18 3h3.5l-7.3 9.8L21.5 21h-4l-5.5-7.6L6 21H2.5l7.3-9.8L2.5 3Z" />
                     </svg>
                   ) : icon === 'opencode-text' ? (
                     <span className="text-cyan-500 font-bold text-xs">OC</span>
@@ -216,7 +227,7 @@ const StepModel = React.memo(function StepModel({
           <label className="block text-sm font-medium mb-2">Model</label>
           <div className={`grid gap-3 ${(PROVIDER_MODELS[provider] || PROVIDER_MODELS.claude).length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
             {(PROVIDER_MODELS[provider] || PROVIDER_MODELS.claude).map((m) => {
-              const accentColor = provider === 'codex' ? 'accent-green' : provider === 'gemini' ? 'accent-purple' : provider === 'pi' ? 'cyan-500' : 'accent-blue';
+              const accentColor = provider === 'codex' ? 'accent-green' : provider === 'gemini' ? 'accent-purple' : provider === 'grok' ? 'foreground' : provider === 'pi' ? 'cyan-500' : 'accent-blue';
               return (
                 <button
                   key={m.id}

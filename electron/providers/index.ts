@@ -3,6 +3,7 @@ import type { CLIProvider } from './cli-provider';
 import { ClaudeProvider } from './claude-provider';
 import { CodexProvider } from './codex-provider';
 import { GeminiProvider } from './gemini-provider';
+import { GrokProvider } from './grok-provider';
 import { OpenCodeProvider } from './opencode-provider';
 import { PiProvider } from './pi-provider';
 
@@ -19,6 +20,7 @@ const providers: Record<string, CLIProvider> = {
   claude: new ClaudeProvider(),
   codex: new CodexProvider(),
   gemini: new GeminiProvider(),
+  grok: new GrokProvider(),
   opencode: new OpenCodeProvider(),
   pi: new PiProvider(),
 };

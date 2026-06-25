@@ -15,20 +15,23 @@ import type {
 /**
  * Provider for xAI's Grok CLI ("Grok Build" — https://x.ai/cli).
  *
- * Install:   curl -fsSL https://x.ai/cli/install.sh | bash
- * Binary:    `grok`
- * Headless:  `grok -p "<prompt>"`              (one-shot, non-interactive)
- * Model:     `-m <model>`
- * JSON:      `--output-format streaming-json`  (machine-readable stream)
- * Auth:      GROK_CODE_XAI_API_KEY (or XAI_API_KEY) env var
+ * Install:  curl -fsSL https://x.ai/cli/install.sh | bash
+ *           (installs to ~/.grok/bin/grok, also symlinked into ~/.local/bin)
+ * Binary:   `grok`
+ * Auth:     `grok login` (interactive) or the GROK_DEPLOYMENT_KEY env var;
+ *           credentials are cached in ~/.grok/auth.json.
+ * Config:   ~/.grok/config.toml (TOML — MCP servers under [mcp_servers.<name>]).
  *
- * The Grok CLI advertises that "AGENTS.md, plugins, hooks, skills, and MCP
- * servers work out of the box". MCP registration and config-file shapes are
- * not yet fully documented for the public beta, so this provider follows the
- * dominant convention used by the other CLIs: try the native `grok mcp add`
- * sub-command first, and fall back to a JSON `settings.json` (`mcpServers`
- * map) under the config dir. Native hooks are treated as unsupported for now
- * (exit-code based status detection), matching the Codex provider.
+ * Flags verified against grok 0.2.64:
+ *   Interactive:  grok [-m <model>] [--permission-mode <mode>] [--effort <lvl>] [--debug] "<prompt>"
+ *   Headless:     grok -p "<prompt>" [--output-format plain|json|streaming-json]
+ *   Models:       grok models            (default model: grok-build)
+ *   MCP:          grok mcp add <name> <command> -- <args> | grok mcp remove <name> | grok mcp list
+ *
+ * Grok's CLI semantics closely mirror Claude Code / Codex, so MCP handling
+ * follows the Codex provider (config.toml with [mcp_servers.<name>] sections).
+ * Note: Grok has no `--add-dir`/multi-root flag, so secondary-project and
+ * Obsidian-vault mounting are intentionally not emitted.
  */
 export class GrokProvider implements CLIProvider {
   readonly id = 'grok' as const;
@@ -37,12 +40,10 @@ export class GrokProvider implements CLIProvider {
   readonly configDir = path.join(os.homedir(), '.grok');
 
   getModels(): ProviderModel[] {
-    // Model IDs evolve quickly during the Grok Build beta; these mirror the
-    // xAI public model line-up. Users can override per-agent in the UI.
+    // `grok models` (after `grok login`) is the source of truth; `grok-build`
+    // is the CLI's documented default. IDs are isolated here for easy updates.
     return [
-      { id: 'grok-4', name: 'Grok 4', description: 'Most capable' },
-      { id: 'grok-4-fast', name: 'Grok 4 Fast', description: 'Fast & efficient' },
-      { id: 'grok-code-fast-1', name: 'Grok Code Fast', description: 'Optimized for coding' },
+      { id: 'grok-build', name: 'Grok Build', description: 'Recommended (default)' },
     ];
   }
 
@@ -53,7 +54,7 @@ export class GrokProvider implements CLIProvider {
   buildInteractiveCommand(params: InteractiveCommandParams): string {
     let command = `'${params.binaryPath.replace(/'/g, "'\\''")}'`;
 
-    // Model (Grok uses -m, same as Gemini)
+    // Model
     if (params.model) {
       if (!/^[a-zA-Z0-9._:/-]+$/.test(params.model)) {
         throw new Error('Invalid model name');
@@ -61,27 +62,25 @@ export class GrokProvider implements CLIProvider {
       command += ` -m '${params.model}'`;
     }
 
-    // Grok's public beta gates tool use behind Plan Mode and exposes no
-    // documented "skip permissions" flag yet, so auto/bypass modes fall back
-    // to the default safety gate (no extra flag emitted).
-
-    // Secondary project — follow the Claude/Codex `--add-dir` convention.
-    if (params.secondaryProjectPath) {
-      const escaped = params.secondaryProjectPath.replace(/'/g, "'\\''");
-      command += ` --add-dir '${escaped}'`;
+    // Permission mode → Grok's Claude-Code-aligned --permission-mode.
+    // (normal keeps Grok's default plan-mode gate; no flag emitted.)
+    if (params.permissionMode === 'auto') {
+      command += ' --permission-mode auto';
+    } else if (params.permissionMode === 'bypass') {
+      command += ' --permission-mode bypassPermissions';
     }
 
-    // Obsidian vaults (read-only access)
-    if (params.obsidianVaultPaths) {
-      for (const vp of params.obsidianVaultPaths) {
-        if (fs.existsSync(vp)) {
-          const escaped = vp.replace(/'/g, "'\\''");
-          command += ` --add-dir '${escaped}'`;
-        }
-      }
+    // Reasoning effort (Grok accepts low|medium|high|xhigh|max).
+    if (params.effort && params.effort !== 'medium') {
+      command += ` --effort ${params.effort}`;
     }
 
-    // Prompt with skills directive
+    // Verbose → debug logging.
+    if (params.verbose) {
+      command += ' --debug';
+    }
+
+    // Prompt (positional) with optional skills directive.
     let finalPrompt = params.prompt;
     if (params.skills && params.skills.length > 0 && !params.isSuperAgent) {
       const skillsList = params.skills.join(', ');
@@ -99,11 +98,15 @@ export class GrokProvider implements CLIProvider {
   buildScheduledCommand(params: ScheduledCommandParams): string {
     let command = `"${params.binaryPath}"`;
 
+    if (params.autonomous) {
+      command += ' --permission-mode bypassPermissions';
+    }
+
     if (params.outputFormat) {
       command += ' --output-format streaming-json';
     }
 
-    // Headless one-shot execution.
+    // Headless single-turn: -p/--single takes the prompt as its value and exits.
     const escaped = params.prompt.replace(/'/g, "'\\''");
     command += ` -p '${escaped}'`;
 
@@ -113,14 +116,13 @@ export class GrokProvider implements CLIProvider {
   buildOneShotCommand(params: OneShotCommandParams): string {
     let command = `'${params.binaryPath.replace(/'/g, "'\\''")}'`;
 
-    command += ' -p';
-
+    // Model must precede -p, since -p/--single consumes the next token as the prompt.
     if (params.model) {
       command += ` -m ${params.model}`;
     }
 
     const escaped = params.prompt.replace(/'/g, "'\\''");
-    command += ` '${escaped}'`;
+    command += ` -p '${escaped}'`;
 
     return command;
   }
@@ -142,7 +144,7 @@ export class GrokProvider implements CLIProvider {
     return {
       supportsNativeHooks: false,
       configDir: this.configDir,
-      settingsFile: path.join(this.configDir, 'settings.json'),
+      settingsFile: path.join(this.configDir, 'config.toml'),
     };
   }
 
@@ -157,41 +159,40 @@ export class GrokProvider implements CLIProvider {
   }
 
   async registerMcpServer(name: string, command: string, args: string[]): Promise<void> {
-    // Try `grok mcp add` first (native CLI registration).
+    // Try `grok mcp add` first: `grok mcp add <name> <command> -- <args...>`.
     try {
       const argsStr = args.map(a => `"${a}"`).join(' ');
-      execSync(`grok mcp add ${name} -- ${command} ${argsStr}`, {
+      execSync(`grok mcp add ${name} ${command} -- ${argsStr}`, {
         encoding: 'utf-8',
         stdio: 'pipe',
       });
       console.log(`[grok] Registered MCP server ${name} via grok mcp add`);
       return;
     } catch {
-      // Fallback: write to settings.json manually.
+      // Fallback: write to config.toml manually.
     }
 
-    const settingsPath = path.join(this.configDir, 'settings.json');
+    const configPath = path.join(this.configDir, 'config.toml');
 
     if (!fs.existsSync(this.configDir)) {
       fs.mkdirSync(this.configDir, { recursive: true });
     }
 
-    let settings: { mcpServers?: Record<string, unknown>; [key: string]: unknown } = {};
-    if (fs.existsSync(settingsPath)) {
-      try {
-        settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-      } catch {
-        settings = {};
-      }
+    let content = '';
+    if (fs.existsSync(configPath)) {
+      content = fs.readFileSync(configPath, 'utf-8');
     }
 
-    if (!settings.mcpServers) {
-      settings.mcpServers = {};
-    }
+    // Remove existing section if present, then append the new one.
+    content = this.removeTomlSection(content, name);
 
-    (settings.mcpServers as Record<string, unknown>)[name] = { command, args };
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
-    console.log(`[grok] Registered MCP server ${name} in settings.json (fallback)`);
+    const sectionKey = this.escapeTomlKey(name);
+    const argsToml = args.map(a => `"${a}"`).join(', ');
+    const section = `\n[mcp_servers.${sectionKey}]\ncommand = "${command}"\nargs = [${argsToml}]\nenabled = true\n`;
+
+    content = content.trimEnd() + '\n' + section;
+    fs.writeFileSync(configPath, content);
+    console.log(`[grok] Registered MCP server ${name} in config.toml (fallback)`);
   }
 
   async removeMcpServer(name: string): Promise<void> {
@@ -205,33 +206,46 @@ export class GrokProvider implements CLIProvider {
       // Ignore if it doesn't exist.
     }
 
-    // Also clean settings.json fallback.
-    const settingsPath = path.join(this.configDir, 'settings.json');
-    if (!fs.existsSync(settingsPath)) return;
+    // Also clean the config.toml fallback.
+    const configPath = path.join(this.configDir, 'config.toml');
+    if (!fs.existsSync(configPath)) return;
 
-    try {
-      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-      if (settings?.mcpServers?.[name]) {
-        delete settings.mcpServers[name];
-        fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
-        console.log(`[grok] Removed MCP server ${name} from settings.json`);
-      }
-    } catch {
-      // Ignore malformed settings.
+    const content = fs.readFileSync(configPath, 'utf-8');
+    const updated = this.removeTomlSection(content, name);
+    if (updated !== content) {
+      fs.writeFileSync(configPath, updated);
+      console.log(`[grok] Removed MCP server ${name} from config.toml`);
     }
   }
 
   isMcpServerRegistered(name: string, expectedServerPath: string): boolean {
-    const settingsPath = path.join(this.configDir, 'settings.json');
-    if (!fs.existsSync(settingsPath)) return false;
+    const configPath = path.join(this.configDir, 'config.toml');
+    if (!fs.existsSync(configPath)) return false;
     try {
-      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-      const server = settings?.mcpServers?.[name] as { args?: string[] } | undefined;
-      if (!server) return false;
-      return Array.isArray(server.args) && server.args.some(a => a === expectedServerPath);
+      const content = fs.readFileSync(configPath, 'utf-8');
+      const sectionKey = this.escapeTomlKey(name);
+      const headerRegex = new RegExp(`\\[mcp_servers\\.${sectionKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]`);
+      if (!headerRegex.test(content)) return false;
+      return content.includes(expectedServerPath);
     } catch {
       return false;
     }
+  }
+
+  private removeTomlSection(content: string, name: string): string {
+    const sectionKey = this.escapeTomlKey(name);
+    const escapedKey = sectionKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Match section header + all lines until the next section header or EOF.
+    const regex = new RegExp(`\\n?\\[mcp_servers\\.${escapedKey}\\]\\n(?:(?!\\[)[^\\n]*\\n?)*`, 'g');
+    return content.replace(regex, '');
+  }
+
+  private escapeTomlKey(key: string): string {
+    // TOML keys with dots or special chars need quoting.
+    if (/[^a-zA-Z0-9_-]/.test(key)) {
+      return `"${key}"`;
+    }
+    return key;
   }
 
   getSkillDirectories(): string[] {
@@ -265,12 +279,13 @@ export class GrokProvider implements CLIProvider {
   }
 
   getMemoryBasePath(): string {
-    // Grok memory layout isn't documented yet; return config dir as placeholder.
+    // Grok supports cross-session memory; config/memory live under ~/.grok.
     return this.configDir;
   }
 
   getAddDirFlag(): string {
-    return '--add-dir';
+    // Grok has no --add-dir / multi-root flag.
+    return '';
   }
 
   buildScheduledScript(params: {
@@ -283,6 +298,8 @@ export class GrokProvider implements CLIProvider {
     logPath: string;
     homeDir: string;
   }): string {
+    const permissionFlag = params.autonomous ? '--permission-mode bypassPermissions ' : '';
+
     return `#!/bin/bash
 
 # Source shell profile for proper PATH (nvm, homebrew, etc.)
@@ -303,7 +320,7 @@ fi
 export PATH="${params.binaryDir}:$PATH"
 cd "${params.projectPath}"
 echo "=== Task started at $(date) ===" >> "${params.logPath}"
-"${params.binaryPath}" --output-format streaming-json -p '${params.prompt}' >> "${params.logPath}" 2>&1
+"${params.binaryPath}" ${permissionFlag}--output-format streaming-json -p '${params.prompt}' >> "${params.logPath}" 2>&1
 echo "=== Task completed at $(date) ===" >> "${params.logPath}"
 `;
   }

@@ -53,6 +53,7 @@ async function detectCLIPaths(savedPaths?: Partial<CLIPaths>): Promise<{ claude:
     '/opt/homebrew/bin',
     '/usr/local/bin',
     path.join(homeDir, '.local/bin'),
+    path.join(homeDir, '.grok/bin'),       // Grok CLI default install dir
     path.join(homeDir, 'Library/pnpm'),   // pnpm global bin (macOS)
     path.join(homeDir, '.yarn/bin'),       // yarn global bin
   ];

@@ -42,11 +42,21 @@ describe('GrokProvider', () => {
       expect(provider.displayName).toBe('Grok CLI');
     });
 
-    it('lists at least one model', async () => {
+    it('lists the grok-build default model', async () => {
       const provider = await getProvider();
       const models = provider.getModels();
       expect(models.length).toBeGreaterThan(0);
-      expect(models.map(m => m.id)).toContain('grok-4');
+      expect(models.map(m => m.id)).toContain('grok-build');
+    });
+
+    it('uses config.toml for hooks/config', async () => {
+      const provider = await getProvider();
+      expect(provider.getHookConfig().settingsFile).toContain('config.toml');
+    });
+
+    it('reports no --add-dir flag (Grok has no multi-root flag)', async () => {
+      const provider = await getProvider();
+      expect(provider.getAddDirFlag()).toBe('');
     });
   });
 
@@ -65,15 +75,15 @@ describe('GrokProvider', () => {
   });
 
   describe('buildInteractiveCommand', () => {
-    it('passes the model with -m', async () => {
+    it('passes the model with -m and the prompt positionally', async () => {
       const provider = await getProvider();
       const cmd = provider.buildInteractiveCommand({
         binaryPath: 'grok',
         prompt: 'hello',
-        model: 'grok-4',
+        model: 'grok-build',
       });
-      expect(cmd).toContain("-m 'grok-4'");
-      expect(cmd).toContain("'hello'");
+      expect(cmd).toContain("-m 'grok-build'");
+      expect(cmd).toMatch(/'hello'$/);
     });
 
     it('rejects an invalid model name', async () => {
@@ -83,19 +93,40 @@ describe('GrokProvider', () => {
       ).toThrow('Invalid model name');
     });
 
-    it('adds secondary directories with --add-dir', async () => {
+    it('maps permission modes to --permission-mode', async () => {
+      const provider = await getProvider();
+      const auto = provider.buildInteractiveCommand({ binaryPath: 'grok', prompt: 'x', permissionMode: 'auto' });
+      expect(auto).toContain('--permission-mode auto');
+
+      const bypass = provider.buildInteractiveCommand({ binaryPath: 'grok', prompt: 'x', permissionMode: 'bypass' });
+      expect(bypass).toContain('--permission-mode bypassPermissions');
+
+      const normal = provider.buildInteractiveCommand({ binaryPath: 'grok', prompt: 'x', permissionMode: 'normal' });
+      expect(normal).not.toContain('--permission-mode');
+    });
+
+    it('passes non-default effort with --effort', async () => {
+      const provider = await getProvider();
+      const high = provider.buildInteractiveCommand({ binaryPath: 'grok', prompt: 'x', effort: 'high' });
+      expect(high).toContain('--effort high');
+
+      const medium = provider.buildInteractiveCommand({ binaryPath: 'grok', prompt: 'x', effort: 'medium' });
+      expect(medium).not.toContain('--effort');
+    });
+
+    it('does not emit --add-dir for secondary directories', async () => {
       const provider = await getProvider();
       const cmd = provider.buildInteractiveCommand({
         binaryPath: 'grok',
         prompt: 'x',
         secondaryProjectPath: '/work/other',
       });
-      expect(cmd).toContain("--add-dir '/work/other'");
+      expect(cmd).not.toContain('--add-dir');
     });
   });
 
   describe('buildScheduledCommand', () => {
-    it('runs headless with -p', async () => {
+    it('runs headless with -p and bypasses permissions when autonomous', async () => {
       const provider = await getProvider();
       const cmd = provider.buildScheduledCommand({
         binaryPath: 'grok',
@@ -103,6 +134,7 @@ describe('GrokProvider', () => {
         autonomous: true,
       });
       expect(cmd).toContain("-p 'do the thing'");
+      expect(cmd).toContain('--permission-mode bypassPermissions');
     });
 
     it('emits streaming-json when an output format is requested', async () => {
@@ -118,12 +150,12 @@ describe('GrokProvider', () => {
   });
 
   describe('buildOneShotCommand', () => {
-    it('builds a -p one-shot with optional model', async () => {
+    it('places -m before -p so the prompt is the value of -p', async () => {
       const provider = await getProvider();
-      const cmd = provider.buildOneShotCommand({ binaryPath: 'grok', prompt: 'hi', model: 'grok-4-fast' });
-      expect(cmd).toContain(' -p');
-      expect(cmd).toContain('-m grok-4-fast');
-      expect(cmd).toContain("'hi'");
+      const cmd = provider.buildOneShotCommand({ binaryPath: 'grok', prompt: 'hi', model: 'grok-build' });
+      // -m must come before -p (which consumes its following token as the prompt)
+      expect(cmd.indexOf('-m grok-build')).toBeLessThan(cmd.indexOf('-p '));
+      expect(cmd).toMatch(/-p 'hi'$/);
     });
   });
 
@@ -135,36 +167,38 @@ describe('GrokProvider', () => {
   });
 
   describe('registerMcpServer', () => {
-    it('uses grok mcp add when the CLI succeeds', async () => {
+    it('uses grok mcp add with command before -- and args after', async () => {
       const provider = await getProvider();
-      mockExecSync.mockReturnValue('Added MCP server');
+      mockExecSync.mockReturnValue('Added stdio MCP server');
 
       await provider.registerMcpServer('my-mcp', 'node', ['/path/to/bundle.js']);
 
       expect(mockExecSync).toHaveBeenCalledWith(
-        expect.stringContaining('grok mcp add my-mcp -- node'),
+        expect.stringContaining('grok mcp add my-mcp node -- "/path/to/bundle.js"'),
         expect.objectContaining({ encoding: 'utf-8', stdio: 'pipe' }),
       );
       // No fallback file written on CLI success.
-      const settingsPath = path.join(tmpDir, '.grok', 'settings.json');
-      expect(fs.existsSync(settingsPath)).toBe(false);
+      const configPath = path.join(tmpDir, '.grok', 'config.toml');
+      expect(fs.existsSync(configPath)).toBe(false);
     });
 
-    it('falls back to settings.json when the CLI throws', async () => {
+    it('falls back to config.toml ([mcp_servers.<name>]) when the CLI throws', async () => {
       const provider = await getProvider();
       mockExecSync.mockImplementation(() => { throw new Error('command not found'); });
 
       await provider.registerMcpServer('my-mcp', 'node', ['/bundle.js']);
 
-      const settingsPath = path.join(tmpDir, '.grok', 'settings.json');
-      expect(fs.existsSync(settingsPath)).toBe(true);
-      const parsed = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-      expect(parsed.mcpServers['my-mcp']).toEqual({ command: 'node', args: ['/bundle.js'] });
+      const configPath = path.join(tmpDir, '.grok', 'config.toml');
+      expect(fs.existsSync(configPath)).toBe(true);
+      const toml = fs.readFileSync(configPath, 'utf-8');
+      expect(toml).toContain('[mcp_servers.my-mcp]');
+      expect(toml).toContain('command = "node"');
+      expect(toml).toContain('args = ["/bundle.js"]');
     });
   });
 
   describe('isMcpServerRegistered', () => {
-    it('detects a server with the expected path in settings.json', async () => {
+    it('detects a server with the expected path in config.toml', async () => {
       const provider = await getProvider();
       mockExecSync.mockImplementation(() => { throw new Error('no cli'); });
       await provider.registerMcpServer('vault', 'node', ['/abs/vault-mcp.js']);

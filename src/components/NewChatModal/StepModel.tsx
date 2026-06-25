@@ -51,7 +51,8 @@ const PROVIDER_MODELS: Record<string, ProviderModel[]> = {
     { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: 'Balanced' },
   ],
   grok: [
-    { id: 'grok-build', name: 'Grok Build', description: 'Recommended (default)' },
+    { id: 'grok-composer-2.5-fast', name: 'Grok Composer 2.5 Fast', description: 'Recommended (default)' },
+    { id: 'grok-build', name: 'Grok Build', description: 'Agentic coding' },
   ],
   opencode: [
     { id: 'default', name: 'Default', description: 'Use configured default' },
@@ -70,7 +71,7 @@ const PROVIDER_DEFAULT_MODEL: Record<string, string> = {
   claude: 'default',
   codex: 'gpt-5.2-codex',
   gemini: 'gemini-3-flash',
-  grok: 'grok-build',
+  grok: 'grok-composer-2.5-fast',
   opencode: 'default',
   pi: 'default',
 };

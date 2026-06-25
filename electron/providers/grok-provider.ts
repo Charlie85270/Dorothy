@@ -40,10 +40,11 @@ export class GrokProvider implements CLIProvider {
   readonly configDir = path.join(os.homedir(), '.grok');
 
   getModels(): ProviderModel[] {
-    // `grok models` (after `grok login`) is the source of truth; `grok-build`
-    // is the CLI's documented default. IDs are isolated here for easy updates.
+    // IDs from `grok models` (authenticated). The available set is
+    // account-dependent; these are isolated here for easy updates.
     return [
-      { id: 'grok-build', name: 'Grok Build', description: 'Recommended (default)' },
+      { id: 'grok-composer-2.5-fast', name: 'Grok Composer 2.5 Fast', description: 'Recommended (default)' },
+      { id: 'grok-build', name: 'Grok Build', description: 'Agentic coding' },
     ];
   }
 

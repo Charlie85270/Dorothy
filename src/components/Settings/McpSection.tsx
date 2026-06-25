@@ -17,7 +17,7 @@ import {
   Check,
 } from 'lucide-react';
 
-type Provider = 'claude' | 'codex' | 'gemini';
+type Provider = 'claude' | 'codex' | 'gemini' | 'grok';
 
 interface McpServer {
   name: string;
@@ -36,6 +36,7 @@ const PROVIDER_TABS: { id: Provider; label: string }[] = [
   { id: 'claude', label: 'Claude' },
   { id: 'codex', label: 'Codex' },
   { id: 'gemini', label: 'Gemini' },
+  { id: 'grok', label: 'Grok' },
 ];
 
 function GeminiSvg({ className }: { className?: string }) {

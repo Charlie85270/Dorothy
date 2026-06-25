@@ -487,7 +487,7 @@ export default function SkillsPage() {
         open={showInstallTerminal}
         repo={currentInstallRepo}
         title={currentInstallTitle}
-        availableProviders={['claude', 'codex', 'gemini']}
+        availableProviders={['claude', 'codex', 'gemini', 'grok']}
         onClose={(success) => {
           setShowInstallTerminal(false);
           setInstallingSkill(null);

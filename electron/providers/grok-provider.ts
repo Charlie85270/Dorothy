@@ -1,7 +1,7 @@
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import type { AppSettings } from '../types';
 import type {
   CLIProvider,
@@ -97,7 +97,7 @@ export class GrokProvider implements CLIProvider {
   }
 
   buildScheduledCommand(params: ScheduledCommandParams): string {
-    let command = `"${params.binaryPath}"`;
+    let command = this.shellQuote(params.binaryPath);
 
     if (params.autonomous) {
       command += ' --permission-mode bypassPermissions';
@@ -119,7 +119,10 @@ export class GrokProvider implements CLIProvider {
 
     // Model must precede -p, since -p/--single consumes the next token as the prompt.
     if (params.model) {
-      command += ` -m ${params.model}`;
+      if (!/^[a-zA-Z0-9._:/-]+$/.test(params.model)) {
+        throw new Error('Invalid model name');
+      }
+      command += ` -m '${params.model}'`;
     }
 
     const escaped = params.prompt.replace(/'/g, "'\\''");
@@ -161,9 +164,10 @@ export class GrokProvider implements CLIProvider {
 
   async registerMcpServer(name: string, command: string, args: string[]): Promise<void> {
     // Try `grok mcp add` first: `grok mcp add <name> <command> -- <args...>`.
+    // execFileSync passes argv as a structured array, so name/command/args are
+    // never interpreted by a shell (no command injection).
     try {
-      const argsStr = args.map(a => `"${a}"`).join(' ');
-      execSync(`grok mcp add ${name} ${command} -- ${argsStr}`, {
+      execFileSync('grok', ['mcp', 'add', name, command, '--', ...args], {
         encoding: 'utf-8',
         stdio: 'pipe',
       });
@@ -188,8 +192,8 @@ export class GrokProvider implements CLIProvider {
     content = this.removeTomlSection(content, name);
 
     const sectionKey = this.escapeTomlKey(name);
-    const argsToml = args.map(a => `"${a}"`).join(', ');
-    const section = `\n[mcp_servers.${sectionKey}]\ncommand = "${command}"\nargs = [${argsToml}]\nenabled = true\n`;
+    const argsToml = args.map(a => this.tomlString(a)).join(', ');
+    const section = `\n[mcp_servers.${sectionKey}]\ncommand = ${this.tomlString(command)}\nargs = [${argsToml}]\nenabled = true\n`;
 
     content = content.trimEnd() + '\n' + section;
     fs.writeFileSync(configPath, content);
@@ -197,9 +201,9 @@ export class GrokProvider implements CLIProvider {
   }
 
   async removeMcpServer(name: string): Promise<void> {
-    // Try `grok mcp remove` first.
+    // Try `grok mcp remove` first. execFileSync avoids shell interpolation.
     try {
-      execSync(`grok mcp remove ${name} 2>&1`, {
+      execFileSync('grok', ['mcp', 'remove', name], {
         encoding: 'utf-8',
         stdio: 'pipe',
       });
@@ -225,9 +229,12 @@ export class GrokProvider implements CLIProvider {
     try {
       const content = fs.readFileSync(configPath, 'utf-8');
       const sectionKey = this.escapeTomlKey(name);
-      const headerRegex = new RegExp(`\\[mcp_servers\\.${sectionKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]`);
-      if (!headerRegex.test(content)) return false;
-      return content.includes(expectedServerPath);
+      const escapedKey = sectionKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // Extract only this server's [mcp_servers.<name>] block so a path that
+      // belongs to a *different* server section can't produce a false match.
+      const sectionRegex = new RegExp(`(?:^|\\n)\\[mcp_servers\\.${escapedKey}\\]\\n[\\s\\S]*?(?=\\n\\[|$)`);
+      const section = content.match(sectionRegex)?.[0];
+      return Boolean(section?.includes(expectedServerPath));
     } catch {
       return false;
     }
@@ -242,11 +249,30 @@ export class GrokProvider implements CLIProvider {
   }
 
   private escapeTomlKey(key: string): string {
-    // TOML keys with dots or special chars need quoting.
+    // TOML keys with dots or special chars need quoting; use full TOML string
+    // escaping so backslashes/quotes in the key can't break the header.
     if (/[^a-zA-Z0-9_-]/.test(key)) {
-      return `"${key}"`;
+      return this.tomlString(key);
     }
     return key;
+  }
+
+  /**
+   * POSIX single-quote shell escaping. Wrapping a value in single quotes and
+   * replacing embedded quotes with '\'' makes it inert to spaces, $(), backticks,
+   * and other metacharacters when interpolated into a generated shell command.
+   */
+  private shellQuote(value: string): string {
+    return `'${value.replace(/'/g, "'\\''")}'`;
+  }
+
+  /**
+   * Serialize a value as a TOML basic string. JSON string escaping is a valid
+   * superset for the common cases (backslashes, double quotes, control chars),
+   * preventing Windows paths like C:\Users\me"x.js from producing invalid TOML.
+   */
+  private tomlString(value: string): string {
+    return JSON.stringify(value);
   }
 
   getSkillDirectories(): string[] {
@@ -301,28 +327,37 @@ export class GrokProvider implements CLIProvider {
   }): string {
     const permissionFlag = params.autonomous ? '--permission-mode bypassPermissions ' : '';
 
+    // Shell-escape every interpolated value so paths/prompts containing spaces,
+    // quotes, $(), or backticks can't break the script or inject commands.
+    const homeDir = this.shellQuote(params.homeDir);
+    const binaryDir = this.shellQuote(params.binaryDir);
+    const projectPath = this.shellQuote(params.projectPath);
+    const logPath = this.shellQuote(params.logPath);
+    const binaryPath = this.shellQuote(params.binaryPath);
+    const prompt = this.shellQuote(params.prompt);
+
     return `#!/bin/bash
 
 # Source shell profile for proper PATH (nvm, homebrew, etc.)
-export HOME="${params.homeDir}"
+export HOME=${homeDir}
 
-if [ -s "${params.homeDir}/.nvm/nvm.sh" ]; then
-  source "${params.homeDir}/.nvm/nvm.sh" 2>/dev/null || true
+if [ -s ${homeDir}/.nvm/nvm.sh ]; then
+  source ${homeDir}/.nvm/nvm.sh 2>/dev/null || true
 fi
 
-if [ -f "${params.homeDir}/.bashrc" ]; then
-  source "${params.homeDir}/.bashrc" 2>/dev/null || true
-elif [ -f "${params.homeDir}/.bash_profile" ]; then
-  source "${params.homeDir}/.bash_profile" 2>/dev/null || true
-elif [ -f "${params.homeDir}/.zshrc" ]; then
-  source "${params.homeDir}/.zshrc" 2>/dev/null || true
+if [ -f ${homeDir}/.bashrc ]; then
+  source ${homeDir}/.bashrc 2>/dev/null || true
+elif [ -f ${homeDir}/.bash_profile ]; then
+  source ${homeDir}/.bash_profile 2>/dev/null || true
+elif [ -f ${homeDir}/.zshrc ]; then
+  source ${homeDir}/.zshrc 2>/dev/null || true
 fi
 
-export PATH="${params.binaryDir}:$PATH"
-cd "${params.projectPath}"
-echo "=== Task started at $(date) ===" >> "${params.logPath}"
-"${params.binaryPath}" ${permissionFlag}--output-format streaming-json -p '${params.prompt}' >> "${params.logPath}" 2>&1
-echo "=== Task completed at $(date) ===" >> "${params.logPath}"
+export PATH=${binaryDir}:$PATH
+cd ${projectPath}
+echo "=== Task started at $(date) ===" >> ${logPath}
+${binaryPath} ${permissionFlag}--output-format streaming-json -p ${prompt} >> ${logPath} 2>&1
+echo "=== Task completed at $(date) ===" >> ${logPath}
 `;
   }
 }

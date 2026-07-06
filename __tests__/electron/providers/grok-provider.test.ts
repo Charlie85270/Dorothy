@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 
 let tmpDir: string;
-let mockExecSync: ReturnType<typeof vi.fn>;
+let mockExecFileSync: ReturnType<typeof vi.fn>;
 
 vi.mock('os', async (importOriginal) => {
   const mod = await importOriginal<typeof import('os')>();
@@ -12,13 +12,13 @@ vi.mock('os', async (importOriginal) => {
 });
 
 vi.mock('child_process', () => ({
-  execSync: (...args: unknown[]) => mockExecSync(...args),
+  execFileSync: (...args: unknown[]) => mockExecFileSync(...args),
 }));
 
 beforeEach(() => {
   vi.resetModules();
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'grok-prov-test-'));
-  mockExecSync = vi.fn();
+  mockExecFileSync = vi.fn();
 });
 
 afterEach(() => {
@@ -154,7 +154,8 @@ describe('GrokProvider', () => {
       const provider = await getProvider();
       const cmd = provider.buildOneShotCommand({ binaryPath: 'grok', prompt: 'hi', model: 'grok-build' });
       // -m must come before -p (which consumes its following token as the prompt)
-      expect(cmd.indexOf('-m grok-build')).toBeLessThan(cmd.indexOf('-p '));
+      expect(cmd).toContain("-m 'grok-build'");
+      expect(cmd.indexOf("-m 'grok-build'")).toBeLessThan(cmd.indexOf('-p '));
       expect(cmd).toMatch(/-p 'hi'$/);
     });
   });
@@ -169,12 +170,13 @@ describe('GrokProvider', () => {
   describe('registerMcpServer', () => {
     it('uses grok mcp add with command before -- and args after', async () => {
       const provider = await getProvider();
-      mockExecSync.mockReturnValue('Added stdio MCP server');
+      mockExecFileSync.mockReturnValue('Added stdio MCP server');
 
       await provider.registerMcpServer('my-mcp', 'node', ['/path/to/bundle.js']);
 
-      expect(mockExecSync).toHaveBeenCalledWith(
-        expect.stringContaining('grok mcp add my-mcp node -- "/path/to/bundle.js"'),
+      expect(mockExecFileSync).toHaveBeenCalledWith(
+        'grok',
+        ['mcp', 'add', 'my-mcp', 'node', '--', '/path/to/bundle.js'],
         expect.objectContaining({ encoding: 'utf-8', stdio: 'pipe' }),
       );
       // No fallback file written on CLI success.
@@ -184,7 +186,7 @@ describe('GrokProvider', () => {
 
     it('falls back to config.toml ([mcp_servers.<name>]) when the CLI throws', async () => {
       const provider = await getProvider();
-      mockExecSync.mockImplementation(() => { throw new Error('command not found'); });
+      mockExecFileSync.mockImplementation(() => { throw new Error('command not found'); });
 
       await provider.registerMcpServer('my-mcp', 'node', ['/bundle.js']);
 
@@ -200,7 +202,7 @@ describe('GrokProvider', () => {
   describe('isMcpServerRegistered', () => {
     it('detects a server with the expected path in config.toml', async () => {
       const provider = await getProvider();
-      mockExecSync.mockImplementation(() => { throw new Error('no cli'); });
+      mockExecFileSync.mockImplementation(() => { throw new Error('no cli'); });
       await provider.registerMcpServer('vault', 'node', ['/abs/vault-mcp.js']);
 
       expect(provider.isMcpServerRegistered('vault', '/abs/vault-mcp.js')).toBe(true);

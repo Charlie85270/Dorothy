@@ -7,6 +7,16 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 12,
+    version: '1.2.9',
+    date: '2026-07-07',
+    updates: [
+      'Add Grok CLI as a new agent provider',
+      'Fix Telegram small message issue — short messages are now submitted instead of left pasted',
+      'Add search input to the "Add agent to board" dropdown on the dashboard',
+    ],
+  },
+  {
     id: 11,
     version: '1.2.8',
     date: '2026-05-05',

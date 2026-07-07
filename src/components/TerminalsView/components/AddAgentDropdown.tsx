@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { ChevronDown, Plus } from 'lucide-react';
+import { ChevronDown, Plus, Search } from 'lucide-react';
 import type { AgentStatus } from '@/types/electron';
 import { CHARACTER_FACES, STATUS_COLORS } from '../constants';
 
@@ -19,7 +19,9 @@ export default function AddAgentDropdown({
   onCreateAgent,
 }: AddAgentDropdownProps) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const ref = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   // Close on click outside
   useEffect(() => {
@@ -33,10 +35,25 @@ export default function AddAgentDropdown({
     return () => window.removeEventListener('mousedown', handler);
   }, [open]);
 
-  // Agents not on current tab, grouped by project
+  // Reset the query and focus the search field when the dropdown opens
+  useEffect(() => {
+    if (open) {
+      setQuery('');
+      searchRef.current?.focus();
+    }
+  }, [open]);
+
+  // Agents not on current tab, grouped by project, filtered by search query
   const groups = useMemo(() => {
     const tabSet = new Set(currentTabAgentIds);
-    const available = allAgents.filter(a => !tabSet.has(a.id));
+    const q = query.trim().toLowerCase();
+    const available = allAgents.filter(a => {
+      if (tabSet.has(a.id)) return false;
+      if (!q) return true;
+      const name = (a.name || `Agent ${a.id.slice(0, 6)}`).toLowerCase();
+      const project = (a.projectPath.split('/').pop() || a.projectPath).toLowerCase();
+      return name.includes(q) || project.includes(q);
+    });
 
     const byProject = new Map<string, AgentStatus[]>();
     for (const agent of available) {
@@ -50,7 +67,7 @@ export default function AddAgentDropdown({
       projectPath: path,
       agents,
     }));
-  }, [allAgents, currentTabAgentIds]);
+  }, [allAgents, currentTabAgentIds, query]);
 
   const totalAvailable = groups.reduce((sum, g) => sum + g.agents.length, 0);
 
@@ -69,9 +86,23 @@ export default function AddAgentDropdown({
 
       {open && (
         <div className="absolute top-full right-0 mt-1 bg-card border border-border shadow-xl z-50 min-w-[220px] max-h-[320px] overflow-y-auto">
+          {/* Search input */}
+          <div className="sticky top-0 z-10 bg-card border-b border-border p-2">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+              <input
+                ref={searchRef}
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Search agents..."
+                className="w-full pl-7 pr-2 py-1.5 text-xs bg-primary/5 text-foreground placeholder:text-muted-foreground border border-transparent focus:border-border focus:outline-none rounded"
+              />
+            </div>
+          </div>
+
           {totalAvailable === 0 ? (
             <div className="px-3 py-4 text-xs text-muted-foreground text-center">
-              All agents are on this board
+              {query.trim() ? 'No matching agents' : 'All agents are on this board'}
             </div>
           ) : (
             groups.map(group => (

@@ -2,7 +2,7 @@
 
 ![Dorothy](screenshots/background-2.png)
 
-A beautiful desktop app to orchestrate your [Claude Code](https://claude.ai/code) ,[Codex](https://chatgpt.com/codex), [Gemini](https://geminicli.com/) and local agents. Deploy, monitor, and debug — all from one delightful interface. Free and open source.
+A beautiful desktop app to orchestrate your [Claude Code](https://claude.ai/code) ,[Codex](https://chatgpt.com/codex), [Gemini](https://geminicli.com/), [Grok](https://x.ai/cli) and local agents. Deploy, monitor, and debug — all from one delightful interface. Free and open source.
 
 ![Dorothy Dashboard](screenshots/0.png)
 
@@ -387,7 +387,7 @@ Access Gmail, Drive, Sheets, Docs, Calendar, and more directly from your agents 
 ### Features
 
 - **MCP server**: Runs `gws mcp` over stdio, exposing Google APIs as tools (10-80 tools per service)
-- **Multi-provider**: MCP server registered with all configured providers (Claude, Codex, Gemini)
+- **Multi-provider**: MCP server registered with all configured providers (Claude, Codex, Gemini, Grok)
 - **Service badges**: Settings page shows connected services with per-service access levels (READ / R/W)
 - **Agent skills**: Detects and lists installed `gws-*` skills (e.g., `gws-gmail`, `gws-drive`, `gws-calendar`)
 - **Update Access**: Re-run `gws auth login` to add or change OAuth scopes without re-running setup

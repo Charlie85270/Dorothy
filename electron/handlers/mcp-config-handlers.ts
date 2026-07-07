@@ -33,6 +33,8 @@ function getConfigPath(provider: string): string {
       return path.join(os.homedir(), '.codex', 'config.toml');
     case 'gemini':
       return path.join(os.homedir(), '.gemini', 'settings.json');
+    case 'grok':
+      return path.join(os.homedir(), '.grok', 'config.toml');
     default:
       throw new Error(`Unknown provider: ${provider}`);
   }
@@ -138,14 +140,16 @@ function writeGeminiMcp(action: 'update' | 'delete', server?: McpServer, deleteN
 
 // ── Codex: TOML [mcp_servers.name] sections ─────────────────────────
 
-function readCodexMcp(): McpServer[] {
-  const configPath = getConfigPath('codex');
+// Codex and Grok share the same TOML schema (config.toml with
+// [mcp_servers.<name>] sections), so these helpers take a provider id.
+function readCodexMcp(provider: string = 'codex'): McpServer[] {
+  const configPath = getConfigPath(provider);
   if (!fs.existsSync(configPath)) return [];
   try {
     const content = fs.readFileSync(configPath, 'utf-8');
     return parseTomlMcpServers(content);
   } catch (err) {
-    console.error('Failed to read Codex MCP config:', err);
+    console.error(`Failed to read ${provider} MCP config:`, err);
     return [];
   }
 }
@@ -213,8 +217,8 @@ function escapeTomlKey(key: string): string {
   return key;
 }
 
-function writeCodexMcp(action: 'update' | 'delete', server?: McpServer, deleteName?: string): void {
-  const configPath = getConfigPath('codex');
+function writeCodexMcp(action: 'update' | 'delete', server?: McpServer, deleteName?: string, provider: string = 'codex'): void {
+  const configPath = getConfigPath(provider);
   let content = '';
   if (fs.existsSync(configPath)) {
     content = fs.readFileSync(configPath, 'utf-8');
@@ -260,6 +264,7 @@ function listServers(provider: string): McpServer[] {
     case 'claude': return readClaudeMcp();
     case 'codex': return readCodexMcp();
     case 'gemini': return readGeminiMcp();
+    case 'grok': return readCodexMcp('grok');
     default: return [];
   }
 }
@@ -269,6 +274,7 @@ function updateServer(provider: string, server: McpServer): void {
     case 'claude': writeClaudeMcp('update', server); break;
     case 'codex': writeCodexMcp('update', server); break;
     case 'gemini': writeGeminiMcp('update', server); break;
+    case 'grok': writeCodexMcp('update', server, undefined, 'grok'); break;
   }
 }
 
@@ -277,6 +283,7 @@ function deleteServer(provider: string, name: string): void {
     case 'claude': writeClaudeMcp('delete', undefined, name); break;
     case 'codex': writeCodexMcp('delete', undefined, name); break;
     case 'gemini': writeGeminiMcp('delete', undefined, name); break;
+    case 'grok': writeCodexMcp('delete', undefined, name, 'grok'); break;
   }
 }
 

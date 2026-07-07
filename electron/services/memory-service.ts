@@ -33,6 +33,7 @@ const PROVIDER_MEMORY_DIRS: { provider: string; dir: string }[] = [
   // These are checked only if they exist — no error if missing.
   { provider: 'codex', dir: path.join(os.homedir(), '.codex', 'projects') },
   { provider: 'gemini', dir: path.join(os.homedir(), '.gemini', 'projects') },
+  { provider: 'grok', dir: path.join(os.homedir(), '.grok', 'projects') },
 ];
 
 /**

@@ -5,7 +5,7 @@ export interface WorktreeConfig {
 
 export type AgentCharacter = 'robot' | 'ninja' | 'wizard' | 'astronaut' | 'knight' | 'pirate' | 'alien' | 'viking';
 
-export type AgentProvider = 'claude' | 'codex' | 'gemini' | 'opencode' | 'pi' | 'local';
+export type AgentProvider = 'claude' | 'codex' | 'gemini' | 'grok' | 'opencode' | 'pi' | 'local';
 
 /** Permission mode for agent tool use:
  * - normal: Claude asks for confirmation on each tool use
@@ -57,6 +57,7 @@ export interface CLIPaths {
   claude: string;
   codex: string;
   gemini: string;
+  grok: string;
   opencode: string;
   pi: string;
   gws: string;

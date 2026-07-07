@@ -87,6 +87,7 @@ export const DEFAULT_APP_SETTINGS = {
     claude: '',
     codex: '',
     gemini: '',
+    grok: '',
     opencode: '',
     pi: '',
     gws: '',

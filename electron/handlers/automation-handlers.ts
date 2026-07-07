@@ -109,7 +109,7 @@ function getDefaultProvider(): AgentProvider {
     const settingsFile = path.join(os.homedir(), '.dorothy', 'app-settings.json');
     if (fs.existsSync(settingsFile)) {
       const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'));
-      if (settings.defaultProvider && ['claude', 'codex', 'gemini'].includes(settings.defaultProvider)) {
+      if (settings.defaultProvider && ['claude', 'codex', 'gemini', 'grok'].includes(settings.defaultProvider)) {
         return settings.defaultProvider as AgentProvider;
       }
     }

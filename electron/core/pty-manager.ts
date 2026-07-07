@@ -41,13 +41,18 @@ export function killAllPty(): void {
  * Write a command to a PTY and submit it.
  *
  * When `bracketPaste` is true (used for sending messages to an already-running
- * Claude Code session), multi-line / long input is wrapped in bracket paste
- * mode so the terminal treats it as a single paste.  A short delay before the
- * final carriage-return ensures the paste buffer is fully processed.
+ * Claude Code session), the carriage return is ALWAYS sent as a separate,
+ * delayed write — even for short single-line messages. Claude Code's TUI treats
+ * a rapid "text\r" burst as a single paste event and buffers it without
+ * submitting (the text lands in the input box as "[Pasted text]" but is never
+ * sent). Delaying the \r lets the paste settle so it registers as a deliberate
+ * submit keystroke. Multi-line / long input is additionally wrapped in bracket
+ * paste markers so the terminal treats it as one paste rather than line-by-line
+ * input.
  *
  * When `bracketPaste` is false (default — used for the initial shell command
  * that starts Claude Code), the data is sent as plain text + \r, which is what
- * a raw bash/zsh shell expects.
+ * a raw bash/zsh shell expects and has no paste-detection race.
  *
  * DO NOT use this for raw keystroke passthrough from xterm.js UI terminals.
  */
@@ -56,14 +61,22 @@ export function writeProgrammaticInput(
   data: string,
   bracketPaste = false,
 ): void {
-  if (bracketPaste && (data.includes('\n') || data.length > 200)) {
-    // Bracket paste mode: \x1b[200~ ... \x1b[201~ tells the terminal
-    // "everything between these markers is pasted content, not typed input"
-    ptyProcess.write('\x1b[200~' + data + '\x1b[201~');
-    // Delay the carriage return so the terminal finishes processing the paste
+  if (bracketPaste) {
+    if (data.includes('\n') || data.length > 200) {
+      // Bracket paste mode: \x1b[200~ ... \x1b[201~ tells the terminal
+      // "everything between these markers is pasted content, not typed input"
+      ptyProcess.write('\x1b[200~' + data + '\x1b[201~');
+    } else {
+      // Short single-line message: no bracket markers needed, but the \r must
+      // still be delayed (see below) so it isn't swallowed into the paste.
+      ptyProcess.write(data);
+    }
+    // Delay the carriage return so the TUI finishes processing the input before
+    // receiving the submit keystroke. Without this, short Telegram/Slack
+    // messages get typed into the box but never sent.
     setTimeout(() => ptyProcess.write('\r'), 300);
   } else {
-    // Short single-line input or shell command: send directly
+    // Plain shell command for a raw bash/zsh prompt: send directly.
     ptyProcess.write(data + '\r');
   }
 }

@@ -206,7 +206,13 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     }
     command += ` '${finalPrompt.replace(/'/g, "'\\''")}'`;
 
-    const shell = getBashShell();
+    let shell: string;
+    try {
+      shell = getBashShell();
+    } catch (err) {
+      sendJson({ error: (err as Error).message }, 500);
+      return;
+    }
     const fullPath = buildFullPath();
 
     const ptyProcess = pty.spawn(shell, ['-l', '-c', command], {

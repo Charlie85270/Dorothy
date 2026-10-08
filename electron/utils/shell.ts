@@ -1,9 +1,9 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { exec, execFileSync } from 'child_process';
+import { execFile, execFileSync } from 'child_process';
 import { promisify } from 'util';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 /**
  * Cross-platform shell resolution.
@@ -51,18 +51,44 @@ export function findWindowsBash(): string | null {
   }) ?? null;
 
   if (!cachedWindowsBash) {
-    console.warn('Git Bash not found — install Git for Windows or set CLAUDE_CODE_GIT_BASH_PATH. Falling back to powershell.exe');
+    console.warn('Git Bash not found — install Git for Windows or set CLAUDE_CODE_GIT_BASH_PATH');
   }
   return cachedWindowsBash;
 }
 
-/** Bash binary used to run agent commands (was hardcoded '/bin/bash'). */
+export const GIT_BASH_MISSING_ERROR =
+  'Git Bash not found. Install Git for Windows (https://git-scm.com/download/win) or set CLAUDE_CODE_GIT_BASH_PATH.';
+
+/** Git Bash on Windows, or throw — POSIX agent commands cannot run in PowerShell. */
+function requireWindowsBash(): string {
+  const bash = findWindowsBash();
+  if (!bash) throw new Error(GIT_BASH_MISSING_ERROR);
+  return bash;
+}
+
+/**
+ * Bash binary used to run agent commands (was hardcoded '/bin/bash').
+ * Throws on Windows when Git Bash is missing.
+ */
 export function getBashShell(): string {
-  if (isWindows) return findWindowsBash() ?? 'powershell.exe';
+  if (isWindows) return requireWindowsBash();
   return '/bin/bash';
 }
 
-/** User's interactive shell (was `process.env.SHELL || '/bin/zsh'`). */
+/**
+ * Shell that receives POSIX command strings (`cd '…' && …`): the user's shell
+ * on macOS/Linux (was `process.env.SHELL || '/bin/zsh'`), Git Bash on Windows.
+ * Throws on Windows when Git Bash is missing.
+ */
+export function getCommandShell(): string {
+  if (isWindows) return requireWindowsBash();
+  return process.env.SHELL || '/bin/zsh';
+}
+
+/**
+ * User's interactive terminal shell (was `process.env.SHELL || '/bin/zsh'`).
+ * Only for terminals the user types into — falls back to PowerShell on Windows.
+ */
 export function getUserShell(): string {
   if (isWindows) return findWindowsBash() ?? 'powershell.exe';
   return process.env.SHELL || '/bin/zsh';
@@ -115,7 +141,7 @@ export function findInDirs(name: string, dirs: string[]): string {
 /** Resolve `name` via `which` (`where` on Windows) with `dirs` prepended to PATH, or ''. */
 export async function whichBinary(name: string, dirs: string[]): Promise<string> {
   try {
-    const { stdout } = await execAsync(isWindows ? `where ${name}` : `which ${name}`, {
+    const { stdout } = await execFileAsync(isWindows ? 'where' : 'which', [name], {
       env: { ...process.env, PATH: `${dirs.join(path.delimiter)}${path.delimiter}${process.env.PATH}` },
     });
     if (isWindows) {

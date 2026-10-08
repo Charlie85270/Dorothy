@@ -95,7 +95,7 @@ import { registerTemplateHandlers } from './handlers/template-handlers';
 import { initVaultDb, closeVaultDb } from './services/vault-db';
 import { initAutoUpdater, checkForUpdates, setMainWindowGetter } from './services/update-checker';
 import { initKanbanAutomation, findMatchingAgent, createAgentForTask, startAgentForTask } from './services/kanban-automation';
-import { getUserShell, loginShellArgs } from './utils/shell';
+import { getCommandShell, loginShellArgs } from './utils/shell';
 
 // Utils
 import {
@@ -432,7 +432,7 @@ app.whenReady().then(async () => {
       const pty = await import('node-pty');
 
       const id = uuidv4();
-      const shell = getUserShell();
+      const shell = getCommandShell();
       let cwd = config.projectPath;
 
       if (!fs.existsSync(cwd)) {

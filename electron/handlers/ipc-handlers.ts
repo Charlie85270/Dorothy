@@ -21,7 +21,7 @@ import { getProvider, getAllProviders } from '../providers';
 import { writeProgrammaticInput } from '../core/pty-manager';
 import { extractStatusLine } from '../utils/ansi';
 import { scheduleTick } from '../utils/agents-tick';
-import { getBashShell, getUserShell, loginShellArgs, envWithPath, isWindows, findWindowsBash } from '../utils/shell';
+import { getBashShell, getCommandShell, getUserShell, loginShellArgs, envWithPath, isWindows, findWindowsBash } from '../utils/shell';
 
 /**
  * Normalize a JIRA domain value to a full hostname.
@@ -1120,7 +1120,7 @@ function registerPluginHandlers(deps: IpcHandlerDependencies): void {
   // contain broken completions like compdef from other tools)
   ipcMain.handle('plugin:install-start', async (_event, { command, cols, rows }: { command: string; cols?: number; rows?: number }) => {
     const id = uuidv4();
-    const shell = getUserShell();
+    const shell = getCommandShell();
 
     // If the command starts with /, it's a Claude CLI slash command - prefix with 'claude'
     const finalCommand = command.startsWith('/') ? `claude "${command}"` : command;

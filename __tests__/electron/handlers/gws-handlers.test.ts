@@ -20,6 +20,9 @@ vi.mock('electron', () => ({
 const mockExec = vi.fn();
 vi.mock('child_process', () => ({
   exec: (...args: unknown[]) => mockExec(...args),
+  // which/where lookups go through execFile(file, args, opts, cb)
+  execFile: (file: string, args: string[], ...rest: unknown[]) => mockExec(`${file} ${args.join(' ')}`, ...rest),
+  execFileSync: () => '',
 }));
 
 // Mock os.homedir to use temp directory

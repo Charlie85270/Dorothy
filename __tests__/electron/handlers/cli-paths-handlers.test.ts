@@ -25,6 +25,10 @@ vi.mock('child_process', () => ({
   exec: vi.fn((_cmd: string, _opts: unknown, cb: (err: Error | null, result: { stdout: string }) => void) => {
     cb(null, { stdout: '' });
   }),
+  execFile: vi.fn((_file: string, _args: string[], _opts: unknown, cb: (err: Error | null, result: { stdout: string }) => void) => {
+    cb(null, { stdout: '' });
+  }),
+  execFileSync: vi.fn(() => ''),
 }));
 
 vi.mock('util', async (importOriginal) => {

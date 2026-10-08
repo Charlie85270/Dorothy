@@ -5,6 +5,7 @@ import * as os from 'os';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import type { AppSettings, CLIPaths } from '../types';
+import { findInDirs, whichBinary } from '../utils/shell';
 
 const execAsync = promisify(exec);
 
@@ -15,6 +16,46 @@ export interface CLIPathsHandlerDependencies {
   getAppSettings: () => AppSettings;
   setAppSettings: (settings: AppSettings) => void;
   saveAppSettings: (settings: AppSettings) => void;
+}
+
+const isWindows = process.platform === 'win32';
+
+/** Platform-specific default binary directories. */
+function getDefaultBinDirs(homeDir: string): string[] {
+  if (isWindows) {
+    const dirs = [
+      path.join(homeDir, '.local', 'bin'),   // Claude Code native installer
+      path.join(homeDir, '.grok', 'bin'),    // Grok CLI default install dir
+    ];
+    if (process.env.APPDATA) dirs.push(path.join(process.env.APPDATA, 'npm'));
+    if (process.env.LOCALAPPDATA) {
+      dirs.push(path.join(process.env.LOCALAPPDATA, 'pnpm'), path.join(process.env.LOCALAPPDATA, 'Volta', 'bin'));
+    }
+    if (process.env.NVM_SYMLINK) dirs.push(process.env.NVM_SYMLINK);
+    if (process.env.ProgramFiles) {
+      dirs.push(path.join(process.env.ProgramFiles, 'nodejs'), path.join(process.env.ProgramFiles, 'GitHub CLI'));
+    }
+    return dirs;
+  }
+  return [
+    '/opt/homebrew/bin',
+    '/usr/local/bin',
+    path.join(homeDir, '.local/bin'),
+    path.join(homeDir, '.grok/bin'),       // Grok CLI default install dir
+    path.join(homeDir, 'Library/pnpm'),   // pnpm global bin (macOS)
+    path.join(homeDir, '.yarn/bin'),       // yarn global bin
+  ];
+}
+
+/** nvm node version bin directories (macOS/Linux nvm layout). */
+function getNvmBinDirs(homeDir: string): string[] {
+  const nvmDir = path.join(homeDir, '.nvm/versions/node');
+  if (!fs.existsSync(nvmDir)) return [];
+  try {
+    return fs.readdirSync(nvmDir).map((version) => path.join(nvmDir, version, 'bin'));
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -36,207 +77,37 @@ async function detectCLIPaths(savedPaths?: Partial<CLIPaths>): Promise<{ claude:
     }
   }
 
-  // Try to get the full interactive shell PATH (includes .zshrc/.bashrc paths)
+  // Try to get the full interactive shell PATH (includes .zshrc/.bashrc paths).
+  // Skipped on Windows: Git Bash would return a POSIX-style PATH; process.env.PATH is authoritative there.
   let shellPath = process.env.PATH || '';
-  try {
-    const shell = process.env.SHELL || '/bin/zsh';
-    const { stdout } = await execAsync(`${shell} -ilc 'echo $PATH'`, { timeout: 5000 });
-    if (stdout.trim()) {
-      shellPath = stdout.trim();
+  if (!isWindows) {
+    try {
+      const shell = process.env.SHELL || '/bin/zsh';
+      const { stdout } = await execAsync(`${shell} -ilc 'echo $PATH'`, { timeout: 5000 });
+      if (stdout.trim()) {
+        shellPath = stdout.trim();
+      }
+    } catch {
+      // Fall back to process.env.PATH
     }
-  } catch {
-    // Fall back to process.env.PATH
   }
 
   // Common locations to check
-  const commonPaths = [
-    '/opt/homebrew/bin',
-    '/usr/local/bin',
-    path.join(homeDir, '.local/bin'),
-    path.join(homeDir, '.grok/bin'),       // Grok CLI default install dir
-    path.join(homeDir, 'Library/pnpm'),   // pnpm global bin (macOS)
-    path.join(homeDir, '.yarn/bin'),       // yarn global bin
-  ];
+  const commonPaths = getDefaultBinDirs(homeDir);
 
   // Add directories from the shell PATH that aren't already included
-  for (const dir of shellPath.split(':')) {
+  for (const dir of shellPath.split(path.delimiter)) {
     if (dir && !commonPaths.includes(dir)) {
       commonPaths.push(dir);
     }
   }
 
   // Add nvm paths
-  const nvmDir = path.join(homeDir, '.nvm/versions/node');
-  if (fs.existsSync(nvmDir)) {
-    try {
-      const versions = fs.readdirSync(nvmDir);
-      for (const version of versions) {
-        commonPaths.push(path.join(nvmDir, version, 'bin'));
-      }
-    } catch {
-      // Ignore errors
-    }
-  }
+  commonPaths.push(...getNvmBinDirs(homeDir));
 
-  // Check for claude
-  if (!paths.claude) for (const dir of commonPaths) {
-    const claudePath = path.join(dir, 'claude');
-    if (fs.existsSync(claudePath)) {
-      paths.claude = claudePath;
-      break;
-    }
-  }
-
-  // Try which command for claude
-  if (!paths.claude) {
-    try {
-      const { stdout } = await execAsync('which claude', {
-        env: { ...process.env, PATH: `${commonPaths.join(':')}:${process.env.PATH}` },
-      });
-      if (stdout.trim()) {
-        paths.claude = stdout.trim();
-      }
-    } catch {
-      // Ignore
-    }
-  }
-
-  // Check for codex
-  if (!paths.codex) for (const dir of commonPaths) {
-    const codexPath = path.join(dir, 'codex');
-    if (fs.existsSync(codexPath)) {
-      paths.codex = codexPath;
-      break;
-    }
-  }
-
-  // Try which command for codex
-  if (!paths.codex) {
-    try {
-      const { stdout } = await execAsync('which codex', {
-        env: { ...process.env, PATH: `${commonPaths.join(':')}:${process.env.PATH}` },
-      });
-      if (stdout.trim()) {
-        paths.codex = stdout.trim();
-      }
-    } catch {
-      // Ignore
-    }
-  }
-
-  // Check for gemini
-  if (!paths.gemini) for (const dir of commonPaths) {
-    const geminiPath = path.join(dir, 'gemini');
-    if (fs.existsSync(geminiPath)) {
-      paths.gemini = geminiPath;
-      break;
-    }
-  }
-
-  // Try which command for gemini
-  if (!paths.gemini) {
-    try {
-      const { stdout } = await execAsync('which gemini', {
-        env: { ...process.env, PATH: `${commonPaths.join(':')}:${process.env.PATH}` },
-      });
-      if (stdout.trim()) {
-        paths.gemini = stdout.trim();
-      }
-    } catch {
-      // Ignore
-    }
-  }
-
-  // Check for grok
-  if (!paths.grok) for (const dir of commonPaths) {
-    const grokPath = path.join(dir, 'grok');
-    if (fs.existsSync(grokPath)) {
-      paths.grok = grokPath;
-      break;
-    }
-  }
-
-  // Try which command for grok
-  if (!paths.grok) {
-    try {
-      const { stdout } = await execAsync('which grok', {
-        env: { ...process.env, PATH: `${commonPaths.join(':')}:${process.env.PATH}` },
-      });
-      if (stdout.trim()) {
-        paths.grok = stdout.trim();
-      }
-    } catch {
-      // Ignore
-    }
-  }
-
-  // Check for opencode
-  if (!paths.opencode) for (const dir of commonPaths) {
-    const opencodePath = path.join(dir, 'opencode');
-    if (fs.existsSync(opencodePath)) {
-      paths.opencode = opencodePath;
-      break;
-    }
-  }
-
-  // Try which command for opencode
-  if (!paths.opencode) {
-    try {
-      const { stdout } = await execAsync('which opencode', {
-        env: { ...process.env, PATH: `${commonPaths.join(':')}:${process.env.PATH}` },
-      });
-      if (stdout.trim()) {
-        paths.opencode = stdout.trim();
-      }
-    } catch {
-      // Ignore
-    }
-  }
-
-  // Check for pi
-  if (!paths.pi) for (const dir of commonPaths) {
-    const piPath = path.join(dir, 'pi');
-    if (fs.existsSync(piPath)) {
-      paths.pi = piPath;
-      break;
-    }
-  }
-
-  // Try which command for pi
-  if (!paths.pi) {
-    try {
-      const { stdout } = await execAsync('which pi', {
-        env: { ...process.env, PATH: `${commonPaths.join(':')}:${process.env.PATH}` },
-      });
-      if (stdout.trim()) {
-        paths.pi = stdout.trim();
-      }
-    } catch {
-      // Ignore
-    }
-  }
-
-  // Check for gws
-  if (!paths.gws) for (const dir of commonPaths) {
-    const gwsPath = path.join(dir, 'gws');
-    if (fs.existsSync(gwsPath)) {
-      paths.gws = gwsPath;
-      break;
-    }
-  }
-
-  // Try which command for gws
-  if (!paths.gws) {
-    try {
-      const { stdout } = await execAsync('which gws', {
-        env: { ...process.env, PATH: `${commonPaths.join(':')}:${process.env.PATH}` },
-      });
-      if (stdout.trim()) {
-        paths.gws = stdout.trim();
-      }
-    } catch {
-      // Ignore
-    }
+  for (const key of ['claude', 'codex', 'gemini', 'grok', 'opencode', 'pi', 'gws'] as const) {
+    if (!paths[key]) paths[key] = findInDirs(key, commonPaths);
+    if (!paths[key]) paths[key] = await whichBinary(key, commonPaths);
   }
 
   // Check for gcloud (also check gcloud-specific install locations)
@@ -246,73 +117,22 @@ async function detectCLIPaths(savedPaths?: Partial<CLIPaths>): Promise<{ claude:
     '/usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/bin',
     path.join(homeDir, 'google-cloud-sdk/bin'),
   ];
-  if (!paths.gcloud) for (const dir of gcloudPaths) {
-    const gcloudPath = path.join(dir, 'gcloud');
-    if (fs.existsSync(gcloudPath)) {
-      paths.gcloud = gcloudPath;
-      break;
-    }
+  if (isWindows && process.env.LOCALAPPDATA) {
+    gcloudPaths.push(path.join(process.env.LOCALAPPDATA, 'Google', 'Cloud SDK', 'google-cloud-sdk', 'bin'));
   }
-
-  // Try which command for gcloud
-  if (!paths.gcloud) {
-    try {
-      const { stdout } = await execAsync('which gcloud', {
-        env: { ...process.env, PATH: `${gcloudPaths.join(':')}:${process.env.PATH}` },
-      });
-      if (stdout.trim()) {
-        paths.gcloud = stdout.trim();
-      }
-    } catch {
-      // Ignore
-    }
-  }
+  if (!paths.gcloud) paths.gcloud = findInDirs('gcloud', gcloudPaths);
+  if (!paths.gcloud) paths.gcloud = await whichBinary('gcloud', gcloudPaths);
 
   // Check for gh
-  if (!paths.gh) for (const dir of ['/opt/homebrew/bin', '/usr/local/bin']) {
-    const ghPath = path.join(dir, 'gh');
-    if (fs.existsSync(ghPath)) {
-      paths.gh = ghPath;
-      break;
-    }
-  }
-
-  // Try which command for gh
-  if (!paths.gh) {
-    try {
-      const { stdout } = await execAsync('which gh', {
-        env: { ...process.env, PATH: `${commonPaths.join(':')}:${process.env.PATH}` },
-      });
-      if (stdout.trim()) {
-        paths.gh = stdout.trim();
-      }
-    } catch {
-      // Ignore
-    }
-  }
+  const ghDirs = isWindows
+    ? (process.env.ProgramFiles ? [path.join(process.env.ProgramFiles, 'GitHub CLI')] : [])
+    : ['/opt/homebrew/bin', '/usr/local/bin'];
+  if (!paths.gh) paths.gh = findInDirs('gh', ghDirs);
+  if (!paths.gh) paths.gh = await whichBinary('gh', commonPaths);
 
   // Check for node
-  if (!paths.node) for (const dir of commonPaths) {
-    const nodePath = path.join(dir, 'node');
-    if (fs.existsSync(nodePath)) {
-      paths.node = nodePath;
-      break;
-    }
-  }
-
-  // Try which command for node
-  if (!paths.node) {
-    try {
-      const { stdout } = await execAsync('which node', {
-        env: { ...process.env, PATH: `${commonPaths.join(':')}:${process.env.PATH}` },
-      });
-      if (stdout.trim()) {
-        paths.node = stdout.trim();
-      }
-    } catch {
-      // Ignore
-    }
-  }
+  if (!paths.node) paths.node = findInDirs('node', commonPaths);
+  if (!paths.node) paths.node = await whichBinary('node', commonPaths);
 
   return paths;
 }
@@ -329,36 +149,20 @@ function saveCLIPathsConfig(paths: CLIPaths): void {
   // Build full PATH string from configured paths
   const homeDir = os.homedir();
   const defaultPaths = [
-    '/opt/homebrew/bin',
-    '/usr/local/bin',
-    path.join(homeDir, '.local/bin'),
-    path.join(homeDir, 'Library/pnpm'),
-    path.join(homeDir, '.yarn/bin'),
+    ...getDefaultBinDirs(homeDir).filter((dir) => !dir.endsWith(path.join('.grok', 'bin'))),
+    ...getNvmBinDirs(homeDir),
   ];
-
-  // Add nvm paths
-  const nvmDir = path.join(homeDir, '.nvm/versions/node');
-  if (fs.existsSync(nvmDir)) {
-    try {
-      const versions = fs.readdirSync(nvmDir);
-      for (const version of versions) {
-        defaultPaths.push(path.join(nvmDir, version, 'bin'));
-      }
-    } catch {
-      // Ignore
-    }
-  }
 
   // Combine all paths
   const allPaths = [...new Set([
     ...paths.additionalPaths,
     ...defaultPaths,
-    ...(process.env.PATH || '').split(':'),
+    ...(process.env.PATH || '').split(path.delimiter),
   ])];
 
   const config = {
     ...paths,
-    fullPath: allPaths.join(':'),
+    fullPath: allPaths.join(path.delimiter),
     updatedAt: new Date().toISOString(),
   };
 
@@ -428,25 +232,9 @@ export function getCLIPathsConfig(): CLIPaths & { fullPath: string } {
   // Return defaults
   const homeDir = os.homedir();
   const defaultPaths = [
-    '/opt/homebrew/bin',
-    '/usr/local/bin',
-    path.join(homeDir, '.local/bin'),
-    path.join(homeDir, 'Library/pnpm'),
-    path.join(homeDir, '.yarn/bin'),
+    ...getDefaultBinDirs(homeDir).filter((dir) => !dir.endsWith(path.join('.grok', 'bin'))),
+    ...getNvmBinDirs(homeDir),
   ];
-
-  // Add nvm paths
-  const nvmDir = path.join(homeDir, '.nvm/versions/node');
-  if (fs.existsSync(nvmDir)) {
-    try {
-      const versions = fs.readdirSync(nvmDir);
-      for (const version of versions) {
-        defaultPaths.push(path.join(nvmDir, version, 'bin'));
-      }
-    } catch {
-      // Ignore
-    }
-  }
 
   return {
     claude: '',
@@ -460,7 +248,7 @@ export function getCLIPathsConfig(): CLIPaths & { fullPath: string } {
     gh: '',
     node: '',
     additionalPaths: [],
-    fullPath: [...new Set([...defaultPaths, ...(process.env.PATH || '').split(':')])].join(':'),
+    fullPath: [...new Set([...defaultPaths, ...(process.env.PATH || '').split(path.delimiter)])].join(path.delimiter),
   };
 }
 

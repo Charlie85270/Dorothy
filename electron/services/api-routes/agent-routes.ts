@@ -8,6 +8,7 @@ import { ptyProcesses, writeProgrammaticInput } from '../../core/pty-manager';
 import { buildFullPath } from '../../utils/path-builder';
 import { AgentStatus, AgentCharacter } from '../../types';
 import { RouteApp, RouteContext } from './types';
+import { getBashShell, envWithPath } from '../../utils/shell';
 
 export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
   // GET /api/agents/:id/wait — long-poll until agent status changes
@@ -205,7 +206,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     }
     command += ` '${finalPrompt.replace(/'/g, "'\\''")}'`;
 
-    const shell = '/bin/bash';
+    const shell = getBashShell();
     const fullPath = buildFullPath();
 
     const ptyProcess = pty.spawn(shell, ['-l', '-c', command], {
@@ -214,8 +215,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       rows: 40,
       cwd: workingDir,
       env: {
-        ...process.env,
-        PATH: fullPath,
+        ...envWithPath(process.env, fullPath),
         TERM: 'xterm-256color',
         CLAUDE_SKILLS: agent.skills?.join(',') || '',
         CLAUDE_AGENT_ID: agent.id,

@@ -13,6 +13,7 @@ import { buildFullPath } from '../utils/path-builder';
 import { getProvider } from '../providers';
 import { extractStatusLine } from '../utils/ansi';
 import { scheduleTick } from '../utils/agents-tick';
+import { getBashShell, loginShellArgs, envWithPath } from '../utils/shell';
 
 export const agents: Map<string, AgentStatus> = new Map();
 
@@ -239,7 +240,7 @@ export async function initAgentPty(
   handleStatusChangeNotificationCallback: (agent: AgentStatus, newStatus: string) => void,
   saveAgentsCallback: () => void
 ): Promise<string> {
-  const shell = '/bin/bash';
+  const shell = getBashShell();
   let cwd = agent.worktreePath || agent.projectPath;
 
   if (!fs.existsSync(cwd)) {
@@ -300,14 +301,13 @@ export async function initAgentPty(
   const agentProvider = getProvider(agent.provider);
   const providerEnvVars = agentProvider.getPtyEnvVars(agent.id, agent.projectPath, agent.skills);
 
-  const ptyProcess = pty.spawn(shell, ['-l'], {
+  const ptyProcess = pty.spawn(shell, loginShellArgs(shell), {
     name: 'xterm-256color',
     cols: 120,
     rows: 30,
     cwd,
     env: {
-      ...process.env as { [key: string]: string },
-      PATH: fullPath,
+      ...envWithPath(process.env, fullPath),
       ...providerEnvVars,
       // Load CLAUDE.md from --add-dir directories (e.g. ~/.dorothy)
       CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD: '1',

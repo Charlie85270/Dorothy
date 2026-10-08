@@ -2,6 +2,7 @@ import * as pty from 'node-pty';
 import { v4 as uuidv4 } from 'uuid';
 import * as os from 'os';
 import { BrowserWindow } from 'electron';
+import { getUserShell, loginShellArgs } from '../utils/shell';
 
 export const ptyProcesses: Map<string, pty.IPty> = new Map();
 export const quickPtyProcesses: Map<string, pty.IPty> = new Map();
@@ -107,9 +108,9 @@ export function createQuickPty(
   rows: number | undefined,
   mainWindow: BrowserWindow | null
 ): string {
-  const shell = process.env.SHELL || '/bin/zsh';
+  const shell = getUserShell();
 
-  const ptyProcess = pty.spawn(shell, ['-l'], {
+  const ptyProcess = pty.spawn(shell, loginShellArgs(shell), {
     name: 'xterm-256color',
     cols: cols || 80,
     rows: rows || 24,

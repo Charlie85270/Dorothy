@@ -199,7 +199,7 @@ describe('gws-handlers', () => {
 
       // Hide real system gcloud binaries so only our tmpDir one is found
       existsSyncFilter = (p) => {
-        if (p.endsWith('/gcloud') && !p.startsWith(tmpDir)) return false;
+        if (/[\\/]gcloud(\.exe|\.cmd)?$/i.test(p) && !p.startsWith(tmpDir)) return false;
         return null; // pass-through to real existsSync
       };
 
@@ -210,7 +210,7 @@ describe('gws-handlers', () => {
 
     it('returns path from which command when not on filesystem', async () => {
       // Hide all gcloud binaries on filesystem
-      existsSyncFilter = (p) => p.endsWith('/gcloud') ? false : null;
+      existsSyncFilter = (p) => /[\\/]gcloud(\.exe|\.cmd)?$/i.test(p) ? false : null;
       mockExecSuccess('/usr/local/bin/gcloud\n');
 
       await registerHandlers();
@@ -220,7 +220,7 @@ describe('gws-handlers', () => {
 
     it('returns empty string when gcloud is not found anywhere', async () => {
       // Hide all gcloud binaries on filesystem
-      existsSyncFilter = (p) => p.endsWith('/gcloud') ? false : null;
+      existsSyncFilter = (p) => /[\\/]gcloud(\.exe|\.cmd)?$/i.test(p) ? false : null;
       mockExecError(new Error('not found'));
 
       await registerHandlers();

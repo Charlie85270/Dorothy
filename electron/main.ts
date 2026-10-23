@@ -95,6 +95,7 @@ import { registerTemplateHandlers } from './handlers/template-handlers';
 import { initVaultDb, closeVaultDb } from './services/vault-db';
 import { initAutoUpdater, checkForUpdates, setMainWindowGetter } from './services/update-checker';
 import { initKanbanAutomation, findMatchingAgent, createAgentForTask, startAgentForTask } from './services/kanban-automation';
+import { getCommandShell, loginShellArgs } from './utils/shell';
 
 // Utils
 import {
@@ -431,7 +432,7 @@ app.whenReady().then(async () => {
       const pty = await import('node-pty');
 
       const id = uuidv4();
-      const shell = process.env.SHELL || '/bin/zsh';
+      const shell = getCommandShell();
       let cwd = config.projectPath;
 
       if (!fs.existsSync(cwd)) {
@@ -441,7 +442,7 @@ app.whenReady().then(async () => {
       // Always include world-builder skill
       const allSkills = [...new Set([...config.skills, 'world-builder'])];
 
-      const ptyProcess = pty.spawn(shell, ['-l'], {
+      const ptyProcess = pty.spawn(shell, loginShellArgs(shell), {
         name: 'xterm-256color',
         cols: 120,
         rows: 30,

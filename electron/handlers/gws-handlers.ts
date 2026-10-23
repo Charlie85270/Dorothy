@@ -6,6 +6,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { buildFullPath } from '../utils/path-builder';
 import type { AppSettings } from '../types';
+import { findInDirs, whichBinary } from '../utils/shell';
 
 const execAsync = promisify(exec);
 
@@ -96,23 +97,11 @@ async function findGwsBinary(): Promise<string> {
     }
   }
 
-  for (const dir of commonPaths) {
-    const gwsPath = path.join(dir, 'gws');
-    if (fs.existsSync(gwsPath)) {
-      return gwsPath;
-    }
+  if (process.platform === 'win32' && process.env.APPDATA) {
+    commonPaths.push(path.join(process.env.APPDATA, 'npm'));
   }
 
-  try {
-    const { stdout } = await execAsync('which gws', {
-      env: { ...process.env, PATH: `${commonPaths.join(':')}:${process.env.PATH}` },
-    });
-    if (stdout.trim()) return stdout.trim();
-  } catch {
-    // Ignore
-  }
-
-  return '';
+  return findInDirs('gws', commonPaths) || whichBinary('gws', commonPaths);
 }
 
 async function findGcloudBinary(): Promise<string> {
@@ -127,24 +116,11 @@ async function findGcloudBinary(): Promise<string> {
     path.join(homeDir, 'google-cloud-sdk/bin'),
   ];
 
-  for (const dir of commonPaths) {
-    const gcloudPath = path.join(dir, 'gcloud');
-    if (fs.existsSync(gcloudPath)) {
-      return gcloudPath;
-    }
+  if (process.platform === 'win32' && process.env.LOCALAPPDATA) {
+    commonPaths.push(path.join(process.env.LOCALAPPDATA, 'Google', 'Cloud SDK', 'google-cloud-sdk', 'bin'));
   }
 
-  try {
-    const fullPath = buildFullPath();
-    const { stdout } = await execAsync('which gcloud', {
-      env: { ...process.env, PATH: `${commonPaths.join(':')}:${fullPath}` },
-    });
-    if (stdout.trim()) return stdout.trim();
-  } catch {
-    // Ignore
-  }
-
-  return '';
+  return findInDirs('gcloud', commonPaths) || whichBinary('gcloud', [...commonPaths, ...buildFullPath().split(path.delimiter)]);
 }
 
 export function registerGwsHandlers(deps: GwsHandlerDependencies): void {
@@ -178,7 +154,7 @@ export function registerGwsHandlers(deps: GwsHandlerDependencies): void {
       // Include gcloud's directory in PATH so gws can find it
       const gcloudPath = await findGcloudBinary();
       const gcloudDir = gcloudPath ? path.dirname(gcloudPath) : '';
-      const fullPath = [gcloudDir, buildFullPath()].filter(Boolean).join(':');
+      const fullPath = [gcloudDir, buildFullPath()].filter(Boolean).join(path.delimiter);
 
       const { stdout } = await execAsync(`"${gwsPath}" auth status --json`, {
         env: { ...process.env, PATH: fullPath },

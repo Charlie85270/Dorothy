@@ -7,6 +7,14 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 13,
+    version: '1.2.10',
+    date: '2026-10-23',
+    updates: [
+      'Security versions updates',
+    ],
+  },
+  {
     id: 12,
     version: '1.2.9',
     date: '2026-07-07',

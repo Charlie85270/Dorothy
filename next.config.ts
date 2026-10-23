@@ -11,6 +11,9 @@ const nextConfig: NextConfig = {
     unoptimized: true,
   },
 
+  // Electron builds type-check app code only (tests and stale dev route types are excluded)
+  typescript: isElectronBuild ? { tsconfigPath: 'tsconfig.electron-build.json' } : undefined,
+
   // Ensure trailing slashes for file:// protocol compatibility
   trailingSlash: true,
 

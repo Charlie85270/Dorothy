@@ -1,6 +1,6 @@
 {
   "name": "dorothy",
-  "version": "1.2.9",
+  "version": "1.2.10",
   "private": true,
   "main": "electron/dist/main.js",
   "scripts": {
@@ -140,7 +140,7 @@
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
     "@slack/bolt": "^4.0.1",
-    "better-sqlite3": "^11.0.0",
+    "better-sqlite3": "^13.0.3",
     "call-bind": "^1.0.8",
     "call-bind-apply-helpers": "^1.0.2",
     "dunder-proto": "^1.0.1",
@@ -174,8 +174,8 @@
     "@types/react-dom": "^19",
     "@types/uuid": "^9.0.8",
     "concurrently": "^9.1.0",
-    "electron": "^33.2.0",
-    "electron-builder": "^25.1.8",
+    "electron": "^45.0.0",
+    "electron-builder": "^26.15.3",
     "eslint": "^9",
     "eslint-config-next": "16.1.4",
     "sharp": "^0.34.5",

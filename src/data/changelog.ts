@@ -11,9 +11,7 @@ export const CHANGELOG: Release[] = [
     version: '1.2.10',
     date: '2026-10-23',
     updates: [
-      'Security update — Electron 33 → 45 (bundled Node.js 24.22, Chromium 156) with the latest Chromium/V8 security fixes',
-      'Updated Next.js, electron-updater, axios, ws and other dependencies to patch critical and high-severity vulnerabilities',
-      'better-sqlite3 upgraded to v13 (N-API) for compatibility with the new Electron runtime',
+      'Security versions updates',
     ],
   },
   {
